@@ -1,21 +1,22 @@
 import { z } from 'zod'
-import { AccessError, validateStudyAccess } from '@ichtys/auth'
+import { handleApiError, validateStudyAccess } from '@ichtys/auth'
 
 export const runtime = 'nodejs'
 
-const chatInput = z.object({
-  studyId: z.string().uuid(),
-  conversationId: z.string().uuid().optional(),
-  message: z.string().min(1),
-})
+const chatInput = z
+  .object({
+    studyId: z.string().uuid(),
+    conversationId: z.string().uuid().optional(),
+    message: z.string().min(1),
+  })
+  .strict()
 
 /**
- * POST /api/chat — answer engine (grounded), streaming.
+ * POST /api/chat - grounded answer engine, streaming.
  *
- * Patrón obligatorio (CLAUDE.md): auth → Zod → validateStudyAccess → lógica.
- * organization_id NUNCA viene del body; sale del token vía validateStudyAccess.
- *
- * Stub funcional: valida y devuelve una respuesta en streaming de placeholder.
+ * Required pattern: auth -> Zod -> validateStudyAccess -> business logic.
+ * organization_id never comes from the body; validateStudyAccess resolves it
+ * from the Clerk token.
  */
 export async function POST(req: Request): Promise<Response> {
   let body: unknown
@@ -31,13 +32,11 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   try {
-    // Valida sesión, org activa y que el study pertenece a la org del token.
     const { orgId, study } = await validateStudyAccess(parsed.data.studyId)
     void orgId
     void study
 
-    // TODO(paso-7): reemplazar por streamText() del Vercel AI SDK alimentado por
-    // generateAnswer({ organizationId: orgId, studyId, question }); persistir
+    // TODO(paso-7): replace with streamText() fed by generateAnswer(); persist
     // message + citations + audit (chat.question / chat.answer).
     const encoder = new TextEncoder()
     const stream = new ReadableStream<Uint8Array>({
@@ -52,11 +51,6 @@ export async function POST(req: Request): Promise<Response> {
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     })
   } catch (err) {
-    if (err instanceof AccessError) {
-      // Mensaje genérico: no se filtran detalles internos al cliente.
-      return new Response(err.message, { status: err.status })
-    }
-    console.error('chat route error', err)
-    return new Response('Internal Server Error', { status: 500 })
+    return handleApiError(err)
   }
 }

@@ -1,9 +1,9 @@
 import { z } from 'zod'
-import { AccessError, validateStudyAccess } from '@ichtys/auth'
+import { handleApiError, validateStudyAccess } from '@ichtys/auth'
 
 export const runtime = 'nodejs'
 
-/** PRD §7.2: PDF, máx 50MB, tipos cerrados. */
+/** PRD section 7.2: PDF, max 50MB, closed document types. */
 export const MAX_PDF_BYTES = 50 * 1024 * 1024
 
 const uploadMeta = z.object({
@@ -19,11 +19,10 @@ const uploadMeta = z.object({
 })
 
 /**
- * POST /api/documents/upload — sube un PDF a Vercel Blob y registra una
- * document_version (status: pending), encolando el pipeline de ingestion.
+ * POST /api/documents/upload - upload a PDF and enqueue ingestion.
  *
- * Stub funcional: valida auth + study access + el archivo, y devuelve
- * { documentId, status: 'pending' }.
+ * Functional stub: validates auth + study access + file and returns a pending
+ * document id.
  */
 export async function POST(req: Request): Promise<Response> {
   try {
@@ -47,16 +46,12 @@ export async function POST(req: Request): Promise<Response> {
     void study
     void file
 
-    // TODO(paso-4): put() a Vercel Blob (key no adivinable) → crear document +
-    // document_version(pending) → enqueue ingestion → audit document.upload.
+    // TODO(paso-4): put() to Vercel Blob with an unguessable key, create
+    // document + document_version(pending), enqueue ingestion, audit upload.
     const documentId = crypto.randomUUID()
 
     return Response.json({ documentId, status: 'pending' as const }, { status: 202 })
   } catch (err) {
-    if (err instanceof AccessError) {
-      return new Response(err.message, { status: err.status })
-    }
-    console.error('upload route error', err)
-    return new Response('Internal Server Error', { status: 500 })
+    return handleApiError(err)
   }
 }

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { AccessError, validateStudyAccess } from '@ichtys/auth'
+import { handleApiError, validateStudyAccess } from '@ichtys/auth'
 
 export const runtime = 'nodejs'
 
@@ -10,11 +10,8 @@ interface RouteContext {
 }
 
 /**
- * GET /api/documents/[id]/page/[pageNumber]?studyId=... — sirve una página del
- * PDF para el viewer.
- *
- * SECURITY.md: el binario nunca se expone con URL pública; se devuelve vía
- * signed URL de expiración corta tras validar acceso al study.
+ * GET /api/documents/[id]/page/[pageNumber]?studyId=... - serves a PDF page
+ * through a short-lived signed URL after study access validation.
  */
 export async function GET(req: Request, { params }: RouteContext): Promise<Response> {
   const { id, pageNumber } = await params
@@ -32,14 +29,10 @@ export async function GET(req: Request, { params }: RouteContext): Promise<Respo
     void id
     void page.data
 
-    // TODO(paso-8): resolver document_version (filtrado org+study) → signed URL
-    // corta de Vercel Blob; audit document.view.
+    // TODO(paso-8): resolve document_version filtered by org+study, return a
+    // short-lived Vercel Blob signed URL, and audit document.view.
     return new Response('Not Implemented', { status: 501 })
   } catch (err) {
-    if (err instanceof AccessError) {
-      return new Response(err.message, { status: err.status })
-    }
-    console.error('document page route error', err)
-    return new Response('Internal Server Error', { status: 500 })
+    return handleApiError(err)
   }
 }

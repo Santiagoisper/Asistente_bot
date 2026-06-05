@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { AccessError, validateStudyAccess } from '@ichtys/auth'
+import { handleApiError, validateStudyAccess } from '@ichtys/auth'
 
 export const runtime = 'nodejs'
 
@@ -10,13 +10,8 @@ interface RouteContext {
 }
 
 /**
- * GET /api/citations/[messageId]?studyId=... — devuelve el payload de citas de
- * un mensaje del assistant para el CitationPanel.
- *
- * Las citas se leen filtrando por org+study: nunca se devuelven citas de otro
- * tenant/estudio aunque el messageId fuese válido en otra org.
- *
- * Stub funcional: valida auth + study access y devuelve un array de citas vacío.
+ * GET /api/citations/[messageId]?studyId=... - returns citation payload for an
+ * assistant message after tenant and study validation.
  */
 export async function GET(req: Request, { params }: RouteContext): Promise<Response> {
   const { messageId } = await params
@@ -29,17 +24,24 @@ export async function GET(req: Request, { params }: RouteContext): Promise<Respo
 
   try {
     const { orgId, study } = await validateStudyAccess(parsed.data.studyId)
+
+    // TODO(RELEASE BLOCKER): Este guard es BLOQUEANTE para release: messageId
+    // debe pertenecer al study activo.
+    // const msg = await db.query.messages.findFirst({
+    //   where: and(
+    //     eq(messages.id, messageId),
+    //     eq(messages.organizationId, orgId),
+    //     eq(messages.studyId, study.id)
+    //   )
+    // })
+    // if (!msg) return new Response('Not Found', { status: 404 })
     void orgId
     void study
 
-    // TODO(paso-8): leer citations WHERE message_id, organization_id, study_id;
+    // TODO(paso-8): read citations WHERE message_id, organization_id, study_id;
     // audit citation.view.
     return Response.json({ messageId, citations: [] as const }, { status: 200 })
   } catch (err) {
-    if (err instanceof AccessError) {
-      return new Response(err.message, { status: err.status })
-    }
-    console.error('citations route error', err)
-    return new Response('Internal Server Error', { status: 500 })
+    return handleApiError(err)
   }
 }
