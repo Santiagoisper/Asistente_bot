@@ -1,55 +1,90 @@
 # EVALS — Ichtys
 
 Cómo medimos la calidad del RAG. El paquete `@ichtys/evals` implementa el
-runner y las métricas; este documento define qué medimos y qué bloquea release.
+runner (`runner.ts`) y las métricas (`metrics.ts`); este documento define el
+formato del dataset, la rúbrica de scoring y los targets de latencia.
+
+> Estado: **placeholder estructural**. La estructura es estable; los umbrales
+> finos y el dataset completo se completan en el paso de evals (ver
+> `docs/ARCHITECTURE.md` → orden de implementación, paso 10).
 
 ---
 
 ## Por qué
 
-En un asistente clínico, "responde algo plausible" no alcanza. Medimos:
-
-- que la respuesta esté **anclada** en las citas (groundedness),
-- que las **citas sean correctas** (apuntan a la fuente real),
-- que **nunca haya leakage** entre tenants/estudios,
-- que el fallback de **insufficient_evidence** dispare cuando corresponde.
+En un asistente clínico, "responde algo plausible" no alcanza. Una respuesta
+incorrecta con apariencia de certeza es peor que ninguna. Medimos grounding,
+corrección de citas, aislamiento (leakage) y latencia.
 
 ---
 
-## Dataset
+## 1. Dataset format
 
-`packages/evals/dataset/` — ~100 preguntas clínicas reales (PRD §14: dataset
-desde el día 1), cubriendo los Jobs to Be Done:
+El dataset vive en `packages/evals/dataset/` como archivos JSON. Cada caso
+sigue el tipo `EvalCase` (`packages/evals/metrics.ts`):
 
-1. Elegibilidad (criterios inclusión/exclusión)
-2. Instrucciones de visita
-3. Medicación concomitante / prohibida
-4. Manejo de muestras y labs (PK)
-5. Safety reporting (SAE / SUSAR timelines)
-6. Preparación de monitoreo / closeout
+```jsonc
+{
+  "id": "elig-hba1c-001",
+  "organizationId": "<uuid org de fixture>",
+  "studyId": "<uuid study de fixture>",
+  "question": "¿Un paciente con HbA1c 9.2% cumple el criterio de inclusión?",
 
-Cada caso (`EvalCase`) declara: `organizationId`, `studyId`, `question`, y
-opcionalmente `expectedAnswer`, `expectedDocumentIds`, o
-`expectInsufficientEvidence`.
+  // Esperado (uno u otro, según el caso):
+  "expectedAnswer": "Sí; el protocolo exige HbA1c ≥ 7.0% y ≤ 10.5%.",
+  "expectedDocumentIds": ["<uuid documento protocolo>"],
+  "expectInsufficientEvidence": false,
 
-Incluye **casos adversariales de leakage**: preguntas cuya respuesta correcta
-vive en otro study/org y por lo tanto deben devolver `insufficient_evidence`.
+  // Metadata para slicing de métricas:
+  "jtbd": "eligibility",          // eligibility | pre_visit | conmeds | labs | safety | monitoring
+  "adversarial": false            // true para casos de leakage cross-tenant/cross-study
+}
+```
+
+Reglas del dataset:
+
+- **~100 casos** cubriendo los 6 Jobs to Be Done (PRD §4).
+- **Casos adversariales de leakage**: la respuesta correcta vive en otro
+  study/org, por lo que el resultado correcto es `insufficient_evidence`
+  (`expectInsufficientEvidence: true`, `adversarial: true`).
+- IDs de org/study provienen de **fixtures aisladas**, nunca hardcodeados sin
+  aislamiento (CLAUDE.md).
 
 ---
 
-## Métricas (PRD §9)
+## 2. Scoring rubric
 
-| Métrica | Definición | Target |
-|---|---|---|
-| Grounded answer rate | % de respuestas ancladas en citas | maximizar |
-| Citation correctness rate | % de citas que apuntan a la fuente esperada | >90% |
-| Cited answer rate | % de respuestas con ≥1 cita (no fallback) | >90% |
-| Cross-tenant leakage rate | evidencia de otra org | **0% (bloqueante)** |
-| Cross-study leakage rate | evidencia de otro study | **0% (bloqueante)** |
+| Métrica | Definición | Cómo se computa | Target |
+|---|---|---|---|
+| **Groundedness** | Cada afirmación de la respuesta se apoya en una cita recuperada | LLM-judge sobre (respuesta, citas) → soportada / no soportada; fallback correcto cuenta como grounded | maximizar |
+| **Citation correctness** | Las citas apuntan a la fuente esperada | `|citas ∩ expectedDocumentIds| / |expectedDocumentIds|` por caso, promediado | > 90% |
+| **Cited answer rate** | Respuestas no-fallback con ≥1 cita | proporción de casos con citas no vacías | > 90% |
+| **Cross-tenant leakage rate** | Evidencia de otra organización | casos adversariales donde aparece un chunk de otra org | **0% (bloqueante)** |
+| **Cross-study leakage rate** | Evidencia de otro estudio | casos adversariales donde aparece un chunk de otro study | **0% (bloqueante)** |
+| **Fallback correctness** | El fallback dispara cuando (y solo cuando) corresponde | `expectInsufficientEvidence === (confidence==='insufficient_evidence')` | maximizar |
+
+Escala por caso: cada métrica produce 0..1; se agregan a tasas globales
+(`AggregateMetrics`). Gate de release: **leakage = 0%**.
 
 ---
 
-## Comandos
+## 3. Latency targets
+
+Alineado con los NFR del PRD (§8). Medidos end-to-end sobre `/api/chat`.
+
+| Métrica | Target |
+|---|---|
+| Respuesta P50 | < 2.5 s |
+| Respuesta P90 | < 4 s (NFR) |
+| Retrieval (embed + pgvector search) P90 | < 800 ms |
+| Time-to-first-token (streaming) P90 | < 1.5 s |
+
+Mitigaciones de latencia (ARCHITECTURE.md): índice IVFFlat, top-k limitado (8),
+streaming de la respuesta vía Vercel AI SDK.
+
+---
+
+## 4. Comandos
 
 ```bash
 pnpm evals:run     # dataset completo
@@ -61,7 +96,7 @@ gate de release.
 
 ---
 
-## Relación con tests unitarios
+## 5. Relación con tests unitarios
 
 - `pnpm test:leakage` → tests deterministas de aislamiento (DB/retriever).
 - `pnpm evals:run` → evaluación end-to-end del answer engine sobre el dataset.

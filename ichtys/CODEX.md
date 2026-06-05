@@ -1,73 +1,108 @@
-# CODEX — Ichtys Engineering Codex
+# CODEX — Reglas de scope para el agente secundario
 
-Reglas operativas de ingeniería para este monorepo. Complementa `docs/CLAUDE.md`
-(reglas para agentes) y `docs/ARCHITECTURE.md` (modelo de datos y flujos).
+Este archivo define qué puede y qué no puede hacer un **agente de codegen
+secundario** (Codex / cualquier asistente que no sea el dueño de la
+arquitectura) trabajando en este repositorio.
+
+Las reglas de producto y seguridad viven en `docs/CLAUDE.md`,
+`docs/ARCHITECTURE.md` y `docs/SECURITY.md`. Este CODEX es el **contrato de
+límites**: define el sandbox.
+
+> **REGLA 0 — Lectura obligatoria.** Antes de proponer o aplicar CUALQUIER
+> cambio, leé `docs/ARCHITECTURE.md` (modelo de datos + flujos) y
+> `docs/CLAUDE.md` (reglas no negociables). Si el cambio toca seguridad,
+> también `docs/SECURITY.md`. No se acepta un diff de un agente que no pueda
+> citar la sección de ARCHITECTURE.md que lo respalda.
 
 ---
 
-## Layout del monorepo
+## 1. Qué PODÉS tocar (con criterio)
+
+| Área | Permitido |
+|---|---|
+| `apps/web/components/**` | Sí — UI nueva, siempre tipada y mobile-first |
+| `apps/web/app/(app)/**` páginas | Sí — composición de UI sobre datos ya validados |
+| `packages/ui/**` | Sí — primitivas compartidas |
+| Implementar `TODO(paso-N)` | Sí — completá el stub respetando su firma y contratos |
+| Tests (`**/tests/**`, `*.test.ts`) | Sí — sumá cobertura, especialmente de aislamiento |
+| `packages/evals/dataset/**` | Sí — sumá casos clínicos / adversariales |
+
+## 2. Qué NO PODÉS tocar sin aprobación explícita
+
+| Área | Por qué |
+|---|---|
+| `packages/db/schema/**` y `migrations/**` | Cambios de schema = decisión arquitectural + migration revisada |
+| `packages/auth/**` | Es el boundary de tenant; un error acá es catastrófico |
+| `packages/rag/retriever.ts` | El filtro org+study antes del vector search es sagrado |
+| `packages/rag/guardrails.ts` | La lógica de fallback no se "ablanda" para responder más |
+| `middleware.ts`, `next.config.ts`, `turbo.json`, `tsconfig*` | Config de plataforma |
+| `.github/workflows/**` | Gates de CI/CD |
+| Stack (deps mayores, frameworks) | El stack está **bloqueado** (ver ARCHITECTURE.md) |
+
+Si una tarea **requiere** tocar algo de la columna izquierda, NO lo hagas:
+abrí una propuesta describiendo el cambio y esperá aprobación.
+
+---
+
+## 3. Contratos que DEBÉS respetar
+
+Son invariantes verificables. Romper uno = el diff se rechaza.
+
+1. **Tenant boundary**: ninguna query lee datos sin filtrar por
+   `organization_id` Y `study_id`. El `organization_id` se obtiene de
+   `validateStudyAccess()` (token de Clerk), nunca del body/query/headers.
+2. **Retrieval**: todo paso por `retrieve()` de `@ichtys/rag`. Prohibido
+   construir vector search ad-hoc sin el filtro de tenant.
+3. **Answer engine**: sin evidencia suficiente → fallback
+   `insufficient_evidence`. Nunca generar respuesta sin citas (salvo el
+   fallback). Nunca mezclar documentos de estudios distintos en un contexto.
+4. **API routes**: patrón fijo `auth → Zod → validateStudyAccess → lógica`.
+   Errores internos nunca se exponen al cliente (mensaje genérico + log
+   server-side).
+5. **Audit**: toda acción sensible escribe en `audit_logs` (incluye accesos
+   denegados).
+6. **Tipos**: TypeScript strict. Sin `any`, sin `as unknown`. Zod en todo
+   borde externo.
+7. **Sin orquestadores**: nada de LangChain/LlamaIndex. El pipeline RAG es
+   código propio (ARCHITECTURE.md principio 4).
+
+---
+
+## 4. Definition of Done para un diff del agente
+
+Antes de entregar, el cambio DEBE:
+
+- [ ] Citar la sección de `docs/ARCHITECTURE.md` que lo respalda.
+- [ ] Pasar `pnpm typecheck && pnpm lint && pnpm test`.
+- [ ] No introducir queries sin filtro de tenant (ni en tests).
+- [ ] Mantener verde `pnpm test:leakage` (bloqueante).
+- [ ] No tocar ningún archivo de la sección 2 sin aprobación previa.
+- [ ] Ser acotado: un PR = una capa/feature (ver `docs/CLAUDE.md`).
+
+---
+
+## 5. Layout (referencia rápida)
 
 ```
-ichtys/
-├── apps/web          # Next.js 15 App Router (UI + API routes)
-├── packages/db       # Drizzle schema, client, migrations  (@ichtys/db)
-├── packages/auth     # Tenant guards y roles               (@ichtys/auth)
-├── packages/ingestion# PDF → pages → chunks → embeddings   (@ichtys/ingestion)
-├── packages/rag      # Retrieval + answer engine + guardrails (@ichtys/rag)
-├── packages/evals    # Eval framework + dataset clínico     (@ichtys/evals)
-└── packages/ui       # Componentes compartidos              (@ichtys/ui)
+apps/web          # Next.js 15 App Router (UI + API routes)
+packages/db       # Drizzle schema, client, migrations   (@ichtys/db)   [bloqueado]
+packages/auth     # Tenant guards y roles                (@ichtys/auth) [bloqueado]
+packages/ingestion# PDF → pages → chunks → embeddings    (@ichtys/ingestion)
+packages/rag      # Retrieval + answer engine + guardrails (@ichtys/rag) [parcial bloqueado]
+packages/evals    # Eval framework + dataset clínico      (@ichtys/evals)
+packages/ui       # Componentes compartidos               (@ichtys/ui)
 ```
 
-Gestión: **pnpm workspaces + Turborepo**. Cada package declara sus deps; nada
-de imports cruzados por path relativo entre packages — siempre por nombre
-(`@ichtys/*`).
+Gestión: pnpm workspaces + Turborepo. Imports entre packages SIEMPRE por nombre
+(`@ichtys/*`), nunca por path relativo cruzado.
 
 ---
 
-## Boundaries no negociables (resumen)
-
-1. `organization_id` **siempre** del token de Clerk, nunca del body.
-2. Retrieval **siempre** filtra por `organization_id` + `study_id` antes del
-   vector search.
-3. Sin evidencia recuperada → fallback `insufficient_evidence`, no respuesta.
-4. Toda acción sensible → `audit_logs`.
-5. TypeScript strict, Zod en bordes de API, sin `any`.
-
-Ver `docs/CLAUDE.md` y `docs/SECURITY.md` para la lista completa.
-
----
-
-## Flujo de trabajo
-
-- Una rama por capa/feature acotada. No mezclar schema changes con lógica.
-- Antes de PR: `pnpm typecheck && pnpm lint && pnpm test`.
-- Si tocás schema: `pnpm db:generate` + revisar la migration + `pnpm db:check`.
-- Tests de leakage (`pnpm test:leakage`) son **bloqueantes** para merge.
-
----
-
-## Comandos
+## 6. Comandos
 
 ```bash
-pnpm dev            # Todos los dev servers (turbo)
-pnpm typecheck      # tsc --noEmit en todos los packages
-pnpm lint
-pnpm test
-pnpm test:leakage   # Tenant/study isolation (bloqueante)
-pnpm db:generate    # Generar migration desde schema Drizzle
-pnpm db:migrate     # Aplicar migrations a Neon
-pnpm db:check       # Validar drift schema/migrations contra Neon branch
-pnpm db:studio      # Drizzle Studio
-pnpm evals:run      # Eval suite completa
-pnpm evals:quick    # Eval rápido (20 preguntas)
+pnpm dev | build | typecheck | lint | test
+pnpm test:leakage   # aislamiento de tenant (bloqueante)
+pnpm db:generate | db:migrate | db:check | db:studio
+pnpm evals:run | evals:quick
 ```
-
----
-
-## Estado del scaffold
-
-Este repositorio fue inicializado en PASO 1 con la estructura completa y
-stubs tipados. Cada archivo marca con `// TODO(paso-N)` lo que falta
-implementar en pasos posteriores. Los stubs compilan y respetan los
-boundaries de seguridad: no introducen queries sin filtro de tenant ni
-respuestas sin evidencia.
