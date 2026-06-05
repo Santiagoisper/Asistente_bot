@@ -1,0 +1,27 @@
+{
+  "name": "@ichtys/evals",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./runner.ts",
+  "types": "./runner.ts",
+  "exports": {
+    ".": "./runner.ts",
+    "./metrics": "./metrics.ts"
+  },
+  "scripts": {
+    "evals:run": "tsx runner.ts",
+    "evals:quick": "tsx runner.ts --quick",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ichtys/rag": "workspace:*",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "vitest": "^2.1.8"
+  }
+}

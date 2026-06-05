@@ -1,0 +1,34 @@
+name: DB Check
+
+on:
+  pull_request:
+    paths:
+      - 'packages/db/**'
+      - '.github/workflows/db-check.yml'
+
+jobs:
+  drizzle-check:
+    name: migrations · schema drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Valida que el schema Drizzle y las migrations no tengan drift.
+      # Usa un Neon branch efímero por PR (ver DATABASE_URL_UNPOOLED en secrets).
+      - name: Drizzle check
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: pnpm db:check

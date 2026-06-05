@@ -1,0 +1,33 @@
+{
+  "name": "ichtys",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ichtys — Clinical Document Assistant (multi-tenant, grounded RAG)",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:leakage": "turbo run test:leakage",
+    "db:generate": "pnpm --filter @ichtys/db db:generate",
+    "db:migrate": "pnpm --filter @ichtys/db db:migrate",
+    "db:check": "pnpm --filter @ichtys/db db:check",
+    "db:studio": "pnpm --filter @ichtys/db db:studio",
+    "evals:run": "pnpm --filter @ichtys/evals evals:run",
+    "evals:quick": "pnpm --filter @ichtys/evals evals:quick",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}

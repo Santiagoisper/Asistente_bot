@@ -1,0 +1,27 @@
+{
+  "name": "@ichtys/auth",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./roles": "./roles.ts",
+    "./validate-study-access": "./validate-study-access.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:leakage": "vitest run --dir tests/leakage"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "^6.9.6",
+    "@ichtys/db": "workspace:*",
+    "drizzle-orm": "^0.38.2"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.8"
+  }
+}
