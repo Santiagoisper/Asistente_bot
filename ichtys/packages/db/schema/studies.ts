@@ -4,14 +4,12 @@ import { organizations } from './organizations'
 import { sites } from './sites'
 import { documents } from './documents'
 import { conversations } from './conversations'
+import { studyStatus } from './enums'
 
 /**
  * studies — unidad de aislamiento de documentos.
  * Todo retrieval y toda respuesta operan dentro de un único study.
  */
-export const studyStatus = ['active', 'closed', 'archived'] as const
-export type StudyStatus = (typeof studyStatus)[number]
-
 export const studies = pgTable('studies', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: uuid('organization_id')

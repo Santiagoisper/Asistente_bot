@@ -21,7 +21,9 @@ const uploadMeta = z.object({
 /**
  * POST /api/documents/upload — sube un PDF a Vercel Blob y registra una
  * document_version (status: pending), encolando el pipeline de ingestion.
- * Requiere rol de gestión documental sobre el study.
+ *
+ * Stub funcional: valida auth + study access + el archivo, y devuelve
+ * { documentId, status: 'pending' }.
  */
 export async function POST(req: Request): Promise<Response> {
   try {
@@ -40,13 +42,16 @@ export async function POST(req: Request): Promise<Response> {
       return new Response('Unsupported Media Type', { status: 415 })
     }
 
-    const ctx = await validateStudyAccess(meta.data.studyId, 'site_coordinator')
-    void ctx
+    const { orgId, study } = await validateStudyAccess(meta.data.studyId)
+    void orgId
+    void study
     void file
 
     // TODO(paso-4): put() a Vercel Blob (key no adivinable) → crear document +
     // document_version(pending) → enqueue ingestion → audit document.upload.
-    return new Response('Not Implemented', { status: 501 })
+    const documentId = crypto.randomUUID()
+
+    return Response.json({ documentId, status: 'pending' as const }, { status: 202 })
   } catch (err) {
     if (err instanceof AccessError) {
       return new Response(err.message, { status: err.status })

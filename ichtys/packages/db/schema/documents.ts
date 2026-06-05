@@ -11,24 +11,7 @@ import { relations } from 'drizzle-orm'
 import { organizations } from './organizations'
 import { studies } from './studies'
 import { chunks } from './chunks'
-
-/**
- * Tipos de documento soportados en el MVP.
- */
-export const documentType = [
-  'protocol',
-  'investigator_brochure',
-  'lab_manual',
-  'pharmacy_manual',
-  'other',
-] as const
-export type DocumentType = (typeof documentType)[number]
-
-/**
- * Estado del pipeline de ingestion sobre una versión de documento.
- */
-export const documentVersionStatus = ['pending', 'processing', 'ready', 'error'] as const
-export type DocumentVersionStatus = (typeof documentVersionStatus)[number]
+import { documentType, documentVersionStatus } from './enums'
 
 /**
  * documents — entidad lógica del documento dentro de un study.

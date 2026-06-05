@@ -1,29 +1,15 @@
-import {
-  pgTable,
-  uuid,
-  text,
-  integer,
-  doublePrecision,
-  timestamp,
-  index,
-} from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, integer, real, timestamp, index } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { organizations } from './organizations'
 import { studies } from './studies'
 import { chunks } from './chunks'
-import { documents, documentVersions, documentType } from './documents'
+import { documents, documentVersions } from './documents'
+import { documentType, messageRole, answerConfidence } from './enums'
 
 /**
- * Niveles de confianza del answer engine.
  * `insufficient_evidence` NO es un error: es la respuesta correcta cuando no
  * hay chunks suficientes (ver PRD §7.4 y CLAUDE.md regla 6).
  */
-export const messageRole = ['user', 'assistant'] as const
-export type MessageRole = (typeof messageRole)[number]
-
-export const answerConfidence = ['high', 'medium', 'low', 'insufficient_evidence'] as const
-export type AnswerConfidence = (typeof answerConfidence)[number]
-
 export const conversations = pgTable(
   'conversations',
   {
@@ -100,7 +86,7 @@ export const citations = pgTable(
     pageEnd: integer('page_end').notNull(),
     sectionTitle: text('section_title'),
     excerpt: text('excerpt').notNull(),
-    similarityScore: doublePrecision('similarity_score'),
+    similarityScore: real('similarity_score'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({

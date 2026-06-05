@@ -1,4 +1,5 @@
 import { pgTable, bigserial, uuid, text, jsonb, timestamp, index } from 'drizzle-orm/pg-core'
+import { auditAction } from './enums'
 
 /**
  * audit_logs — append-only. Toda acción sensible deja rastro, incluyendo
@@ -7,23 +8,6 @@ import { pgTable, bigserial, uuid, text, jsonb, timestamp, index } from 'drizzle
  * No tiene FKs duras a otras tablas: debe sobrevivir borrados (cascade) para
  * preservar la trazabilidad histórica.
  */
-export const auditAction = [
-  'document.upload',
-  'document.delete',
-  'ingestion.start',
-  'ingestion.complete',
-  'ingestion.error',
-  'chat.question',
-  'chat.answer',
-  'chat.insufficient_evidence',
-  'citation.view',
-  'document.view',
-  'auth.login',
-  'auth.access_denied',
-  'admin.action',
-] as const
-export type AuditAction = (typeof auditAction)[number]
-
 export const auditLogs = pgTable(
   'audit_logs',
   {
@@ -39,8 +23,8 @@ export const auditLogs = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
-    orgIdx: index('audit_logs_org_idx').on(t.organizationId, t.createdAt),
-    studyIdx: index('audit_logs_study_idx').on(t.studyId, t.createdAt),
+    orgIdx: index('audit_logs_org_idx').on(t.organizationId, t.createdAt.desc()),
+    studyIdx: index('audit_logs_study_idx').on(t.studyId, t.createdAt.desc()),
   }),
 )
 

@@ -1,24 +1,19 @@
-name: Preview Deploy
+# Preview Deploy — PLACEHOLDER
+#
+# Se configura una vez que el proyecto esté conectado a Vercel.
+# Vercel ya crea preview deployments automáticos por cada PR vía su integración
+# nativa de GitHub, así que este workflow puede quedar vacío hasta que se
+# necesite un paso de deploy custom (p. ej. amondnet/vercel-action con
+# VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID en secrets).
+#
+# Ver docs/ARCHITECTURE.md → CI/CD.
 
+name: Preview Deploy
 on:
   pull_request:
-
-concurrency:
-  group: preview-${{ github.ref }}
-  cancel-in-progress: true
-
+    branches: [main, develop]
 jobs:
-  deploy:
-    name: vercel preview
+  noop:
     runs-on: ubuntu-latest
-    # No correr en forks: los secrets de Vercel no están disponibles.
-    if: github.event.pull_request.head.repo.full_name == github.repository
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          working-directory: ./apps/web
+      - run: echo "Preview deploy se configura tras conectar Vercel."

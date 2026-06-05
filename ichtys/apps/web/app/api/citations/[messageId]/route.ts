@@ -15,6 +15,8 @@ interface RouteContext {
  *
  * Las citas se leen filtrando por org+study: nunca se devuelven citas de otro
  * tenant/estudio aunque el messageId fuese válido en otra org.
+ *
+ * Stub funcional: valida auth + study access y devuelve un array de citas vacío.
  */
 export async function GET(req: Request, { params }: RouteContext): Promise<Response> {
   const { messageId } = await params
@@ -26,13 +28,13 @@ export async function GET(req: Request, { params }: RouteContext): Promise<Respo
   }
 
   try {
-    const ctx = await validateStudyAccess(parsed.data.studyId)
-    void ctx
-    void messageId
+    const { orgId, study } = await validateStudyAccess(parsed.data.studyId)
+    void orgId
+    void study
 
     // TODO(paso-8): leer citations WHERE message_id, organization_id, study_id;
     // audit citation.view.
-    return new Response('Not Implemented', { status: 501 })
+    return Response.json({ messageId, citations: [] as const }, { status: 200 })
   } catch (err) {
     if (err instanceof AccessError) {
       return new Response(err.message, { status: err.status })

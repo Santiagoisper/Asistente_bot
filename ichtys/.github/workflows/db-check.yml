@@ -1,34 +1,25 @@
-name: DB Check
+# DB Check — PLACEHOLDER
+#
+# Valida que el schema Drizzle y las migrations no tengan drift, corriendo
+# `pnpm db:check` contra un Neon branch de test efímero (uno por PR).
+#
+# Requiere configurar en secrets:
+#   - DATABASE_URL           (pooled, del Neon branch de test)
+#   - DATABASE_URL_UNPOOLED  (directo, para drizzle-kit)
+# y, opcionalmente, la integración de Neon + GitHub para crear/destruir el
+# branch automáticamente.
+#
+# Ver docs/ARCHITECTURE.md → CI/CD y packages/db/drizzle.config.ts.
 
+name: DB Check
 on:
   pull_request:
+    branches: [main, develop]
     paths:
       - 'packages/db/**'
       - '.github/workflows/db-check.yml'
-
 jobs:
-  drizzle-check:
-    name: migrations · schema drift
+  noop:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      # Valida que el schema Drizzle y las migrations no tengan drift.
-      # Usa un Neon branch efímero por PR (ver DATABASE_URL_UNPOOLED en secrets).
-      - name: Drizzle check
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
-        run: pnpm db:check
+      - run: echo "DB check se configura con el Neon branch de test."

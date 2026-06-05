@@ -18,12 +18,13 @@ export class AccessError extends Error {
 }
 
 export interface StudyAccessContext {
+  /** Clerk user id, tomado SIEMPRE del token. */
   userId: string
-  /** Clerk organization id (org_...) tomado SIEMPRE del token, nunca del request. */
-  clerkOrgId: string
-  /** organization_id interno (UUID) resuelto desde clerk_org_id. */
-  organizationId: string
-  role: Role
+  /**
+   * organization_id INTERNO (UUID) resuelto desde el clerk_org_id del token.
+   * Es el valor que se usa para filtrar por tenant en todas las queries.
+   */
+  orgId: string
   study: Study
 }
 
@@ -64,19 +65,11 @@ export async function validateStudyAccess(
     throw new AccessError('Study not found or access denied', 404)
   }
 
-  const normalizedRole = normalizeRole(orgRole)
-
-  if (requiredRole && !roleSatisfies(normalizedRole, requiredRole)) {
+  if (requiredRole && !roleSatisfies(normalizeRole(orgRole), requiredRole)) {
     throw new AccessError('Insufficient role', 403)
   }
 
-  return {
-    userId,
-    clerkOrgId,
-    organizationId: org.id,
-    role: normalizedRole,
-    study,
-  }
+  return { userId, orgId: org.id, study }
 }
 
 /**

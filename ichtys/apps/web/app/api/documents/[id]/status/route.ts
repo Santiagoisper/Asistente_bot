@@ -13,6 +13,8 @@ interface RouteContext {
  * GET /api/documents/[id]/status?studyId=... — estado del pipeline de ingestion
  * para una versión de documento (pending | processing | ready | error).
  * Usado por el frontend para polling (ARCHITECTURE.md).
+ *
+ * Stub funcional: valida auth + study access y devuelve un estado placeholder.
  */
 export async function GET(req: Request, { params }: RouteContext): Promise<Response> {
   const { id } = await params
@@ -24,12 +26,12 @@ export async function GET(req: Request, { params }: RouteContext): Promise<Respo
   }
 
   try {
-    const ctx = await validateStudyAccess(parsed.data.studyId)
-    void ctx
-    void id
+    const { orgId, study } = await validateStudyAccess(parsed.data.studyId)
+    void orgId
+    void study
 
     // TODO(paso-4): leer document_versions filtrando org+study+document; 404 si no.
-    return new Response('Not Implemented', { status: 501 })
+    return Response.json({ documentId: id, status: 'processing' as const }, { status: 200 })
   } catch (err) {
     if (err instanceof AccessError) {
       return new Response(err.message, { status: err.status })

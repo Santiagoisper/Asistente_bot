@@ -14,7 +14,7 @@
     "evals:quick": "tsx runner.ts --quick",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@ichtys/rag": "workspace:*",

@@ -10,7 +10,8 @@ import {
 import { relations } from 'drizzle-orm'
 import { organizations } from './organizations'
 import { studies } from './studies'
-import { documents, documentVersions, documentType } from './documents'
+import { documents, documentVersions } from './documents'
+import { documentType } from './enums'
 
 /**
  * Dimensión del embedding. Alineado con text-embedding-3-small (OpenAI) = 1536.
@@ -50,11 +51,11 @@ export const chunks = pgTable(
   (t) => ({
     // Filtro de tenant/study — se usa SIEMPRE antes del similarity search.
     orgStudyIdx: index('chunks_org_study_idx').on(t.organizationId, t.studyId),
-    // Índice vectorial (IVFFlat, cosine). La migration crea la extensión vector.
-    embeddingIdx: index('chunks_embedding_idx').using(
-      'ivfflat',
-      t.embedding.op('vector_cosine_ops'),
-    ),
+    // Índice vectorial (IVFFlat, cosine, lists=100). La migration crea la
+    // extensión vector.
+    embeddingIdx: index('chunks_embedding_idx')
+      .using('ivfflat', t.embedding.op('vector_cosine_ops'))
+      .with({ lists: 100 }),
   }),
 )
 

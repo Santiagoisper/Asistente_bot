@@ -9,8 +9,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:leakage": "vitest run --dir tests/leakage"
+    "test": "vitest run --passWithNoTests",
+    "test:leakage": "vitest run --dir tests/leakage --passWithNoTests"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.0.6",

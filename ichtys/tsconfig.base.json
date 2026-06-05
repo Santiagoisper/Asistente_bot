@@ -6,6 +6,20 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "moduleDetection": "force",
+
+    "baseUrl": ".",
+    "paths": {
+      "@ichtys/db": ["packages/db/index.ts"],
+      "@ichtys/db/*": ["packages/db/*"],
+      "@ichtys/auth": ["packages/auth/index.ts"],
+      "@ichtys/auth/*": ["packages/auth/*"],
+      "@ichtys/ingestion": ["packages/ingestion/pipeline.ts"],
+      "@ichtys/ingestion/*": ["packages/ingestion/*"],
+      "@ichtys/rag": ["packages/rag/answer-engine.ts"],
+      "@ichtys/rag/*": ["packages/rag/*"],
+      "@ichtys/ui": ["packages/ui/index.ts"]
+    },
+
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "isolatedModules": true,

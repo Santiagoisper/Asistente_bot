@@ -31,8 +31,8 @@ export async function runEvals(quick = false): Promise<EvalReport> {
   const cases = await loadDataset(quick)
 
   const evaluations = await Promise.all(
-    cases.map(async (testCase) => {
-      // TODO(paso-10): invocar generateAnswer y evaluar contra el caso.
+    cases.map(async (_testCase) => {
+      // TODO(paso-10): invocar generateAnswer y evaluar contra el caso (_testCase).
       void evaluateCase
       throw new Error('eval execution not implemented (paso 10)')
     }),

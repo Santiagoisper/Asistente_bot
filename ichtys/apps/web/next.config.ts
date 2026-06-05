@@ -10,10 +10,8 @@ const nextConfig: NextConfig = {
     '@ichtys/rag',
     '@ichtys/ui',
   ],
-  experimental: {
-    // Mantener deps server-only fuera del bundle del cliente.
-    serverComponentsExternalPackages: ['postgres', 'pdf-parse'],
-  },
+  // Mantener deps server-only fuera del bundle del cliente (Next 15).
+  serverExternalPackages: ['@neondatabase/serverless', 'ws', 'pdf-parse'],
 }
 
 export default nextConfig

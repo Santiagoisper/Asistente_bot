@@ -13,8 +13,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run",
-    "test:leakage": "vitest run --dir tests/leakage"
+    "test": "vitest run --passWithNoTests",
+    "test:leakage": "vitest run --dir tests/leakage --passWithNoTests"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.9.6",

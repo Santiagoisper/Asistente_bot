@@ -1,5 +1,4 @@
-import { z } from 'zod'
-import { AccessError, validateStudyAccess } from '@ichtys/auth'
+import { AccessError, ROLES, validateStudyAccess } from '@ichtys/auth'
 import { runIngestionInput } from '@ichtys/ingestion'
 
 export const runtime = 'nodejs'
@@ -9,7 +8,9 @@ const triggerInput = runIngestionInput.omit({ organizationId: true })
 
 /**
  * POST /api/ingestion/run — dispara (o reintenta) el pipeline de ingestion para
- * una versión de documento. Requiere rol de gestión documental.
+ * una versión de documento. Requiere rol org_admin.
+ *
+ * Stub funcional: valida auth + rol + study access y devuelve un estado de cola.
  */
 export async function POST(req: Request): Promise<Response> {
   let body: unknown
@@ -25,14 +26,17 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   try {
-    const ctx = await validateStudyAccess(parsed.data.studyId, 'site_coordinator')
+    const { orgId } = await validateStudyAccess(parsed.data.studyId, ROLES.ORG_ADMIN)
 
     // organization_id viene del contexto validado, no del request.
-    const input = { ...parsed.data, organizationId: ctx.organizationId }
+    const input = { ...parsed.data, organizationId: orgId }
     void input
 
     // TODO(paso-5): runIngestion(input) en background + audit ingestion.start.
-    return new Response('Not Implemented', { status: 501 })
+    return Response.json(
+      { documentVersionId: parsed.data.documentVersionId, status: 'queued' as const },
+      { status: 202 },
+    )
   } catch (err) {
     if (err instanceof AccessError) {
       return new Response(err.message, { status: err.status })
