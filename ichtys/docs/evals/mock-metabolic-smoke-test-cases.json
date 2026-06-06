@@ -1,11 +1,12 @@
 {
   "_meta": {
-    "version": "1.0",
-    "phase": "10A",
+    "version": "1.1",
+    "phase": "10A.1",
     "studyMock": "MOCK-METABOLIC-T2D-v1",
     "domain": "cardiometabolic / diabetes tipo 2",
     "totalCases": 12,
-    "note": "expectedPageStart y expectedPageEnd son null hasta que se carguen los PDFs mock definitivos. Actualizar con los valores reales después de la primera carga."
+    "note": "expectedPageStart y expectedPageEnd son null hasta que se exporten los Markdown a PDF definitivos y se identifiquen las páginas reales. Ver docs/evals/mock-metabolic-documents/README.md para instrucciones de exportación.",
+    "documentDirectory": "docs/evals/mock-metabolic-documents/"
   },
   "cases": [
     {
@@ -13,140 +14,140 @@
       "category": "Elegibilidad",
       "question": "¿Un paciente con HbA1c de 9% cumple criterio de inclusión?",
       "expectedDocumentType": "protocol",
-      "expectedDocumentName": "MOCK-METABOLIC-Protocol-v1.0.pdf",
-      "expectedSectionTitle": "Criterios de inclusión",
+      "expectedDocumentName": "MOCK-METABOLIC-T2D-Protocol.pdf",
+      "expectedSectionTitle": "3.1 Inclusion Criteria",
       "expectedPageStart": null,
       "expectedPageEnd": null,
       "mustFindEvidence": true,
       "tags": ["eligibility", "hba1c", "inclusion-criteria"],
-      "reviewerNotes": "Verificar si la respuesta menciona el rango completo de HbA1c (mínimo y máximo) y si señala que se deben cumplir otros criterios además de la glucemia. No es correcto si solo dice 'sí' sin citar el rango específico del protocolo.",
-      "passCriteria": "La respuesta cita el criterio de HbA1c del protocolo con el rango exacto (ej: ≥7.0% y ≤10.5%). Debe mencionar que el cumplimiento depende también de otros criterios de inclusión. No debe extrapolarse a condiciones no mencionadas en el documento."
+      "reviewerNotes": "El protocolo define HbA1c >= 7.0% y <= 10.0%. Un paciente con 9% cumple ese rango. La respuesta debe citar el rango exacto. Debe señalar que el cumplimiento también depende de otros criterios (edad, diagnóstico, BMI, etc.).",
+      "passCriteria": "La respuesta cita la sección 3.1 del protocolo con el rango de HbA1c (>= 7.0% y <= 10.0%). Indica que 9% cumple el criterio numérico. No omite que se deben cumplir los demás criterios. No inventa condiciones adicionales."
     },
     {
       "id": "SM-002",
       "category": "Exclusión",
       "question": "¿Está excluido un paciente con antecedente de pancreatitis?",
       "expectedDocumentType": "protocol",
-      "expectedDocumentName": "MOCK-METABOLIC-Protocol-v1.0.pdf",
-      "expectedSectionTitle": "Criterios de exclusión",
+      "expectedDocumentName": "MOCK-METABOLIC-T2D-Protocol.pdf",
+      "expectedSectionTitle": "3.2 Exclusion Criteria",
       "expectedPageStart": null,
       "expectedPageEnd": null,
       "mustFindEvidence": true,
       "tags": ["eligibility", "exclusion-criteria", "pancreatitis"],
-      "reviewerNotes": "Si el protocolo distingue entre pancreatitis aguda vs crónica, o exige que sea 'antecedente reciente' (ej: dentro de los últimos X años), la respuesta debe reflejar esa distinción. Si el documento dice solo 'antecedente de pancreatitis' sin más calificación, la respuesta no debe agregar restricciones.",
-      "passCriteria": "La respuesta cita el criterio de exclusión correspondiente del protocolo. Si hay calificaciones (tipo, recencia), deben incluirse tal como aparecen en el documento. No inventar condiciones adicionales."
+      "reviewerNotes": "El protocolo excluye cualquier antecedente de pancreatitis (aguda o crónica), sin restricción de tiempo. La respuesta debe citar esa calificación. No debe suavizar el criterio diciendo 'solo pancreatitis reciente'.",
+      "passCriteria": "La respuesta cita el criterio 1 de la sección 3.2 del protocolo: cualquier antecedente de pancreatitis (aguda o crónica) excluye al sujeto. La respuesta no inventa limitaciones de tiempo ni calificaciones adicionales."
     },
     {
       "id": "SM-003",
       "category": "Visita",
       "question": "¿Qué procedimientos corresponden en la visita 4?",
       "expectedDocumentType": "protocol",
-      "expectedDocumentName": "MOCK-METABOLIC-Protocol-v1.0.pdf",
-      "expectedSectionTitle": "Schedule of Assessments",
+      "expectedDocumentName": "MOCK-METABOLIC-T2D-Protocol.pdf",
+      "expectedSectionTitle": "3.3 Schedule of Assessments",
       "expectedPageStart": null,
       "expectedPageEnd": null,
       "mustFindEvidence": true,
       "tags": ["pre-visit", "schedule-of-assessments", "visit-4"],
-      "reviewerNotes": "La respuesta debe apuntar a la tabla de SoA o sección equivalente. Si la visita 4 tiene muchos procedimientos, es aceptable que la respuesta liste los principales. Lo que no es aceptable es inventar procedimientos no presentes en la tabla.",
-      "passCriteria": "La cita apunta a la tabla de Schedule of Assessments o sección de procedimientos de visita. Los procedimientos listados en la respuesta deben coincidir con los marcados para V4 en el documento. No deben aparecer procedimientos de otras visitas como si fueran de V4."
+      "reviewerNotes": "Visit 4 (Week 12) incluye: vital signs, physical exam, AE/SAE review, conmeds, fasting glucose, HbA1c, lipid panel, CMP, PK sample, compliance check, dispensación. La respuesta debe citar la sección 3.3.",
+      "passCriteria": "La respuesta cita la sección 3.3 del protocolo y lista los procedimientos de Visit 4. Los procedimientos mencionados coinciden con los del documento. No aparecen procedimientos de otras visitas como si fueran de V4."
     },
     {
       "id": "SM-004",
       "category": "Ventana de visita",
       "question": "¿Cuál es la ventana permitida para la visita de seguimiento?",
       "expectedDocumentType": "protocol",
-      "expectedDocumentName": "MOCK-METABOLIC-Protocol-v1.0.pdf",
-      "expectedSectionTitle": "Ventanas de visita",
+      "expectedDocumentName": "MOCK-METABOLIC-T2D-Protocol.pdf",
+      "expectedSectionTitle": "3.4 Visit Windows",
       "expectedPageStart": null,
       "expectedPageEnd": null,
       "mustFindEvidence": true,
       "tags": ["pre-visit", "visit-window", "follow-up"],
-      "reviewerNotes": "Si el protocolo define distintas ventanas según la visita (ej: ±3 días para intermedias, ±7 para fin de tratamiento), la respuesta debe especificar cuál aplica a 'seguimiento'. Si la ventana depende de una visita de referencia (ej: desde baseline o desde la última dosis), eso debe mencionarse.",
-      "passCriteria": "La respuesta cita la ventana específica para visitas de seguimiento con los días exactos del protocolo. No debe generalizar a 'depende del protocolo' sin citar el valor concreto."
+      "reviewerNotes": "La visita de seguimiento (End of Study / Follow-Up, V6) tiene ventana de ± 7 días desde Day 169. La respuesta debe citar esa ventana específica, no una genérica. Si menciona otras visitas para contexto, está bien, pero la ventana de seguimiento es ± 7 días.",
+      "passCriteria": "La respuesta cita la sección 3.4 del protocolo e indica que la visita de seguimiento (V6) tiene una ventana de ± 7 días desde Day 169. No generaliza con 'depende de la visita' sin citar el valor."
     },
     {
       "id": "SM-005",
       "category": "Medicación concomitante",
       "question": "¿Está permitida metformina durante el estudio?",
       "expectedDocumentType": "protocol",
-      "expectedDocumentName": "MOCK-METABOLIC-Protocol-v1.0.pdf",
-      "expectedSectionTitle": "Medicación concomitante permitida",
+      "expectedDocumentName": "MOCK-METABOLIC-T2D-Protocol.pdf",
+      "expectedSectionTitle": "3.5 Concomitant Medication",
       "expectedPageStart": null,
       "expectedPageEnd": null,
       "mustFindEvidence": true,
       "tags": ["conmeds", "metformin", "allowed-medication"],
-      "reviewerNotes": "Aceptable si cita la sección general de medicación concomitante. La respuesta debe indicar si metformina está explícitamente permitida, explícitamente prohibida, o no mencionada. No debe extrapolar a 'generalmente permitida en diabetes' si el documento no lo dice.",
-      "passCriteria": "La respuesta cita el estado de metformina del protocolo (permitida / prohibida / no mencionada) con referencia directa a la sección de medicación concomitante. Si hay condiciones de uso (ej: dosis estable por X semanas antes de screening), deben mencionarse."
+      "reviewerNotes": "Metformina está permitida si la dosis es estable (>= 1000 mg/día) por al menos 8 semanas previas al screening. La respuesta debe citar esa condición. No debe decir que está 'generalmente permitida' sin mencionar el requisito de estabilidad.",
+      "passCriteria": "La respuesta cita la sección 3.5 del protocolo. Indica que metformina está permitida con condición: dosis estable de al menos 1000 mg/día por al menos 8 semanas previas al screening, y que debe mantenerse estable durante el estudio."
     },
     {
       "id": "SM-006",
       "category": "Medicación prohibida",
       "question": "¿Qué medicamentos antidiabéticos están prohibidos?",
       "expectedDocumentType": "protocol",
-      "expectedDocumentName": "MOCK-METABOLIC-Protocol-v1.0.pdf",
-      "expectedSectionTitle": "Medicación prohibida",
+      "expectedDocumentName": "MOCK-METABOLIC-T2D-Protocol.pdf",
+      "expectedSectionTitle": "3.6 Prohibited Medication",
       "expectedPageStart": null,
       "expectedPageEnd": null,
       "mustFindEvidence": true,
       "tags": ["conmeds", "prohibited-medication", "antidiabetics"],
-      "reviewerNotes": "Idealmente la respuesta lista los fármacos prohibidos tal como aparecen en el documento (insulina, GLP-1, SGLT2, etc.). Cuidado con respuestas parciales que listan solo algunos. Si el protocolo tiene una tabla, la respuesta puede no listar todos pero debe citar la tabla.",
-      "passCriteria": "La respuesta cita la lista o tabla de medicación antidiabética prohibida del protocolo. No debe inferir que un fármaco está prohibido si el documento no lo dice explícitamente."
+      "reviewerNotes": "El protocolo lista: GLP-1 receptor agonists, SGLT2 inhibitors, sulfonylureas, thiazolidinediones, DPP-4 inhibitors, insulina (excepto rescue), alpha-glucosidase inhibitors, meglitinides, y otros agentes investigacionales antidiabéticos. La respuesta puede listar los principales; si cita la tabla/sección está bien.",
+      "passCriteria": "La respuesta cita la sección 3.6 del protocolo y menciona al menos las clases principales (GLP-1, SGLT2, sulfonylureas, insulin excepto rescue). No infiere prohibición de fármacos no listados. No inventa restricciones adicionales."
     },
     {
       "id": "SM-007",
       "category": "Muestras / laboratorio",
       "question": "¿Cómo se procesa y envía la muestra PK?",
       "expectedDocumentType": "lab_manual",
-      "expectedDocumentName": "MOCK-METABOLIC-Lab-Manual-v1.pdf",
-      "expectedSectionTitle": "Manejo y envío de muestras PK",
+      "expectedDocumentName": "MOCK-METABOLIC-T2D-Lab-Manual.pdf",
+      "expectedSectionTitle": "3.2 PK Sample Processing",
       "expectedPageStart": null,
       "expectedPageEnd": null,
       "mustFindEvidence": true,
       "tags": ["labs", "pk-samples", "sample-handling"],
-      "reviewerNotes": "La respuesta debe citar pasos clave del manejo (volumen de extracción, tipo de tubo, temperatura de almacenamiento, tiempo hasta centrifugado). No debe inventar condiciones de shipping ni direcciones del laboratorio central que no estén en el documento.",
-      "passCriteria": "La cita apunta al manual de laboratorio, sección de muestras PK. Los pasos mencionados coinciden con los del documento. No aparecen condiciones no presentes en el manual."
+      "reviewerNotes": "La respuesta debe citar el Lab Manual sección 3.2 y/o 3.4. Pasos clave: invertir tubo 8-10 veces, centrifugar a 1500xg por 10 min a 4°C dentro de 30 min de colección, alicuotar en cryovials A y B, congelar a -60°C o menor, enviar en dry ice con manifest. No debe inventar condiciones de courier ni del laboratorio central.",
+      "passCriteria": "La cita apunta al Lab Manual. Los pasos mencionados coinciden con secciones 3.2 y 3.4 del documento. No aparecen condiciones de shipping (direcciones, couriers específicos) que no estén en el manual."
     },
     {
       "id": "SM-008",
       "category": "Safety / SAE",
       "question": "¿Cuál es el timeline de reporte para un SAE?",
       "expectedDocumentType": "protocol",
-      "expectedDocumentName": "MOCK-METABOLIC-Protocol-v1.0.pdf",
-      "expectedSectionTitle": "Safety reporting",
+      "expectedDocumentName": "MOCK-METABOLIC-T2D-Protocol.pdf",
+      "expectedSectionTitle": "3.7 Safety Reporting — Adverse Events and SAEs",
       "expectedPageStart": null,
       "expectedPageEnd": null,
       "mustFindEvidence": true,
       "tags": ["safety", "sae", "reporting-timeline"],
-      "reviewerNotes": "La respuesta debe indicar el tiempo límite de reporte (ej: 24h al monitor) y el canal si el documento lo especifica. No debe extrapolar a 'ICH E6 requiere X horas' si el protocolo no cita ese estándar explícitamente.",
-      "passCriteria": "La respuesta cita el timeline exacto del protocolo (horas o días) y el receptor del reporte (monitor, sponsor, autoridad competente) tal como aparece en el documento. No debe agregar obligaciones regulatorias no mencionadas."
+      "reviewerNotes": "El protocolo indica: reporte al sponsor dentro de 24 horas de conocimiento del sitio. Reporte escrito con SAE Form dentro de 5 días calendario. SAEs fatales o que amenazan vida: a autoridad regulatoria dentro de 7 días. La respuesta debe citar esos timelines. No debe extrapolar regulación ICH E6 si el protocolo no la cita explícitamente.",
+      "passCriteria": "La respuesta cita la sección 3.7.2 del protocolo con los timelines correctos: 24 horas al sponsor (inicial), 5 días para reporte escrito, 7 días a autoridad regulatoria para SAEs fatales. No inventa timelines no presentes."
     },
     {
       "id": "SM-009",
       "category": "Dosis / interrupción",
       "question": "¿Qué hacer si el paciente omite una dosis?",
-      "expectedDocumentType": "protocol",
-      "expectedDocumentName": "MOCK-METABOLIC-Protocol-v1.0.pdf",
-      "expectedSectionTitle": "Manejo de dosis omitidas",
+      "expectedDocumentType": "pharmacy_manual",
+      "expectedDocumentName": "MOCK-METABOLIC-T2D-Pharmacy-Manual.pdf",
+      "expectedSectionTitle": "3.4 Missed Dose Management",
       "expectedPageStart": null,
       "expectedPageEnd": null,
       "mustFindEvidence": true,
       "tags": ["dosing", "missed-dose", "pharmacy"],
-      "reviewerNotes": "Si el protocolo o el manual de farmacia distingue entre dosis aislada vs dosis consecutivas omitidas, la respuesta debe reflejar esa distinción. Si solo hay una instrucción general, la respuesta debe citarla sin inventar casos especiales.",
-      "passCriteria": "La respuesta cita la sección de manejo de dosis omitidas con las instrucciones exactas del documento. Si hay distinción por cantidad de dosis omitidas, debe reflejarse. No debe inventar criterios de discontinuación no mencionados."
+      "reviewerNotes": "El Pharmacy Manual sección 3.4 define: dosis única omitida < 12h → tomar; > 12h → saltear y continuar. No duplicar dosis. Dos o más consecutivas → notificar al Investigador. La respuesta puede también referenciar Protocolo 3.8. Debe citar las reglas sin inventar condiciones adicionales.",
+      "passCriteria": "La respuesta cita el Pharmacy Manual sección 3.4 (o Protocol sección 3.8) con las reglas de dosis omitida. Distingue la regla de < 12h vs > 12h. Indica que no se debe duplicar la dosis. Menciona que 2+ dosis consecutivas requieren notificación al Investigador."
     },
     {
       "id": "SM-010",
       "category": "Monitor prep",
       "question": "¿Qué documentos o datos hay que tener disponibles para monitoreo?",
       "expectedDocumentType": "other",
-      "expectedDocumentName": "MOCK-METABOLIC-Study-Procedures-v1.pdf",
-      "expectedSectionTitle": "Visitas de monitoreo",
+      "expectedDocumentName": "MOCK-METABOLIC-T2D-Study-Procedures-Manual.pdf",
+      "expectedSectionTitle": "3.1 Monitoring Visit Preparation",
       "expectedPageStart": null,
       "expectedPageEnd": null,
       "mustFindEvidence": true,
       "tags": ["monitoring", "source-documents", "cra-visit"],
-      "reviewerNotes": "La respuesta puede combinar información de más de un documento si el manual de procedimientos hace referencia cruzada. Lo que no es aceptable es inventar items de checklist no presentes en ningún documento cargado.",
-      "passCriteria": "La respuesta cita el manual de procedimientos (u otro documento cargado que contenga esta info). Los items mencionados coinciden con lo que el documento especifica para visitas de monitoreo."
+      "reviewerNotes": "El Study Procedures Manual sección 3.1 lista 10 categorías de documentos. La respuesta puede no listarlos todos, pero debe citar la sección y mencionar al menos: ICFs, source documents, IPAL, delegation/training log, AE/SAE documentation, protocol deviation log, eCRF status, lab sample logs.",
+      "passCriteria": "La respuesta cita la sección 3.1 del Study Procedures Manual. Los items mencionados están en esa sección del documento. No inventa items de checklist no presentes."
     },
     {
       "id": "SM-011",
@@ -159,8 +160,8 @@
       "expectedPageEnd": null,
       "mustFindEvidence": false,
       "tags": ["fallback", "insufficient-evidence", "adversarial"],
-      "reviewerNotes": "La variable X no existe en ningún documento cargado. Ichtys debe devolver insufficient_evidence. Si da una respuesta 'plausible' sobre algún criterio con confianza alta o media, es un fallo crítico (hallucination con apariencia de certeza).",
-      "passCriteria": "La respuesta devuelve insufficient_evidence y no ofrece respuesta alternativa inventada. El campo confidence debe ser 'insufficient_evidence'. No deben aparecer citas."
+      "reviewerNotes": "ADVERSARIAL CASE. La frase 'variable X' no existe en ningún documento del estudio mock. Ichtys debe devolver insufficient_evidence. Cualquier respuesta con confianza high o medium es un fallo crítico (hallucination). No agregar 'variable X' a ningún documento mock.",
+      "passCriteria": "confidence = 'insufficient_evidence'. No aparecen citas. La respuesta indica que no encontró evidencia sobre ese criterio en los documentos disponibles. No ofrece respuesta inventada."
     },
     {
       "id": "SM-012",
@@ -173,8 +174,8 @@
       "expectedPageEnd": null,
       "mustFindEvidence": false,
       "tags": ["fallback", "insufficient-evidence", "adversarial"],
-      "reviewerNotes": "La visita 99 y el procedimiento Y no existen en el protocolo mock. Ichtys debe devolver insufficient_evidence. Si inventa un procedimiento para 'visita 99' con confianza alta, es un fallo crítico.",
-      "passCriteria": "La respuesta devuelve insufficient_evidence y no ofrece contenido inventado. El campo confidence debe ser 'insufficient_evidence'. No deben aparecer citas. Es aceptable que la respuesta indique que no encontró esa visita en los documentos disponibles."
+      "reviewerNotes": "ADVERSARIAL CASE. 'Visita 99' y 'procedimiento Y' no existen en ningún documento del estudio mock. Ichtys debe devolver insufficient_evidence. Cualquier respuesta inventada con confianza alta es un fallo crítico. No agregar 'visita 99' ni 'procedimiento Y' a ningún documento mock.",
+      "passCriteria": "confidence = 'insufficient_evidence'. No aparecen citas. La respuesta indica que no encontró esa visita ni ese procedimiento en los documentos disponibles. No ofrece contenido inventado."
     }
   ]
 }

@@ -103,13 +103,15 @@ Antes del eval runner automatizado, se ejecuta un smoke test manual estructurado
 con un estudio mock metabólico (diabetes tipo 2). Este smoke test verifica que
 Ichtys funciona correctamente de extremo a extremo con evidencia verificable.
 
-**Archivos de Fase 10A:**
+**Archivos de Fase 10A / 10A.1:**
 
 | Archivo | Descripción |
 |---|---|
 | `docs/decisions/phase-10a-smoke-test.md` | Guía completa de ejecución manual |
-| `docs/evals/mock-metabolic-smoke-test-cases.json` | Dataset de 12 preguntas con criterios de evaluación |
+| `docs/evals/mock-metabolic-smoke-test-cases.json` | Dataset de 12 preguntas con criterios de evaluación (v1.1) |
 | `docs/evals/mock-metabolic-smoke-test-results-template.csv` | Plantilla para registrar resultados |
+| `docs/evals/mock-metabolic-documents/` | Documentos mock listos para cargar en Ichtys |
+| `docs/evals/mock-metabolic-documents/README.md` | Instrucciones de uso, mapping de tipos y carga |
 
 **Criterios bloqueantes para pasar a 10B:**
 - 0 leakage cross-tenant y cross-study
