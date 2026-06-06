@@ -55,7 +55,12 @@ import {
 } from '../answer-engine'
 import type { AnswerEngineInput } from '../answer-engine'
 import type { RetrievedChunk } from '../retriever'
-import { MIN_SIMILARITY_THRESHOLD } from '../guardrails'
+import {
+  MIN_SIMILARITY_THRESHOLD,
+  detectQuestionLanguage,
+  getInsufficientEvidenceMessage,
+  INSUFFICIENT_EVIDENCE_MESSAGES,
+} from '../guardrails'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -496,5 +501,101 @@ describe('buildContext', () => {
 
     expect(context).toContain('p. 3')
     expect(context).not.toContain('pp. 3-3')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// detectQuestionLanguage
+// ---------------------------------------------------------------------------
+
+describe('detectQuestionLanguage', () => {
+  it('returns "es" when the question starts with ¿', () => {
+    expect(detectQuestionLanguage('¿Cuál es el criterio de inclusión?')).toBe('es')
+  })
+
+  it('returns "es" when the question contains ñ', () => {
+    expect(detectQuestionLanguage('Información sobre el estudio')).toBe('es')
+  })
+
+  it('returns "es" when the question contains accented vowels', () => {
+    expect(detectQuestionLanguage('¿Qué procedimiento se aplica?')).toBe('es')
+  })
+
+  it('returns "es" for a typical Spanish clinical question', () => {
+    expect(detectQuestionLanguage('¿Cuál es el timeline de reporte para un SAE serio inesperado?')).toBe('es')
+  })
+
+  it('returns "es" based on Spanish function words even without diacritics', () => {
+    expect(detectQuestionLanguage('que criterios tiene el estudio')).toBe('es')
+  })
+
+  it('returns "en" for a typical English clinical question', () => {
+    expect(detectQuestionLanguage('What are the eligibility criteria for HbA1c?')).toBe('en')
+  })
+
+  it('returns "en" for English questions about SAE reporting', () => {
+    expect(detectQuestionLanguage('What is the SAE reporting timeline?')).toBe('en')
+  })
+
+  it('defaults to "en" for ambiguous or unknown input', () => {
+    expect(detectQuestionLanguage('HbA1c 9.2%')).toBe('en')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// getInsufficientEvidenceMessage
+// ---------------------------------------------------------------------------
+
+describe('getInsufficientEvidenceMessage', () => {
+  it('returns the Spanish message for a Spanish question', () => {
+    const msg = getInsufficientEvidenceMessage('¿Cuál es el criterio de inclusión?')
+    expect(msg).toBe(INSUFFICIENT_EVIDENCE_MESSAGES.es)
+  })
+
+  it('returns the English message for an English question', () => {
+    const msg = getInsufficientEvidenceMessage('What is the eligibility criteria?')
+    expect(msg).toBe(INSUFFICIENT_EVIDENCE_MESSAGES.en)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// i18n fallback — pre-LLM (sin llamar al LLM)
+// ---------------------------------------------------------------------------
+
+describe('answerEngine — i18n fallback pre-LLM', () => {
+  it('returns Spanish message when retrievedChunks is empty and question is in Spanish', async () => {
+    const spanishQuestion = '¿Cuál es el criterio de HbA1c para inclusión?'
+    const result = await answerEngine(makeInput([], spanishQuestion))
+
+    expect(result.confidence).toBe('insufficient_evidence')
+    expect(result.answer).toBe(INSUFFICIENT_EVIDENCE_MESSAGES.es)
+    expect(mocks.generateObject).not.toHaveBeenCalled()
+  })
+
+  it('returns Spanish message when chunks are below threshold and question is in Spanish', async () => {
+    const belowThreshold = makeChunk({ similarityScore: MIN_SIMILARITY_THRESHOLD - 0.01 })
+    const spanishQuestion = '¿Qué procedimiento se aplica para las muestras PK?'
+
+    const result = await answerEngine(makeInput([belowThreshold], spanishQuestion))
+
+    expect(result.confidence).toBe('insufficient_evidence')
+    expect(result.answer).toBe(INSUFFICIENT_EVIDENCE_MESSAGES.es)
+    expect(mocks.generateObject).not.toHaveBeenCalled()
+  })
+
+  it('returns English message when retrievedChunks is empty and question is in English', async () => {
+    const englishQuestion = 'What is the primary endpoint of this study?'
+    const result = await answerEngine(makeInput([], englishQuestion))
+
+    expect(result.confidence).toBe('insufficient_evidence')
+    expect(result.answer).toBe(INSUFFICIENT_EVIDENCE_MESSAGES.en)
+    expect(mocks.generateObject).not.toHaveBeenCalled()
+  })
+
+  it('does not call the LLM in any pre-LLM fallback scenario', async () => {
+    await answerEngine(makeInput([], '¿Tiene información sobre metformina?'))
+    await answerEngine(makeInput([makeChunk({ similarityScore: 0.50 })], 'What about metformin?'))
+
+    expect(mocks.generateObject).not.toHaveBeenCalled()
   })
 })

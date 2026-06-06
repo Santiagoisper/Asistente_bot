@@ -6,7 +6,7 @@ import { retrieveRelevantChunks, type RetrievedChunk } from './retriever'
 import {
   assessEvidence,
   filterByThreshold,
-  INSUFFICIENT_EVIDENCE_MESSAGE,
+  getInsufficientEvidenceMessage,
 } from './guardrails'
 
 /**
@@ -208,7 +208,7 @@ export async function answerEngine(input: AnswerEngineInput): Promise<AnswerResu
 
   if (!assessment.hasEvidence) {
     return {
-      answer: INSUFFICIENT_EVIDENCE_MESSAGE,
+      answer: getInsufficientEvidenceMessage(question),
       confidence: 'insufficient_evidence',
       evidences: [],
     }
@@ -247,7 +247,7 @@ export async function answerEngine(input: AnswerEngineInput): Promise<AnswerResu
   //    citationIndices que no mapean a chunks válidos, degradar.
   if (evidences.length === 0) {
     return {
-      answer: INSUFFICIENT_EVIDENCE_MESSAGE,
+      answer: getInsufficientEvidenceMessage(question),
       confidence: 'insufficient_evidence',
       evidences: [],
     }

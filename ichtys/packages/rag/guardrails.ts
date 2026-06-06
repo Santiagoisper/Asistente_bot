@@ -2,7 +2,7 @@ import type { RetrievedChunk } from './retriever'
 import type { AnswerConfidence } from '@ichtys/db'
 
 /**
- * guardrails.ts — lógica de confianza, umbral y fallback.
+ * guardrails.ts — lógica de confianza, umbral, fallback e i18n.
  *
  * Principio (PRD §5, CLAUDE.md 6): una respuesta incorrecta con apariencia de
  * certeza es peor que ninguna respuesta. El fallback es una feature.
@@ -17,9 +17,41 @@ export const MIN_CHUNKS_FOR_ANSWER = 1
  */
 export const MIN_SIMILARITY_THRESHOLD = 0.75
 
-export const INSUFFICIENT_EVIDENCE_MESSAGE =
-  "I don't have sufficient evidence in the uploaded documents to answer this question. " +
-  'Please consult the study team or review the source documents directly.'
+/** Idiomas soportados para mensajes de fallback. Default: 'en'. */
+export type SupportedLanguage = 'en' | 'es'
+
+export const INSUFFICIENT_EVIDENCE_MESSAGES: Record<SupportedLanguage, string> = {
+  en: 'I do not have sufficient information in the available documents to answer this question.',
+  es: 'No tengo información suficiente en los documentos disponibles para responder esta pregunta.',
+}
+
+/** Conservado por compatibilidad con código existente. */
+export const INSUFFICIENT_EVIDENCE_MESSAGE = INSUFFICIENT_EVIDENCE_MESSAGES.en
+
+// Indicadores morfológicos del español. La presencia de cualquiera de estos
+// en la pregunta es señal suficiente sin necesidad de modelos externos.
+const SPANISH_CHAR_PATTERN = /[¿¡ñÑáéíóúÁÉÍÓÚ]/
+const SPANISH_WORD_PATTERN =
+  /\b(qué|cuál|cómo|está|estás|para|tiene|tienen|son|las|los|del|una|por|con|que|es|se|en|no|hay|más|si|su|te|le|la|un|al|qué|dónde|cuándo|quién|quiénes)\b/i
+
+/**
+ * Detecta el idioma de la pregunta mediante heurística léxica ligera.
+ * Sin dependencias externas; sin llamadas al LLM.
+ * Default: 'en' cuando no hay señal clara de español.
+ */
+export function detectQuestionLanguage(question: string): SupportedLanguage {
+  if (SPANISH_CHAR_PATTERN.test(question)) return 'es'
+  if (SPANISH_WORD_PATTERN.test(question)) return 'es'
+  return 'en'
+}
+
+/**
+ * Devuelve el mensaje de insufficient_evidence en el idioma de la pregunta.
+ * No llama al LLM.
+ */
+export function getInsufficientEvidenceMessage(question: string): string {
+  return INSUFFICIENT_EVIDENCE_MESSAGES[detectQuestionLanguage(question)]
+}
 
 export interface EvidenceAssessment {
   hasEvidence: boolean
