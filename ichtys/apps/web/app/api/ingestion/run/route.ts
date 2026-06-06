@@ -1,16 +1,24 @@
-import { handleApiError, ROLES, validateStudyAccess } from '@ichtys/auth'
-import { runIngestionInput } from '@ichtys/ingestion'
+import { z } from 'zod'
+import { handleApiError, validateDocumentVersionAccess } from '@ichtys/auth'
+import { runIngestion } from '@ichtys/ingestion'
 
 export const runtime = 'nodejs'
 
-// The client only provides study + document; organization_id is server-side.
-const triggerInput = runIngestionInput.omit({ organizationId: true })
+const triggerInput = z
+  .object({
+    documentVersionId: z.string().uuid(),
+  })
+  .strict()
 
 /**
  * POST /api/ingestion/run - trigger or retry ingestion for a document version.
- * Requires org_admin.
  */
 export async function POST(req: Request): Promise<Response> {
+  const url = new URL(req.url)
+  if (url.searchParams.has('organization_id') || url.searchParams.has('organizationId')) {
+    return new Response('Bad Request', { status: 400 })
+  }
+
   let body: unknown
   try {
     body = await req.json()
@@ -24,14 +32,23 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   try {
-    const { orgId } = await validateStudyAccess(parsed.data.studyId, ROLES.ORG_ADMIN)
+    const { userId, orgId, studyId, document, documentVersion } =
+      await validateDocumentVersionAccess(parsed.data.documentVersionId)
 
-    const input = { ...parsed.data, organizationId: orgId }
-    void input
+    const result = await runIngestion({
+      userId,
+      orgId,
+      studyId,
+      documentId: document.id,
+      documentVersionId: documentVersion.id,
+    })
 
-    // TODO(paso-5): runIngestion(input) in background + audit ingestion.start.
     return Response.json(
-      { documentVersionId: parsed.data.documentVersionId, status: 'queued' as const },
+      {
+        documentId: result.documentId,
+        documentVersionId: result.documentVersionId,
+        status: result.status,
+      },
       { status: 202 },
     )
   } catch (err) {

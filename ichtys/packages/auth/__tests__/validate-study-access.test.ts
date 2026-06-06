@@ -47,6 +47,20 @@ interface PutPrivateDocumentPdfInput {
   file: File
 }
 
+interface IngestionContextInput {
+  userId: string
+  orgId: string
+  studyId: string
+  documentId: string
+  documentVersionId: string
+}
+
+interface IngestionRouteResult {
+  documentId: string
+  documentVersionId: string
+  status: 'processing' | 'ready' | 'error'
+}
+
 interface InsertCall {
   table: unknown
   values: unknown
@@ -99,6 +113,7 @@ const mocks = vi.hoisted(() => ({
   pagesFindFirst: vi.fn<FindFirst<Page>>(),
   messagesFindFirst: vi.fn<FindFirst<Message>>(),
   citationsFindMany: vi.fn<FindMany<Citation>>(),
+  runIngestion: vi.fn<(input: IngestionContextInput) => Promise<IngestionRouteResult>>(),
   transaction: vi.fn<(callback: TransactionCallback) => Promise<unknown>>(),
   txInsert: vi.fn<(table: unknown) => InsertValuesBuilder>(),
   insertedValues: [] as InsertCall[],
@@ -106,8 +121,10 @@ const mocks = vi.hoisted(() => ({
     documents: {
       id: 'documents.id',
       organizationId: 'documents.organizationId',
+      studyId: 'documents.studyId',
     },
     documentVersions: {
+      id: 'documentVersions.id',
       documentId: 'documentVersions.documentId',
       organizationId: 'documentVersions.organizationId',
       studyId: 'documentVersions.studyId',
@@ -185,6 +202,7 @@ vi.mock('@ichtys/db', () => ({
 
 import {
   validateDocumentAccess,
+  validateDocumentVersionAccess,
   validateDocumentPageAccess,
   validateMessageAccess,
 } from '../object-access'
@@ -197,6 +215,7 @@ import { GET as documentStatusGet } from '../../../apps/web/app/api/documents/[i
 type DocumentUploadPost = (req: Request) => Promise<Response>
 
 let documentUploadPost: DocumentUploadPost
+let ingestionRunPost: DocumentUploadPost
 let maxPdfBytes = 0
 
 beforeAll(async () => {
@@ -216,8 +235,14 @@ beforeAll(async () => {
     },
   }))
 
+  vi.doMock('@ichtys/ingestion', () => ({
+    runIngestion: mocks.runIngestion,
+  }))
+
   const uploadRoute = await import('../../../apps/web/app/api/documents/upload/route')
+  const ingestionRoute = await import('../../../apps/web/app/api/ingestion/run/route')
   documentUploadPost = uploadRoute.POST
+  ingestionRunPost = ingestionRoute.POST
   maxPdfBytes = uploadRoute.MAX_PDF_BYTES
 })
 
@@ -357,8 +382,8 @@ function mockActiveOrgAndStudy(fixture: TenantFixture): void {
   mocks.studiesFindFirst.mockResolvedValue(fixture.study)
 }
 
-function createJsonRequest(body: object): Request {
-  return new Request('http://localhost/api/chat', {
+function createJsonRequest(body: object, path = '/api/chat'): Request {
+  return new Request(`http://localhost${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -563,6 +588,36 @@ describe('object-level authorization', () => {
     expect(mocks.studiesFindFirst).not.toHaveBeenCalled()
   })
 
+  it('validateDocumentVersionAccess returns a version scoped to the active org and study', async () => {
+    const fixture = createTenantFixture()
+    mockActiveOrgAndStudy(fixture)
+    mocks.documentVersionsFindFirst.mockResolvedValue(fixture.documentVersion)
+    mocks.documentsFindFirst.mockResolvedValue(fixture.document)
+
+    const result = await validateDocumentVersionAccess(fixture.documentVersionId)
+
+    expect(result.userId).toBe(fixture.userId)
+    expect(result.orgId).toBe(fixture.orgId)
+    expect(result.studyId).toBe(fixture.studyId)
+    expect(result.document).toEqual(fixture.document)
+    expect(result.documentVersion).toEqual(fixture.documentVersion)
+    expect(mocks.eq).toHaveBeenCalledWith('documentVersions.id', fixture.documentVersionId)
+    expect(mocks.eq).toHaveBeenCalledWith('documentVersions.organizationId', fixture.orgId)
+    expect(mocks.eq).toHaveBeenCalledWith('documents.studyId', fixture.studyId)
+  })
+
+  it('validateDocumentVersionAccess denies a version from another org', async () => {
+    const fixture = createTenantFixture()
+    setActiveClerkSession(fixture)
+    mocks.organizationsFindFirst.mockResolvedValue(fixture.org)
+    mocks.documentVersionsFindFirst.mockResolvedValue(null)
+
+    await expect(validateDocumentVersionAccess(fixture.documentVersionId)).rejects.toMatchObject({
+      status: 404,
+    })
+    expect(mocks.documentsFindFirst).not.toHaveBeenCalled()
+  })
+
   it('validateMessageAccess returns a message that belongs to the active org and study', async () => {
     const fixture = createTenantFixture()
     mockActiveOrgAndStudy(fixture)
@@ -658,6 +713,48 @@ describe('object-level authorization', () => {
     })
   })
 
+  it('document status reflects processing and error states with sanitized errors', async () => {
+    const processingFixture = createTenantFixture()
+    processingFixture.documentVersion.status = 'processing'
+    mockActiveOrgAndStudy(processingFixture)
+    mocks.documentsFindFirst.mockResolvedValue(processingFixture.document)
+    mocks.documentVersionsFindFirst.mockResolvedValue(processingFixture.documentVersion)
+
+    const processingResponse = await documentStatusGet(createGetRequest('/api/documents/status'), {
+      params: Promise.resolve({ id: processingFixture.documentId }),
+    })
+    const processingBody: unknown = await processingResponse.json()
+
+    expect(processingResponse.status).toBe(200)
+    expect(processingBody).toMatchObject({
+      documentId: processingFixture.documentId,
+      latestDocumentVersionId: processingFixture.documentVersionId,
+      status: 'processing',
+      errorMessage: null,
+    })
+
+    vi.clearAllMocks()
+    const errorFixture = createTenantFixture()
+    errorFixture.documentVersion.status = 'error'
+    errorFixture.documentVersion.errorMessage = 'stack trace that must not leak'
+    mockActiveOrgAndStudy(errorFixture)
+    mocks.documentsFindFirst.mockResolvedValue(errorFixture.document)
+    mocks.documentVersionsFindFirst.mockResolvedValue(errorFixture.documentVersion)
+
+    const errorResponse = await documentStatusGet(createGetRequest('/api/documents/status'), {
+      params: Promise.resolve({ id: errorFixture.documentId }),
+    })
+    const errorBody: unknown = await errorResponse.json()
+
+    expect(errorResponse.status).toBe(200)
+    expect(errorBody).toMatchObject({
+      documentId: errorFixture.documentId,
+      latestDocumentVersionId: errorFixture.documentVersionId,
+      status: 'error',
+      errorMessage: 'Document processing failed',
+    })
+  })
+
   it('citations rejects a messageId from another org', async () => {
     const fixture = createTenantFixture()
     setActiveClerkSession(fixture)
@@ -727,6 +824,70 @@ describe('object-level authorization', () => {
     expect(mocks.documentVersionsFindFirst).not.toHaveBeenCalled()
     expect(mocks.pagesFindFirst).not.toHaveBeenCalled()
   })
+
+  it('ingestion rejects when there is no auth', async () => {
+    const fixture = createTenantFixture()
+    mocks.auth.mockResolvedValue({
+      userId: null,
+      orgId: fixture.clerkOrgId,
+      orgRole: null,
+    })
+
+    const response = await ingestionRunPost(
+      createJsonRequest({ documentVersionId: fixture.documentVersionId }, '/api/ingestion/run'),
+    )
+
+    expect(response.status).toBe(401)
+    expect(mocks.runIngestion).not.toHaveBeenCalled()
+  })
+
+  it('ingestion rejects organization_id in the body', async () => {
+    const fixture = createTenantFixture()
+
+    const response = await ingestionRunPost(
+      createJsonRequest(
+        {
+          documentVersionId: fixture.documentVersionId,
+          organization_id: fixture.orgId,
+        },
+        '/api/ingestion/run',
+      ),
+    )
+
+    expect(response.status).toBe(400)
+    expect(mocks.auth).not.toHaveBeenCalled()
+    expect(mocks.runIngestion).not.toHaveBeenCalled()
+  })
+
+  it('ingestion rejects organization_id in query params', async () => {
+    const fixture = createTenantFixture()
+
+    const response = await ingestionRunPost(
+      createJsonRequest(
+        { documentVersionId: fixture.documentVersionId },
+        `/api/ingestion/run?organization_id=${crypto.randomUUID()}`,
+      ),
+    )
+
+    expect(response.status).toBe(400)
+    expect(mocks.auth).not.toHaveBeenCalled()
+    expect(mocks.runIngestion).not.toHaveBeenCalled()
+  })
+
+  it('ingestion rejects a documentVersionId from another org', async () => {
+    const fixture = createTenantFixture()
+    setActiveClerkSession(fixture)
+    mocks.organizationsFindFirst.mockResolvedValue(fixture.org)
+    mocks.documentVersionsFindFirst.mockResolvedValue(null)
+
+    const response = await ingestionRunPost(
+      createJsonRequest({ documentVersionId: fixture.documentVersionId }, '/api/ingestion/run'),
+    )
+
+    expect(response.status).toBe(404)
+    expect(mocks.runIngestion).not.toHaveBeenCalled()
+  })
+
 })
 
 describe('document upload registry', () => {

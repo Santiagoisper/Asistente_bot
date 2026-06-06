@@ -59,3 +59,11 @@ server validates the completed private blob and tenant scope.
 `resource_id = documentId`, and metadata for the created document version,
 document type, file size, and source file name. If audit insertion fails, the
 request fails with a generic server error.
+
+## Ingestion handoff
+
+Upload stops after storing the private blob and creating a pending
+`document_version`. Parsing, page extraction, and chunk creation are handled by
+the ingestion phase using `documentVersionId` as the primary input. That keeps
+future re-uploads unambiguous because the blob, status, page count, and error
+message all belong to a specific version, not just the logical document.

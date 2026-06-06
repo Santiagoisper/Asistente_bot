@@ -136,3 +136,28 @@ conservative 4 MiB application limit. It intentionally does not claim robust
 50MB support. Supporting 50MB+ PDFs safely should move to a direct/client Blob
 upload or presigned flow, with document registration after server-side
 validation of the completed private blob.
+
+---
+
+## 9. Document ingestion
+
+Upload and ingestion are separate security boundaries. Upload registers a
+private blob and a pending `document_version`; ingestion later processes one
+authorized `documentVersionId`.
+
+Ingestion rules:
+
+- The HTTP route validates Clerk auth and object-level access to
+  `document_versions.id` before calling the internal pipeline.
+- The internal pipeline receives `userId`, `orgId`, `studyId`, `documentId`, and
+  `documentVersionId` from that validated context; it does not call Clerk.
+- The pipeline revalidates `documents` and `document_versions` against
+  `organization_id` + `study_id` before reading Blob or writing rows.
+- `pages` and `chunks` persist `organization_id` and `study_id` from the
+  authorized context. No page or chunk may be inserted without both boundaries.
+- Chunks in this phase have metadata only; embeddings, retrieval, and RAG remain
+  out of scope.
+- OCR is out of scope. PDFs with no extractable text are marked `error` with a
+  sanitized code.
+- Ingestion errors stored on `document_versions.error_message` are sanitized
+  codes, never stack traces or provider internals.

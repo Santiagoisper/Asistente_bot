@@ -18,9 +18,11 @@
   },
   "dependencies": {
     "@ichtys/db": "workspace:*",
+    "@vercel/blob": "^2.4.0",
     "drizzle-orm": "^0.38.2",
     "openai": "^4.77.0",
     "pdf-parse": "^1.1.1",
+    "pdfjs-dist": "^6.0.227",
     "zod": "^3.24.1"
   },
   "devDependencies": {

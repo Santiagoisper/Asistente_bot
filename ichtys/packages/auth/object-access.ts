@@ -38,6 +38,10 @@ export interface DocumentPageAccessContext extends DocumentAccessContext {
   page: Page
 }
 
+export interface DocumentVersionAccessContext extends DocumentAccessContext {
+  documentVersion: DocumentVersion
+}
+
 async function resolveActiveOrganization(): Promise<ActiveOrganizationContext> {
   const { userId, orgId: clerkOrgId } = await auth()
 
@@ -82,6 +86,36 @@ export async function validateDocumentAccess(documentId: string): Promise<Docume
   const study = await validateStudyBelongsToOrg(document.studyId, orgId)
 
   return { userId, orgId, studyId: study.id, document, study }
+}
+
+export async function validateDocumentVersionAccess(
+  documentVersionId: string,
+): Promise<DocumentVersionAccessContext> {
+  const { userId, orgId } = await resolveActiveOrganization()
+
+  const documentVersion = await db.query.documentVersions.findFirst({
+    where: and(eq(documentVersions.id, documentVersionId), eq(documentVersions.organizationId, orgId)),
+  })
+
+  if (!documentVersion) {
+    throw new AccessError('Document version not found or access denied', 404)
+  }
+
+  const document = await db.query.documents.findFirst({
+    where: and(
+      eq(documents.id, documentVersion.documentId),
+      eq(documents.organizationId, orgId),
+      eq(documents.studyId, documentVersion.studyId),
+    ),
+  })
+
+  if (!document) {
+    throw new AccessError('Document not found or access denied', 404)
+  }
+
+  const study = await validateStudyBelongsToOrg(documentVersion.studyId, orgId)
+
+  return { userId, orgId, studyId: study.id, document, documentVersion, study }
 }
 
 export async function validateMessageAccess(messageId: string): Promise<MessageAccessContext> {

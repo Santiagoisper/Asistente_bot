@@ -1,9 +1,10 @@
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
+
 /**
- * parser.ts — extracción de texto de PDFs, página por página.
+ * parser.ts - PDF text extraction, page by page.
  *
- * El MVP NO hace OCR (PRD §6: out of scope). Si una página no tiene texto
- * extraíble, se conserva el número de página con texto vacío para no romper
- * el mapeo de citas.
+ * OCR is out of scope for this phase. Scanned PDFs with no extractable text
+ * fail with a controlled error so ingestion can mark the version as error.
  */
 
 export interface ParsedPage {
@@ -16,14 +17,75 @@ export interface ParsedDocument {
   pages: ParsedPage[]
 }
 
+export type PdfParseErrorCode =
+  | 'pdf_text_extraction_failed'
+  | 'pdf_contains_no_extractable_text'
+
+export class PdfParseError extends Error {
+  constructor(
+    readonly code: PdfParseErrorCode,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'PdfParseError'
+  }
+}
+
+interface PdfTextItem {
+  str: string
+  hasEOL?: boolean
+}
+
+function isPdfTextItem(item: unknown): item is PdfTextItem {
+  if (typeof item !== 'object' || item === null) return false
+  return 'str' in item && typeof item.str === 'string'
+}
+
+function normalizePageText(items: readonly unknown[]): string {
+  return items
+    .filter(isPdfTextItem)
+    .map((item) => (item.hasEOL ? `${item.str}\n` : item.str))
+    .join(' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim()
+}
+
 /**
- * Extrae texto por página de un PDF.
- *
- * @param data - contenido del PDF (descargado desde Vercel Blob).
+ * Extracts text by page from a PDF buffer.
  */
 export async function parsePdf(data: Buffer | Uint8Array): Promise<ParsedDocument> {
-  // TODO(paso-5): implementar extracción real por página con pdf-parse / pdfjs.
-  // Debe preservar el orden y el número de página (1-indexed) para citas exactas.
-  void data
-  throw new Error('parsePdf not implemented (paso 5)')
+  try {
+    const pdfData = new Uint8Array(data)
+    const pdf = await getDocument({
+      data: pdfData,
+      disableFontFace: true,
+    }).promise
+
+    const pages: ParsedPage[] = []
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber)
+      const textContent = await page.getTextContent()
+      pages.push({
+        pageNumber,
+        rawText: normalizePageText(textContent.items),
+      })
+    }
+
+    if (!pages.some((page) => page.rawText.trim().length > 0)) {
+      throw new PdfParseError(
+        'pdf_contains_no_extractable_text',
+        'PDF contains no extractable text; OCR is out of scope for this phase',
+      )
+    }
+
+    return { pageCount: pdf.numPages, pages }
+  } catch (err) {
+    if (err instanceof PdfParseError) {
+      throw err
+    }
+
+    throw new PdfParseError('pdf_text_extraction_failed', 'Failed to extract text from PDF')
+  }
 }
