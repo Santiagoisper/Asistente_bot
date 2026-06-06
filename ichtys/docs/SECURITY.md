@@ -310,3 +310,45 @@ Error handling:
 No persistence:
 - This endpoint does not write to `messages`, `citations`, or `audit_logs`.
 - It is intended for pipeline integration testing only.
+
+---
+
+## 15. Chat persistence and audit logging — `/api/chat`
+
+`POST /api/chat` is the production chat endpoint. It persists every turn (user
+question + assistant answer + citations) and writes audit logs.
+
+Audit log rules:
+- `rag.answer.requested` is written after auth/study validation and before the LLM
+  call. Metadata: `documentType`, `topK`, `conversationId`. Never includes the
+  question text, answer text, chunk content, prompts, or embeddings.
+- `rag.answer.completed` is written after persistence succeeds. Metadata:
+  `confidence`, `evidenceCount`, `retrievalCount`.
+- `rag.answer.failed` is written when the wrapper or persistence fails. Metadata:
+  a sanitized error code string (`wrapper_error`, `persistence_error`). Never
+  includes raw error messages, stack traces, or provider details.
+- All audit log writes are best-effort (`safeWriteAuditLog`). Audit failures are
+  logged server-side but never abort the response flow.
+
+Citation integrity rules:
+- Citations are derived exclusively from `evidences` returned by `generateAnswerForStudy`.
+  They are never reconstructed after the fact.
+- Document metadata (`documentName`, `documentType`) is fetched inside the same DB
+  transaction that inserts citations. If a document is not found, the transaction
+  rolls back — no partial citation writes.
+- `pageStart` and `pageEnd` are asserted non-null before insert. A null value
+  triggers a transaction rollback.
+
+Conversation security:
+- `orgId` is always resolved from the Clerk token. It is never accepted from the
+  body or query params.
+- When `conversationId` is provided by the client, it is validated against three
+  fields: `organizationId = orgId`, `studyId`, and `userId`. All three must match.
+  A mismatch returns 404 (not 403) to avoid enumeration leakage.
+
+Error handling:
+- All internal errors (auth, persistence, LLM) return generic HTTP responses. No
+  stack traces, provider details, or internal codes reach the client.
+- No partial success: if `persistAssistantMessageAndCitations` fails, the route
+  returns 500 and the client sees an error rather than a response that appears
+  successful but has no citations.

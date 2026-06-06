@@ -153,6 +153,14 @@ vi.mock('drizzle-orm', () => ({
 }))
 
 vi.mock('@ichtys/db', () => ({
+  // Enums needed at module-load time by rag/retriever.ts and rag/answer-engine.ts
+  documentType: ['protocol', 'investigator_brochure', 'lab_manual', 'pharmacy_manual', 'other'],
+  answerConfidence: ['high', 'medium', 'low', 'insufficient_evidence'],
+  EMBEDDING_DIMENSIONS: 1536,
+  // Drizzle operators re-exported from @ichtys/db (used by lib/chat/persistence.ts)
+  and: mocks.and,
+  eq: mocks.eq,
+  inArray: vi.fn(() => ({ kind: 'inArray' })),
   db: {
     insert: mocks.txInsert,
     transaction: mocks.transaction,
@@ -177,6 +185,9 @@ vi.mock('@ichtys/db', () => ({
       },
       citations: {
         findMany: mocks.citationsFindMany,
+      },
+      conversations: {
+        findFirst: vi.fn(),
       },
     },
   },
@@ -204,6 +215,19 @@ vi.mock('@ichtys/db', () => ({
     messageId: 'citations.messageId',
     organizationId: 'citations.organizationId',
     studyId: 'citations.studyId',
+  },
+  conversations: {
+    id: 'conversations.id',
+    organizationId: 'conversations.organizationId',
+    studyId: 'conversations.studyId',
+    userId: 'conversations.userId',
+  },
+  chunks: {
+    id: 'chunks.id',
+    organizationId: 'chunks.organizationId',
+    studyId: 'chunks.studyId',
+    documentType: 'chunks.documentType',
+    embedding: 'chunks.embedding',
   },
 }))
 
@@ -607,7 +631,7 @@ describe('validateStudyAccess tenant isolation', () => {
     const response = await chatPost(
       createJsonRequest({
         studyId: fixture.studyId,
-        message: crypto.randomUUID(),
+        question: crypto.randomUUID(),
       }),
     )
 
