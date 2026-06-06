@@ -8,12 +8,6 @@ import { getMessageCitations } from '../../../../lib/chat/history'
  *
  * Returns citation payload for an assistant message after full tenant,
  * object-level, and user-level validation.
- *
- * Auth chain: messageId → organizationId + studyId (validateMessageAccess) →
- * conversationId → userId (conversation ownership check) → citations.
- *
- * SECURITY.md §16: validation traverses the full chain
- * messageId → conversationId → organizationId + studyId + userId.
  */
 
 export const runtime = 'nodejs'
@@ -32,7 +26,6 @@ export async function GET(_req: Request, { params }: RouteContext): Promise<Resp
   try {
     const { userId, orgId, studyId, message } = await validateMessageAccess(messageId)
 
-    // Validate userId through conversation chain — ensures users only see their own citations.
     const conv = await db.query.conversations.findFirst({
       where: (c, { and, eq }) =>
         and(
@@ -48,20 +41,15 @@ export async function GET(_req: Request, { params }: RouteContext): Promise<Resp
 
     const citations = await getMessageCitations(messageId, orgId, studyId)
 
-    // Audit citation.view — best-effort, never aborts the response.
-    db.insert(auditLogs)
-      .values({
-        action: 'citation.view',
-        organizationId: orgId,
-        studyId,
-        userId,
-        resourceType: 'message',
-        resourceId: messageId,
-        metadata: { citationCount: citations.length },
-      })
-      .catch(() => {
-        // Best-effort — audit failure must not block the response.
-      })
+    await db.insert(auditLogs).values({
+      action: 'citation.view',
+      organizationId: orgId,
+      studyId,
+      userId,
+      resourceType: 'message',
+      resourceId: messageId,
+      metadata: { citationCount: citations.length },
+    })
 
     return Response.json({ messageId, citations }, { status: 200 })
   } catch (err) {

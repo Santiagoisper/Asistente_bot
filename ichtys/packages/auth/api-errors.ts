@@ -1,4 +1,5 @@
 import { AccessError } from './validate-study-access'
+import { logServerError } from './logging'
 
 const ACCESS_ERROR_MESSAGES: Record<AccessError['status'], string> = {
   401: 'Unauthorized',
@@ -11,6 +12,7 @@ export function handleApiError(err: unknown): Response {
     return new Response(ACCESS_ERROR_MESSAGES[err.status], { status: err.status })
   }
 
-  console.error('api route error', err)
+  void err
+  logServerError('api route error', 'internal_error')
   return new Response('Internal Server Error', { status: 500 })
 }

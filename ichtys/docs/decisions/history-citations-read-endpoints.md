@@ -118,7 +118,9 @@ No embeddings, full chunks, or raw prompts exposed.
 
 ## Audit logging
 
-Citations read generates `citation.view` audit log (best-effort).
+Citations read generates a mandatory `citation.view` audit log. If the audit
+insert fails, the endpoint returns a generic 500 rather than returning citations
+without traceability.
 
 Metadata: `{ citationCount: number }`.
 

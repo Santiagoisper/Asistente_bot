@@ -7,8 +7,12 @@ import {
   getOrCreateConversation,
   persistAssistantMessageAndCitations,
   persistUserMessage,
-  safeWriteAuditLog,
+  writeAuditLog,
 } from '../../../lib/chat/persistence'
+import {
+  enforceSlidingWindowRateLimit,
+  rateLimitResponse,
+} from '../../../lib/security/rate-limit'
 
 /**
  * POST /api/chat — grounded answer engine with full chat persistence.
@@ -21,7 +25,7 @@ import {
  *  - orgId always from Clerk token — never from body or query params.
  *  - studyId validated against active org before any RAG operation.
  *  - No prompts, embeddings, chunks or PHI in logs or responses.
- *  - Audit log writes are best-effort and never abort the response.
+ *  - Audit log writes are mandatory for rag.answer.* events.
  *  - No streaming in this phase. No UI. No PDF viewer.
  */
 
@@ -94,6 +98,15 @@ export async function POST(req: Request): Promise<Response> {
     return handleApiError(err)
   }
 
+  const rateLimit = await enforceSlidingWindowRateLimit({
+    key: `chat:${userId}:${studyId}`,
+    limit: 20,
+    windowSeconds: 60,
+  })
+  if (rateLimit.limited) {
+    return rateLimitResponse(rateLimit.retryAfterSeconds)
+  }
+
   // 6. Get or create conversation (validates ownership if conversationId provided).
   let conversationId: string
   try {
@@ -116,33 +129,41 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   // 8. Audit — requested. Best-effort, safe metadata only (no question text / PHI).
-  await safeWriteAuditLog({
-    action: 'rag.answer.requested',
-    orgId,
-    studyId,
-    userId,
-    resourceType: 'conversation',
-    resourceId: conversationId,
-    metadata: {
-      documentType: documentType ?? null,
-      topK: topK ?? null,
-    },
-  })
+  try {
+    await writeAuditLog({
+      action: 'rag.answer.requested',
+      orgId,
+      studyId,
+      userId,
+      resourceType: 'conversation',
+      resourceId: conversationId,
+      metadata: {
+        documentType: documentType ?? null,
+        topK: topK ?? null,
+      },
+    })
+  } catch {
+    return new Response('Internal Server Error', { status: 500 })
+  }
 
   // 9. RAG wrapper — retrieval + answer engine.
   let result: Awaited<ReturnType<typeof generateAnswerForStudy>>
   try {
     result = await generateAnswerForStudy({ studyId, question, documentType, topK })
   } catch {
-    await safeWriteAuditLog({
-      action: 'rag.answer.failed',
-      orgId,
-      studyId,
-      userId,
-      resourceType: 'conversation',
-      resourceId: conversationId,
-      metadata: { error: 'wrapper_error' },
-    })
+    try {
+      await writeAuditLog({
+        action: 'rag.answer.failed',
+        orgId,
+        studyId,
+        userId,
+        resourceType: 'conversation',
+        resourceId: conversationId,
+        metadata: { error: 'wrapper_error' },
+      })
+    } catch {
+      return new Response('Internal Server Error', { status: 500 })
+    }
     return new Response('Internal Server Error', { status: 500 })
   }
 
@@ -162,19 +183,23 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   // 11. Audit — completed. Best-effort, safe metadata only.
-  await safeWriteAuditLog({
-    action: 'rag.answer.completed',
-    orgId,
-    studyId,
-    userId,
-    resourceType: 'conversation',
-    resourceId: conversationId,
-    metadata: {
-      confidence: result.confidence,
-      evidenceCount: result.evidences.length,
-      retrievalCount: result.retrievalCount,
-    },
-  })
+  try {
+    await writeAuditLog({
+      action: 'rag.answer.completed',
+      orgId,
+      studyId,
+      userId,
+      resourceType: 'conversation',
+      resourceId: conversationId,
+      metadata: {
+        confidence: result.confidence,
+        evidenceCount: result.evidences.length,
+        retrievalCount: result.retrievalCount,
+      },
+    })
+  } catch {
+    return new Response('Internal Server Error', { status: 500 })
+  }
 
   // 12. Return structured response — no prompts, embeddings or raw chunks.
   return Response.json(

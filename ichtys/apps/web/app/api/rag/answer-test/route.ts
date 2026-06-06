@@ -4,6 +4,11 @@ import {
   generateAnswerForStudy,
   AnswerOrchestratorError,
 } from '../../../../lib/rag/answer-orchestrator'
+import {
+  clientIpRateLimitKey,
+  enforceSlidingWindowRateLimit,
+  rateLimitResponse,
+} from '../../../../lib/security/rate-limit'
 
 /**
  * POST /api/rag/answer-test — INTERNAL TESTING ENDPOINT
@@ -58,6 +63,15 @@ export async function POST(req: Request): Promise<Response> {
     if (url.searchParams.has(field)) {
       return new Response('Bad Request', { status: 400 })
     }
+  }
+
+  const rateLimit = await enforceSlidingWindowRateLimit({
+    key: `answer-test:${clientIpRateLimitKey(req)}`,
+    limit: 20,
+    windowSeconds: 60,
+  })
+  if (rateLimit.limited) {
+    return rateLimitResponse(rateLimit.retryAfterSeconds)
   }
 
   // 3. Parse body.

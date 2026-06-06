@@ -276,4 +276,17 @@ describe('GET /api/citations/[messageId] — error handling', () => {
 
     expect(res.status).toBe(500)
   })
+
+  it('returns 500 when mandatory citation.view audit insert fails', async () => {
+    mocks.validateMessageAccess.mockResolvedValueOnce(makeMessageAccessCtx())
+    mocks.conversationsFindFirst.mockResolvedValueOnce(makeConvObject())
+    mocks.getMessageCitations.mockResolvedValueOnce([makeCitation()])
+    mocks.dbInsert.mockReturnValueOnce({
+      values: vi.fn().mockRejectedValueOnce(new Error('audit unavailable')),
+    })
+
+    const res = await GET(makeRequest(mocks.MSG_ID), makeRouteCtx())
+
+    expect(res.status).toBe(500)
+  })
 })

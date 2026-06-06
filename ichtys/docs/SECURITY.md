@@ -290,6 +290,9 @@ is enforced upstream in the SQL query.
 `POST /api/rag/answer-test` is an internal-only route protected by a feature
 flag. It is not part of the production UI surface.
 
+This internal endpoint is rate limited by `x-internal-client-id`, `x-forwarded-for`,
+or `x-real-ip` when Upstash Redis / Vercel KV REST env vars are configured.
+
 Feature flag:
 - `ENABLE_INTERNAL_RAG_ANSWER_TEST=true` must be set explicitly in the
   environment. Without it, the route returns 404.
@@ -327,8 +330,12 @@ Audit log rules:
 - `rag.answer.failed` is written when the wrapper or persistence fails. Metadata:
   a sanitized error code string (`wrapper_error`, `persistence_error`). Never
   includes raw error messages, stack traces, or provider details.
-- All audit log writes are best-effort (`safeWriteAuditLog`). Audit failures are
-  logged server-side but never abort the response flow.
+- `rag.answer.*` audit log writes are mandatory. If an audit row cannot be
+  written, the route returns a generic 500 rather than presenting an unaudited
+  chat success.
+- `/api/chat` is rate limited by `userId + studyId` with a 20 requests/minute
+  sliding window when Upstash Redis / Vercel KV REST env vars are configured.
+  Limited requests return 429 with `Retry-After`.
 
 Citation integrity rules:
 - Citations are derived exclusively from `evidences` returned by `generateAnswerForStudy`.
@@ -379,7 +386,7 @@ Authorization chain:
    - Additional check: conversation table lookup ensures `userId` matches conversation owner
    - Security: the chain `messageId → conversationId → userId` is validated explicitly
    - Filters citations by `messageId + organizationId + studyId` in SQL
-   - Writes `citation.view` audit log (best-effort, never aborts response)
+   - Writes mandatory `citation.view` audit log before returning citations
 
 Query filtering:
 - All filtering applied in SQL before returning to client — no in-memory filtering

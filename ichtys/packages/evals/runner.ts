@@ -57,8 +57,9 @@ if (isMain) {
       console.error(JSON.stringify(report, null, 2))
       process.exit(report.passed ? 0 : 1)
     })
-    .catch((err: unknown) => {
-      console.error(err)
+    .catch((_err: unknown) => {
+      // eslint-disable-next-line no-console
+      console.error(JSON.stringify({ error: 'eval_runner_failed' }))
       process.exit(1)
     })
 }

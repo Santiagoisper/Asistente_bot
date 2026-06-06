@@ -24,6 +24,16 @@ const mocks = vi.hoisted(() => {
     handleApiError: vi
       .fn<(err: unknown) => Response>()
       .mockReturnValue(new Response('Internal Server Error', { status: 500 })),
+    clientIpRateLimitKey: vi.fn().mockReturnValue('203.0.113.10'),
+    enforceSlidingWindowRateLimit: vi.fn(),
+    rateLimitResponse: vi
+      .fn<(retryAfterSeconds: number) => Response>()
+      .mockImplementation((retryAfterSeconds) =>
+        new Response('Too Many Requests', {
+          status: 429,
+          headers: { 'Retry-After': String(retryAfterSeconds) },
+        }),
+      ),
   }
 })
 
@@ -36,6 +46,12 @@ vi.mock('../../../../../lib/rag/answer-orchestrator', () => ({
 
 vi.mock('@ichtys/auth', () => ({
   handleApiError: mocks.handleApiError,
+}))
+
+vi.mock('../../../../../lib/security/rate-limit', () => ({
+  clientIpRateLimitKey: mocks.clientIpRateLimitKey,
+  enforceSlidingWindowRateLimit: mocks.enforceSlidingWindowRateLimit,
+  rateLimitResponse: mocks.rateLimitResponse,
 }))
 
 // ---------------------------------------------------------------------------
@@ -110,6 +126,8 @@ describe('POST /api/rag/answer-test — feature flag enabled', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubEnv('ENABLE_INTERNAL_RAG_ANSWER_TEST', 'true')
+    mocks.clientIpRateLimitKey.mockReturnValue('203.0.113.10')
+    mocks.enforceSlidingWindowRateLimit.mockResolvedValue({ limited: false })
   })
   afterEach(() => {
     vi.unstubAllEnvs()
@@ -133,6 +151,24 @@ describe('POST /api/rag/answer-test — feature flag enabled', () => {
     })
     const b = body as { evidences: unknown[] }
     expect(b.evidences.length).toBeGreaterThan(0)
+  })
+
+  it('returns 429 with Retry-After when the internal caller is rate limited', async () => {
+    mocks.enforceSlidingWindowRateLimit.mockResolvedValueOnce({
+      limited: true,
+      retryAfterSeconds: 21,
+    })
+
+    const res = await POST(makeRequest({ studyId: STUDY_ID, question: 'test' }))
+
+    expect(res.status).toBe(429)
+    expect(res.headers.get('Retry-After')).toBe('21')
+    expect(mocks.enforceSlidingWindowRateLimit).toHaveBeenCalledWith({
+      key: 'answer-test:203.0.113.10',
+      limit: 20,
+      windowSeconds: 60,
+    })
+    expect(mocks.generateAnswerForStudy).not.toHaveBeenCalled()
   })
 
   it('returns 200 with insufficient_evidence and empty evidences when retrieval finds no chunks', async () => {

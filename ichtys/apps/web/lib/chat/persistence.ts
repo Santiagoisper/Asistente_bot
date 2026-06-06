@@ -11,7 +11,7 @@ import {
   type AnswerConfidence,
   type AuditAction,
 } from '@ichtys/db'
-import { AccessError } from '@ichtys/auth'
+import { AccessError, logServerError } from '@ichtys/auth'
 import type { Evidence } from '@ichtys/rag'
 
 /**
@@ -20,7 +20,7 @@ import type { Evidence } from '@ichtys/rag'
  * Responsabilidades:
  *  - Crear o validar conversaciones (tenant-isolated).
  *  - Persistir user messages y assistant messages + citations.
- *  - Escribir audit logs de forma best-effort (sin romper el flujo principal).
+ *  - Escribir audit logs mandatory o best-effort segun politica.
  *
  * Reglas:
  *  - No recibe orgId del body/cliente — siempre resuelto por el caller desde Clerk.
@@ -193,13 +193,13 @@ export async function persistAssistantMessageAndCitations(params: {
 // ---------------------------------------------------------------------------
 
 /**
- * Escribe un audit log de forma best-effort: los errores se logean server-side
- * pero nunca abortan el flujo principal ni generan un 500 al cliente.
+ * Audit log helpers: writeAuditLog is mandatory; safeWriteAuditLog is best-effort.
+ * Metadata must stay limited to IDs, counts, confidence values, and codes.
  *
  * Metadata permitida: IDs, counts, confidence, codes — nunca texto de usuario,
  * respuestas, chunks, prompts ni PHI.
  */
-export async function safeWriteAuditLog(params: {
+type AuditLogParams = {
   action: AuditAction
   orgId?: string
   studyId?: string
@@ -207,22 +207,25 @@ export async function safeWriteAuditLog(params: {
   resourceType?: string
   resourceId?: string
   metadata?: Record<string, unknown>
-}): Promise<void> {
+}
+
+export async function writeAuditLog(params: AuditLogParams): Promise<void> {
+  await db.insert(auditLogs).values({
+    action: params.action,
+    organizationId: params.orgId,
+    studyId: params.studyId,
+    userId: params.userId,
+    resourceType: params.resourceType,
+    resourceId: params.resourceId,
+    metadata: params.metadata ?? null,
+  })
+}
+
+export async function safeWriteAuditLog(params: AuditLogParams): Promise<void> {
   try {
-    await db.insert(auditLogs).values({
-      action: params.action,
-      organizationId: params.orgId,
-      studyId: params.studyId,
-      userId: params.userId,
-      resourceType: params.resourceType,
-      resourceId: params.resourceId,
-      metadata: params.metadata ?? null,
-    })
-  } catch (err) {
+    await writeAuditLog(params)
+  } catch {
     // Swallow — audit failures are not fatal (SECURITY.md §15).
-    console.error('[audit] Failed to write audit log', {
-      action: params.action,
-      err: err instanceof Error ? err.message : 'unknown',
-    })
+    logServerError('[audit] Failed to write audit log', params.action)
   }
 }

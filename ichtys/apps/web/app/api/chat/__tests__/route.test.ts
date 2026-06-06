@@ -55,7 +55,16 @@ const mocks = vi.hoisted(() => {
     getOrCreateConversation: vi.fn(),
     persistUserMessage: vi.fn(),
     persistAssistantMessageAndCitations: vi.fn(),
-    safeWriteAuditLog: vi.fn(),
+    writeAuditLog: vi.fn(),
+    enforceSlidingWindowRateLimit: vi.fn(),
+    rateLimitResponse: vi
+      .fn<(retryAfterSeconds: number) => Response>()
+      .mockImplementation((retryAfterSeconds) =>
+        new Response('Too Many Requests', {
+          status: 429,
+          headers: { 'Retry-After': String(retryAfterSeconds) },
+        }),
+      ),
   }
 })
 
@@ -74,7 +83,12 @@ vi.mock('../../../../lib/chat/persistence', () => ({
   getOrCreateConversation: mocks.getOrCreateConversation,
   persistUserMessage: mocks.persistUserMessage,
   persistAssistantMessageAndCitations: mocks.persistAssistantMessageAndCitations,
-  safeWriteAuditLog: mocks.safeWriteAuditLog,
+  writeAuditLog: mocks.writeAuditLog,
+}))
+
+vi.mock('../../../../lib/security/rate-limit', () => ({
+  enforceSlidingWindowRateLimit: mocks.enforceSlidingWindowRateLimit,
+  rateLimitResponse: mocks.rateLimitResponse,
 }))
 
 // ---------------------------------------------------------------------------
@@ -130,14 +144,17 @@ function setupHappyPath() {
   mocks.persistUserMessage.mockResolvedValueOnce(mocks.USER_MSG_ID)
   mocks.generateAnswerForStudy.mockResolvedValueOnce(makeWrapperResult())
   mocks.persistAssistantMessageAndCitations.mockResolvedValueOnce(mocks.ASST_MSG_ID)
-  mocks.safeWriteAuditLog.mockResolvedValue(undefined)
+  mocks.writeAuditLog.mockResolvedValue(undefined)
 }
 
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  mocks.enforceSlidingWindowRateLimit.mockResolvedValue({ limited: false })
+})
 afterEach(() => vi.clearAllMocks())
 
 // ---------------------------------------------------------------------------
@@ -185,7 +202,7 @@ describe('POST /api/chat — existing conversationId', () => {
     mocks.persistUserMessage.mockResolvedValueOnce(mocks.USER_MSG_ID)
     mocks.generateAnswerForStudy.mockResolvedValueOnce(makeWrapperResult())
     mocks.persistAssistantMessageAndCitations.mockResolvedValueOnce(mocks.ASST_MSG_ID)
-    mocks.safeWriteAuditLog.mockResolvedValue(undefined)
+    mocks.writeAuditLog.mockResolvedValue(undefined)
 
     const res = await POST(makeRequest({ studyId: mocks.STUDY_ID, question: 'test', conversationId: existingConvId }))
 
@@ -212,7 +229,7 @@ describe('POST /api/chat — insufficient_evidence', () => {
       retrievalCount: 0,
     })
     mocks.persistAssistantMessageAndCitations.mockResolvedValueOnce(mocks.ASST_MSG_ID)
-    mocks.safeWriteAuditLog.mockResolvedValue(undefined)
+    mocks.writeAuditLog.mockResolvedValue(undefined)
 
     const res = await POST(makeRequest({ studyId: mocks.STUDY_ID, question: 'unknown topic' }))
     const body = await res.json() as { confidence: string; evidences: unknown[] }
@@ -317,6 +334,32 @@ describe('POST /api/chat — access denied', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Rate limiting
+// ---------------------------------------------------------------------------
+
+describe('POST /api/chat - rate limiting', () => {
+  it('returns 429 with Retry-After when the user+study window is exhausted', async () => {
+    mocks.validateStudyAccess.mockResolvedValueOnce(makeStudyAccessCtx())
+    mocks.enforceSlidingWindowRateLimit.mockResolvedValueOnce({
+      limited: true,
+      retryAfterSeconds: 12,
+    })
+
+    const res = await POST(makeRequest({ studyId: mocks.STUDY_ID, question: 'test' }))
+
+    expect(res.status).toBe(429)
+    expect(res.headers.get('Retry-After')).toBe('12')
+    expect(mocks.enforceSlidingWindowRateLimit).toHaveBeenCalledWith({
+      key: `chat:${mocks.USER_ID}:${mocks.STUDY_ID}`,
+      limit: 20,
+      windowSeconds: 60,
+    })
+    expect(mocks.getOrCreateConversation).not.toHaveBeenCalled()
+    expect(mocks.generateAnswerForStudy).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Parameter propagation
 // ---------------------------------------------------------------------------
 
@@ -347,19 +390,19 @@ describe('POST /api/chat — parameter propagation', () => {
 // ---------------------------------------------------------------------------
 
 describe('POST /api/chat — error handling', () => {
-  it('returns 500 and calls safeWriteAuditLog(rag.answer.failed) when wrapper fails', async () => {
+  it('returns 500 and calls writeAuditLog(rag.answer.failed) when wrapper fails', async () => {
     mocks.validateStudyAccess.mockResolvedValueOnce(makeStudyAccessCtx())
     mocks.getOrCreateConversation.mockResolvedValueOnce(mocks.CONV_ID)
     mocks.persistUserMessage.mockResolvedValueOnce(mocks.USER_MSG_ID)
     mocks.generateAnswerForStudy.mockRejectedValueOnce(new Error('llm_provider_error'))
-    mocks.safeWriteAuditLog.mockResolvedValue(undefined)
+    mocks.writeAuditLog.mockResolvedValue(undefined)
 
     const res = await POST(makeRequest({ studyId: mocks.STUDY_ID, question: 'test' }))
     const text = await res.text()
 
     expect(res.status).toBe(500)
     expect(text).toBe('Internal Server Error')
-    expect(mocks.safeWriteAuditLog).toHaveBeenCalledWith(
+    expect(mocks.writeAuditLog).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'rag.answer.failed' }),
     )
     expect(mocks.persistAssistantMessageAndCitations).not.toHaveBeenCalled()
@@ -371,7 +414,34 @@ describe('POST /api/chat — error handling', () => {
     mocks.persistUserMessage.mockResolvedValueOnce(mocks.USER_MSG_ID)
     mocks.generateAnswerForStudy.mockResolvedValueOnce(makeWrapperResult())
     mocks.persistAssistantMessageAndCitations.mockRejectedValueOnce(new Error('TX failed'))
-    mocks.safeWriteAuditLog.mockResolvedValue(undefined)
+    mocks.writeAuditLog.mockResolvedValue(undefined)
+
+    const res = await POST(makeRequest({ studyId: mocks.STUDY_ID, question: 'test' }))
+
+    expect(res.status).toBe(500)
+  })
+
+  it('returns 500 when mandatory rag.answer.requested audit fails', async () => {
+    mocks.validateStudyAccess.mockResolvedValueOnce(makeStudyAccessCtx())
+    mocks.getOrCreateConversation.mockResolvedValueOnce(mocks.CONV_ID)
+    mocks.persistUserMessage.mockResolvedValueOnce(mocks.USER_MSG_ID)
+    mocks.writeAuditLog.mockRejectedValueOnce(new Error('audit unavailable'))
+
+    const res = await POST(makeRequest({ studyId: mocks.STUDY_ID, question: 'test' }))
+
+    expect(res.status).toBe(500)
+    expect(mocks.generateAnswerForStudy).not.toHaveBeenCalled()
+  })
+
+  it('returns 500 when mandatory rag.answer.completed audit fails', async () => {
+    mocks.validateStudyAccess.mockResolvedValueOnce(makeStudyAccessCtx())
+    mocks.getOrCreateConversation.mockResolvedValueOnce(mocks.CONV_ID)
+    mocks.persistUserMessage.mockResolvedValueOnce(mocks.USER_MSG_ID)
+    mocks.generateAnswerForStudy.mockResolvedValueOnce(makeWrapperResult())
+    mocks.persistAssistantMessageAndCitations.mockResolvedValueOnce(mocks.ASST_MSG_ID)
+    mocks.writeAuditLog
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('audit unavailable'))
 
     const res = await POST(makeRequest({ studyId: mocks.STUDY_ID, question: 'test' }))
 
@@ -389,7 +459,7 @@ describe('POST /api/chat — audit logs', () => {
     mocks.validateStudyAccess.mockResolvedValueOnce(makeStudyAccessCtx())
     mocks.getOrCreateConversation.mockResolvedValueOnce(mocks.CONV_ID)
     mocks.persistUserMessage.mockResolvedValueOnce(mocks.USER_MSG_ID)
-    mocks.safeWriteAuditLog.mockImplementation(async (p: { action: string }) => {
+    mocks.writeAuditLog.mockImplementation(async (p: { action: string }) => {
       callOrder.push(p.action)
     })
     mocks.generateAnswerForStudy.mockImplementation(async () => {
@@ -412,7 +482,7 @@ describe('POST /api/chat — audit logs', () => {
 
     await POST(makeRequest({ studyId: mocks.STUDY_ID, question: 'test' }))
 
-    const completedCall = mocks.safeWriteAuditLog.mock.calls.find(
+    const completedCall = mocks.writeAuditLog.mock.calls.find(
       (call) => (call[0] as { action: string }).action === 'rag.answer.completed'
     )
     expect(completedCall).toBeDefined()
@@ -433,7 +503,7 @@ describe('POST /api/chat — audit logs', () => {
     const question = 'Sensitive patient question about HbA1c 9.2%'
     await POST(makeRequest({ studyId: mocks.STUDY_ID, question }))
 
-    const requestedCall = mocks.safeWriteAuditLog.mock.calls.find(
+    const requestedCall = mocks.writeAuditLog.mock.calls.find(
       (call) => (call[0] as { action: string }).action === 'rag.answer.requested'
     )
     const metadata = (requestedCall![0] as { metadata?: Record<string, unknown> }).metadata ?? {}
@@ -461,7 +531,7 @@ describe('POST /api/chat — language', () => {
     mocks.persistUserMessage.mockResolvedValueOnce(mocks.USER_MSG_ID)
     mocks.generateAnswerForStudy.mockResolvedValueOnce(spanishFallback)
     mocks.persistAssistantMessageAndCitations.mockResolvedValueOnce(mocks.ASST_MSG_ID)
-    mocks.safeWriteAuditLog.mockResolvedValue(undefined)
+    mocks.writeAuditLog.mockResolvedValue(undefined)
 
     const res = await POST(makeRequest({ studyId: mocks.STUDY_ID, question: spanishQ }))
     const body = await res.json() as { answer: string; confidence: string }
