@@ -282,3 +282,31 @@ Evidence integrity:
 `orgId` and `studyId` are not accepted as inputs to `answerEngine`. Attempts to
 pass tenant identifiers at this layer do not affect retrieval scope; isolation
 is enforced upstream in the SQL query.
+
+---
+
+## 14. Internal test endpoint — `/api/rag/answer-test`
+
+`POST /api/rag/answer-test` is an internal-only route protected by a feature
+flag. It is not part of the production UI surface.
+
+Feature flag:
+- `ENABLE_INTERNAL_RAG_ANSWER_TEST=true` must be set explicitly in the
+  environment. Without it, the route returns 404.
+- `NODE_ENV` alone is not a sufficient gate.
+
+Forbidden client-controlled fields:
+- `orgId`, `organizationId`, and `organization_id` are rejected from query
+  params and body before any business logic runs, following the same pattern as
+  `POST /api/documents/upload` and `POST /api/ingestion/run`.
+- The Zod schema uses `.strict()` as an additional layer of defense.
+
+Error handling:
+- Auth failures and study access denials return 403 with the generic message
+  `Study not found or access denied`. Internal codes never reach the body.
+- Retrieval and LLM failures return 500 with `Internal Server Error`.
+- No stack traces or provider details are exposed.
+
+No persistence:
+- This endpoint does not write to `messages`, `citations`, or `audit_logs`.
+- It is intended for pipeline integration testing only.
