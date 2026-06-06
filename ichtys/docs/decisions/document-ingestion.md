@@ -81,6 +81,23 @@ Stored error messages are sanitized codes, not stack traces. Audit logs are
 created for `ingestion.started`, `ingestion.completed`, and
 `ingestion.failed`.
 
+## Authenticated PDF download/preview
+
+PDF binary access uses the same version boundary as ingestion:
+`documentVersionId`. The route
+`GET /api/document-versions/[documentVersionId]/download` validates the version
+with object-level authorization before reading the private Blob object. This is
+intentional because the Blob key, status, page count, error message, pages, and
+chunks all belong to a concrete `document_versions` row.
+
+The endpoint rejects client-supplied `organization_id`/`organizationId`, derives
+the active org from Clerk, validates the related document and study, reads Blob
+through the stored private key, and returns `application/pdf` as an attachment.
+It never returns `blob_url` or `blob_key`.
+
+Inline preview is out of scope for this phase. A future preview endpoint or mode
+must preserve the same authorization path and avoid public Blob URLs.
+
 ## Out of scope
 
 - OCR

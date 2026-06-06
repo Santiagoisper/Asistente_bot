@@ -40,9 +40,14 @@ missing resources and return `404 Not Found`.
 
 ## Storage access
 
-Private Blob storage is mandatory for PDFs. Future download or preview work must
-route through an authenticated endpoint or an equivalent signed-token mechanism
-that revalidates document access before granting binary access.
+Private Blob storage is mandatory for PDFs. Downloads now route through
+`GET /api/document-versions/[documentVersionId]/download`, which validates
+auth and object-level access before reading Blob. The route does not expose
+`blob_url`, `blob_key`, or direct Blob download URLs to clients.
+
+The current response mode is attachment download. Inline preview can be added
+later, but it must use the same authenticated and object-authorized path or an
+equivalent server-controlled mechanism.
 
 ## Upload size
 
@@ -58,6 +63,12 @@ server validates the completed private blob and tenant scope.
 `organization_id`, `study_id`, `user_id`, `resource_type = document`,
 `resource_id = documentId`, and metadata for the created document version,
 document type, file size, and source file name. If audit insertion fails, the
+request fails with a generic server error.
+
+`document.download` audit logs are also mandatory. They record
+`organization_id`, `study_id`, `user_id`, `resource_type = document_version`,
+`resource_id = documentVersionId`, and metadata containing the logical
+`documentId` and served file name. If audit insertion fails, the download
 request fails with a generic server error.
 
 ## Ingestion handoff

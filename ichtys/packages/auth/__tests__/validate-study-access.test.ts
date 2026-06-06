@@ -47,6 +47,11 @@ interface PutPrivateDocumentPdfInput {
   file: File
 }
 
+interface PrivateDocumentPdf {
+  stream: ReadableStream<Uint8Array>
+  size: number | null
+}
+
 interface IngestionContextInput {
   userId: string
   orgId: string
@@ -106,6 +111,7 @@ type DocumentVersionWhere = (
 const mocks = vi.hoisted(() => ({
   auth: vi.fn<() => Promise<ClerkAuthState>>(),
   put: vi.fn<(pathname: string, body: File, options: BlobPutOptions) => Promise<BlobPutResult>>(),
+  getPrivateDocumentPdf: vi.fn<(blobKey: string) => Promise<PrivateDocumentPdf>>(),
   organizationsFindFirst: vi.fn<FindFirst<Organization>>(),
   studiesFindFirst: vi.fn<FindFirst<Study>>(),
   documentsFindFirst: vi.fn<FindFirst<Document>>(),
@@ -148,6 +154,7 @@ vi.mock('drizzle-orm', () => ({
 
 vi.mock('@ichtys/db', () => ({
   db: {
+    insert: mocks.txInsert,
     transaction: mocks.transaction,
     query: {
       organizations: {
@@ -213,9 +220,14 @@ import { GET as documentPageGet } from '../../../apps/web/app/api/documents/[id]
 import { GET as documentStatusGet } from '../../../apps/web/app/api/documents/[id]/status/route'
 
 type DocumentUploadPost = (req: Request) => Promise<Response>
+type DocumentVersionDownloadGet = (
+  req: Request,
+  context: { params: Promise<{ documentVersionId: string }> },
+) => Promise<Response>
 
 let documentUploadPost: DocumentUploadPost
 let ingestionRunPost: DocumentUploadPost
+let documentVersionDownloadGet: DocumentVersionDownloadGet
 let maxPdfBytes = 0
 
 beforeAll(async () => {
@@ -239,10 +251,21 @@ beforeAll(async () => {
     runIngestion: mocks.runIngestion,
   }))
 
+  vi.doMock(
+    '../../../apps/web/app/api/document-versions/[documentVersionId]/download/blob-download',
+    () => ({
+      getPrivateDocumentPdf: mocks.getPrivateDocumentPdf,
+    }),
+  )
+
   const uploadRoute = await import('../../../apps/web/app/api/documents/upload/route')
   const ingestionRoute = await import('../../../apps/web/app/api/ingestion/run/route')
+  const documentVersionDownloadRoute = await import(
+    '../../../apps/web/app/api/document-versions/[documentVersionId]/download/route'
+  )
   documentUploadPost = uploadRoute.POST
   ingestionRunPost = ingestionRoute.POST
+  documentVersionDownloadGet = documentVersionDownloadRoute.GET
   maxPdfBytes = uploadRoute.MAX_PDF_BYTES
 })
 
@@ -403,6 +426,15 @@ function createUploadRequest(form: FormData, query = ''): Request {
   })
 }
 
+function createDownloadRequest(fixture: TenantFixture, query = ''): Request {
+  return new Request(
+    `http://localhost/api/document-versions/${fixture.documentVersionId}/download${query}`,
+    {
+      method: 'GET',
+    },
+  )
+}
+
 function createUploadForm(fixture: TenantFixture, file: File): FormData {
   const form = new FormData()
   form.set('file', file)
@@ -428,6 +460,33 @@ function mockBlobUpload(fixture: TenantFixture): void {
     contentType: 'application/pdf',
     contentDisposition: 'inline',
   })
+}
+
+function createPdfStream(content = '%PDF-private'): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(content))
+      controller.close()
+    },
+  })
+}
+
+function mockBlobDownload(fixture: TenantFixture, content?: string): void {
+  mocks.getPrivateDocumentPdf.mockResolvedValue({
+    stream: createPdfStream(content),
+    size: fixture.documentVersion.fileSizeBytes,
+  })
+}
+
+function mockAuditInsert(): void {
+  mocks.txInsert.mockImplementation((table) => ({
+    values: (values) => {
+      mocks.insertedValues.push({ table, values })
+      return {
+        returning: async () => [],
+      }
+    },
+  }))
 }
 
 function mockUploadTransaction(fixture: TenantFixture): void {
@@ -886,6 +945,121 @@ describe('object-level authorization', () => {
 
     expect(response.status).toBe(404)
     expect(mocks.runIngestion).not.toHaveBeenCalled()
+  })
+
+  it('download rejects when there is no auth', async () => {
+    const fixture = createTenantFixture()
+    mocks.auth.mockResolvedValue({
+      userId: null,
+      orgId: fixture.clerkOrgId,
+      orgRole: null,
+    })
+
+    const response = await documentVersionDownloadGet(createDownloadRequest(fixture), {
+      params: Promise.resolve({ documentVersionId: fixture.documentVersionId }),
+    })
+
+    expect(response.status).toBe(401)
+    expect(mocks.getPrivateDocumentPdf).not.toHaveBeenCalled()
+    expect(mocks.txInsert).not.toHaveBeenCalled()
+  })
+
+  it('download rejects organization_id in query params', async () => {
+    const fixture = createTenantFixture()
+
+    const response = await documentVersionDownloadGet(
+      createDownloadRequest(fixture, `?organization_id=${crypto.randomUUID()}`),
+      {
+        params: Promise.resolve({ documentVersionId: fixture.documentVersionId }),
+      },
+    )
+
+    expect(response.status).toBe(400)
+    expect(mocks.auth).not.toHaveBeenCalled()
+    expect(mocks.getPrivateDocumentPdf).not.toHaveBeenCalled()
+  })
+
+  it('download rejects request bodies before auth', async () => {
+    const fixture = createTenantFixture()
+    const request = createJsonRequest(
+      { organization_id: fixture.orgId },
+      `/api/document-versions/${fixture.documentVersionId}/download`,
+    )
+
+    const response = await documentVersionDownloadGet(request, {
+      params: Promise.resolve({ documentVersionId: fixture.documentVersionId }),
+    })
+
+    expect(response.status).toBe(400)
+    expect(mocks.auth).not.toHaveBeenCalled()
+    expect(mocks.getPrivateDocumentPdf).not.toHaveBeenCalled()
+  })
+
+  it('download rejects a documentVersionId from another org', async () => {
+    const fixture = createTenantFixture()
+    setActiveClerkSession(fixture)
+    mocks.organizationsFindFirst.mockResolvedValue(fixture.org)
+    mocks.documentVersionsFindFirst.mockResolvedValue(null)
+
+    const response = await documentVersionDownloadGet(createDownloadRequest(fixture), {
+      params: Promise.resolve({ documentVersionId: fixture.documentVersionId }),
+    })
+
+    expect(response.status).toBe(404)
+    expect(mocks.getPrivateDocumentPdf).not.toHaveBeenCalled()
+    expect(mocks.txInsert).not.toHaveBeenCalled()
+  })
+
+  it('download returns a PDF attachment without exposing Blob identifiers', async () => {
+    const fixture = createTenantFixture()
+    mockActiveOrgAndStudy(fixture)
+    mocks.documentVersionsFindFirst.mockResolvedValue(fixture.documentVersion)
+    mocks.documentsFindFirst.mockResolvedValue(fixture.document)
+    mockBlobDownload(fixture)
+    mockAuditInsert()
+
+    const response = await documentVersionDownloadGet(createDownloadRequest(fixture), {
+      params: Promise.resolve({ documentVersionId: fixture.documentVersionId }),
+    })
+    const body = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Content-Type')).toBe('application/pdf')
+    expect(response.headers.get('Content-Disposition')).toMatch(/^attachment; filename=".+\.pdf"$/)
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store')
+    expect(mocks.getPrivateDocumentPdf).toHaveBeenCalledWith(fixture.documentVersion.blobKey)
+    expect(body).not.toContain(fixture.documentVersion.blobKey)
+    expect(body).not.toContain(fixture.documentVersion.blobUrl)
+  })
+
+  it('download audits document.download with the active org, study, and user', async () => {
+    const fixture = createTenantFixture()
+    mockActiveOrgAndStudy(fixture)
+    mocks.documentVersionsFindFirst.mockResolvedValue(fixture.documentVersion)
+    mocks.documentsFindFirst.mockResolvedValue(fixture.document)
+    mockBlobDownload(fixture)
+    mockAuditInsert()
+
+    const response = await documentVersionDownloadGet(createDownloadRequest(fixture), {
+      params: Promise.resolve({ documentVersionId: fixture.documentVersionId }),
+    })
+
+    expect(response.status).toBe(200)
+    expect(mocks.insertedValues).toContainEqual({
+      table: mocks.tables.auditLogs,
+      values: expect.objectContaining({
+        organizationId: fixture.orgId,
+        studyId: fixture.studyId,
+        userId: fixture.userId,
+        action: 'document.download',
+        resourceType: 'document_version',
+        resourceId: fixture.documentVersionId,
+        metadata: expect.objectContaining({
+          documentId: fixture.documentId,
+          fileName: expect.stringMatching(/\.pdf$/),
+        }),
+      }),
+    })
   })
 
 })

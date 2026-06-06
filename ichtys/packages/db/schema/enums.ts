@@ -30,6 +30,7 @@ export type AnswerConfidence = (typeof answerConfidence)[number]
 
 export const auditAction = [
   'document.upload',
+  'document.download',
   'document.delete',
   'ingestion.start',
   'ingestion.complete',

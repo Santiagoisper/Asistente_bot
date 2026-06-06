@@ -1,8 +1,8 @@
-# SECURITY — Ichtys
+# SECURITY - Ichtys
 
 Reglas de seguridad expandidas. Complementa las reglas no negociables de
-`CLAUDE.md` y la sección Seguridad de `ARCHITECTURE.md`. Ichtys opera en
-entornos clínicos regulados (ICH E6 GCP, FDA 21 CFR, ANMAT/ANVISA): un fallo de
+`CLAUDE.md` y la seccion Seguridad de `ARCHITECTURE.md`. Ichtys opera en
+entornos clinicos regulados (ICH E6 GCP, FDA 21 CFR, ANMAT/ANVISA): un fallo de
 aislamiento es un incidente, no un bug menor.
 
 ---
@@ -10,11 +10,11 @@ aislamiento es un incidente, no un bug menor.
 ## 1. Modelo de tenancy
 
 ```
-organization (Clerk Org)  →  studies  →  documents  →  chunks
-                          →  conversations / messages / citations
+organization (Clerk Org) -> studies -> documents -> chunks
+                         -> conversations / messages / citations
 ```
 
-- El tenant raíz es la **organización**. Su identidad llega SIEMPRE desde el
+- El tenant raiz es la **organizacion**. Su identidad llega SIEMPRE desde el
   token de Clerk (`auth().orgId`), nunca desde el body, query o headers del
   request.
 - La unidad de aislamiento de contenido es el **study**. Ninguna respuesta
@@ -24,18 +24,19 @@ organization (Clerk Org)  →  studies  →  documents  →  chunks
 
 ## 2. Reglas no negociables
 
-1. **Todo acceso a datos se valida server-side.** Nunca confiar en parámetros
+1. **Todo acceso a datos se valida server-side.** Nunca confiar en parametros
    del cliente para determinar permisos.
 2. **`organization_id` siempre desde el token de Clerk.** Se resuelve el UUID
    interno a partir de `clerk_org_id`; el cliente nunca lo provee.
-3. **`study_id` validado contra la org del token** antes de cualquier operación
+3. **`study_id` validado contra la org del token** antes de cualquier operacion
    (`validateStudyAccess`).
 4. **Retrieval filtra por `organization_id` + `study_id` en el WHERE**, antes
    del ordenamiento por distancia vectorial. Sin excepciones, ni "para testing".
-5. **PDFs servidos con signed URLs de expiración corta.** Nunca públicos.
-6. **Audit log en toda acción sensible**, incluyendo accesos denegados.
+5. **PDFs servidos solo por endpoints autenticados.** Blob privado; nunca URLs
+   publicas directas al cliente.
+6. **Audit log en toda accion sensible**, incluyendo accesos denegados.
 7. **Errores internos nunca se exponen al cliente.** Log server-side; mensaje
-   genérico (401/403/404/500) al cliente.
+   generico (401/403/404/500) al cliente.
 
 ---
 
@@ -43,24 +44,25 @@ organization (Clerk Org)  →  studies  →  documents  →  chunks
 
 | Capa | Control |
 |---|---|
-| Edge | `middleware.ts` (Clerk) protege todo salvo rutas públicas de auth |
-| API route | `validateStudyAccess()` + validación Zod del body |
+| Edge | `middleware.ts` (Clerk) protege todo salvo rutas publicas de auth |
+| API route | `validateStudyAccess()` + validacion Zod del body |
 | Query | filtro `organization_id` + `study_id` obligatorio en toda lectura |
-| Storage | signed URLs por documento, expiración corta |
+| Storage | Vercel Blob privado; acceso binario por endpoint autenticado |
 | Observabilidad | `audit_logs` append-only |
 
 El aislamiento no depende de una sola capa: el filtro de tenant en la query es
-la última línea y la más importante.
+la ultima linea y la mas importante.
 
 ---
 
 ## 4. Manejo de PDFs
 
 - Los blobs se almacenan con key derivada (no adivinable) en Vercel Blob.
-- El acceso al binario pasa por `GET /api/documents/[id]/page/[pageNumber]`,
-  que valida acceso al study y devuelve contenido/`signed URL` de expiración
-  corta.
-- Nunca se exponen URLs públicas de Blob en el cliente.
+- El acceso al binario pasa por
+  `GET /api/document-versions/[documentVersionId]/download`, que valida
+  autenticacion y object-level authorization antes de leer Blob privado.
+- Nunca se exponen URLs publicas de Blob en el cliente.
+- Nunca se exponen `blob_url` ni `blob_key` en respuestas de descarga.
 
 ---
 
@@ -70,7 +72,7 @@ la última línea y la más importante.
   org B. Target 0%.
 - **Cross-study leakage**: dentro de una org, una pregunta sobre study X nunca
   trae evidencia de study Y. Target 0%.
-- **Auth guards**: toda API route rechaza requests sin sesión/org activa.
+- **Auth guards**: toda API route rechaza requests sin sesion/org activa.
 
 `pnpm test:leakage` debe pasar para mergear. Ver `docs/EVALS.md`.
 
@@ -80,7 +82,8 @@ la última línea y la más importante.
 
 - Nunca commitear `.env*` (solo `.env.example`).
 - Claves: Clerk, Neon (`DATABASE_URL`/`_UNPOOLED`), Vercel Blob, Anthropic,
-  OpenAI. Rotables sin cambios de código.
+  OpenAI. Rotables sin cambios de codigo.
+
 ---
 
 ## 7. Object-level authorization
@@ -95,6 +98,9 @@ Reglas:
   interno de `organizations`.
 - `documentId` se busca con `documents.id` + `documents.organization_id`; luego
   `documents.study_id` se cruza contra `studies.organization_id`.
+- `documentVersionId` se busca con `document_versions.id` +
+  `document_versions.organization_id`; luego se verifica el `document` y el
+  `study` asociados.
 - `messageId` se busca con `messages.id` + `messages.organization_id`; luego
   `messages.study_id` se cruza contra `studies.organization_id`.
 - Las citas se leen solo con `citations.message_id` +
@@ -121,8 +127,9 @@ Storage and registry rules:
 
 - PDFs are uploaded to Vercel Blob with `access: 'private'`.
 - Upload responses never expose Blob URLs or download URLs.
-- Future PDF reads/downloads must go through an authenticated endpoint or an
-  equivalent signed-token flow that revalidates object access.
+- PDF reads/downloads go through
+  `GET /api/document-versions/[documentVersionId]/download`, which revalidates
+  object access before reading private Blob.
 - `documents` and `document_versions` both persist the same
   `organization_id` and `study_id` so every later read can enforce tenant
   isolation without joining through client-provided ids.
@@ -161,3 +168,29 @@ Ingestion rules:
   sanitized code.
 - Ingestion errors stored on `document_versions.error_message` are sanitized
   codes, never stack traces or provider internals.
+
+---
+
+## 10. Authenticated PDF download/preview
+
+PDF download uses `documentVersionId` as the access unit, matching ingestion and
+version status. The route validates the requested version with
+`validateDocumentVersionAccess()`, which resolves the active Clerk organization
+to the internal `organization_id`, filters `document_versions` by that org, then
+verifies the related document and study.
+
+Download rules:
+
+- `organization_id` and `organizationId` in query params are rejected before
+  auth or storage work.
+- The route reads Blob through the stored private `blob_key` only after
+  authorization succeeds.
+- The HTTP response is `application/pdf` with attachment disposition and
+  `Cache-Control: private, no-store`.
+- The response never includes `blob_url`, `blob_key`, or Blob download URLs.
+- `document.download` audit logs are mandatory and carry `organization_id`,
+  `study_id`, `user_id`, `resource_type = document_version`, and
+  `resource_id = documentVersionId`.
+
+Inline preview is a future extension and must use the same authenticated,
+object-authorized path or an equivalent server-controlled mechanism.
