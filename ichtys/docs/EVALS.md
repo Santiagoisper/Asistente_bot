@@ -112,6 +112,8 @@ Ichtys funciona correctamente de extremo a extremo con evidencia verificable.
 | `docs/evals/mock-metabolic-smoke-test-results-template.csv` | Plantilla para registrar resultados |
 | `docs/evals/mock-metabolic-documents/` | Documentos mock listos para cargar en Ichtys |
 | `docs/evals/mock-metabolic-documents/README.md` | Instrucciones de uso, mapping de tipos y carga |
+| `docs/evals/mock-metabolic-smoke-test-runbook.md` | Runbook ejecutable: PDF export → upload → ingestion → chat → CSV |
+| `docs/evals/.gitignore` | Excluye resultados CSV con timestamp y PDFs generados |
 
 **Criterios bloqueantes para pasar a 10B:**
 - 0 leakage cross-tenant y cross-study

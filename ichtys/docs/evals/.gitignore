@@ -1,0 +1,8 @@
+# Resultados manuales del smoke test
+# Estos archivos no deben commitearse: pueden contener respuestas de Ichtys,
+# excerpts de documentos o datos de sesión.
+mock-metabolic-smoke-test-results-*.csv
+
+# PDFs generados desde los Markdown mock
+# No commitear salvo decisión explícita del Comandante.
+mock-metabolic-documents/*.pdf
