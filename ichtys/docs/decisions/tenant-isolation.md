@@ -58,3 +58,21 @@ status, page, citation, message, or related resource data.
 
 Object-level authorization tests for document status, document page access,
 messages, and citations are release-blocking.
+
+## Document upload registry
+
+Document upload follows the same tenant boundary:
+
+- `studyId` may be supplied by the client only as a selector and is validated
+  with `validateStudyAccess()` before storage or DB writes.
+- `organization_id` is rejected from FormData, JSON bodies, and query params.
+- `documents.organization_id` and `document_versions.organization_id` are set
+  from the Clerk-derived internal org UUID, never from client input.
+- `documents.study_id` and `document_versions.study_id` are set from the
+  validated study row.
+- The upload response excludes Blob URLs and organization identifiers.
+
+Every later document status, page, citation, or binary download path must still
+perform object-level authorization. A stored `document_version` row is not a
+permission grant by itself; it is tenant metadata used to enforce the same
+org/study boundary on future reads.

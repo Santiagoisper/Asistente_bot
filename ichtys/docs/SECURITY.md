@@ -107,3 +107,32 @@ Reglas:
 
 Estos tests son bloqueantes para release junto con cross-tenant y cross-study
 leakage.
+
+---
+
+## 8. Document upload and private Blob storage
+
+`POST /api/documents/upload` accepts only PDF uploads for a `studyId` that has
+already been validated with `validateStudyAccess()`. `organization_id` is
+rejected if it appears in body/FormData or query params; the internal org UUID is
+always derived from Clerk server-side auth.
+
+Storage and registry rules:
+
+- PDFs are uploaded to Vercel Blob with `access: 'private'`.
+- Upload responses never expose Blob URLs or download URLs.
+- Future PDF reads/downloads must go through an authenticated endpoint or an
+  equivalent signed-token flow that revalidates object access.
+- `documents` and `document_versions` both persist the same
+  `organization_id` and `study_id` so every later read can enforce tenant
+  isolation without joining through client-provided ids.
+- Document status reads the latest `document_versions` row only after
+  validating the `documentId` against the active org and the document study.
+- `document.upload` audit logs are mandatory. If the audit insert fails, the
+  upload request fails with a generic 500.
+
+This phase keeps the existing server route handler upload pattern and enforces a
+conservative 4 MiB application limit. It intentionally does not claim robust
+50MB support. Supporting 50MB+ PDFs safely should move to a direct/client Blob
+upload or presigned flow, with document registration after server-side
+validation of the completed private blob.

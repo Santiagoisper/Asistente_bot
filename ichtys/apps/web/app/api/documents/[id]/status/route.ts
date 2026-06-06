@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { handleApiError, validateDocumentAccess } from '@ichtys/auth'
+import { db } from '@ichtys/db'
 
 export const runtime = 'nodejs'
 
@@ -19,12 +20,32 @@ export async function GET(_req: Request, { params }: RouteContext): Promise<Resp
 
   try {
     const { orgId, studyId, document } = await validateDocumentAccess(documentId)
-    void orgId
-    void studyId
-    void document
 
-    // TODO(paso-4): read document_versions filtered by org+study+document.
-    return Response.json({ documentId, status: 'processing' as const }, { status: 200 })
+    const latestVersion = await db.query.documentVersions.findFirst({
+      where: (version, { and, eq }) =>
+        and(
+          eq(version.documentId, document.id),
+          eq(version.organizationId, orgId),
+          eq(version.studyId, studyId),
+        ),
+      orderBy: (version, { desc }) => [desc(version.versionNumber), desc(version.createdAt)],
+    })
+
+    if (!latestVersion) {
+      throw new Error('Authorized document has no document version')
+    }
+
+    return Response.json(
+      {
+        documentId: document.id,
+        latestDocumentVersionId: latestVersion.id,
+        status: latestVersion.status,
+        pageCount: latestVersion.pageCount,
+        errorMessage: latestVersion.status === 'error' ? 'Document processing failed' : null,
+        createdAt: latestVersion.createdAt,
+      },
+      { status: 200 },
+    )
   } catch (err) {
     return handleApiError(err)
   }

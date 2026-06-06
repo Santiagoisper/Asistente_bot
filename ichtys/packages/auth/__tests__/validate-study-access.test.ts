@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   Citation,
   Document,
@@ -17,6 +17,7 @@ interface ClerkAuthState {
 
 interface FindFirstArgs {
   where: unknown
+  orderBy?: unknown
 }
 
 interface FindManyArgs {
@@ -26,8 +27,53 @@ interface FindManyArgs {
 type FindFirst<T> = (args: FindFirstArgs) => Promise<T | null>
 type FindMany<T> = (args: FindManyArgs) => Promise<T[]>
 
+interface BlobPutResult {
+  url: string
+  downloadUrl: string
+  pathname: string
+  contentType: string
+  contentDisposition: string
+}
+
+interface BlobPutOptions {
+  access: 'private'
+  addRandomSuffix?: boolean
+  allowOverwrite?: boolean
+  contentType?: string
+}
+
+interface PutPrivateDocumentPdfInput {
+  blobKey: string
+  file: File
+}
+
+interface InsertCall {
+  table: unknown
+  values: unknown
+}
+
+interface ReturningInsert {
+  returning: () => Promise<unknown[]>
+}
+
+interface InsertValuesBuilder {
+  values: (values: unknown) => ReturningInsert
+}
+
+interface TransactionClient {
+  insert: (table: unknown) => InsertValuesBuilder
+}
+
+type TransactionCallback = (tx: TransactionClient) => Promise<unknown>
+
 interface CitationWhereColumns {
   messageId: string
+  organizationId: string
+  studyId: string
+}
+
+interface DocumentVersionWhereColumns {
+  documentId: string
   organizationId: string
   studyId: string
 }
@@ -38,9 +84,14 @@ interface QueryOperators {
 }
 
 type CitationWhere = (citation: CitationWhereColumns, operators: QueryOperators) => unknown
+type DocumentVersionWhere = (
+  documentVersion: DocumentVersionWhereColumns,
+  operators: QueryOperators,
+) => unknown
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn<() => Promise<ClerkAuthState>>(),
+  put: vi.fn<(pathname: string, body: File, options: BlobPutOptions) => Promise<BlobPutResult>>(),
   organizationsFindFirst: vi.fn<FindFirst<Organization>>(),
   studiesFindFirst: vi.fn<FindFirst<Study>>(),
   documentsFindFirst: vi.fn<FindFirst<Document>>(),
@@ -48,6 +99,23 @@ const mocks = vi.hoisted(() => ({
   pagesFindFirst: vi.fn<FindFirst<Page>>(),
   messagesFindFirst: vi.fn<FindFirst<Message>>(),
   citationsFindMany: vi.fn<FindMany<Citation>>(),
+  transaction: vi.fn<(callback: TransactionCallback) => Promise<unknown>>(),
+  txInsert: vi.fn<(table: unknown) => InsertValuesBuilder>(),
+  insertedValues: [] as InsertCall[],
+  tables: {
+    documents: {
+      id: 'documents.id',
+      organizationId: 'documents.organizationId',
+    },
+    documentVersions: {
+      documentId: 'documentVersions.documentId',
+      organizationId: 'documentVersions.organizationId',
+      studyId: 'documentVersions.studyId',
+    },
+    auditLogs: {
+      id: 'auditLogs.id',
+    },
+  },
   and: vi.fn((...conditions: readonly unknown[]) => ({ conditions })),
   eq: vi.fn((left: unknown, right: unknown) => ({ left, right })),
 }))
@@ -63,6 +131,7 @@ vi.mock('drizzle-orm', () => ({
 
 vi.mock('@ichtys/db', () => ({
   db: {
+    transaction: mocks.transaction,
     query: {
       organizations: {
         findFirst: mocks.organizationsFindFirst,
@@ -94,15 +163,9 @@ vi.mock('@ichtys/db', () => ({
     id: 'studies.id',
     organizationId: 'studies.organizationId',
   },
-  documents: {
-    id: 'documents.id',
-    organizationId: 'documents.organizationId',
-  },
-  documentVersions: {
-    documentId: 'documentVersions.documentId',
-    organizationId: 'documentVersions.organizationId',
-    studyId: 'documentVersions.studyId',
-  },
+  documents: mocks.tables.documents,
+  documentVersions: mocks.tables.documentVersions,
+  auditLogs: mocks.tables.auditLogs,
   pages: {
     documentVersionId: 'pages.documentVersionId',
     organizationId: 'pages.organizationId',
@@ -130,6 +193,33 @@ import { POST as chatPost } from '../../../apps/web/app/api/chat/route'
 import { GET as citationsGet } from '../../../apps/web/app/api/citations/[messageId]/route'
 import { GET as documentPageGet } from '../../../apps/web/app/api/documents/[id]/page/[pageNumber]/route'
 import { GET as documentStatusGet } from '../../../apps/web/app/api/documents/[id]/status/route'
+
+type DocumentUploadPost = (req: Request) => Promise<Response>
+
+let documentUploadPost: DocumentUploadPost
+let maxPdfBytes = 0
+
+beforeAll(async () => {
+  vi.doMock('../../../apps/web/app/api/documents/upload/blob-storage', () => ({
+    putPrivateDocumentPdf: async ({ blobKey, file }: PutPrivateDocumentPdfInput) => {
+      const blob = await mocks.put(blobKey, file, {
+        access: 'private',
+        addRandomSuffix: false,
+        allowOverwrite: false,
+        contentType: 'application/pdf',
+      })
+
+      return {
+        url: blob.url,
+        pathname: blob.pathname,
+      }
+    },
+  }))
+
+  const uploadRoute = await import('../../../apps/web/app/api/documents/upload/route')
+  documentUploadPost = uploadRoute.POST
+  maxPdfBytes = uploadRoute.MAX_PDF_BYTES
+})
 
 interface TenantFixture {
   userId: string
@@ -281,13 +371,88 @@ function createGetRequest(path: string): Request {
   })
 }
 
+function createUploadRequest(form: FormData, query = ''): Request {
+  return new Request(`http://localhost/api/documents/upload${query}`, {
+    method: 'POST',
+    body: form,
+  })
+}
+
+function createUploadForm(fixture: TenantFixture, file: File): FormData {
+  const form = new FormData()
+  form.set('file', file)
+  form.set('studyId', fixture.studyId)
+  form.set('documentType', fixture.document.documentType)
+  form.set('name', fixture.document.name)
+  return form
+}
+
+function createPdfFile(name = 'document.pdf', bytes = 1024): File {
+  return new File([new Uint8Array(bytes)], name, { type: 'application/pdf' })
+}
+
+function createTextFile(): File {
+  return new File([new Uint8Array(16)], 'document.txt', { type: 'text/plain' })
+}
+
+function mockBlobUpload(fixture: TenantFixture): void {
+  mocks.put.mockResolvedValue({
+    url: fixture.documentVersion.blobUrl,
+    downloadUrl: `${fixture.documentVersion.blobUrl}?download=1`,
+    pathname: fixture.documentVersion.blobKey,
+    contentType: 'application/pdf',
+    contentDisposition: 'inline',
+  })
+}
+
+function mockUploadTransaction(fixture: TenantFixture): void {
+  const tx: TransactionClient = {
+    insert: mocks.txInsert,
+  }
+
+  mocks.transaction.mockImplementation(async (callback) => callback(tx))
+  mocks.txInsert.mockImplementation((table) => ({
+    values: (values) => {
+      mocks.insertedValues.push({ table, values })
+
+      return {
+        returning: async () => {
+          if (table === mocks.tables.documents) return [fixture.document]
+          if (table === mocks.tables.documentVersions) return [fixture.documentVersion]
+          return []
+        },
+      }
+    },
+  }))
+}
+
 function isCitationWhere(value: unknown): value is CitationWhere {
   return typeof value === 'function'
+}
+
+function isDocumentVersionWhere(value: unknown): value is DocumentVersionWhere {
+  return typeof value === 'function'
+}
+
+function exerciseDocumentVersionWhere(): void {
+  const latestCall = mocks.documentVersionsFindFirst.mock.calls.at(-1)
+  const latestArgs = latestCall?.[0]
+  if (latestArgs && isDocumentVersionWhere(latestArgs.where)) {
+    latestArgs.where(
+      {
+        documentId: 'documentVersions.documentId',
+        organizationId: 'documentVersions.organizationId',
+        studyId: 'documentVersions.studyId',
+      },
+      { and: mocks.and, eq: mocks.eq },
+    )
+  }
 }
 
 describe('validateStudyAccess tenant isolation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.insertedValues.length = 0
   })
 
   it('rejects when Clerk has no userId', async () => {
@@ -370,6 +535,7 @@ describe('validateStudyAccess tenant isolation', () => {
 describe('object-level authorization', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.insertedValues.length = 0
   })
 
   it('validateDocumentAccess returns a document that belongs to the active org and study', async () => {
@@ -455,6 +621,7 @@ describe('object-level authorization', () => {
     const fixture = createTenantFixture()
     mockActiveOrgAndStudy(fixture)
     mocks.documentsFindFirst.mockResolvedValue(fixture.document)
+    mocks.documentVersionsFindFirst.mockResolvedValue(fixture.documentVersion)
 
     const response = await documentStatusGet(
       createGetRequest(`/api/documents/status?organization_id=${crypto.randomUUID()}`),
@@ -464,7 +631,31 @@ describe('object-level authorization', () => {
     )
 
     expect(response.status).toBe(200)
+    exerciseDocumentVersionWhere()
     expect(mocks.eq).toHaveBeenCalledWith('documents.organizationId', fixture.orgId)
+    expect(mocks.eq).toHaveBeenCalledWith('documentVersions.organizationId', fixture.orgId)
+    expect(mocks.eq).toHaveBeenCalledWith('documentVersions.studyId', fixture.studyId)
+  })
+
+  it('document status returns the latest authorized document version', async () => {
+    const fixture = createTenantFixture()
+    mockActiveOrgAndStudy(fixture)
+    mocks.documentsFindFirst.mockResolvedValue(fixture.document)
+    mocks.documentVersionsFindFirst.mockResolvedValue(fixture.documentVersion)
+
+    const response = await documentStatusGet(createGetRequest('/api/documents/status'), {
+      params: Promise.resolve({ id: fixture.documentId }),
+    })
+    const body: unknown = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body).toMatchObject({
+      documentId: fixture.documentId,
+      latestDocumentVersionId: fixture.documentVersionId,
+      status: fixture.documentVersion.status,
+      pageCount: fixture.documentVersion.pageCount,
+      errorMessage: null,
+    })
   })
 
   it('citations rejects a messageId from another org', async () => {
@@ -535,5 +726,162 @@ describe('object-level authorization', () => {
     expect(response.status).toBe(404)
     expect(mocks.documentVersionsFindFirst).not.toHaveBeenCalled()
     expect(mocks.pagesFindFirst).not.toHaveBeenCalled()
+  })
+})
+
+describe('document upload registry', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.insertedValues.length = 0
+  })
+
+  it('upload rejects when there is no auth', async () => {
+    const fixture = createTenantFixture()
+    const form = createUploadForm(fixture, createPdfFile())
+    mocks.auth.mockResolvedValue({
+      userId: null,
+      orgId: fixture.clerkOrgId,
+      orgRole: null,
+    })
+
+    const response = await documentUploadPost(createUploadRequest(form))
+
+    expect(response.status).toBe(401)
+    expect(mocks.put).not.toHaveBeenCalled()
+    expect(mocks.transaction).not.toHaveBeenCalled()
+  })
+
+  it('upload rejects organization_id in FormData', async () => {
+    const fixture = createTenantFixture()
+    const form = createUploadForm(fixture, createPdfFile())
+    form.set('organization_id', crypto.randomUUID())
+
+    const response = await documentUploadPost(createUploadRequest(form))
+
+    expect(response.status).toBe(400)
+    expect(mocks.auth).not.toHaveBeenCalled()
+    expect(mocks.put).not.toHaveBeenCalled()
+  })
+
+  it('upload rejects organization_id in query params', async () => {
+    const fixture = createTenantFixture()
+    const form = createUploadForm(fixture, createPdfFile())
+
+    const response = await documentUploadPost(
+      createUploadRequest(form, `?organization_id=${crypto.randomUUID()}`),
+    )
+
+    expect(response.status).toBe(400)
+    expect(mocks.auth).not.toHaveBeenCalled()
+    expect(mocks.put).not.toHaveBeenCalled()
+  })
+
+  it('upload rejects a non-PDF file', async () => {
+    const fixture = createTenantFixture()
+    const form = createUploadForm(fixture, createTextFile())
+
+    const response = await documentUploadPost(createUploadRequest(form))
+
+    expect(response.status).toBe(415)
+    expect(mocks.auth).not.toHaveBeenCalled()
+    expect(mocks.put).not.toHaveBeenCalled()
+  })
+
+  it('upload rejects a PDF larger than the server upload limit', async () => {
+    const fixture = createTenantFixture()
+    const form = createUploadForm(fixture, createPdfFile('large.pdf', maxPdfBytes + 1))
+
+    const response = await documentUploadPost(createUploadRequest(form))
+
+    expect(response.status).toBe(413)
+    expect(mocks.auth).not.toHaveBeenCalled()
+    expect(mocks.put).not.toHaveBeenCalled()
+  })
+
+  it('upload validates studyId against the active org before creating records', async () => {
+    const fixture = createTenantFixture()
+    const form = createUploadForm(fixture, createPdfFile())
+    setActiveClerkSession(fixture)
+    mocks.organizationsFindFirst.mockResolvedValue(fixture.org)
+    mocks.studiesFindFirst.mockResolvedValue(null)
+
+    const response = await documentUploadPost(createUploadRequest(form))
+
+    expect(response.status).toBe(404)
+    expect(mocks.studiesFindFirst).toHaveBeenCalledOnce()
+    expect(mocks.put).not.toHaveBeenCalled()
+    expect(mocks.transaction).not.toHaveBeenCalled()
+  })
+
+  it('upload creates document and document_version with orgId from Clerk', async () => {
+    const fixture = createTenantFixture()
+    fixture.documentVersion.status = 'pending'
+    const file = createPdfFile(fixture.document.name)
+    const form = createUploadForm(fixture, file)
+    mockActiveOrgAndStudy(fixture)
+    mockBlobUpload(fixture)
+    mockUploadTransaction(fixture)
+
+    const response = await documentUploadPost(createUploadRequest(form))
+    const body: unknown = await response.json()
+
+    expect(response.status).toBe(202)
+    expect(body).toMatchObject({
+      documentId: fixture.documentId,
+      documentVersionId: fixture.documentVersionId,
+      status: 'pending',
+      name: fixture.document.name,
+      documentType: fixture.document.documentType,
+    })
+    const putCall = mocks.put.mock.calls[0]
+    expect(putCall).toBeDefined()
+    if (!putCall) {
+      throw new Error('Expected Blob put to be called')
+    }
+    const [pathname, uploadedFile, blobOptions] = putCall
+    expect(pathname).toMatch(/^clinical-documents\/[0-9a-f-]+\/.+/)
+    expect(uploadedFile).toBeInstanceOf(File)
+    expect(uploadedFile.name).toBe(file.name)
+    expect(uploadedFile.size).toBe(file.size)
+    expect(uploadedFile.type).toBe('application/pdf')
+    expect(blobOptions).toMatchObject({
+      access: 'private',
+      addRandomSuffix: false,
+      allowOverwrite: false,
+      contentType: 'application/pdf',
+    })
+    expect(mocks.insertedValues).toContainEqual({
+      table: mocks.tables.documents,
+      values: expect.objectContaining({
+        organizationId: fixture.orgId,
+        studyId: fixture.studyId,
+        name: fixture.document.name,
+        documentType: fixture.document.documentType,
+      }),
+    })
+    expect(mocks.insertedValues).toContainEqual({
+      table: mocks.tables.documentVersions,
+      values: expect.objectContaining({
+        documentId: fixture.documentId,
+        organizationId: fixture.orgId,
+        studyId: fixture.studyId,
+        blobUrl: fixture.documentVersion.blobUrl,
+        blobKey: fixture.documentVersion.blobKey,
+        fileSizeBytes: file.size,
+        status: 'pending',
+        versionNumber: 1,
+      }),
+    })
+    expect(mocks.insertedValues).toContainEqual({
+      table: mocks.tables.auditLogs,
+      values: expect.objectContaining({
+        organizationId: fixture.orgId,
+        studyId: fixture.studyId,
+        userId: fixture.userId,
+        action: 'document.upload',
+        resourceType: 'document',
+        resourceId: fixture.documentId,
+      }),
+    })
   })
 })
