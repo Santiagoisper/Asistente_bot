@@ -2,12 +2,14 @@ import { auth } from '@clerk/nextjs/server'
 import { and, eq } from 'drizzle-orm'
 import {
   db,
+  conversations,
   documentVersions,
   documents,
   messages,
   organizations,
   pages,
   studies,
+  type Conversation,
   type Document,
   type DocumentVersion,
   type Message,
@@ -42,6 +44,12 @@ export interface DocumentVersionAccessContext extends DocumentAccessContext {
   documentVersion: DocumentVersion
 }
 
+export interface ConversationAccessContext extends ActiveOrganizationContext {
+  studyId: string
+  conversation: Conversation
+  study: Study
+}
+
 async function resolveActiveOrganization(): Promise<ActiveOrganizationContext> {
   const { userId, orgId: clerkOrgId } = await auth()
 
@@ -70,6 +78,32 @@ async function validateStudyBelongsToOrg(studyId: string, orgId: string): Promis
   }
 
   return study
+}
+
+/**
+ * Validates that the active user owns the conversation within their active org.
+ * Chain: conversationId → organizationId + userId → studyId.
+ */
+export async function validateConversationAccess(
+  conversationId: string,
+): Promise<ConversationAccessContext> {
+  const { userId, orgId } = await resolveActiveOrganization()
+
+  const conversation = await db.query.conversations.findFirst({
+    where: and(
+      eq(conversations.id, conversationId),
+      eq(conversations.organizationId, orgId),
+      eq(conversations.userId, userId),
+    ),
+  })
+
+  if (!conversation) {
+    throw new AccessError('Conversation not found or access denied', 404)
+  }
+
+  const study = await validateStudyBelongsToOrg(conversation.studyId, orgId)
+
+  return { userId, orgId, studyId: study.id, conversation, study }
 }
 
 export async function validateDocumentAccess(documentId: string): Promise<DocumentAccessContext> {

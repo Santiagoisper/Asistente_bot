@@ -352,3 +352,49 @@ Error handling:
 - No partial success: if `persistAssistantMessageAndCitations` fails, the route
   returns 500 and the client sees an error rather than a response that appears
   successful but has no citations.
+
+---
+
+## 16. Read-only history and citations endpoints — `/api/conversations*`
+
+`GET /api/conversations`, `GET /api/conversations/[conversationId]/messages`, and
+`GET /api/citations/[messageId]` are read-only endpoints exposing chat history and
+evidence with strict authorization and no data leakage.
+
+Authorization chain:
+
+1. **Conversations list** — `/api/conversations?studyId=...`
+   - Validates `studyId` against active org (validateStudyAccess)
+   - Filters by `organizationId + studyId + userId` in SQL
+   - Returns only conversations owned by the active user within the active org/study
+
+2. **Messages from conversation** — `/api/conversations/[conversationId]/messages`
+   - Validates conversation ownership: `organizationId + studyId + userId` all match
+   - Uses `validateConversationAccess` to check three-field security boundary
+   - Filters messages by `conversationId + organizationId + studyId` in SQL
+   - Returns messages in ascending `createdAt` order (conversation natural order)
+
+3. **Citations from message** — `/api/citations/[messageId]`
+   - Validates message ownership via message table lookup (validateMessageAccess)
+   - Additional check: conversation table lookup ensures `userId` matches conversation owner
+   - Security: the chain `messageId → conversationId → userId` is validated explicitly
+   - Filters citations by `messageId + organizationId + studyId` in SQL
+   - Writes `citation.view` audit log (best-effort, never aborts response)
+
+Query filtering:
+- All filtering applied in SQL before returning to client — no in-memory filtering
+- `orgId` never accepted from body or query params — always from Clerk token
+- `studyId` validated against active org before any data query
+- `userId` implicitly from Clerk — never from client params
+
+Response shape:
+- No `orgId`, `organizationId`, or `userId` fields exposed
+- No embeddings, full chunks, or raw prompts
+- Citation excerpts present (bounded text, not full chunk content)
+- Conversation list ordered by `updatedAt` descending (most recent first)
+
+Error handling:
+- Auth failures → 401/403 with generic message
+- Invalid studyId/conversationId/messageId → 400 (validation) or 404 (not found/access denied)
+- DB errors → 500 generic, no stack trace
+- Missing resource across org/study/user boundary → 404 (not 403 to prevent enumeration)

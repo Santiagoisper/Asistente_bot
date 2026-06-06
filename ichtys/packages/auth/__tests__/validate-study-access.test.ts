@@ -1,6 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   Citation,
+  Conversation,
   Document,
   DocumentVersion,
   Message,
@@ -118,10 +119,13 @@ const mocks = vi.hoisted(() => ({
   documentVersionsFindFirst: vi.fn<FindFirst<DocumentVersion>>(),
   pagesFindFirst: vi.fn<FindFirst<Page>>(),
   messagesFindFirst: vi.fn<FindFirst<Message>>(),
+  conversationsFindFirst: vi.fn<FindFirst<Conversation>>(),
   citationsFindMany: vi.fn<FindMany<Citation>>(),
   runIngestion: vi.fn<(input: IngestionContextInput) => Promise<IngestionRouteResult>>(),
   transaction: vi.fn<(callback: TransactionCallback) => Promise<unknown>>(),
-  txInsert: vi.fn<(table: unknown) => InsertValuesBuilder>(),
+  txInsert: vi.fn<(table: unknown) => InsertValuesBuilder>().mockReturnValue({
+    values: vi.fn().mockResolvedValue(undefined),
+  }),
   insertedValues: [] as InsertCall[],
   tables: {
     documents: {
@@ -187,7 +191,7 @@ vi.mock('@ichtys/db', () => ({
         findMany: mocks.citationsFindMany,
       },
       conversations: {
-        findFirst: vi.fn(),
+        findFirst: mocks.conversationsFindFirst,
       },
     },
   },
@@ -856,6 +860,15 @@ describe('object-level authorization', () => {
     const fixture = createTenantFixture()
     mockActiveOrgAndStudy(fixture)
     mocks.messagesFindFirst.mockResolvedValue(fixture.message)
+    mocks.conversationsFindFirst.mockResolvedValue({
+      id: fixture.message.conversationId,
+      userId: fixture.userId,
+      organizationId: fixture.orgId,
+      studyId: fixture.studyId,
+      title: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
     mocks.citationsFindMany.mockImplementation(async (args) => {
       if (isCitationWhere(args.where)) {
         args.where(
@@ -879,14 +892,7 @@ describe('object-level authorization', () => {
     expect(response.status).toBe(200)
     expect(body).toMatchObject({
       messageId: fixture.messageId,
-      citations: [
-        {
-          id: fixture.citationId,
-          messageId: fixture.messageId,
-          organizationId: fixture.orgId,
-          studyId: fixture.studyId,
-        },
-      ],
+      citations: expect.arrayContaining([expect.objectContaining({ citationId: fixture.citationId })]),
     })
     expect(mocks.eq).toHaveBeenCalledWith('citations.messageId', fixture.messageId)
     expect(mocks.eq).toHaveBeenCalledWith('citations.organizationId', fixture.orgId)
