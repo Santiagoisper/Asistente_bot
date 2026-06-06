@@ -4,9 +4,10 @@ Cómo medimos la calidad del RAG. El paquete `@ichtys/evals` implementa el
 runner (`runner.ts`) y las métricas (`metrics.ts`); este documento define el
 formato del dataset, la rúbrica de scoring y los targets de latencia.
 
-> Estado: **placeholder estructural**. La estructura es estable; los umbrales
-> finos y el dataset completo se completan en el paso de evals (ver
-> `docs/ARCHITECTURE.md` → orden de implementación, paso 10).
+> Estado: **Fase 10A activa**. El smoke test manual con dataset mock metabólico
+> está listo para ejecutar. Ver `docs/decisions/phase-10a-smoke-test.md` y
+> `docs/evals/mock-metabolic-smoke-test-cases.json`. El dataset automatizado
+> completo (~100 casos) y el eval runner se implementan en Fase 10B.
 
 ---
 
@@ -96,7 +97,33 @@ gate de release.
 
 ---
 
-## 5. Relación con tests unitarios
+## 5. Fase 10A — Smoke test manual
+
+Antes del eval runner automatizado, se ejecuta un smoke test manual estructurado
+con un estudio mock metabólico (diabetes tipo 2). Este smoke test verifica que
+Ichtys funciona correctamente de extremo a extremo con evidencia verificable.
+
+**Archivos de Fase 10A:**
+
+| Archivo | Descripción |
+|---|---|
+| `docs/decisions/phase-10a-smoke-test.md` | Guía completa de ejecución manual |
+| `docs/evals/mock-metabolic-smoke-test-cases.json` | Dataset de 12 preguntas con criterios de evaluación |
+| `docs/evals/mock-metabolic-smoke-test-results-template.csv` | Plantilla para registrar resultados |
+
+**Criterios bloqueantes para pasar a 10B:**
+- 0 leakage cross-tenant y cross-study
+- Casos 11 y 12 devuelven `insufficient_evidence`
+- 0 respuestas inventadas con confianza `high` o `medium`
+- ≥7/10 citas correctas en casos 1–10
+
+**Política de datos:** nunca commitear resultados con datos de estudios reales,
+excerpts bajo NDA, ni información de pacientes. El CSV de resultados es un
+artefacto local del reviewer.
+
+---
+
+## 6. Relación con tests unitarios
 
 - `pnpm test:leakage` → tests deterministas de aislamiento (DB/retriever).
 - `pnpm evals:run` → evaluación end-to-end del answer engine sobre el dataset.
