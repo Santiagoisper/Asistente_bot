@@ -2,7 +2,7 @@ import type { RetrievedChunk } from './retriever'
 import type { AnswerConfidence } from '@ichtys/db'
 
 /**
- * guardrails.ts — lógica de confianza y fallback.
+ * guardrails.ts — lógica de confianza, umbral y fallback.
  *
  * Principio (PRD §5, CLAUDE.md 6): una respuesta incorrecta con apariencia de
  * certeza es peor que ninguna respuesta. El fallback es una feature.
@@ -10,6 +10,12 @@ import type { AnswerConfidence } from '@ichtys/db'
 
 /** Mínimo de chunks por encima del umbral para intentar responder. */
 export const MIN_CHUNKS_FOR_ANSWER = 1
+
+/**
+ * Umbral mínimo de similitud coseno para considerar un chunk como evidencia.
+ * Alineado con ARCHITECTURE.md: similarity threshold >= 0.75.
+ */
+export const MIN_SIMILARITY_THRESHOLD = 0.75
 
 export const INSUFFICIENT_EVIDENCE_MESSAGE =
   "I don't have sufficient evidence in the uploaded documents to answer this question. " +
@@ -19,6 +25,18 @@ export interface EvidenceAssessment {
   hasEvidence: boolean
   /** Confianza preliminar derivada de la cantidad/calidad de la evidencia. */
   baselineConfidence: AnswerConfidence
+}
+
+/**
+ * Filtra chunks por encima del umbral de similitud mínimo.
+ * Llamar antes de assessEvidence para garantizar que solo se evalúan
+ * chunks con score suficiente.
+ */
+export function filterByThreshold(
+  retrieved: readonly RetrievedChunk[],
+  threshold = MIN_SIMILARITY_THRESHOLD,
+): RetrievedChunk[] {
+  return retrieved.filter((c) => c.similarityScore >= threshold)
 }
 
 /**

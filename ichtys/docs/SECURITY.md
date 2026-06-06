@@ -245,3 +245,40 @@ Download rules:
 
 Inline preview is a future extension and must use the same authenticated,
 object-authorized path or an equivalent server-controlled mechanism.
+
+---
+
+## 13. Answer engine
+
+`answerEngine` is a pure module: it receives `question` and `retrievedChunks` as
+input and returns a structured answer. It does not call Clerk, does not access the
+database, and does not perform retrieval. All tenant isolation is delegated to the
+retriever.
+
+Logging rules:
+- No full prompt text may be logged — it may contain the user's question (PHI).
+- No chunk content may be logged — it may contain PHI from clinical documents.
+- No LLM completion text may be logged — it may reflect PHI from document excerpts.
+- Errors from the LLM provider are sanitized before propagating; raw provider
+  messages are discarded. Only `AnswerEngineError` with a sanitized code surfaces.
+
+Prompt injection:
+- Document chunks are passed to the LLM as evidence, never as trusted instructions.
+- The system prompt explicitly instructs the LLM to ignore any instructions or
+  directives embedded in document content.
+- No server-side filtering or sanitization of chunk content is performed; the
+  constraint is enforced entirely at the prompt level.
+
+Evidence integrity:
+- `Evidence.documentId`, `Evidence.documentVersionId`, `Evidence.pageStart`,
+  `Evidence.pageEnd`, and `Evidence.sectionTitle` are copied verbatim from the
+  corresponding `RetrievedChunk`. They are never generated or inferred.
+- A response with `confidence = high | medium | low` without `evidences` is
+  an invariant violation. The engine degrades to `insufficient_evidence` in
+  this case rather than returning an ungrounded answer.
+- `Evidence.excerpt` is a truncated slice of `chunk.content` (≤ 600 chars).
+  The LLM does not write or expand the excerpt.
+
+`orgId` and `studyId` are not accepted as inputs to `answerEngine`. Attempts to
+pass tenant identifiers at this layer do not affect retrieval scope; isolation
+is enforced upstream in the SQL query.

@@ -48,9 +48,9 @@ export function evaluateCase(testCase: EvalCase, result: AnswerResult): CaseEval
 
   // TODO(paso-10): groundedness y citation correctness reales (LLM-judge + match
   // de document_ids esperados). Por ahora chequeos estructurales mínimos.
-  const hasCitations = result.citations.length > 0
+  const hasCitations = result.evidences.length > 0
   const expectedIds = new Set(testCase.expectedDocumentIds ?? [])
-  const citedExpected = result.citations.filter((c) => expectedIds.has(c.documentId)).length
+  const citedExpected = result.evidences.filter((e) => expectedIds.has(e.documentId)).length
   const citationCorrectness = expectedIds.size === 0 ? 0 : citedExpected / expectedIds.size
 
   return {
