@@ -36,3 +36,25 @@ If this layer breaks, a user could retrieve clinical documents, document states,
 messages, citations, or answer evidence from another organization or another
 study. In a regulated clinical workflow, that is a tenant data leakage incident,
 not a recoverable UI defect.
+
+## Object-level authorization
+
+Validating `study_id` is not enough when an endpoint receives a concrete object
+id. The object itself must prove its tenancy in DB before any response exposes
+status, page, citation, message, or related resource data.
+
+- `documentId` is authorized through `documents.id` +
+  `documents.organization_id`; then `documents.study_id` is checked against
+  `studies.organization_id`.
+- document page access validates the document first, then validates the
+  document version and page with the same `organization_id` and `study_id`.
+- `messageId` is authorized through `messages.id` +
+  `messages.organization_id`; then `messages.study_id` is checked against
+  `studies.organization_id`.
+- citations are read only with `message_id` + `organization_id` + `study_id`
+  derived from the validated message.
+- client-provided `organization_id` and `study_id` are ignored for object-level
+  authorization on these routes.
+
+Object-level authorization tests for document status, document page access,
+messages, and citations are release-blocking.

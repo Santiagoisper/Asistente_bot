@@ -81,3 +81,29 @@ la última línea y la más importante.
 - Nunca commitear `.env*` (solo `.env.example`).
 - Claves: Clerk, Neon (`DATABASE_URL`/`_UNPOOLED`), Vercel Blob, Anthropic,
   OpenAI. Rotables sin cambios de código.
+---
+
+## 7. Object-level authorization
+
+Validar `study_id` no alcanza cuando una ruta recibe un id de objeto. Todo
+`documentId`, `messageId`, `citationId` o acceso a pagina debe validarse en DB
+contra la organizacion activa y el study real del objeto antes de devolver datos.
+
+Reglas:
+
+- `organization_id` sigue viniendo solo del token de Clerk y se resuelve al UUID
+  interno de `organizations`.
+- `documentId` se busca con `documents.id` + `documents.organization_id`; luego
+  `documents.study_id` se cruza contra `studies.organization_id`.
+- `messageId` se busca con `messages.id` + `messages.organization_id`; luego
+  `messages.study_id` se cruza contra `studies.organization_id`.
+- Las citas se leen solo con `citations.message_id` +
+  `citations.organization_id` + `citations.study_id` derivados del mensaje
+  validado.
+- Las paginas se autorizan despues de validar el documento y se buscan con
+  `pages.organization_id` + `pages.study_id` + la version documental validada.
+- Objetos fuera de la org/study activa devuelven `404 Not Found`, no `403`, para
+  evitar enumeration leakage.
+
+Estos tests son bloqueantes para release junto con cross-tenant y cross-study
+leakage.

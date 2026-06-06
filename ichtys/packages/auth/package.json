@@ -9,7 +9,8 @@
     ".": "./index.ts",
     "./roles": "./roles.ts",
     "./validate-study-access": "./validate-study-access.ts",
-    "./api-errors": "./api-errors.ts"
+    "./api-errors": "./api-errors.ts",
+    "./object-access": "./object-access.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
