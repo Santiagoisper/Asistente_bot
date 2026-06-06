@@ -18,8 +18,8 @@ Upload and ingestion are separate phases:
 3. The HTTP route passes a safe context to the internal pipeline:
    `userId`, `orgId`, `studyId`, `documentId`, and `documentVersionId`.
 4. The pipeline downloads the private blob, extracts text by page, creates
-   pages, creates chunks with metadata, and marks the version `ready` or
-   `error`.
+   pages, creates chunks with metadata, embeds those chunks, and marks the
+   version `ready` or `error`.
 
 The internal pipeline does not call Clerk. This keeps it usable from a future
 worker or queue, where request-local auth is not available.
@@ -50,7 +50,8 @@ Each chunk preserves:
 - `content`
 - approximate `token_count`
 
-Embeddings are not created in this phase. Chunks are metadata and text only.
+Embeddings are created after chunks are inserted and before the document version
+can be marked `ready`.
 
 ## Tenant isolation
 
@@ -74,12 +75,14 @@ Client-provided `organization_id` is never accepted.
 
 - `pending` after upload
 - `processing` when ingestion starts
-- `ready` after pages and chunks are persisted
-- `error` if Blob download, PDF parsing, or ingestion fails
+- `ready` after pages, chunks, and embeddings are persisted
+- `error` if Blob download, PDF parsing, chunking, embeddings, or ingestion
+  fails
 
-Stored error messages are sanitized codes, not stack traces. Audit logs are
-created for `ingestion.started`, `ingestion.completed`, and
-`ingestion.failed`.
+Stored error messages are sanitized codes, not stack traces. Ingestion audit logs
+are created for `ingestion.started`, `ingestion.completed`, and
+`ingestion.failed`. Embedding audit logs are created for `embeddings.started`,
+`embeddings.completed`, and `embeddings.failed`.
 
 ## Authenticated PDF download/preview
 
@@ -101,7 +104,6 @@ must preserve the same authorization path and avoid public Blob URLs.
 ## Out of scope
 
 - OCR
-- embeddings
 - retrieval
 - RAG or answer generation
 - UI beyond existing status polling

@@ -162,8 +162,8 @@ Ingestion rules:
   `organization_id` + `study_id` before reading Blob or writing rows.
 - `pages` and `chunks` persist `organization_id` and `study_id` from the
   authorized context. No page or chunk may be inserted without both boundaries.
-- Chunks in this phase have metadata only; embeddings, retrieval, and RAG remain
-  out of scope.
+- Chunks are embedded before a document version can become `ready`; retrieval
+  and RAG remain out of scope until the retrieval layer is implemented.
 - OCR is out of scope. PDFs with no extractable text are marked `error` with a
   sanitized code.
 - Ingestion errors stored on `document_versions.error_message` are sanitized
@@ -171,7 +171,37 @@ Ingestion rules:
 
 ---
 
-## 10. Authenticated PDF download/preview
+## 10. Embeddings and vector indexing
+
+Embeddings are generated only for chunks that already carry tenant metadata.
+The indexer receives an authorized context from the HTTP-triggered ingestion
+route and revalidates `documents` and `document_versions` against
+`organization_id` + `study_id` before reading chunks.
+
+Indexing rules:
+
+- The model is `text-embedding-3-small` with 1536 dimensions, matching the
+  `chunks.embedding VECTOR(1536)` schema.
+- Chunks are selected with `document_id`, `document_version_id`,
+  `organization_id`, `study_id`, and `embedding IS NULL`.
+- Each update repeats the same object and tenant filters before writing the
+  vector.
+- Embedding provider failures are stored as sanitized codes:
+  `embedding_provider_error`, `embedding_dimension_mismatch`,
+  `embedding_rate_limited`, or `embedding_internal_error`.
+- `document_versions.status = ready` means the PDF has been parsed, pages and
+  chunks have been persisted, and chunks have embeddings.
+- If embeddings fail, the document version remains `error` and is not
+  considered searchable.
+- `embeddings.started`, `embeddings.completed`, and `embeddings.failed` audit
+  logs are mandatory.
+
+No retrieval, answer generation, chat, or generated citations are exposed in
+this phase.
+
+---
+
+## 11. Authenticated PDF download/preview
 
 PDF download uses `documentVersionId` as the access unit, matching ingestion and
 version status. The route validates the requested version with

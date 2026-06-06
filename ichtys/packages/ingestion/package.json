@@ -9,7 +9,8 @@
     ".": "./pipeline.ts",
     "./parser": "./parser.ts",
     "./chunker": "./chunker.ts",
-    "./embedder": "./embedder.ts"
+    "./embedder": "./embedder.ts",
+    "./indexer": "./indexer.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

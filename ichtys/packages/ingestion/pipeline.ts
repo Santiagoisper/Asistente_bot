@@ -12,6 +12,7 @@ import {
   type DocumentVersion,
 } from '@ichtys/db'
 import { chunkPages } from './chunker'
+import { EmbeddingIndexingError, indexDocumentVersionChunks } from './indexer'
 import { parsePdf, PdfParseError } from './parser'
 
 /**
@@ -39,12 +40,17 @@ export interface IngestionResult {
   documentVersionId: string
   pageCount: number
   chunkCount: number
+  embeddedChunkCount: number
   status: IngestionStatus
   errorMessage?: IngestionErrorCode
 }
 
 export type IngestionErrorCode =
   | 'blob_download_failed'
+  | 'embedding_dimension_mismatch'
+  | 'embedding_internal_error'
+  | 'embedding_provider_error'
+  | 'embedding_rate_limited'
   | 'pdf_text_extraction_failed'
   | 'pdf_contains_no_extractable_text'
   | 'ingestion_internal_error'
@@ -141,6 +147,7 @@ async function downloadPrivateBlob(blobKey: string): Promise<Uint8Array> {
 
 function sanitizeIngestionError(err: unknown): IngestionErrorCode {
   if (err instanceof IngestionPipelineError) return err.code
+  if (err instanceof EmbeddingIndexingError) return err.code
   if (err instanceof PdfParseError) return err.code
   return 'ingestion_internal_error'
 }
@@ -257,7 +264,11 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
           tokenCount: chunk.tokenCount,
         })),
       )
+    })
 
+    const indexingResult = await indexDocumentVersionChunks(parsedInput)
+
+    await db.transaction(async (tx) => {
       await tx
         .update(documentVersions)
         .set({
@@ -284,6 +295,7 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
           documentId: parsedInput.documentId,
           pageCount: parsedDocument.pageCount,
           chunkCount: contentChunks.length,
+          embeddedChunkCount: indexingResult.embeddedChunkCount,
         },
       })
     })
@@ -293,6 +305,7 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
       documentVersionId: parsedInput.documentVersionId,
       pageCount: parsedDocument.pageCount,
       chunkCount: contentChunks.length,
+      embeddedChunkCount: indexingResult.embeddedChunkCount,
       status: 'ready',
     }
   } catch (err) {
@@ -304,6 +317,7 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
       documentVersionId: parsedInput.documentVersionId,
       pageCount: 0,
       chunkCount: 0,
+      embeddedChunkCount: 0,
       status: 'error',
       errorMessage,
     }
@@ -313,3 +327,4 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
 export { parsePdf } from './parser'
 export { chunkPages } from './chunker'
 export { embedBatch, embedQuery } from './embedder'
+export { indexDocumentVersionChunks } from './indexer'

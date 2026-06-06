@@ -48,6 +48,9 @@ const mocks = vi.hoisted(() => ({
   documentsFindFirst: vi.fn<FindFirst<Document>>(),
   get: vi.fn<(pathname: string, options: { access: 'private'; useCache: false }) => Promise<BlobGetResult | null>>(),
   parsePdf: vi.fn<() => Promise<{ pageCount: number; pages: { pageNumber: number; rawText: string }[] }>>(),
+  indexDocumentVersionChunks: vi.fn<
+    (input: RunIngestionInput) => Promise<{ embeddedChunkCount: number }>
+  >(),
   transaction: vi.fn<(callback: TransactionCallback) => Promise<void>>(),
   operations: [] as DbOperation[],
   tables: {
@@ -116,6 +119,19 @@ vi.mock('../parser', () => ({
     }
   },
   parsePdf: mocks.parsePdf,
+}))
+
+vi.mock('../indexer', () => ({
+  EmbeddingIndexingError: class EmbeddingIndexingError extends Error {
+    constructor(
+      readonly code: string,
+      message: string,
+    ) {
+      super(message)
+      this.name = 'EmbeddingIndexingError'
+    }
+  },
+  indexDocumentVersionChunks: mocks.indexDocumentVersionChunks,
 }))
 
 vi.mock('@ichtys/db', () => ({
@@ -206,7 +222,7 @@ describe('runIngestion', () => {
     mocks.transaction.mockImplementation(async (callback) => callback(createDbClient()))
   })
 
-  it('inserts pages and chunks with organization_id and study_id, then marks ready', async () => {
+  it('inserts pages and chunks with organization_id and study_id, embeds chunks, then marks ready', async () => {
     const fixture = createFixture()
     mocks.documentVersionsFindFirst.mockResolvedValue(fixture.documentVersion)
     mocks.documentsFindFirst.mockResolvedValue(fixture.document)
@@ -218,6 +234,7 @@ describe('runIngestion', () => {
         { pageNumber: 2, rawText: 'Study procedures continue on page two.' },
       ],
     })
+    mocks.indexDocumentVersionChunks.mockResolvedValue({ embeddedChunkCount: 1 })
 
     const result = await runIngestion(fixture.input)
 
@@ -225,6 +242,7 @@ describe('runIngestion', () => {
       documentId: fixture.input.documentId,
       documentVersionId: fixture.input.documentVersionId,
       pageCount: 2,
+      embeddedChunkCount: 1,
       status: 'ready',
     })
 
@@ -266,6 +284,7 @@ describe('runIngestion', () => {
     expect(pageValues?.every((page) => page.studyId === fixture.input.studyId)).toBe(true)
     expect(chunkValues?.every((chunk) => chunk.organizationId === fixture.input.orgId)).toBe(true)
     expect(chunkValues?.every((chunk) => chunk.studyId === fixture.input.studyId)).toBe(true)
+    expect(mocks.indexDocumentVersionChunks).toHaveBeenCalledWith(fixture.input)
     expect(readyUpdate).toBeDefined()
   })
 
@@ -292,5 +311,42 @@ describe('runIngestion', () => {
         )
       }),
     ).toBe(true)
+  })
+
+  it('marks error with a sanitized message if embedding indexing fails and does not mark ready', async () => {
+    const fixture = createFixture()
+    mocks.documentVersionsFindFirst.mockResolvedValue(fixture.documentVersion)
+    mocks.documentsFindFirst.mockResolvedValue(fixture.document)
+    mocks.get.mockResolvedValue({ stream: createBlobStream() })
+    mocks.parsePdf.mockResolvedValue({
+      pageCount: 1,
+      pages: [{ pageNumber: 1, rawText: 'Eligibility criteria require documented lab review.' }],
+    })
+    mocks.indexDocumentVersionChunks.mockRejectedValue(
+      new Error('provider leaked sensitive embedding internals'),
+    )
+
+    const result = await runIngestion(fixture.input)
+
+    expect(result).toMatchObject({
+      status: 'error',
+      errorMessage: 'ingestion_internal_error',
+    })
+    expect(
+      mocks.operations.some((operation) => {
+        const values = operationValues<{ status?: string; errorMessage?: string }>(operation)
+        return (
+          operation.kind === 'update' &&
+          values?.status === 'error' &&
+          values.errorMessage === 'ingestion_internal_error'
+        )
+      }),
+    ).toBe(true)
+    expect(
+      mocks.operations.some((operation) => {
+        const values = operationValues<{ status?: string }>(operation)
+        return operation.kind === 'update' && values?.status === 'ready'
+      }),
+    ).toBe(false)
   })
 })
