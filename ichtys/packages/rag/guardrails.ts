@@ -30,7 +30,7 @@ export function assessEvidence(retrieved: RetrievedChunk[]): EvidenceAssessment 
     return { hasEvidence: false, baselineConfidence: 'insufficient_evidence' }
   }
 
-  const top = retrieved[0]?.similarity ?? 0
+  const top = retrieved[0]?.similarityScore ?? 0
 
   let baselineConfidence: AnswerConfidence = 'low'
   if (top >= 0.85 && retrieved.length >= 3) baselineConfidence = 'high'

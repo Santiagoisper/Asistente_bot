@@ -96,7 +96,7 @@ export async function generateAnswer(params: GenerateAnswerParams): Promise<Answ
  */
 export function buildContext(retrieved: RetrievedChunk[]): string {
   return retrieved
-    .map(({ chunk }, i) => {
+    .map((chunk, i) => {
       const header = `[${i + 1}] (${chunk.documentType}, pp. ${chunk.pageStart}-${chunk.pageEnd}${
         chunk.sectionTitle ? `, ${chunk.sectionTitle}` : ''
       })`

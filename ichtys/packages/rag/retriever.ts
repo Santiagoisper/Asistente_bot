@@ -1,63 +1,188 @@
-import { and, eq, sql } from 'drizzle-orm'
-import { db, chunks, type Chunk } from '@ichtys/db'
-import { embedQuery } from '@ichtys/ingestion/embedder'
+import { and, eq, isNotNull, sql } from 'drizzle-orm'
+import { z } from 'zod'
+import {
+  chunks,
+  db,
+  documentType,
+  EMBEDDING_DIMENSIONS,
+  type DocumentType,
+} from '@ichtys/db'
+import { embedQuery, EmbeddingError, type EmbeddingErrorCode } from '@ichtys/ingestion/embedder'
 
 /**
- * retriever.ts — similarity search sobre pgvector.
+ * retriever.ts - pgvector similarity search over embedded chunks.
  *
- * REGLA CRÍTICA (CLAUDE.md 3, ARCHITECTURE.md): el filtro por organization_id +
- * study_id se aplica en el WHERE, ANTES del ordenamiento por distancia. Nunca
- * se hace vector search sin ambos boundaries.
+ * The tenant filter is part of the SQL WHERE used by the vector query. Never
+ * retrieve global top-K and filter org/study in memory.
  */
 
 export const DEFAULT_TOP_K = 8
-/** Umbral de similaridad coseno mínima (>= 0.75 => distancia coseno <= 0.25). */
-export const DEFAULT_SIMILARITY_THRESHOLD = 0.75
+export const MAX_TOP_K = 20
+
+export type RetrievalErrorCode =
+  | EmbeddingErrorCode
+  | 'retrieval_invalid_input'
+  | 'query_embedding_failed'
+
+export class RetrievalError extends Error {
+  constructor(
+    readonly code: RetrievalErrorCode,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'RetrievalError'
+  }
+}
 
 export interface RetrieveParams {
+  queryText: string
+  orgId: string
+  studyId: string
+  topK?: number
+  documentType?: DocumentType
+}
+
+export interface RetrievedChunk {
+  chunkId: string
+  documentId: string
+  documentVersionId: string
+  documentType: DocumentType
+  pageStart: number
+  pageEnd: number
+  sectionTitle: string | null
+  content: string
+  similarityScore: number
+}
+
+const retrieveParamsSchema = z.object({
+  queryText: z.string().trim().min(1),
+  orgId: z.string().uuid(),
+  studyId: z.string().uuid(),
+  topK: z.number().int().positive().max(MAX_TOP_K).default(DEFAULT_TOP_K),
+  documentType: z.enum(documentType).optional(),
+})
+
+type ParsedRetrieveParams = z.infer<typeof retrieveParamsSchema>
+
+interface RetrievedChunkRow {
+  chunkId: string
+  documentId: string
+  documentVersionId: string
+  documentType: DocumentType
+  pageStart: number
+  pageEnd: number
+  sectionTitle: string | null
+  content: string
+  similarityScore: number
+}
+
+function vectorLiteral(embedding: readonly number[]): string {
+  return `[${embedding.join(',')}]`
+}
+
+function validateEmbeddingDimensions(embedding: readonly number[]): void {
+  if (embedding.length !== EMBEDDING_DIMENSIONS) {
+    throw new RetrievalError(
+      'embedding_dimension_mismatch',
+      'Query embedding has unexpected dimensions',
+    )
+  }
+}
+
+function sanitizeQueryEmbeddingError(err: unknown): RetrievalError {
+  if (err instanceof RetrievalError) return err
+  if (err instanceof EmbeddingError) {
+    return new RetrievalError(err.code, 'Query embedding generation failed')
+  }
+
+  return new RetrievalError('query_embedding_failed', 'Query embedding generation failed')
+}
+
+function parseParams(params: RetrieveParams): ParsedRetrieveParams {
+  const parsed = retrieveParamsSchema.safeParse(params)
+  if (!parsed.success) {
+    throw new RetrievalError('retrieval_invalid_input', 'Invalid retrieval parameters')
+  }
+
+  return parsed.data
+}
+
+export async function embedRetrievalQuery(queryText: string): Promise<number[]> {
+  try {
+    const embedding = await embedQuery(queryText)
+    validateEmbeddingDimensions(embedding)
+    return embedding
+  } catch (err) {
+    throw sanitizeQueryEmbeddingError(err)
+  }
+}
+
+/**
+ * Retrieves relevant chunks inside one authorized organization/study boundary.
+ */
+export async function retrieveRelevantChunks(params: RetrieveParams): Promise<RetrievedChunk[]> {
+  const parsed = parseParams(params)
+  const queryEmbedding = await embedRetrievalQuery(parsed.queryText)
+  const vector = vectorLiteral(queryEmbedding)
+  const distance = sql<number>`${chunks.embedding} <=> ${vector}::vector`
+  const similarityScore = sql<number>`1 - (${distance})`
+  const whereClause = parsed.documentType
+    ? and(
+        eq(chunks.organizationId, parsed.orgId),
+        eq(chunks.studyId, parsed.studyId),
+        eq(chunks.documentType, parsed.documentType),
+        isNotNull(chunks.embedding),
+      )
+    : and(
+        eq(chunks.organizationId, parsed.orgId),
+        eq(chunks.studyId, parsed.studyId),
+        isNotNull(chunks.embedding),
+      )
+
+  const rows = await db
+    .select({
+      chunkId: chunks.id,
+      documentId: chunks.documentId,
+      documentVersionId: chunks.documentVersionId,
+      documentType: chunks.documentType,
+      pageStart: chunks.pageStart,
+      pageEnd: chunks.pageEnd,
+      sectionTitle: chunks.sectionTitle,
+      content: chunks.content,
+      similarityScore,
+    })
+    .from(chunks)
+    .where(whereClause)
+    .orderBy(distance)
+    .limit(parsed.topK)
+
+  return rows.map((row: RetrievedChunkRow) => ({
+    chunkId: row.chunkId,
+    documentId: row.documentId,
+    documentVersionId: row.documentVersionId,
+    documentType: row.documentType,
+    pageStart: row.pageStart,
+    pageEnd: row.pageEnd,
+    sectionTitle: row.sectionTitle,
+    content: row.content,
+    similarityScore: row.similarityScore,
+  }))
+}
+
+/**
+ * Compatibility wrapper for the future answer engine. New code should call
+ * retrieveRelevantChunks().
+ */
+export async function retrieve(params: {
   organizationId: string
   studyId: string
   query: string
   topK?: number
-  similarityThreshold?: number
-}
-
-export interface RetrievedChunk {
-  chunk: Chunk
-  similarity: number
-}
-
-/**
- * Recupera los chunks más relevantes para una query dentro de un único study.
- */
-export async function retrieve(params: RetrieveParams): Promise<RetrievedChunk[]> {
-  const {
-    organizationId,
-    studyId,
-    query,
-    topK = DEFAULT_TOP_K,
-    similarityThreshold = DEFAULT_SIMILARITY_THRESHOLD,
-  } = params
-
-  const queryEmbedding = await embedQuery(query)
-  const vectorLiteral = `[${queryEmbedding.join(',')}]`
-
-  // distancia coseno: embedding <=> query ; similaridad = 1 - distancia.
-  const similarity = sql<number>`1 - (${chunks.embedding} <=> ${vectorLiteral}::vector)`
-
-  const rows = await db
-    .select({ chunk: chunks, similarity })
-    .from(chunks)
-    .where(
-      and(
-        eq(chunks.organizationId, organizationId), // ← boundary obligatorio
-        eq(chunks.studyId, studyId), // ← boundary obligatorio
-      ),
-    )
-    .orderBy(sql`${chunks.embedding} <=> ${vectorLiteral}::vector`)
-    .limit(topK)
-
-  return rows
-    .filter((r) => r.similarity >= similarityThreshold)
-    .map((r) => ({ chunk: r.chunk, similarity: r.similarity }))
+}): Promise<RetrievedChunk[]> {
+  return retrieveRelevantChunks({
+    queryText: params.query,
+    orgId: params.organizationId,
+    studyId: params.studyId,
+    topK: params.topK,
+  })
 }

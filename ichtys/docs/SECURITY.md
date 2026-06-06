@@ -201,7 +201,28 @@ this phase.
 
 ---
 
-## 11. Authenticated PDF download/preview
+## 11. Retrieval base
+
+Retrieval is an internal module that receives `orgId` and `studyId` from an
+already-authorized caller. It does not call Clerk and does not accept
+`organization_id` from client input.
+
+Retrieval rules:
+
+- Query embeddings use the same `text-embedding-3-small` model and 1536
+  dimensions as indexing.
+- The pgvector query includes `chunks.organization_id = orgId` and
+  `chunks.study_id = studyId` in the SQL `WHERE` clause before ordering by
+  vector distance.
+- The query also requires `chunks.embedding IS NOT NULL`.
+- Optional filters such as `document_type` are applied in the same SQL query.
+- The retriever returns chunk metadata for future citations but does not create
+  answers, chat messages, or citation rows.
+- Cross-org and cross-study leakage tests for retrieval are release-blocking.
+
+---
+
+## 12. Authenticated PDF download/preview
 
 PDF download uses `documentVersionId` as the access unit, matching ingestion and
 version status. The route validates the requested version with
