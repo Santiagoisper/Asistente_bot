@@ -50,18 +50,27 @@ Chunks: 58 total con embeddings 1536-dim (text-embedding-3-small)
 
 ## Cómo ejecutar la eval real (runbook completo)
 
-### Prerequisito único: obtener cookie de sesión Clerk
+### Prerequisito único: obtener cookie de sesión Clerk FRESCA
+
+El runner usa **ejecución paralela (concurrency=4)** para completar los 12 casos en ~21s,
+dentro de la ventana de 60s del JWT de Clerk. No hay refresh server-side — la cookie
+tiene que estar fresca cuando arranca el eval.
 
 1. Arrancar el dev server:
    ```bash
    pnpm dev
    ```
-2. Abrir browser → `http://localhost:3000/sign-in`
+2. Abrir browser → `http://localhost:3000`
 3. Iniciar sesión con cuenta Clerk de `org_3Emh0j274SoeBVmpICF4gnlWlVR`
-4. Abrir DevTools → Application → Cookies → `localhost:3000`
-5. Copiar el valor de la cookie `__session`
+4. **Confirmar que el dashboard/app muestra la org activa** (no solo estar logueado)
+5. Abrir DevTools → Application → Cookies → `localhost:3000`
+6. **Copiar TODOS los cookies como string** (`__session`, `__clerk_db_jwt`, etc.)
+7. **INMEDIATAMENTE** (< 30s) pegar la cookie y ejecutar el eval
 
 > **Nunca imprimir, commitear, ni guardar el valor de la cookie.**
+>
+> El runner valida que el JWT incluya `o.id` (org activa) y que no esté expirado.
+> Si falla cualquiera de esas condiciones, sale inmediatamente con mensaje de error.
 
 ### Ejecutar eval
 
@@ -71,12 +80,12 @@ Terminal 1 — servidor activo:
 pnpm dev
 ```
 
-Terminal 2 — eval runner:
+Terminal 2 — eval runner (pegar el string COMPLETO de cookies):
 ```bash
 EVAL_STUDY_ID=508fa9c9-dbb9-49aa-abd5-7f7fe968bbc6 \
-EVAL_AUTH_COOKIE="__session=<pegar-valor-copiado>" \
+EVAL_AUTH_COOKIE="<pegar string completo: __session=...; __clerk_db_jwt=...; __refresh_...=...; __client_uat=...>" \
 EVAL_BASE_URL=http://localhost:3000 \
-pnpm evals:mock-metabolic
+pnpm --filter @ichtys/evals evals:mock-metabolic
 ```
 
 ### Resultado esperado
