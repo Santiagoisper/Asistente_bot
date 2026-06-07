@@ -128,9 +128,7 @@ export function scoreCase(
     evalCase.forbiddenAnswerKeywords,
   )
 
-  const failureType = insufficientEvidenceCorrect
-    ? classifyFailure(evalCase, result, matchedKeywords, matchedSection, noForbiddenKeywords)
-    : classifyFailure(evalCase, result, matchedKeywords, matchedSection, noForbiddenKeywords)
+  const failureType = classifyFailure(evalCase, result, matchedKeywords, matchedSection, noForbiddenKeywords)
 
   const passed =
     insufficientEvidenceCorrect &&

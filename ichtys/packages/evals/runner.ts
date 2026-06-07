@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { AnswerResult } from '@ichtys/rag'
 import { aggregateResults, evaluateFormalCase } from './metrics'
 import { FormalEvalDatasetSchema, type CaseResult, type EvalSuiteResult, type FormalEvalCase } from './types'
@@ -268,7 +269,7 @@ if (isMain) {
     process.exit(1)
   }
 
-  const datasetPath = new URL('./dataset/mock-metabolic-eval-cases.json', import.meta.url).pathname
+  const datasetPath = fileURLToPath(new URL('./dataset/mock-metabolic-eval-cases.json', import.meta.url))
 
   runMockMetabolicEvals({
     adapter: makeHttpAdapter({ baseUrl, authCookie }),
