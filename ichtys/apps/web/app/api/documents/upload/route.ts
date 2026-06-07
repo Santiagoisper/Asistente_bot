@@ -9,8 +9,8 @@ export const runtime = 'nodejs'
  * Server route uploads are intentionally capped below the PRD target. Large
  * PDFs need a future client/direct upload flow before claiming 50MB support.
  */
-export const MAX_SERVER_UPLOAD_BYTES = 4 * 1024 * 1024
-export const MAX_PDF_BYTES = MAX_SERVER_UPLOAD_BYTES
+const MAX_SERVER_UPLOAD_BYTES = 4 * 1024 * 1024
+const MAX_PDF_BYTES = MAX_SERVER_UPLOAD_BYTES
 
 const documentType = z.enum([
   'protocol',
