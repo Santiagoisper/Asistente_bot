@@ -89,6 +89,7 @@ vi.mock('../../../../lib/chat/persistence', () => ({
 vi.mock('../../../../lib/security/rate-limit', () => ({
   enforceSlidingWindowRateLimit: mocks.enforceSlidingWindowRateLimit,
   rateLimitResponse: mocks.rateLimitResponse,
+  getChatRateLimitConfig: () => ({ limit: 30, windowSeconds: 60 }),
 }))
 
 // ---------------------------------------------------------------------------
@@ -351,7 +352,7 @@ describe('POST /api/chat - rate limiting', () => {
     expect(res.headers.get('Retry-After')).toBe('12')
     expect(mocks.enforceSlidingWindowRateLimit).toHaveBeenCalledWith({
       key: `chat:${mocks.USER_ID}:${mocks.STUDY_ID}`,
-      limit: 20,
+      limit: 30,
       windowSeconds: 60,
     })
     expect(mocks.getOrCreateConversation).not.toHaveBeenCalled()

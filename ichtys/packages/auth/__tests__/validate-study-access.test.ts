@@ -256,7 +256,7 @@ type DocumentVersionDownloadGet = (
 let documentUploadPost: DocumentUploadPost
 let ingestionRunPost: DocumentUploadPost
 let documentVersionDownloadGet: DocumentVersionDownloadGet
-let maxPdfBytes = 0
+const maxPdfBytes = 4 * 1024 * 1024 // MAX_SERVER_UPLOAD_BYTES from upload route
 
 beforeAll(async () => {
   vi.doMock('../../../apps/web/app/api/documents/upload/blob-storage', () => ({
@@ -294,7 +294,7 @@ beforeAll(async () => {
   documentUploadPost = uploadRoute.POST
   ingestionRunPost = ingestionRoute.POST
   documentVersionDownloadGet = documentVersionDownloadRoute.GET
-  maxPdfBytes = uploadRoute.MAX_PDF_BYTES
+  void uploadRoute // accessed for POST handler only
 })
 
 interface TenantFixture {

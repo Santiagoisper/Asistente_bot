@@ -11,8 +11,10 @@ import {
 } from '../../../lib/chat/persistence'
 import {
   enforceSlidingWindowRateLimit,
+  getChatRateLimitConfig,
   rateLimitResponse,
 } from '../../../lib/security/rate-limit'
+import { getOrCreateRequestId, log, makeRecord } from '../../../lib/observability/logger'
 
 /**
  * POST /api/chat — grounded answer engine with full chat persistence.
@@ -58,6 +60,10 @@ function hasOrgField(body: unknown): boolean {
 }
 
 export async function POST(req: Request): Promise<Response> {
+  const requestId = getOrCreateRequestId(req)
+  const startMs = Date.now()
+  log(makeRecord({ requestId, level: 'info', event: 'api.request.started', endpoint: '/api/chat', method: 'POST' }))
+
   // 1. Reject org identifiers from query params.
   const url = new URL(req.url)
   for (const field of FORBIDDEN_ORG_FIELDS) {
@@ -98,12 +104,14 @@ export async function POST(req: Request): Promise<Response> {
     return handleApiError(err)
   }
 
+  const chatRlConfig = getChatRateLimitConfig()
   const rateLimit = await enforceSlidingWindowRateLimit({
     key: `chat:${userId}:${studyId}`,
-    limit: 20,
-    windowSeconds: 60,
+    limit: chatRlConfig.limit,
+    windowSeconds: chatRlConfig.windowSeconds,
   })
   if (rateLimit.limited) {
+    log(makeRecord({ requestId, level: 'warn', event: 'api.rate_limit.blocked', endpoint: '/api/chat', method: 'POST', userId, statusCode: 429 }))
     return rateLimitResponse(rateLimit.retryAfterSeconds)
   }
 
@@ -202,6 +210,7 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   // 12. Return structured response — no prompts, embeddings or raw chunks.
+  log(makeRecord({ requestId, level: 'info', event: 'api.request.completed', endpoint: '/api/chat', method: 'POST', userId, conversationId, statusCode: 200, durationMs: Date.now() - startMs }))
   return Response.json(
     {
       conversationId,

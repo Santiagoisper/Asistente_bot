@@ -405,3 +405,32 @@ Error handling:
 - Invalid studyId/conversationId/messageId → 400 (validation) or 404 (not found/access denied)
 - DB errors → 500 generic, no stack trace
 - Missing resource across org/study/user boundary → 404 (not 403 to prevent enumeration)
+
+---
+
+## 17. Rate limiting and structured observability
+
+All five production API endpoints enforce a per-user sliding window rate limit via
+Upstash Redis REST API. Rate limit keys are built server-side from Clerk-resolved
+identifiers; `organizationId` is never accepted from the client.
+
+Rate limiting:
+- Implementation: Redis sliding window (Lua EVAL), `apps/web/lib/security/rate-limit.ts`
+- Fail-open: when Redis is unavailable, requests are allowed (not blocked)
+- `RATE_LIMIT_ENABLED=false` disables rate limiting for tests and local development
+- 429 response body is always `{ "error": "rate_limited", "message": "Too many requests, please try again later." }`
+- `Retry-After` header is included; no other quota headers are exposed to clients
+- Rate limiting does not reveal resource existence — blocked requests return the same 429 shape for any key
+
+Structured logging (`apps/web/lib/observability/logger.ts`):
+- All log records are emitted as `console.log(JSON.stringify(record))`
+- `requestId` is taken from `x-request-id` or `x-correlation-id` header (≤128 chars), or generated via `crypto.randomUUID()`
+- Allowed fields: `requestId`, `timestamp`, `level`, `event`, `endpoint`, `method`, `userId`, `organizationId`, `studyId`, `conversationId`, `messageId`, `documentId`, `documentVersionId`, `statusCode`, `durationMs`, `errorCode`
+
+Fields **never** logged (PHI and secrets protection):
+- `prompt`, `question`, `answer` — may contain PHI
+- `documentContent`, `content`, `chunks`, `excerpt` — clinical document text
+- `embedding` — vector data
+- `authorization`, `cookie`, `token`, `secret`, `password` — credentials
+- `rawBody`, `formData` — unstructured payloads
+- Stack traces are never included in client responses

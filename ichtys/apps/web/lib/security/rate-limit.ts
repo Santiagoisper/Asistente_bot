@@ -8,6 +8,11 @@ export type RateLimitParams = {
   windowSeconds: number
 }
 
+export interface RateLimitConfig {
+  limit: number
+  windowSeconds: number
+}
+
 type RedisRestResponse = {
   result?: unknown
   error?: string
@@ -35,9 +40,48 @@ redis.call("PEXPIRE", key .. ":seq", window)
 return {1, 0}
 `
 
+function parsePositiveInt(value: string | undefined, fallback: number): number {
+  const n = parseInt(value ?? '', 10)
+  return Number.isInteger(n) && n > 0 ? n : fallback
+}
+
+export function isRateLimitEnabled(): boolean {
+  return process.env.RATE_LIMIT_ENABLED !== 'false'
+}
+
+export function getChatRateLimitConfig(): RateLimitConfig {
+  return {
+    limit: parsePositiveInt(process.env.RATE_LIMIT_CHAT_PER_MINUTE, 30),
+    windowSeconds: 60,
+  }
+}
+
+export function getUploadRateLimitConfig(): RateLimitConfig {
+  return {
+    limit: parsePositiveInt(process.env.RATE_LIMIT_UPLOAD_PER_MINUTE, 10),
+    windowSeconds: 60,
+  }
+}
+
+export function getHistoryRateLimitConfig(): RateLimitConfig {
+  return {
+    limit: parsePositiveInt(process.env.RATE_LIMIT_HISTORY_PER_MINUTE, 100),
+    windowSeconds: 60,
+  }
+}
+
+export function getCitationsRateLimitConfig(): RateLimitConfig {
+  return {
+    limit: parsePositiveInt(process.env.RATE_LIMIT_CITATIONS_PER_MINUTE, 100),
+    windowSeconds: 60,
+  }
+}
+
 export async function enforceSlidingWindowRateLimit(
   params: RateLimitParams,
 ): Promise<RateLimitResult> {
+  if (!isRateLimitEnabled()) return { limited: false }
+
   const redis = getRedisRestConfig()
   if (!redis) return { limited: false }
 
@@ -88,12 +132,13 @@ export async function enforceSlidingWindowRateLimit(
 }
 
 export function rateLimitResponse(retryAfterSeconds: number): Response {
-  return new Response('Too Many Requests', {
-    status: 429,
-    headers: {
-      'Retry-After': String(Math.max(1, retryAfterSeconds)),
+  return Response.json(
+    { error: 'rate_limited', message: 'Too many requests, please try again later.' },
+    {
+      status: 429,
+      headers: { 'Retry-After': String(Math.max(1, retryAfterSeconds)) },
     },
-  })
+  )
 }
 
 export function clientIpRateLimitKey(req: Request): string {

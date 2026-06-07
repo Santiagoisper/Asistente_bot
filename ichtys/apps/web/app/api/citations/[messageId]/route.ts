@@ -2,6 +2,12 @@ import { z } from 'zod'
 import { AccessError, handleApiError, validateMessageAccess } from '@ichtys/auth'
 import { auditLogs, db } from '@ichtys/db'
 import { getMessageCitations } from '../../../../lib/chat/history'
+import {
+  enforceSlidingWindowRateLimit,
+  getCitationsRateLimitConfig,
+  rateLimitResponse,
+} from '../../../../lib/security/rate-limit'
+import { getOrCreateRequestId, log, makeRecord } from '../../../../lib/observability/logger'
 
 /**
  * GET /api/citations/[messageId]
@@ -16,7 +22,11 @@ interface RouteContext {
   params: Promise<{ messageId: string }>
 }
 
-export async function GET(_req: Request, { params }: RouteContext): Promise<Response> {
+export async function GET(req: Request, { params }: RouteContext): Promise<Response> {
+  const requestId = getOrCreateRequestId(req)
+  const startMs = Date.now()
+  log(makeRecord({ requestId, level: 'info', event: 'api.request.started', endpoint: '/api/citations/[messageId]', method: 'GET' }))
+
   const { messageId } = await params
 
   if (!z.string().uuid().safeParse(messageId).success) {
@@ -25,6 +35,17 @@ export async function GET(_req: Request, { params }: RouteContext): Promise<Resp
 
   try {
     const { userId, orgId, studyId, message } = await validateMessageAccess(messageId)
+
+    const citationsRlConfig = getCitationsRateLimitConfig()
+    const rateLimit = await enforceSlidingWindowRateLimit({
+      key: `citations:${userId}:${orgId}`,
+      limit: citationsRlConfig.limit,
+      windowSeconds: citationsRlConfig.windowSeconds,
+    })
+    if (rateLimit.limited) {
+      log(makeRecord({ requestId, level: 'warn', event: 'api.rate_limit.blocked', endpoint: '/api/citations/[messageId]', method: 'GET', userId, messageId, statusCode: 429 }))
+      return rateLimitResponse(rateLimit.retryAfterSeconds)
+    }
 
     const conv = await db.query.conversations.findFirst({
       where: (c, { and, eq }) =>
@@ -51,8 +72,10 @@ export async function GET(_req: Request, { params }: RouteContext): Promise<Resp
       metadata: { citationCount: citations.length },
     })
 
+    log(makeRecord({ requestId, level: 'info', event: 'api.request.completed', endpoint: '/api/citations/[messageId]', method: 'GET', userId, messageId, studyId, statusCode: 200, durationMs: Date.now() - startMs }))
     return Response.json({ messageId, citations }, { status: 200 })
   } catch (err) {
+    log(makeRecord({ requestId, level: 'error', event: 'api.request.failed', endpoint: '/api/citations/[messageId]', method: 'GET', durationMs: Date.now() - startMs }))
     return handleApiError(err)
   }
 }

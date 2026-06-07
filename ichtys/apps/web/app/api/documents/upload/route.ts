@@ -2,6 +2,12 @@ import { z } from 'zod'
 import { handleApiError, validateStudyAccess } from '@ichtys/auth'
 import { auditLogs, db, documents, documentVersions } from '@ichtys/db'
 import { putPrivateDocumentPdf } from './blob-storage'
+import {
+  enforceSlidingWindowRateLimit,
+  getUploadRateLimitConfig,
+  rateLimitResponse,
+} from '../../../../lib/security/rate-limit'
+import { getOrCreateRequestId, log, makeRecord } from '../../../../lib/observability/logger'
 
 export const runtime = 'nodejs'
 
@@ -55,6 +61,10 @@ function buildBlobKey(fileName: string): string {
  * Vercel Blob, registers the document and its initial pending version.
  */
 export async function POST(req: Request): Promise<Response> {
+  const requestId = getOrCreateRequestId(req)
+  const startMs = Date.now()
+  log(makeRecord({ requestId, level: 'info', event: 'api.request.started', endpoint: '/api/documents/upload', method: 'POST' }))
+
   try {
     const url = new URL(req.url)
     if (url.searchParams.has('organization_id') || url.searchParams.has('organizationId')) {
@@ -87,6 +97,18 @@ export async function POST(req: Request): Promise<Response> {
     }
 
     const { userId, orgId, study } = await validateStudyAccess(meta.data.studyId)
+
+    const uploadRlConfig = getUploadRateLimitConfig()
+    const rateLimit = await enforceSlidingWindowRateLimit({
+      key: `upload:${userId}:${orgId}`,
+      limit: uploadRlConfig.limit,
+      windowSeconds: uploadRlConfig.windowSeconds,
+    })
+    if (rateLimit.limited) {
+      log(makeRecord({ requestId, level: 'warn', event: 'api.rate_limit.blocked', endpoint: '/api/documents/upload', method: 'POST', userId, studyId: meta.data.studyId, statusCode: 429 }))
+      return rateLimitResponse(rateLimit.retryAfterSeconds)
+    }
+
     const fileName = file.name.trim().length > 0 ? file.name : 'document.pdf'
     const name = meta.data.name ?? fileName
     const blobKey = buildBlobKey(fileName)
@@ -146,6 +168,7 @@ export async function POST(req: Request): Promise<Response> {
       return { document, documentVersion }
     })
 
+    log(makeRecord({ requestId, level: 'info', event: 'api.request.completed', endpoint: '/api/documents/upload', method: 'POST', userId, studyId: meta.data.studyId, documentId: result.document.id, documentVersionId: result.documentVersion.id, statusCode: 202, durationMs: Date.now() - startMs }))
     return Response.json(
       {
         documentId: result.document.id,
@@ -157,6 +180,7 @@ export async function POST(req: Request): Promise<Response> {
       { status: 202 },
     )
   } catch (err) {
+    log(makeRecord({ requestId, level: 'error', event: 'api.request.failed', endpoint: '/api/documents/upload', method: 'POST', durationMs: Date.now() - startMs }))
     return handleApiError(err)
   }
 }
