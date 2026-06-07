@@ -12,6 +12,7 @@
   "scripts": {
     "evals:run": "tsx runner.ts",
     "evals:quick": "tsx runner.ts --quick",
+    "evals:mock-metabolic": "tsx runner.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests"

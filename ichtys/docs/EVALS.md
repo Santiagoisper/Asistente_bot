@@ -4,10 +4,9 @@ Cómo medimos la calidad del RAG. El paquete `@ichtys/evals` implementa el
 runner (`runner.ts`) y las métricas (`metrics.ts`); este documento define el
 formato del dataset, la rúbrica de scoring y los targets de latencia.
 
-> Estado: **Fase 10A activa**. El smoke test manual con dataset mock metabólico
-> está listo para ejecutar. Ver `docs/decisions/phase-10a-smoke-test.md` y
-> `docs/evals/mock-metabolic-smoke-test-cases.json`. El dataset automatizado
-> completo (~100 casos) y el eval runner se implementan en Fase 10B.
+> Estado: **Fase 10B activa**. El eval runner automatizado está implementado con
+> dataset formal de 12 casos mock metabólicos. Ver `docs/decisions/formal-eval-suite.md`
+> para arquitectura, variables de entorno y comando de ejecución.
 
 ---
 
@@ -88,16 +87,55 @@ streaming de la respuesta vía Vercel AI SDK.
 ## 4. Comandos
 
 ```bash
-pnpm evals:run     # dataset completo
-pnpm evals:quick   # subset de 20 (smoke)
+pnpm evals:run              # dataset completo (requiere servidor + env vars)
+pnpm evals:quick            # subset de 5 casos (smoke rápido)
+pnpm evals:mock-metabolic   # alias — mismo que evals:run
 ```
 
-El runner sale con código ≠ 0 si la tasa de leakage no es 0%. CI lo trata como
-gate de release.
+El runner sale con código ≠ 0 si hay FAILs o ERRORs. Resultados en `docs/evals/results/`.
+
+Variables de entorno requeridas:
+```bash
+EVAL_STUDY_ID=<uuid del study cargado>
+EVAL_AUTH_COOKIE=<cookie de sesión Clerk>
+EVAL_BASE_URL=http://localhost:3000  # o URL de staging
+ENABLE_INTERNAL_RAG_ANSWER_TEST=true  # en el servidor
+RATE_LIMIT_ENABLED=false              # en el servidor, para evitar throttling
+```
+
+Ver `docs/decisions/formal-eval-suite.md` para el diseño completo.
 
 ---
 
-## 5. Fase 10A — Smoke test manual
+## 5. Fase 10B — Eval runner automatizado
+
+El runner automatizado vive en `packages/evals/`. Arquitectura:
+
+- **`types.ts`** — Zod schemas para `FormalEvalCase`, `CaseResult`, `EvalSuiteResult`
+- **`scoring.ts`** — Funciones de scoring puras (sin I/O, completamente testeables)
+- **`metrics.ts`** — Aggregation y re-exports; mantiene API legada de Phase 10A
+- **`runner.ts`** — Runner con `AnswerAdapter` pluggable (HTTP en prod, mock en tests)
+- **`dataset/mock-metabolic-eval-cases.json`** — 12 casos formalizados
+
+**Datasets y sus propósitos:**
+
+| Archivo | Propósito |
+|---|---|
+| `docs/evals/mock-metabolic-smoke-test-cases.json` | Manual: `reviewerNotes`, `passCriteria` para review humano |
+| `packages/evals/dataset/mock-metabolic-eval-cases.json` | Automático: keywords, flags de scoring |
+
+**Failure types** (de más a menos crítico):
+- `missed_insufficient_evidence` — sistema inventó respuesta cuando no debía (alucinación crítica)
+- `forbidden_keywords_found` — respuesta contiene markers de alucinación
+- `false_insufficient_evidence` — sistema no encontró evidencia cuando debía
+- `retrieval_miss` — cero chunks recuperados cuando se esperaban ≥1
+- `answer_unsupported` — keywords esperados ausentes
+- `wrong_section` — sectionTitle no coincide
+- `runtime_error` / `test_setup_error`
+
+---
+
+## 6. Fase 10A — Smoke test manual
 
 Antes del eval runner automatizado, se ejecuta un smoke test manual estructurado
 con un estudio mock metabólico (diabetes tipo 2). Este smoke test verifica que
