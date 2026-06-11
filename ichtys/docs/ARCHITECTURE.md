@@ -79,7 +79,7 @@ POST /api/chat
     → embed question
     → pgvector search WHERE organization_id=$org AND study_id=$study
       ORDER BY embedding <=> $q LIMIT 8
-    → filtrar por similarity threshold (>= 0.75)
+    → filtrar por similarity threshold (>= 0.30, calibrado para text-embedding-3-small)
     → assemble context → LLM con grounded prompt
     → parse structured response (answer + citations + confidence)
     → insufficient_evidence → fallback explícito

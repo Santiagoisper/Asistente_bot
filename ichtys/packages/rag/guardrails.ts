@@ -13,9 +13,15 @@ export const MIN_CHUNKS_FOR_ANSWER = 1
 
 /**
  * Umbral mínimo de similitud coseno para considerar un chunk como evidencia.
- * Alineado con ARCHITECTURE.md: similarity threshold >= 0.75.
+ *
+ * Calibrado empíricamente para text-embedding-3-small (EMBEDDING_MODEL), cuya
+ * escala de similitud es más baja que la de modelos anteriores: en el estudio
+ * mock metabólico (phase 10B) los pares relevantes puntúan ~0.40-0.55 y el
+ * ruido queda <0.30. El valor histórico 0.75 filtraba el 100% de la evidencia
+ * real y producía insufficient_evidence sistemático
+ * (docs/decisions/phase-10a-smoke-test.md ya anticipaba este riesgo).
  */
-export const MIN_SIMILARITY_THRESHOLD = 0.75
+export const MIN_SIMILARITY_THRESHOLD = 0.3
 
 /** Idiomas soportados para mensajes de fallback. Default: 'en'. */
 export type SupportedLanguage = 'en' | 'es'
