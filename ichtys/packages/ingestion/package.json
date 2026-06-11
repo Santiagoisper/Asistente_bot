@@ -10,7 +10,10 @@
     "./parser": "./parser.ts",
     "./chunker": "./chunker.ts",
     "./embedder": "./embedder.ts",
-    "./indexer": "./indexer.ts"
+    "./indexer": "./indexer.ts",
+    "./study-spec": "./study-spec.ts",
+    "./spec-extractor": "./spec-extractor.ts",
+    "./spec-store": "./spec-store.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -18,8 +21,10 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^1.0.6",
     "@ichtys/db": "workspace:*",
     "@vercel/blob": "^2.4.0",
+    "ai": "^4.0.30",
     "drizzle-orm": "^0.38.2",
     "openai": "^4.77.0",
     "pdf-parse": "^1.1.1",
