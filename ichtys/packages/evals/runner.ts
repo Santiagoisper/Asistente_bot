@@ -105,16 +105,75 @@ function secondsUntilExpiry(jwt: string): number {
 }
 
 // ---------------------------------------------------------------------------
-// Cookie jar — captures Set-Cookie from server responses
+// BAPI JWT refresh — uses Clerk Backend API with CLERK_SECRET_KEY
 // ---------------------------------------------------------------------------
 
+interface BapiConfig {
+  secretKey: string
+  sessionId: string
+}
+
 /**
- * Merges new cookies from a Set-Cookie response header into the existing
- * cookie string. The server's Clerk middleware may auto-refresh the JWT
- * when a request arrives with an expired __session but a valid __refresh_*
- * token. Capturing the resulting Set-Cookie headers lets us reuse the fresh
- * JWT for subsequent requests without needing to call Clerk FAPI directly.
+ * Extracts BAPI config from the cookie string.
+ * Uses clerk_active_context=<sessionId>:<orgId> or falls back to the __session JWT sid claim.
+ * Returns null if CLERK_SECRET_KEY is not set or session ID is not found.
  */
+function extractBapiConfig(cookieStr: string): BapiConfig | null {
+  const secretKey = process.env['CLERK_SECRET_KEY']
+  if (!secretKey?.startsWith('sk_')) return null
+
+  const cookies = parseCookies(cookieStr)
+
+  // clerk_active_context = "sessionId:orgId" — reliable even when __session is expired
+  const activeCtx = cookies['clerk_active_context']
+  if (activeCtx) {
+    const [sessionId] = activeCtx.split(':')
+    if (sessionId?.startsWith('sess_')) return { secretKey, sessionId }
+  }
+
+  // Fallback: extract from __session JWT sid claim
+  const sessionJwt = cookies['__session']
+  if (sessionJwt) {
+    try {
+      const payload = decodeJwtPayload(sessionJwt)
+      const sid = payload['sid']
+      if (typeof sid === 'string' && sid.startsWith('sess_')) return { secretKey, sessionId: sid }
+    } catch { /* ignore */ }
+  }
+
+  return null
+}
+
+async function bapiGetToken(cfg: BapiConfig): Promise<string> {
+  const resp = await fetch(`https://api.clerk.com/v1/sessions/${cfg.sessionId}/tokens`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${cfg.secretKey}`,
+      'Content-Type': 'application/json',
+    },
+  })
+  const rawBody = await resp.text()
+  if (!resp.ok) {
+    if (resp.status === 404 || resp.status === 410) {
+      // eslint-disable-next-line no-console
+      console.error(
+        `\n[evals] FATAL: Clerk session ${cfg.sessionId} not found or revoked (${resp.status}). ` +
+        'Log into localhost:3000, copy fresh cookies, and re-run.',
+      )
+      process.exit(1)
+    }
+    throw new Error(`BAPI ${resp.status}: ${rawBody.slice(0, 200)}`)
+  }
+  const data = JSON.parse(rawBody) as Record<string, unknown>
+  const jwt = data['jwt']
+  if (typeof jwt !== 'string' || !jwt) throw new Error(`BAPI: no jwt in response — ${rawBody.slice(0, 200)}`)
+  return jwt
+}
+
+// ---------------------------------------------------------------------------
+// Cookie jar — merges Set-Cookie response headers into the outgoing cookie string
+// ---------------------------------------------------------------------------
+
 function mergeCookieJar(currentCookies: string, setCookieHeaders: string[]): string {
   const jar: Record<string, string> = {}
   for (const part of currentCookies.split(';')) {
@@ -124,7 +183,6 @@ function mergeCookieJar(currentCookies: string, setCookieHeaders: string[]): str
     }
   }
   for (const header of setCookieHeaders) {
-    // Each Set-Cookie header: "name=value; Path=/; HttpOnly; ..."
     const firstSegment = header.split(';')[0]!.trim()
     const eqIdx = firstSegment.indexOf('=')
     if (eqIdx <= 0) continue
@@ -137,74 +195,90 @@ function mergeCookieJar(currentCookies: string, setCookieHeaders: string[]): str
     .join('; ')
 }
 
+function replaceSession(cookieStr: string, freshJwt: string): string {
+  const parts = cookieStr.split(';').map((p) => p.trim())
+  let replaced = false
+  const updated = parts.map((p) => {
+    if (p.startsWith('__session=')) { replaced = true; return `__session=${freshJwt}` }
+    // Also update suffixed variant if present (e.g. __session_Kc0H-txM)
+    if (/^__session_[A-Za-z0-9-]+=/.test(p)) return p.replace(/=.*/, `=${freshJwt}`)
+    return p
+  })
+  if (!replaced) updated.unshift(`__session=${freshJwt}`)
+  return updated.join('; ')
+}
+
 /**
- * Like makeHttpAdapter but with pre-flight JWT validation and cookie jar tracking.
+ * HTTP adapter with automatic JWT refresh via Clerk Backend API.
  *
- * Clerk JWTs have a 60s TTL. The runner uses concurrency=4 to complete all 12
- * cases in ~21s — well within the JWT window — so no server-side refresh is
- * needed. The pre-flight check enforces that the initial JWT carries org context
- * (o.id) and is not already expired before sending any requests.
- *
- * Set-Cookie headers from responses are captured and merged into the cookie jar
- * as a defensive measure in case the server issues a refreshed JWT mid-run.
+ * Reads CLERK_SECRET_KEY from env to generate fresh session JWTs as needed.
+ * Extracts sessionId from clerk_active_context cookie (works even when __session
+ * is already expired). Falls back to concurrency-based timing if CLERK_SECRET_KEY
+ * is not available.
  */
 export function makeRefreshableHttpAdapter(config: HttpAdapterConfig): AnswerAdapter {
   let currentCookie = config.authCookie
+  // JWT minteado vía BAPI. Se envía además como Authorization: Bearer porque
+  // clerkMiddleware acepta Bearer sin el handshake de cookies del dev instance
+  // (__client_uat / __clerk_db_jwt), que solo existe en un browser real.
+  let currentJwt: string | null = null
+  const bapiCfg = extractBapiConfig(currentCookie)
 
-  // Pre-flight: log initial JWT TTL so the operator can gauge timing.
-  const initialJwt = parseCookies(currentCookie)['__session']
-  if (initialJwt) {
-    const ttl = secondsUntilExpiry(initialJwt)
-    const payload = decodeJwtPayload(initialJwt)
-    const hasOrg = !!(payload['o'] as Record<string, unknown> | undefined)?.['id']
-    // eslint-disable-next-line no-console
-    console.log(`[evals] initial JWT TTL=${ttl}s org=${hasOrg ? 'present' : 'MISSING'}`)
-    if (!hasOrg) {
-      // eslint-disable-next-line no-console
-      console.error(
-        '[evals] FATAL: initial JWT lacks org claim (o.id). ' +
-        'Log into localhost:3000 with your org active, copy cookies, and re-run.',
-      )
-      process.exit(1)
-    }
-    if (ttl === 0) {
-      // eslint-disable-next-line no-console
-      console.error(
-        '[evals] FATAL: JWT already expired (TTL=0). ' +
-        'Copy cookies immediately after logging in, then run eval within 30s.',
-      )
-      process.exit(1)
-    }
-    if (ttl < 30) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[evals] WARNING: JWT TTL=${ttl}s is low. ` +
-        'With concurrency=4 the run takes ~21s — likely OK but re-copying cookies is safer.',
-      )
-    }
-  }
+  // eslint-disable-next-line no-console
+  console.log(`[evals] auth mode: ${bapiCfg ? 'BAPI (CLERK_SECRET_KEY available — auto-refresh enabled)' : 'cookie-only (no CLERK_SECRET_KEY — JWT must be fresh at start)'}`)
 
   return async (question: string, studyId: string): Promise<AnswerResult> => {
+    // Refresh JWT via BAPI if TTL is low or already expired.
+    if (bapiCfg) {
+      const sessionJwt = parseCookies(currentCookie)['__session'] ?? ''
+      const secsLeft = secondsUntilExpiry(sessionJwt)
+      if (secsLeft < 30) {
+        try {
+          const freshJwt = await bapiGetToken(bapiCfg)
+          currentCookie = replaceSession(currentCookie, freshJwt)
+          currentJwt = freshJwt
+          const freshTtl = secondsUntilExpiry(freshJwt)
+          const freshPayload = decodeJwtPayload(freshJwt)
+          const hasOrg = !!(freshPayload['o'] as Record<string, unknown> | undefined)?.['id']
+          // eslint-disable-next-line no-console
+          console.log(`[evals] JWT refreshed via BAPI — TTL=${freshTtl}s org=${hasOrg ? 'present' : 'MISSING'}`)
+          if (!hasOrg) {
+            // eslint-disable-next-line no-console
+            console.error('[evals] FATAL: BAPI JWT lacks org claim. Ensure you are a member of the org.')
+            process.exit(1)
+          }
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn(`[evals] JWT refresh failed: ${err instanceof Error ? err.message : String(err)}`)
+        }
+      }
+    } else {
+      // No BAPI available — validate initial JWT on first call only.
+      const sessionJwt = parseCookies(currentCookie)['__session'] ?? ''
+      const secsLeft = secondsUntilExpiry(sessionJwt)
+      if (secsLeft === 0) {
+        throw new Error(
+          'JWT expired and CLERK_SECRET_KEY is not available for refresh. ' +
+          'Copy fresh cookies within 30s of logging in.',
+        )
+      }
+    }
+
     const url = `${config.baseUrl}/api/rag/answer-test`
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Cookie: currentCookie,
+        ...(currentJwt ? { Authorization: `Bearer ${currentJwt}` } : {}),
       },
       body: JSON.stringify({ studyId, question }),
     })
 
-    // Capture Set-Cookie from response — Clerk middleware may have refreshed the JWT.
+    // Capture Set-Cookie from server — defensive update of cookie jar.
     const setCookieHeaders = response.headers.getSetCookie?.() ?? []
     if (setCookieHeaders.length > 0) {
       currentCookie = mergeCookieJar(currentCookie, setCookieHeaders)
-      const freshJwt = parseCookies(currentCookie)['__session']
-      const freshTtl = freshJwt ? secondsUntilExpiry(freshJwt) : 0
-      if (freshTtl > 0) {
-        // eslint-disable-next-line no-console
-        console.log(`[evals] JWT refreshed via Set-Cookie — new TTL=${freshTtl}s`)
-      }
     }
 
     if (!response.ok) {
