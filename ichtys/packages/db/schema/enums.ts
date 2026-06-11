@@ -28,6 +28,14 @@ export type MessageRole = (typeof messageRole)[number]
 export const answerConfidence = ['high', 'medium', 'low', 'insufficient_evidence'] as const
 export type AnswerConfidence = (typeof answerConfidence)[number]
 
+/**
+ * Ciclo de vida del study spec extraído. Nace 'draft' SIEMPRE: la extracción
+ * LLM requiere revisión humana antes de usarse operativamente (ALPHI: humano
+ * en el loop para objetos críticos).
+ */
+export const studySpecStatus = ['draft', 'approved', 'superseded'] as const
+export type StudySpecStatus = (typeof studySpecStatus)[number]
+
 export const auditAction = [
   'document.upload',
   'document.download',
