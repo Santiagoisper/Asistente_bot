@@ -53,6 +53,7 @@ const mocks = vi.hoisted(() => {
       }),
     generateAnswerForStudy: vi.fn(),
     getOrCreateConversation: vi.fn(),
+    loadConversationHistory: vi.fn(),
     persistUserMessage: vi.fn(),
     persistAssistantMessageAndCitations: vi.fn(),
     writeAuditLog: vi.fn(),
@@ -81,6 +82,7 @@ vi.mock('../../../../lib/rag/answer-orchestrator', () => ({
 
 vi.mock('../../../../lib/chat/persistence', () => ({
   getOrCreateConversation: mocks.getOrCreateConversation,
+  loadConversationHistory: mocks.loadConversationHistory,
   persistUserMessage: mocks.persistUserMessage,
   persistAssistantMessageAndCitations: mocks.persistAssistantMessageAndCitations,
   writeAuditLog: mocks.writeAuditLog,
@@ -142,6 +144,7 @@ function makeWrapperResult(overrides: Record<string, unknown> = {}) {
 function setupHappyPath() {
   mocks.validateStudyAccess.mockResolvedValueOnce(makeStudyAccessCtx())
   mocks.getOrCreateConversation.mockResolvedValueOnce(mocks.CONV_ID)
+  mocks.loadConversationHistory.mockResolvedValueOnce([])
   mocks.persistUserMessage.mockResolvedValueOnce(mocks.USER_MSG_ID)
   mocks.generateAnswerForStudy.mockResolvedValueOnce(makeWrapperResult())
   mocks.persistAssistantMessageAndCitations.mockResolvedValueOnce(mocks.ASST_MSG_ID)
@@ -155,6 +158,7 @@ function setupHappyPath() {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.enforceSlidingWindowRateLimit.mockResolvedValue({ limited: false })
+  mocks.loadConversationHistory.mockResolvedValue([])
 })
 afterEach(() => vi.clearAllMocks())
 
@@ -188,6 +192,47 @@ describe('POST /api/chat — happy path (new conversation)', () => {
     expect(mocks.getOrCreateConversation).toHaveBeenCalledWith(
       expect.objectContaining({ conversationId: undefined }),
     )
+  })
+
+  it('loads conversation history with tenant boundary and passes it to the answer engine', async () => {
+    const history = [
+      { role: 'user', content: '¿Qué procedimientos tiene la visita 4?' },
+      { role: 'assistant', content: 'La visita 4 incluye HbA1c y muestra PK [1].' },
+    ]
+    mocks.validateStudyAccess.mockResolvedValueOnce(makeStudyAccessCtx())
+    mocks.getOrCreateConversation.mockResolvedValueOnce(mocks.CONV_ID)
+    mocks.loadConversationHistory.mockResolvedValueOnce(history)
+    mocks.persistUserMessage.mockResolvedValueOnce(mocks.USER_MSG_ID)
+    mocks.generateAnswerForStudy.mockResolvedValueOnce(makeWrapperResult())
+    mocks.persistAssistantMessageAndCitations.mockResolvedValueOnce(mocks.ASST_MSG_ID)
+    mocks.writeAuditLog.mockResolvedValue(undefined)
+
+    const res = await POST(makeRequest({ studyId: mocks.STUDY_ID, question: '¿Y la visita 5?' }))
+
+    expect(res.status).toBe(200)
+    expect(mocks.loadConversationHistory).toHaveBeenCalledWith({
+      conversationId: mocks.CONV_ID,
+      orgId: mocks.ORG_ID,
+      studyId: mocks.STUDY_ID,
+    })
+    expect(mocks.generateAnswerForStudy).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationHistory: history }),
+    )
+  })
+
+  it('loads history BEFORE persisting the new user message (current turn not duplicated)', async () => {
+    const order: string[] = []
+    mocks.validateStudyAccess.mockResolvedValueOnce(makeStudyAccessCtx())
+    mocks.getOrCreateConversation.mockResolvedValueOnce(mocks.CONV_ID)
+    mocks.loadConversationHistory.mockImplementationOnce(async () => { order.push('history'); return [] })
+    mocks.persistUserMessage.mockImplementationOnce(async () => { order.push('user-message'); return mocks.USER_MSG_ID })
+    mocks.generateAnswerForStudy.mockResolvedValueOnce(makeWrapperResult())
+    mocks.persistAssistantMessageAndCitations.mockResolvedValueOnce(mocks.ASST_MSG_ID)
+    mocks.writeAuditLog.mockResolvedValue(undefined)
+
+    await POST(makeRequest({ studyId: mocks.STUDY_ID, question: 'test' }))
+
+    expect(order).toEqual(['history', 'user-message'])
   })
 })
 

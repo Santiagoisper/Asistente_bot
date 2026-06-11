@@ -49,11 +49,14 @@ import {
   answerEngine,
   AnswerEngineError,
   EXCERPT_MAX_CHARS,
+  HISTORY_TURN_MAX_CHARS,
+  MAX_HISTORY_TURNS,
   SYSTEM_PROMPT,
   truncateExcerpt,
   buildContext,
+  buildHistoryBlock,
 } from '../answer-engine'
-import type { AnswerEngineInput } from '../answer-engine'
+import type { AnswerEngineInput, ConversationTurn } from '../answer-engine'
 import type { RetrievedChunk } from '../retriever'
 import {
   MIN_SIMILARITY_THRESHOLD,
@@ -596,6 +599,89 @@ describe('answerEngine — i18n fallback pre-LLM', () => {
     await answerEngine(makeInput([], '¿Tiene información sobre metformina?'))
     await answerEngine(makeInput([makeChunk({ similarityScore: MIN_SIMILARITY_THRESHOLD - 0.01 })], 'What about metformin?'))
 
+    expect(mocks.generateObject).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// conversationHistory — memoria por estudio (cross-session)
+// ---------------------------------------------------------------------------
+
+describe('answerEngine — conversationHistory', () => {
+  function makeHistory(turns: number): ConversationTurn[] {
+    return Array.from({ length: turns }, (_, i) => ({
+      role: (i % 2 === 0 ? 'user' : 'assistant') as ConversationTurn['role'],
+      content: `turn-${i + 1}`,
+    }))
+  }
+
+  function lastPrompt(): string {
+    const call = mocks.generateObject.mock.calls.at(-1)?.[0] as { prompt: string }
+    return call.prompt
+  }
+
+  it('injects the history block before the question when history is provided', async () => {
+    mocks.generateObject.mockResolvedValue(makeLLMResponse({}))
+    const history: ConversationTurn[] = [
+      { role: 'user', content: '¿Qué procedimientos tiene la visita 4?' },
+      { role: 'assistant', content: 'La visita 4 incluye HbA1c y muestra PK [1].' },
+    ]
+
+    await answerEngine({ ...makeInput([makeChunk()], '¿Y la visita 5?'), conversationHistory: history })
+
+    const prompt = lastPrompt()
+    expect(prompt).toContain('CONVERSATION HISTORY (context only — NOT evidence):')
+    expect(prompt).toContain('USER: ¿Qué procedimientos tiene la visita 4?')
+    expect(prompt).toContain('ASSISTANT: La visita 4 incluye HbA1c y muestra PK [1].')
+    // El historial precede a la pregunta actual.
+    expect(prompt.indexOf('CONVERSATION HISTORY')).toBeLessThan(prompt.indexOf('USER QUESTION:'))
+  })
+
+  it('omits the history block when history is absent or empty', async () => {
+    mocks.generateObject.mockResolvedValue(makeLLMResponse({}))
+
+    await answerEngine(makeInput([makeChunk()]))
+    expect(lastPrompt()).not.toContain('CONVERSATION HISTORY')
+
+    await answerEngine({ ...makeInput([makeChunk()]), conversationHistory: [] })
+    expect(lastPrompt()).not.toContain('CONVERSATION HISTORY')
+  })
+
+  it('windows the history to the last MAX_HISTORY_TURNS turns', async () => {
+    mocks.generateObject.mockResolvedValue(makeLLMResponse({}))
+    const history = makeHistory(MAX_HISTORY_TURNS + 2)
+
+    await answerEngine({ ...makeInput([makeChunk()]), conversationHistory: history })
+
+    const prompt = lastPrompt()
+    expect(prompt).not.toContain('turn-1\n')
+    expect(prompt).not.toContain(': turn-2')
+    expect(prompt).toContain(`turn-${MAX_HISTORY_TURNS + 2}`)
+  })
+
+  it('truncates each turn at HISTORY_TURN_MAX_CHARS', () => {
+    const longTurn: ConversationTurn = {
+      role: 'assistant',
+      content: 'palabra '.repeat(400), // >> HISTORY_TURN_MAX_CHARS
+    }
+    const block = buildHistoryBlock([longTurn])
+    expect(block.length).toBeLessThanOrEqual('ASSISTANT: '.length + HISTORY_TURN_MAX_CHARS + 1) // +1 por '…'
+    expect(block.endsWith('…')).toBe(true)
+  })
+
+  it('history does NOT bypass the pre-LLM insufficient_evidence fallback', async () => {
+    const history: ConversationTurn[] = [
+      { role: 'user', content: '¿Cuál es el rango de HbA1c?' },
+      { role: 'assistant', content: 'Entre 7.0% y 10.0% [1].' },
+    ]
+
+    const result = await answerEngine({
+      ...makeInput([], '¿Y me lo repetís?'),
+      conversationHistory: history,
+    })
+
+    expect(result.confidence).toBe('insufficient_evidence')
+    expect(result.evidences).toEqual([])
     expect(mocks.generateObject).not.toHaveBeenCalled()
   })
 })

@@ -76,6 +76,8 @@ GET /api/documents/:id/status → polling desde el frontend
 POST /api/chat
     → validate auth + active org + study membership (Clerk)
     → validate study_id ∈ org
+    → load conversation history (últimos 10 turnos, tenant-filtered)
+      — contexto para interpretar la pregunta; NUNCA evidencia
     → embed question
     → pgvector search WHERE organization_id=$org AND study_id=$study
       ORDER BY embedding <=> $q LIMIT 8
