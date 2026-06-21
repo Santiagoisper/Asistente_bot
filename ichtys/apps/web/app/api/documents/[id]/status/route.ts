@@ -41,7 +41,7 @@ export async function GET(_req: Request, { params }: RouteContext): Promise<Resp
         latestDocumentVersionId: latestVersion.id,
         status: latestVersion.status,
         pageCount: latestVersion.pageCount,
-        errorMessage: latestVersion.status === 'error' ? 'Document processing failed' : null,
+        errorMessage: latestVersion.status === 'error' ? latestVersion.errorMessage : null,
         createdAt: latestVersion.createdAt,
       },
       { status: 200 },

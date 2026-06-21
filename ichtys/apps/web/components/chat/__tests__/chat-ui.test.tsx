@@ -85,7 +85,7 @@ describe('minimal chat UI render', () => {
     const html = render(<ChatMessageList turns={turns} />)
 
     expect(html).toContain('Evidencia insuficiente')
-    expect(html).toContain('Sin evidencia suficiente en los documentos disponibles.')
+    expect(html).toContain('No encontré fragmentos relevantes en los documentos indexados para esa pregunta.')
     expect(html).not.toContain('Abrir PDF fuente')
     expect(html).not.toContain('/api/document-versions/')
   })

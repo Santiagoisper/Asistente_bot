@@ -19,6 +19,11 @@ type ChatClientProps = {
 }
 
 const SAFE_ERROR_MESSAGE = 'No se pudo completar la operacion. Intenta nuevamente.'
+const SUGGESTED_QUESTIONS = [
+  '¿Cuáles son las visitas del protocolo?',
+  '¿Cuáles son los criterios de inclusión?',
+  '¿Qué medicación concomitante está prohibida?',
+]
 
 export default function ChatClient({ studyId, studyName, protocolNumber, initialConversationId = null }: ChatClientProps) {
   const [conversations, setConversations] = useState<ConversationListItem[]>([])
@@ -110,6 +115,7 @@ export default function ChatClient({ studyId, studyName, protocolNumber, initial
       content: trimmedQuestion,
       confidence: null,
       evidences: [],
+      retrievalCount: null,
     }
 
     setTurns((current) => [...current, pendingUserTurn])
@@ -131,6 +137,7 @@ export default function ChatClient({ studyId, studyName, protocolNumber, initial
           content: result.answer,
           confidence: result.confidence,
           evidences: result.confidence === 'insufficient_evidence' ? [] : result.evidences,
+          retrievalCount: result.retrievalCount,
         },
       ])
       setConversations((current) => upsertConversation(current, studyId, result.conversationId))
@@ -223,9 +230,21 @@ export default function ChatClient({ studyId, studyName, protocolNumber, initial
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
             />
+            <div className="mt-3 flex flex-wrap gap-2">
+              {SUGGESTED_QUESTIONS.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setQuestion(item)}
+                  className="rounded-full border border-gray-200 px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
             <div className="mt-3 flex items-center justify-between gap-3">
               <p className="text-xs text-gray-500">
-                Las respuestas se basan solo en documentos del estudio autorizado.
+                Usá preguntas completas sobre el protocolo o manuales; evitá consultas de una sola palabra.
               </p>
               <button
                 type="submit"
@@ -261,7 +280,7 @@ export function ChatMessageList({ turns }: { turns: ChatTurn[] }) {
           <p className="whitespace-pre-wrap text-sm leading-6">{turn.content}</p>
           {turn.confidence === 'insufficient_evidence' ? (
             <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              Sin evidencia suficiente en los documentos disponibles.
+              {buildInsufficientEvidenceHint(turn.retrievalCount)}
             </p>
           ) : null}
           {turn.role === 'assistant' ? <EvidenceList evidences={turn.evidences} /> : null}
@@ -300,6 +319,7 @@ async function hydrateMessagesWithCitations(messages: MessageItem[]): Promise<Ch
           content: message.content,
           confidence: null,
           evidences: [],
+          retrievalCount: null,
           createdAt: message.createdAt,
         }
       }
@@ -317,6 +337,7 @@ async function hydrateMessagesWithCitations(messages: MessageItem[]): Promise<Ch
         content: message.content,
         confidence: message.confidence,
         evidences,
+        retrievalCount: null,
         createdAt: message.createdAt,
       }
     }),
@@ -363,4 +384,12 @@ function formatDate(value: string): string {
     month: 'short',
     day: '2-digit',
   })
+}
+
+function buildInsufficientEvidenceHint(retrievalCount?: number | null): string {
+  if ((retrievalCount ?? 0) === 0) {
+    return 'No encontré fragmentos relevantes en los documentos indexados para esa pregunta.'
+  }
+
+  return 'Encontré fragmentos, pero no fueron suficientemente relevantes. Probá una pregunta más específica (por ejemplo: visitas, criterios, medicación o procedimientos).'
 }

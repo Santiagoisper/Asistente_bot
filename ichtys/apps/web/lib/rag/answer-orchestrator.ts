@@ -2,6 +2,7 @@ import { validateStudyAccess } from '@ichtys/auth'
 import { answerEngine, retrieveRelevantChunks } from '@ichtys/rag'
 import type { DocumentType } from '@ichtys/db'
 import type { AnswerResult, ConversationTurn } from '@ichtys/rag'
+import { expandShortQueryForRetrieval } from './query-expander'
 
 /**
  * answer-orchestrator.ts — server-side wrapper que conecta auth, retrieval y
@@ -75,18 +76,28 @@ export async function generateAnswerForStudy(
   // 1. Validar acceso y resolver orgId desde el token de Clerk.
   //    Cualquier fallo (auth, org, study) se envuelve como access_denied.
   let orgId: string
+  let studyName: string | null = null
+  let protocolNumber: string | null = null
   try {
     const ctx = await validateStudyAccess(input.studyId)
     orgId = ctx.orgId
+    studyName = ctx.study.name
+    protocolNumber = ctx.study.protocolNumber
   } catch {
     throw new AnswerOrchestratorError('access_denied', 'Study access check failed')
   }
+
+  const retrievalQuery = expandShortQueryForRetrieval({
+    question: input.question,
+    studyName,
+    protocolNumber,
+  })
 
   // 2. Retrieval con filtro de tenant en la query SQL.
   let retrievedChunks: Awaited<ReturnType<typeof retrieveRelevantChunks>>
   try {
     retrievedChunks = await retrieveRelevantChunks({
-      queryText: input.question,
+      queryText: retrievalQuery,
       orgId,
       studyId: input.studyId,
       topK: input.topK,

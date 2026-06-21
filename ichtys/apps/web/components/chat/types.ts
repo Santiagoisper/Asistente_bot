@@ -57,5 +57,6 @@ export type ChatTurn = {
   content: string
   confidence: AnswerConfidence | null
   evidences: Evidence[]
+  retrievalCount?: number | null
   createdAt?: string
 }
