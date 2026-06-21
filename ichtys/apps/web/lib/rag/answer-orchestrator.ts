@@ -1,7 +1,7 @@
 import { validateStudyAccess } from '@ichtys/auth'
 import { answerEngine, retrieveRelevantChunks } from '@ichtys/rag'
 import type { DocumentType } from '@ichtys/db'
-import type { AnswerResult } from '@ichtys/rag'
+import type { AnswerResult, ConversationTurn } from '@ichtys/rag'
 
 /**
  * answer-orchestrator.ts — server-side wrapper que conecta auth, retrieval y
@@ -29,6 +29,13 @@ export type GenerateAnswerForStudyInput = {
   question: string
   documentType?: DocumentType
   topK?: number
+  /**
+   * Turnos previos de la conversación (cargados por el caller desde DB, ya
+   * tenant-validados). Contexto para interpretar la pregunta — nunca evidencia.
+   * El retrieval sigue usando solo la pregunta actual (limitación conocida:
+   * follow-ups que dependen 100% del historial pueden recuperar peor).
+   */
+  conversationHistory?: ConversationTurn[]
 }
 
 export type GenerateAnswerForStudyResult = AnswerResult & {
@@ -97,6 +104,7 @@ export async function generateAnswerForStudy(
     result = await answerEngine({
       question: input.question,
       retrievedChunks,
+      conversationHistory: input.conversationHistory,
     })
   } catch {
     throw new AnswerOrchestratorError('answer_generation_error', 'Answer generation failed')

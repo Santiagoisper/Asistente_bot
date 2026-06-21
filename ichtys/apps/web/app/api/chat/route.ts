@@ -5,6 +5,7 @@ import {
 } from '../../../lib/rag/answer-orchestrator'
 import {
   getOrCreateConversation,
+  loadConversationHistory,
   persistAssistantMessageAndCitations,
   persistUserMessage,
   writeAuditLog,
@@ -20,8 +21,13 @@ import { getOrCreateRequestId, log, makeRecord } from '../../../lib/observabilit
  * POST /api/chat — grounded answer engine with full chat persistence.
  *
  * Flow:
- *   auth → study access → conversation → user message → rag.answer.requested
- *   → generateAnswerForStudy → assistant message + citations → rag.answer.completed
+ *   auth → study access → conversation → load history → user message
+ *   → rag.answer.requested → generateAnswerForStudy (con memoria)
+ *   → assistant message + citations → rag.answer.completed
+ *
+ * Memoria por estudio (cross-session): el historial se carga desde DB por
+ * conversationId — retomar una conversación con el mismo conversationId
+ * restaura el contexto aunque sea otra sesión HTTP u otro día.
  *
  * Rules (CLAUDE.md, SECURITY.md):
  *  - orgId always from Clerk token — never from body or query params.
@@ -128,7 +134,17 @@ export async function POST(req: Request): Promise<Response> {
     return handleApiError(err)
   }
 
-  // 7. Persist user message.
+  // 7. Load conversation history BEFORE persisting the new user message —
+  //    el turno actual no debe duplicarse en el historial del prompt.
+  //    Memoria cross-session: el historial vive en DB, no en la sesión HTTP.
+  let conversationHistory: Awaited<ReturnType<typeof loadConversationHistory>>
+  try {
+    conversationHistory = await loadConversationHistory({ conversationId, orgId, studyId })
+  } catch {
+    return new Response('Internal Server Error', { status: 500 })
+  }
+
+  // 8. Persist user message.
   let userMessageId: string
   try {
     userMessageId = await persistUserMessage({ conversationId, orgId, studyId, question })
@@ -136,7 +152,7 @@ export async function POST(req: Request): Promise<Response> {
     return new Response('Internal Server Error', { status: 500 })
   }
 
-  // 8. Audit — requested. Best-effort, safe metadata only (no question text / PHI).
+  // 9. Audit — requested. Best-effort, safe metadata only (no question text / PHI).
   try {
     await writeAuditLog({
       action: 'rag.answer.requested',
@@ -148,16 +164,17 @@ export async function POST(req: Request): Promise<Response> {
       metadata: {
         documentType: documentType ?? null,
         topK: topK ?? null,
+        historyTurns: conversationHistory.length,
       },
     })
   } catch {
     return new Response('Internal Server Error', { status: 500 })
   }
 
-  // 9. RAG wrapper — retrieval + answer engine.
+  // 10. RAG wrapper — retrieval + answer engine (con memoria de conversación).
   let result: Awaited<ReturnType<typeof generateAnswerForStudy>>
   try {
-    result = await generateAnswerForStudy({ studyId, question, documentType, topK })
+    result = await generateAnswerForStudy({ studyId, question, documentType, topK, conversationHistory })
   } catch {
     try {
       await writeAuditLog({
@@ -175,7 +192,7 @@ export async function POST(req: Request): Promise<Response> {
     return new Response('Internal Server Error', { status: 500 })
   }
 
-  // 10. Persist assistant message + citations atomically.
+  // 11. Persist assistant message + citations atomically.
   let assistantMessageId: string
   try {
     assistantMessageId = await persistAssistantMessageAndCitations({
@@ -190,7 +207,7 @@ export async function POST(req: Request): Promise<Response> {
     return new Response('Internal Server Error', { status: 500 })
   }
 
-  // 11. Audit — completed. Best-effort, safe metadata only.
+  // 12. Audit — completed. Best-effort, safe metadata only.
   try {
     await writeAuditLog({
       action: 'rag.answer.completed',
@@ -209,7 +226,7 @@ export async function POST(req: Request): Promise<Response> {
     return new Response('Internal Server Error', { status: 500 })
   }
 
-  // 12. Return structured response — no prompts, embeddings or raw chunks.
+  // 13. Return structured response — no prompts, embeddings or raw chunks.
   log(makeRecord({ requestId, level: 'info', event: 'api.request.completed', endpoint: '/api/chat', method: 'POST', userId, conversationId, statusCode: 200, durationMs: Date.now() - startMs }))
   return Response.json(
     {

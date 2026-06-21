@@ -1,6 +1,7 @@
 import {
   and,
   db,
+  desc,
   eq,
   inArray,
   auditLogs,
@@ -12,7 +13,7 @@ import {
   type AuditAction,
 } from '@ichtys/db'
 import { AccessError, logServerError } from '@ichtys/auth'
-import type { Evidence } from '@ichtys/rag'
+import type { ConversationTurn, Evidence } from '@ichtys/rag'
 
 /**
  * persistence.ts — helpers server-only de persistencia de chat.
@@ -77,6 +78,44 @@ export async function getOrCreateConversation(params: {
 // ---------------------------------------------------------------------------
 // Mensajes
 // ---------------------------------------------------------------------------
+
+/** Default de turnos de historial cargados para el answer engine. */
+export const DEFAULT_HISTORY_LIMIT = 10
+
+/**
+ * Carga los últimos `limit` mensajes de la conversación en orden cronológico,
+ * como ConversationTurn[] para el answer engine.
+ *
+ * El triple filtro (conversation + org + study) es defense-in-depth: el caller
+ * ya validó ownership vía getOrCreateConversation, pero ninguna query de
+ * mensajes sale sin tenant boundary (CLAUDE.md regla 3).
+ */
+export async function loadConversationHistory(params: {
+  conversationId: string
+  orgId: string
+  studyId: string
+  limit?: number
+}): Promise<ConversationTurn[]> {
+  const rows = await db
+    .select({
+      role: messages.role,
+      content: messages.content,
+    })
+    .from(messages)
+    .where(
+      and(
+        eq(messages.conversationId, params.conversationId),
+        eq(messages.organizationId, params.orgId),
+        eq(messages.studyId, params.studyId),
+      ),
+    )
+    .orderBy(desc(messages.createdAt))
+    .limit(params.limit ?? DEFAULT_HISTORY_LIMIT)
+
+  // La query trae los más recientes primero; el prompt los necesita en orden
+  // cronológico.
+  return rows.reverse().map((row) => ({ role: row.role, content: row.content }))
+}
 
 export async function persistUserMessage(params: {
   conversationId: string
