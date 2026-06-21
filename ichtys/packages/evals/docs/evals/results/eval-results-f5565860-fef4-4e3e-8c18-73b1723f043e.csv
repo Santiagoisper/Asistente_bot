@@ -1,0 +1,13 @@
+caseId,status,failureType,actualConfidence,expectedConfidence,evidenceCount,matchedKeywords,matchedSection,insufficientEvidenceCorrect,forbiddenKeywordsFound,durationMs
+SM-001,PASS,,high,any,2,true,true,true,false,8698
+SM-002,PASS,,high,any,2,true,true,true,false,7539
+SM-003,PASS,,high,any,2,true,true,true,false,8089
+SM-004,PASS,,high,any,2,true,N/A,true,false,5369
+SM-005,PASS,,high,any,3,true,true,true,false,7169
+SM-006,PASS,,high,any,1,true,true,true,false,11216
+SM-007,PASS,,high,any,4,true,true,true,false,17693
+SM-008,PASS,,high,any,2,true,true,true,false,7804
+SM-009,PASS,,high,any,5,true,true,true,false,12177
+SM-010,PASS,,high,any,4,true,true,true,false,14689
+SM-011,PASS,,insufficient_evidence,insufficient_evidence,0,true,N/A,true,false,1061
+SM-012,PASS,,insufficient_evidence,insufficient_evidence,0,true,N/A,true,false,5974

@@ -71,6 +71,234 @@ export function makeHttpAdapter(config: HttpAdapterConfig): AnswerAdapter {
 }
 
 // ---------------------------------------------------------------------------
+// Cookie / JWT helpers
+// ---------------------------------------------------------------------------
+
+function parseCookies(cookieStr: string): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const part of cookieStr.split(';')) {
+    const eq = part.trim().indexOf('=')
+    if (eq > 0) {
+      result[part.trim().slice(0, eq).trim()] = part.trim().slice(eq + 1).trim()
+    }
+  }
+  return result
+}
+
+function decodeJwtPayload(jwt: string): Record<string, unknown> {
+  const parts = jwt.split('.')
+  if (parts.length !== 3) throw new Error('Invalid JWT structure')
+  const b64 = parts[1]!.replace(/-/g, '+').replace(/_/g, '/')
+  const padded = b64.padEnd(b64.length + ((4 - (b64.length % 4)) % 4), '=')
+  return JSON.parse(Buffer.from(padded, 'base64').toString('utf-8')) as Record<string, unknown>
+}
+
+function secondsUntilExpiry(jwt: string): number {
+  try {
+    const payload = decodeJwtPayload(jwt)
+    const exp = payload['exp']
+    if (typeof exp !== 'number') return 0
+    return Math.max(0, exp - Math.floor(Date.now() / 1000))
+  } catch {
+    return 0
+  }
+}
+
+// ---------------------------------------------------------------------------
+// BAPI JWT refresh — uses Clerk Backend API with CLERK_SECRET_KEY
+// ---------------------------------------------------------------------------
+
+interface BapiConfig {
+  secretKey: string
+  sessionId: string
+}
+
+/**
+ * Extracts BAPI config from the cookie string.
+ * Uses clerk_active_context=<sessionId>:<orgId> or falls back to the __session JWT sid claim.
+ * Returns null if CLERK_SECRET_KEY is not set or session ID is not found.
+ */
+function extractBapiConfig(cookieStr: string): BapiConfig | null {
+  const secretKey = process.env['CLERK_SECRET_KEY']
+  if (!secretKey?.startsWith('sk_')) return null
+
+  const cookies = parseCookies(cookieStr)
+
+  // clerk_active_context = "sessionId:orgId" — reliable even when __session is expired
+  const activeCtx = cookies['clerk_active_context']
+  if (activeCtx) {
+    const [sessionId] = activeCtx.split(':')
+    if (sessionId?.startsWith('sess_')) return { secretKey, sessionId }
+  }
+
+  // Fallback: extract from __session JWT sid claim
+  const sessionJwt = cookies['__session']
+  if (sessionJwt) {
+    try {
+      const payload = decodeJwtPayload(sessionJwt)
+      const sid = payload['sid']
+      if (typeof sid === 'string' && sid.startsWith('sess_')) return { secretKey, sessionId: sid }
+    } catch { /* ignore */ }
+  }
+
+  return null
+}
+
+async function bapiGetToken(cfg: BapiConfig): Promise<string> {
+  const resp = await fetch(`https://api.clerk.com/v1/sessions/${cfg.sessionId}/tokens`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${cfg.secretKey}`,
+      'Content-Type': 'application/json',
+    },
+  })
+  const rawBody = await resp.text()
+  if (!resp.ok) {
+    if (resp.status === 404 || resp.status === 410) {
+      // eslint-disable-next-line no-console
+      console.error(
+        `\n[evals] FATAL: Clerk session ${cfg.sessionId} not found or revoked (${resp.status}). ` +
+        'Log into localhost:3000, copy fresh cookies, and re-run.',
+      )
+      process.exit(1)
+    }
+    throw new Error(`BAPI ${resp.status}: ${rawBody.slice(0, 200)}`)
+  }
+  const data = JSON.parse(rawBody) as Record<string, unknown>
+  const jwt = data['jwt']
+  if (typeof jwt !== 'string' || !jwt) throw new Error(`BAPI: no jwt in response — ${rawBody.slice(0, 200)}`)
+  return jwt
+}
+
+// ---------------------------------------------------------------------------
+// Cookie jar — merges Set-Cookie response headers into the outgoing cookie string
+// ---------------------------------------------------------------------------
+
+function mergeCookieJar(currentCookies: string, setCookieHeaders: string[]): string {
+  const jar: Record<string, string> = {}
+  for (const part of currentCookies.split(';')) {
+    const eq = part.trim().indexOf('=')
+    if (eq > 0) {
+      jar[part.trim().slice(0, eq).trim()] = part.trim().slice(eq + 1).trim()
+    }
+  }
+  for (const header of setCookieHeaders) {
+    const firstSegment = header.split(';')[0]!.trim()
+    const eqIdx = firstSegment.indexOf('=')
+    if (eqIdx <= 0) continue
+    const name = firstSegment.slice(0, eqIdx).trim()
+    const value = firstSegment.slice(eqIdx + 1).trim()
+    if (name) jar[name] = value
+  }
+  return Object.entries(jar)
+    .map(([k, v]) => `${k}=${v}`)
+    .join('; ')
+}
+
+function replaceSession(cookieStr: string, freshJwt: string): string {
+  const parts = cookieStr.split(';').map((p) => p.trim())
+  let replaced = false
+  const updated = parts.map((p) => {
+    if (p.startsWith('__session=')) { replaced = true; return `__session=${freshJwt}` }
+    // Also update suffixed variant if present (e.g. __session_Kc0H-txM)
+    if (/^__session_[A-Za-z0-9-]+=/.test(p)) return p.replace(/=.*/, `=${freshJwt}`)
+    return p
+  })
+  if (!replaced) updated.unshift(`__session=${freshJwt}`)
+  return updated.join('; ')
+}
+
+/**
+ * HTTP adapter with automatic JWT refresh via Clerk Backend API.
+ *
+ * Reads CLERK_SECRET_KEY from env to generate fresh session JWTs as needed.
+ * Extracts sessionId from clerk_active_context cookie (works even when __session
+ * is already expired). Falls back to concurrency-based timing if CLERK_SECRET_KEY
+ * is not available.
+ */
+export function makeRefreshableHttpAdapter(config: HttpAdapterConfig): AnswerAdapter {
+  let currentCookie = config.authCookie
+  // JWT minteado vía BAPI. Se envía además como Authorization: Bearer porque
+  // clerkMiddleware acepta Bearer sin el handshake de cookies del dev instance
+  // (__client_uat / __clerk_db_jwt), que solo existe en un browser real.
+  let currentJwt: string | null = null
+  const bapiCfg = extractBapiConfig(currentCookie)
+
+  // eslint-disable-next-line no-console
+  console.log(`[evals] auth mode: ${bapiCfg ? 'BAPI (CLERK_SECRET_KEY available — auto-refresh enabled)' : 'cookie-only (no CLERK_SECRET_KEY — JWT must be fresh at start)'}`)
+
+  return async (question: string, studyId: string): Promise<AnswerResult> => {
+    // Refresh JWT via BAPI if TTL is low or already expired.
+    if (bapiCfg) {
+      const sessionJwt = parseCookies(currentCookie)['__session'] ?? ''
+      const secsLeft = secondsUntilExpiry(sessionJwt)
+      if (secsLeft < 30) {
+        try {
+          const freshJwt = await bapiGetToken(bapiCfg)
+          currentCookie = replaceSession(currentCookie, freshJwt)
+          currentJwt = freshJwt
+          const freshTtl = secondsUntilExpiry(freshJwt)
+          const freshPayload = decodeJwtPayload(freshJwt)
+          const hasOrg = !!(freshPayload['o'] as Record<string, unknown> | undefined)?.['id']
+          // eslint-disable-next-line no-console
+          console.log(`[evals] JWT refreshed via BAPI — TTL=${freshTtl}s org=${hasOrg ? 'present' : 'MISSING'}`)
+          if (!hasOrg) {
+            // eslint-disable-next-line no-console
+            console.error('[evals] FATAL: BAPI JWT lacks org claim. Ensure you are a member of the org.')
+            process.exit(1)
+          }
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn(`[evals] JWT refresh failed: ${err instanceof Error ? err.message : String(err)}`)
+        }
+      }
+    } else {
+      // No BAPI available — validate initial JWT on first call only.
+      const sessionJwt = parseCookies(currentCookie)['__session'] ?? ''
+      const secsLeft = secondsUntilExpiry(sessionJwt)
+      if (secsLeft === 0) {
+        throw new Error(
+          'JWT expired and CLERK_SECRET_KEY is not available for refresh. ' +
+          'Copy fresh cookies within 30s of logging in.',
+        )
+      }
+    }
+
+    const url = `${config.baseUrl}/api/rag/answer-test`
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: currentCookie,
+        ...(currentJwt ? { Authorization: `Bearer ${currentJwt}` } : {}),
+      },
+      body: JSON.stringify({ studyId, question }),
+    })
+
+    // Capture Set-Cookie from server — defensive update of cookie jar.
+    const setCookieHeaders = response.headers.getSetCookie?.() ?? []
+    if (setCookieHeaders.length > 0) {
+      currentCookie = mergeCookieJar(currentCookie, setCookieHeaders)
+    }
+
+    if (!response.ok) {
+      throw new Error(`answer-test returned ${response.status}: ${await response.text()}`)
+    }
+
+    const data = (await response.json()) as {
+      answer: string
+      confidence: string
+      evidences: AnswerResult['evidences']
+    }
+    return {
+      answer: data.answer,
+      confidence: data.confidence as AnswerResult['confidence'],
+      evidences: data.evidences,
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Dataset loader
 // ---------------------------------------------------------------------------
 
@@ -96,8 +324,12 @@ export interface RunEvalsConfig {
   datasetPath: string
   outputDir: string
   quick?: boolean
-  /** Delay in ms between requests to avoid hitting rate limits. Default 200ms. */
-  requestDelayMs?: number
+  /**
+   * Maximum number of cases to run concurrently.
+   * Default=4 — completes 12 cases in ~3 LLM-latency slots (~21s), well within
+   * the 60s Clerk JWT window so no token refresh is needed.
+   */
+  concurrency?: number
 }
 
 const QUICK_LIMIT = 5
@@ -111,22 +343,24 @@ export async function runMockMetabolicEvals(config: RunEvalsConfig): Promise<Eva
   const cases = config.quick ? allCases.slice(0, QUICK_LIMIT) : allCases
   const runId = crypto.randomUUID()
   const timestamp = new Date().toISOString()
+  const concurrency = config.concurrency ?? 4
 
   // eslint-disable-next-line no-console
-  console.log(`[evals] run=${runId} study=${config.studyId} cases=${cases.length} quick=${config.quick ?? false}`)
+  console.log(
+    `[evals] run=${runId} study=${config.studyId} cases=${cases.length} ` +
+    `quick=${config.quick ?? false} concurrency=${concurrency}`,
+  )
 
-  const results: CaseResult[] = []
+  // Pre-allocate results array to preserve case order.
+  const results: CaseResult[] = new Array(cases.length) as CaseResult[]
 
-  for (const evalCase of cases) {
+  async function runCase(evalCase: FormalEvalCase, idx: number): Promise<void> {
     const start = Date.now()
     let result: CaseResult
-
     try {
       const answer = await config.adapter(evalCase.question, config.studyId)
-      const durationMs = Date.now() - start
-      result = evaluateFormalCase(evalCase, answer, durationMs)
+      result = evaluateFormalCase(evalCase, answer, Date.now() - start)
     } catch (err: unknown) {
-      const durationMs = Date.now() - start
       const message = err instanceof Error ? err.message : String(err)
       result = {
         caseId: evalCase.id,
@@ -142,28 +376,31 @@ export async function runMockMetabolicEvals(config: RunEvalsConfig): Promise<Eva
         status: 'ERROR',
         failureType: 'runtime_error',
         failureReason: message.slice(0, 300),
-        durationMs,
+        durationMs: Date.now() - start,
       }
     }
-
-    results.push(result)
+    results[idx] = result
     // eslint-disable-next-line no-console
-    console.log(`  ${result.status.padEnd(5)} ${result.caseId} (${result.durationMs}ms)${result.failureType ? ` — ${result.failureType}` : ''}`)
-
-    if (config.requestDelayMs && config.requestDelayMs > 0) {
-      await delay(config.requestDelayMs)
-    }
+    console.log(
+      `  ${result.status.padEnd(5)} ${result.caseId} (${result.durationMs}ms)` +
+      `${result.failureType ? ` — ${result.failureType}` : ''}`,
+    )
   }
 
+  // Bounded concurrency pool — N workers pull from a shared index.
+  let nextIdx = 0
+  async function worker(): Promise<void> {
+    while (true) {
+      const idx = nextIdx++
+      if (idx >= cases.length) break
+      await runCase(cases[idx]!, idx)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, cases.length) }, worker))
+
   const suiteResult = aggregateResults(results, runId, config.studyId, config.baseUrl, timestamp)
-
   await writeOutput(suiteResult, config.outputDir, runId)
-
   return suiteResult
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 // ---------------------------------------------------------------------------
@@ -263,22 +500,33 @@ if (isMain) {
     console.error('[evals] ERROR: EVAL_AUTH_COOKIE is required')
     // eslint-disable-next-line no-console
     console.error(
-      '  Set EVAL_AUTH_COOKIE to a valid Clerk session cookie from the browser.\n' +
+      '  Set EVAL_AUTH_COOKIE to the FULL cookie string from browser DevTools.\n' +
+      '  Must include __session AND __clerk_db_jwt (needed for automatic JWT refresh).\n' +
+      '  Steps: localhost:3000/sign-in → DevTools → Application → Cookies → copy all.\n' +
       '  Also ensure ENABLE_INTERNAL_RAG_ANSWER_TEST=true and RATE_LIMIT_ENABLED=false on the server.',
     )
     process.exit(1)
   }
 
+  if (!authCookie.includes('__clerk_db_jwt') || !authCookie.includes('__refresh_')) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[evals] WARNING: EVAL_AUTH_COOKIE is missing __clerk_db_jwt and/or __refresh_* cookies.\n' +
+      '  The server cannot auto-refresh the JWT — eval will fail after the 60s JWT window.\n' +
+      '  Copy the FULL cookie string from DevTools (Application → Cookies → localhost:3000).',
+    )
+  }
+
   const datasetPath = fileURLToPath(new URL('./dataset/mock-metabolic-eval-cases.json', import.meta.url))
 
   runMockMetabolicEvals({
-    adapter: makeHttpAdapter({ baseUrl, authCookie }),
+    adapter: makeRefreshableHttpAdapter({ baseUrl, authCookie }),
     studyId,
     baseUrl,
     datasetPath,
     outputDir,
     quick,
-    requestDelayMs: 250,
+    concurrency: 4,
   })
     .then((report) => {
       printSummary(report)

@@ -594,7 +594,7 @@ describe('answerEngine — i18n fallback pre-LLM', () => {
 
   it('does not call the LLM in any pre-LLM fallback scenario', async () => {
     await answerEngine(makeInput([], '¿Tiene información sobre metformina?'))
-    await answerEngine(makeInput([makeChunk({ similarityScore: 0.50 })], 'What about metformin?'))
+    await answerEngine(makeInput([makeChunk({ similarityScore: MIN_SIMILARITY_THRESHOLD - 0.01 })], 'What about metformin?'))
 
     expect(mocks.generateObject).not.toHaveBeenCalled()
   })
