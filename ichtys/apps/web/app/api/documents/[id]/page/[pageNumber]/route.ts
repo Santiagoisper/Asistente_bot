@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { handleApiError, validateDocumentPageAccess } from '@ichtys/auth'
+import { auditLogs, db } from '@ichtys/db'
 
 export const runtime = 'nodejs'
 
@@ -21,11 +22,33 @@ export async function GET(_req: Request, { params }: RouteContext): Promise<Resp
 
   try {
     const ctx = await validateDocumentPageAccess(id, page.data)
-    void ctx
+    const inlineUrl =
+      `/api/document-versions/${encodeURIComponent(ctx.documentVersion.id)}/download` +
+      `?inline=1#page=${ctx.page.pageNumber}`
 
-    // TODO(paso-8): resolve signed URL for the validated page and audit
-    // document.view.
-    return new Response('Not Implemented', { status: 501 })
+    await db.insert(auditLogs).values({
+      organizationId: ctx.orgId,
+      studyId: ctx.studyId,
+      userId: ctx.userId,
+      action: 'document.view',
+      resourceType: 'page',
+      resourceId: `${ctx.document.id}:${ctx.page.pageNumber}`,
+      metadata: {
+        documentId: ctx.document.id,
+        documentVersionId: ctx.documentVersion.id,
+        pageNumber: ctx.page.pageNumber,
+      },
+    })
+
+    return Response.json(
+      {
+        documentId: ctx.document.id,
+        documentVersionId: ctx.documentVersion.id,
+        pageNumber: ctx.page.pageNumber,
+        openUrl: inlineUrl,
+      },
+      { status: 200 },
+    )
   } catch (err) {
     return handleApiError(err)
   }

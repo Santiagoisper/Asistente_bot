@@ -1,0 +1,11 @@
+name: Preview Deploy
+
+on:
+  pull_request:
+    branches: [main, claude/**]
+
+jobs:
+  vercel-preview-status:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Vercel GitHub integration handles preview deployments for this repository."

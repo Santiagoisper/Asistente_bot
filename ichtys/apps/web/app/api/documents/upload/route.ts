@@ -12,10 +12,11 @@ import { getOrCreateRequestId, log, makeRecord } from '../../../../lib/observabi
 export const runtime = 'nodejs'
 
 /**
- * Server route uploads are intentionally capped below the PRD target. Large
- * PDFs need a future client/direct upload flow before claiming 50MB support.
+ * PRD target for PDF upload size (50MB). This route still receives bytes
+ * server-side; a direct-to-blob upload flow can be layered on top later
+ * without changing the business validation.
  */
-const MAX_SERVER_UPLOAD_BYTES = 4 * 1024 * 1024
+const MAX_SERVER_UPLOAD_BYTES = 50 * 1024 * 1024
 const MAX_PDF_BYTES = MAX_SERVER_UPLOAD_BYTES
 
 const documentType = z.enum([

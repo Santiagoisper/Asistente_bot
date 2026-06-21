@@ -73,11 +73,14 @@ export async function validateStudyAccess(
 }
 
 /**
- * Convierte el rol de Clerk (p. ej. "org:study_admin") a un Role de Ichtys.
+ * Convierte el rol de Clerk a un Role de Ichtys.
+ * Clerk puede devolver "org:admin" (admin nativo) u "org:study_admin" (custom).
  * Default conservador: read_only_monitor (mínimo privilegio).
  */
 function normalizeRole(orgRole: string | null | undefined): Role {
   if (!orgRole) return 'read_only_monitor'
   const stripped = orgRole.replace(/^org:/, '')
+  // Clerk admin nativo ("org:admin") mapea a org_admin de Ichtys.
+  if (stripped === 'admin') return 'org_admin'
   return isRole(stripped) ? stripped : 'read_only_monitor'
 }

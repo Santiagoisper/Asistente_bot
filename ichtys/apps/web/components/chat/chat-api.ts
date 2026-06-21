@@ -121,6 +121,12 @@ export function privatePdfDownloadHref(documentVersionId: string): string {
   return `/api/document-versions/${encodeURIComponent(documentVersionId)}/download`
 }
 
+/** URL para abrir el PDF inline en el browser, saltando a la página indicada. */
+export function privatePdfInlineHref(documentVersionId: string, page?: number | null): string {
+  const base = `/api/document-versions/${encodeURIComponent(documentVersionId)}/download?inline=1`
+  return page !== null && page !== undefined ? `${base}#page=${page}` : base
+}
+
 export function pageLabel(pageStart: number | null, pageEnd: number | null): string | null {
   if (pageStart === null) return null
   if (pageEnd === null || pageEnd === pageStart) return `p. ${pageStart}`

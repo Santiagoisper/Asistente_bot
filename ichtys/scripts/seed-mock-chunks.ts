@@ -13,7 +13,7 @@
 import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { db } from '../packages/db/index'
+import { db, eq } from '../packages/db/index'
 import { chunks } from '../packages/db/schema/index'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -145,7 +145,6 @@ async function main() {
   if (!apiKey) throw new Error('OPENAI_API_KEY is not set')
 
   // Delete existing chunks for this study to avoid duplicates on re-run
-  const { eq } = await import('../packages/db/node_modules/drizzle-orm')
   const deleted = await db.delete(chunks).where(eq(chunks.studyId, STUDY_ID))
   console.log(`Deleted existing chunks for study ${STUDY_ID}`)
 

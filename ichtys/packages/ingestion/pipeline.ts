@@ -14,6 +14,8 @@ import {
 import { chunkPages } from './chunker'
 import { EmbeddingIndexingError, indexDocumentVersionChunks } from './indexer'
 import { parsePdf, PdfParseError } from './parser'
+import { extractStudySpec } from './spec-extractor'
+import { saveStudySpec } from './spec-store'
 
 /**
  * pipeline.ts - ingestion orchestrator.
@@ -137,6 +139,21 @@ async function readStream(stream: ReadableStream<Uint8Array>): Promise<Uint8Arra
 }
 
 async function downloadPrivateBlob(blobKey: string): Promise<Uint8Array> {
+  // Dev: leer del filesystem local donde el mock de upload guardó el PDF.
+  if (process.env.NODE_ENV === 'development') {
+    try {
+      const { readFile } = await import('node:fs/promises')
+      const { join } = await import('node:path')
+      const { tmpdir } = await import('node:os')
+      const safeKey = blobKey.replace(/\//g, '__')
+      const localPath = join(tmpdir(), 'ichtys-dev-blobs', safeKey)
+      console.log(`[DEV-MOCK Blob] Reading from local path: ${localPath}`)
+      return await readFile(localPath)
+    } catch (err) {
+      console.warn('[DEV-MOCK Blob] Local read failed, falling through to Vercel Blob:', err)
+    }
+  }
+
   const result = await get(blobKey, { access: 'private', useCache: false })
   if (!result || result.statusCode === 304 || !result.stream) {
     throw new IngestionPipelineError('blob_download_failed', 'Could not download private blob')
@@ -268,6 +285,30 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
 
     const indexingResult = await indexDocumentVersionChunks(parsedInput)
 
+    // Extraer study spec si el documento es un protocolo.
+    // Fire-and-forget: los warnings se loguean pero no fallan el ingestion.
+    if (document.documentType === 'protocol') {
+      extractStudySpec(parsedDocument.pages)
+        .then(({ spec, warnings, extractionModel }) => {
+          if (warnings.length > 0) {
+            console.warn(`[spec-extractor] warnings for documentVersionId=${parsedInput.documentVersionId}:`, warnings)
+          }
+          return saveStudySpec({
+            orgId: parsedInput.orgId,
+            studyId: parsedInput.studyId,
+            documentVersionId: parsedInput.documentVersionId,
+            spec,
+            extractionModel,
+          })
+        })
+        .then(({ id, version }) => {
+          console.log(`[spec-extractor] saved draft spec id=${id} version=${version}`)
+        })
+        .catch((err) => {
+          console.error(`[spec-extractor] FAILED for documentVersionId=${parsedInput.documentVersionId}:`, err)
+        })
+    }
+
     await db.transaction(async (tx) => {
       await tx
         .update(documentVersions)
@@ -310,6 +351,7 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
     }
   } catch (err) {
     const errorMessage = sanitizeIngestionError(err)
+    console.error(`[ingestion] FAILED documentVersionId=${parsedInput.documentVersionId} errorCode=${errorMessage}`, err)
     await markError(parsedInput, errorMessage)
 
     return {
@@ -328,3 +370,7 @@ export { parsePdf } from './parser'
 export { chunkPages } from './chunker'
 export { embedBatch, embedQuery } from './embedder'
 export { indexDocumentVersionChunks } from './indexer'
+export { extractStudySpec } from './spec-extractor'
+export { saveStudySpec, getLatestStudySpec } from './spec-store'
+export { studySpecSchema } from './study-spec'
+export type { StudySpec, EligibilityCriterion, StudyEndpoint, StudyVisit } from './study-spec'
