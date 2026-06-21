@@ -1,42 +1,52 @@
 import { z } from 'zod'
-import { AccessError, validateStudyAccess } from '@ichtys/auth'
+import { handleApiError, validateDocumentAccess } from '@ichtys/auth'
+import { db } from '@ichtys/db'
 
 export const runtime = 'nodejs'
-
-const query = z.object({ studyId: z.string().uuid() })
 
 interface RouteContext {
   params: Promise<{ id: string }>
 }
 
 /**
- * GET /api/documents/[id]/status?studyId=... — estado del pipeline de ingestion
- * para una versión de documento (pending | processing | ready | error).
- * Usado por el frontend para polling (ARCHITECTURE.md).
- *
- * Stub funcional: valida auth + study access y devuelve un estado placeholder.
+ * GET /api/documents/[id]/status - ingestion pipeline status.
  */
-export async function GET(req: Request, { params }: RouteContext): Promise<Response> {
-  const { id } = await params
-  const url = new URL(req.url)
-  const parsed = query.safeParse({ studyId: url.searchParams.get('studyId') })
+export async function GET(_req: Request, { params }: RouteContext): Promise<Response> {
+  const { id: documentId } = await params
 
-  if (!parsed.success || !z.string().uuid().safeParse(id).success) {
+  if (!z.string().uuid().safeParse(documentId).success) {
     return new Response('Bad Request', { status: 400 })
   }
 
   try {
-    const { orgId, study } = await validateStudyAccess(parsed.data.studyId)
-    void orgId
-    void study
+    const { orgId, studyId, document } = await validateDocumentAccess(documentId)
 
-    // TODO(paso-4): leer document_versions filtrando org+study+document; 404 si no.
-    return Response.json({ documentId: id, status: 'processing' as const }, { status: 200 })
-  } catch (err) {
-    if (err instanceof AccessError) {
-      return new Response(err.message, { status: err.status })
+    const latestVersion = await db.query.documentVersions.findFirst({
+      where: (version, { and, eq }) =>
+        and(
+          eq(version.documentId, document.id),
+          eq(version.organizationId, orgId),
+          eq(version.studyId, studyId),
+        ),
+      orderBy: (version, { desc }) => [desc(version.versionNumber), desc(version.createdAt)],
+    })
+
+    if (!latestVersion) {
+      throw new Error('Authorized document has no document version')
     }
-    console.error('status route error', err)
-    return new Response('Internal Server Error', { status: 500 })
+
+    return Response.json(
+      {
+        documentId: document.id,
+        latestDocumentVersionId: latestVersion.id,
+        status: latestVersion.status,
+        pageCount: latestVersion.pageCount,
+        errorMessage: latestVersion.status === 'error' ? 'Document processing failed' : null,
+        createdAt: latestVersion.createdAt,
+      },
+      { status: 200 },
+    )
+  } catch (err) {
+    return handleApiError(err)
   }
 }

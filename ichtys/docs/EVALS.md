@@ -4,9 +4,9 @@ Cómo medimos la calidad del RAG. El paquete `@ichtys/evals` implementa el
 runner (`runner.ts`) y las métricas (`metrics.ts`); este documento define el
 formato del dataset, la rúbrica de scoring y los targets de latencia.
 
-> Estado: **placeholder estructural**. La estructura es estable; los umbrales
-> finos y el dataset completo se completan en el paso de evals (ver
-> `docs/ARCHITECTURE.md` → orden de implementación, paso 10).
+> Estado: **Fase 10B activa**. El eval runner automatizado está implementado con
+> dataset formal de 12 casos mock metabólicos. Ver `docs/decisions/formal-eval-suite.md`
+> para arquitectura, variables de entorno y comando de ejecución.
 
 ---
 
@@ -87,16 +87,85 @@ streaming de la respuesta vía Vercel AI SDK.
 ## 4. Comandos
 
 ```bash
-pnpm evals:run     # dataset completo
-pnpm evals:quick   # subset de 20 (smoke)
+pnpm evals:run              # dataset completo (requiere servidor + env vars)
+pnpm evals:quick            # subset de 5 casos (smoke rápido)
+pnpm evals:mock-metabolic   # alias — mismo que evals:run
 ```
 
-El runner sale con código ≠ 0 si la tasa de leakage no es 0%. CI lo trata como
-gate de release.
+El runner sale con código ≠ 0 si hay FAILs o ERRORs. Resultados en `docs/evals/results/`.
+
+Variables de entorno requeridas:
+```bash
+EVAL_STUDY_ID=<uuid del study cargado>
+EVAL_AUTH_COOKIE=<cookie de sesión Clerk>
+EVAL_BASE_URL=http://localhost:3000  # o URL de staging
+ENABLE_INTERNAL_RAG_ANSWER_TEST=true  # en el servidor
+RATE_LIMIT_ENABLED=false              # en el servidor, para evitar throttling
+```
+
+Ver `docs/decisions/formal-eval-suite.md` para el diseño completo.
 
 ---
 
-## 5. Relación con tests unitarios
+## 5. Fase 10B — Eval runner automatizado
+
+El runner automatizado vive en `packages/evals/`. Arquitectura:
+
+- **`types.ts`** — Zod schemas para `FormalEvalCase`, `CaseResult`, `EvalSuiteResult`
+- **`scoring.ts`** — Funciones de scoring puras (sin I/O, completamente testeables)
+- **`metrics.ts`** — Aggregation y re-exports; mantiene API legada de Phase 10A
+- **`runner.ts`** — Runner con `AnswerAdapter` pluggable (HTTP en prod, mock en tests)
+- **`dataset/mock-metabolic-eval-cases.json`** — 12 casos formalizados
+
+**Datasets y sus propósitos:**
+
+| Archivo | Propósito |
+|---|---|
+| `docs/evals/mock-metabolic-smoke-test-cases.json` | Manual: `reviewerNotes`, `passCriteria` para review humano |
+| `packages/evals/dataset/mock-metabolic-eval-cases.json` | Automático: keywords, flags de scoring |
+
+**Failure types** (de más a menos crítico):
+- `missed_insufficient_evidence` — sistema inventó respuesta cuando no debía (alucinación crítica)
+- `forbidden_keywords_found` — respuesta contiene markers de alucinación
+- `false_insufficient_evidence` — sistema no encontró evidencia cuando debía
+- `retrieval_miss` — cero chunks recuperados cuando se esperaban ≥1
+- `answer_unsupported` — keywords esperados ausentes
+- `wrong_section` — sectionTitle no coincide
+- `runtime_error` / `test_setup_error`
+
+---
+
+## 6. Fase 10A — Smoke test manual
+
+Antes del eval runner automatizado, se ejecuta un smoke test manual estructurado
+con un estudio mock metabólico (diabetes tipo 2). Este smoke test verifica que
+Ichtys funciona correctamente de extremo a extremo con evidencia verificable.
+
+**Archivos de Fase 10A / 10A.1:**
+
+| Archivo | Descripción |
+|---|---|
+| `docs/decisions/phase-10a-smoke-test.md` | Guía completa de ejecución manual |
+| `docs/evals/mock-metabolic-smoke-test-cases.json` | Dataset de 12 preguntas con criterios de evaluación (v1.1) |
+| `docs/evals/mock-metabolic-smoke-test-results-template.csv` | Plantilla para registrar resultados |
+| `docs/evals/mock-metabolic-documents/` | Documentos mock listos para cargar en Ichtys |
+| `docs/evals/mock-metabolic-documents/README.md` | Instrucciones de uso, mapping de tipos y carga |
+| `docs/evals/mock-metabolic-smoke-test-runbook.md` | Runbook ejecutable: PDF export → upload → ingestion → chat → CSV |
+| `docs/evals/.gitignore` | Excluye resultados CSV con timestamp y PDFs generados |
+
+**Criterios bloqueantes para pasar a 10B:**
+- 0 leakage cross-tenant y cross-study
+- Casos 11 y 12 devuelven `insufficient_evidence`
+- 0 respuestas inventadas con confianza `high` o `medium`
+- ≥7/10 citas correctas en casos 1–10
+
+**Política de datos:** nunca commitear resultados con datos de estudios reales,
+excerpts bajo NDA, ni información de pacientes. El CSV de resultados es un
+artefacto local del reviewer.
+
+---
+
+## 6. Relación con tests unitarios
 
 - `pnpm test:leakage` → tests deterministas de aislamiento (DB/retriever).
 - `pnpm evals:run` → evaluación end-to-end del answer engine sobre el dataset.

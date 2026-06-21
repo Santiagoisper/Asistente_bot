@@ -1,62 +1,186 @@
 import { z } from 'zod'
-import { AccessError, validateStudyAccess } from '@ichtys/auth'
+import { handleApiError, validateStudyAccess } from '@ichtys/auth'
+import { auditLogs, db, documents, documentVersions } from '@ichtys/db'
+import { putPrivateDocumentPdf } from './blob-storage'
+import {
+  enforceSlidingWindowRateLimit,
+  getUploadRateLimitConfig,
+  rateLimitResponse,
+} from '../../../../lib/security/rate-limit'
+import { getOrCreateRequestId, log, makeRecord } from '../../../../lib/observability/logger'
 
 export const runtime = 'nodejs'
 
-/** PRD §7.2: PDF, máx 50MB, tipos cerrados. */
-export const MAX_PDF_BYTES = 50 * 1024 * 1024
+/**
+ * Server route uploads are intentionally capped below the PRD target. Large
+ * PDFs need a future client/direct upload flow before claiming 50MB support.
+ */
+const MAX_SERVER_UPLOAD_BYTES = 4 * 1024 * 1024
+const MAX_PDF_BYTES = MAX_SERVER_UPLOAD_BYTES
+
+const documentType = z.enum([
+  'protocol',
+  'investigator_brochure',
+  'lab_manual',
+  'pharmacy_manual',
+  'other',
+])
 
 const uploadMeta = z.object({
   studyId: z.string().uuid(),
-  name: z.string().min(1),
-  documentType: z.enum([
-    'protocol',
-    'investigator_brochure',
-    'lab_manual',
-    'pharmacy_manual',
-    'other',
-  ]),
+  name: z.string().min(1).optional(),
+  documentType,
 })
 
+function getOptionalString(form: FormData, key: string): string | undefined {
+  const value = form.get(key)
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
+}
+
+function getRequiredString(form: FormData, key: string): string | null {
+  const value = form.get(key)
+  return typeof value === 'string' ? value : null
+}
+
+function safeBlobFileName(fileName: string): string {
+  const sanitized = fileName
+    .trim()
+    .replace(/[^A-Za-z0-9._-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[.-]+/, '')
+
+  return sanitized.length > 0 ? sanitized : 'document.pdf'
+}
+
+function buildBlobKey(fileName: string): string {
+  return `clinical-documents/${crypto.randomUUID()}/${safeBlobFileName(fileName)}`
+}
+
 /**
- * POST /api/documents/upload — sube un PDF a Vercel Blob y registra una
- * document_version (status: pending), encolando el pipeline de ingestion.
- *
- * Stub funcional: valida auth + study access + el archivo, y devuelve
- * { documentId, status: 'pending' }.
+ * POST /api/documents/upload - validates study access, stores the PDF in
+ * Vercel Blob, registers the document and its initial pending version.
  */
 export async function POST(req: Request): Promise<Response> {
+  const requestId = getOrCreateRequestId(req)
+  const startMs = Date.now()
+  log(makeRecord({ requestId, level: 'info', event: 'api.request.started', endpoint: '/api/documents/upload', method: 'POST' }))
+
   try {
+    const url = new URL(req.url)
+    if (url.searchParams.has('organization_id') || url.searchParams.has('organizationId')) {
+      return new Response('Bad Request', { status: 400 })
+    }
+
     const form = await req.formData()
+
+    if (form.has('organization_id') || form.has('organizationId')) {
+      return new Response('Bad Request', { status: 400 })
+    }
+
     const file = form.get('file')
     const meta = uploadMeta.safeParse({
-      studyId: form.get('studyId'),
-      name: form.get('name'),
-      documentType: form.get('documentType'),
+      studyId: getRequiredString(form, 'studyId'),
+      name: getOptionalString(form, 'name'),
+      documentType: getRequiredString(form, 'documentType'),
     })
 
     if (!meta.success || !(file instanceof File)) {
       return new Response('Bad Request', { status: 400 })
     }
-    if (file.type !== 'application/pdf' || file.size > MAX_PDF_BYTES) {
+
+    if (file.type !== 'application/pdf') {
       return new Response('Unsupported Media Type', { status: 415 })
     }
 
-    const { orgId, study } = await validateStudyAccess(meta.data.studyId)
-    void orgId
-    void study
-    void file
-
-    // TODO(paso-4): put() a Vercel Blob (key no adivinable) → crear document +
-    // document_version(pending) → enqueue ingestion → audit document.upload.
-    const documentId = crypto.randomUUID()
-
-    return Response.json({ documentId, status: 'pending' as const }, { status: 202 })
-  } catch (err) {
-    if (err instanceof AccessError) {
-      return new Response(err.message, { status: err.status })
+    if (file.size > MAX_PDF_BYTES) {
+      return new Response('Payload Too Large', { status: 413 })
     }
-    console.error('upload route error', err)
-    return new Response('Internal Server Error', { status: 500 })
+
+    const { userId, orgId, study } = await validateStudyAccess(meta.data.studyId)
+
+    const uploadRlConfig = getUploadRateLimitConfig()
+    const rateLimit = await enforceSlidingWindowRateLimit({
+      key: `upload:${userId}:${orgId}`,
+      limit: uploadRlConfig.limit,
+      windowSeconds: uploadRlConfig.windowSeconds,
+    })
+    if (rateLimit.limited) {
+      log(makeRecord({ requestId, level: 'warn', event: 'api.rate_limit.blocked', endpoint: '/api/documents/upload', method: 'POST', userId, studyId: meta.data.studyId, statusCode: 429 }))
+      return rateLimitResponse(rateLimit.retryAfterSeconds)
+    }
+
+    const fileName = file.name.trim().length > 0 ? file.name : 'document.pdf'
+    const name = meta.data.name ?? fileName
+    const blobKey = buildBlobKey(fileName)
+    const blob = await putPrivateDocumentPdf({ blobKey, file })
+
+    const result = await db.transaction(async (tx) => {
+      const [document] = await tx
+        .insert(documents)
+        .values({
+          organizationId: orgId,
+          studyId: study.id,
+          name,
+          documentType: meta.data.documentType,
+        })
+        .returning()
+
+      if (!document) {
+        throw new Error('Document insert did not return a row')
+      }
+
+      // TODO(re-upload): compute max(version_number) + 1 for existing logical
+      // documents once the UI supports uploading a new version of the same doc.
+      const versionNumber = 1
+      const [documentVersion] = await tx
+        .insert(documentVersions)
+        .values({
+          documentId: document.id,
+          organizationId: orgId,
+          studyId: study.id,
+          blobUrl: blob.url,
+          blobKey: blob.pathname,
+          fileSizeBytes: file.size,
+          status: 'pending',
+          versionNumber,
+        })
+        .returning()
+
+      if (!documentVersion) {
+        throw new Error('Document version insert did not return a row')
+      }
+
+      await tx.insert(auditLogs).values({
+        organizationId: orgId,
+        studyId: study.id,
+        userId,
+        action: 'document.upload',
+        resourceType: 'document',
+        resourceId: document.id,
+        metadata: {
+          documentVersionId: documentVersion.id,
+          documentType: meta.data.documentType,
+          fileSizeBytes: file.size,
+          fileName,
+        },
+      })
+
+      return { document, documentVersion }
+    })
+
+    log(makeRecord({ requestId, level: 'info', event: 'api.request.completed', endpoint: '/api/documents/upload', method: 'POST', userId, studyId: meta.data.studyId, documentId: result.document.id, documentVersionId: result.documentVersion.id, statusCode: 202, durationMs: Date.now() - startMs }))
+    return Response.json(
+      {
+        documentId: result.document.id,
+        documentVersionId: result.documentVersion.id,
+        status: result.documentVersion.status,
+        name: result.document.name,
+        documentType: result.document.documentType,
+      },
+      { status: 202 },
+    )
+  } catch (err) {
+    log(makeRecord({ requestId, level: 'error', event: 'api.request.failed', endpoint: '/api/documents/upload', method: 'POST', durationMs: Date.now() - startMs }))
+    return handleApiError(err)
   }
 }

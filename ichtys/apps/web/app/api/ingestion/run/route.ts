@@ -1,18 +1,24 @@
-import { AccessError, ROLES, validateStudyAccess } from '@ichtys/auth'
-import { runIngestionInput } from '@ichtys/ingestion'
+import { z } from 'zod'
+import { handleApiError, validateDocumentVersionAccess } from '@ichtys/auth'
+import { runIngestion } from '@ichtys/ingestion'
 
 export const runtime = 'nodejs'
 
-// El cliente sólo provee study + documento; organization_id se resuelve server-side.
-const triggerInput = runIngestionInput.omit({ organizationId: true })
+const triggerInput = z
+  .object({
+    documentVersionId: z.string().uuid(),
+  })
+  .strict()
 
 /**
- * POST /api/ingestion/run — dispara (o reintenta) el pipeline de ingestion para
- * una versión de documento. Requiere rol org_admin.
- *
- * Stub funcional: valida auth + rol + study access y devuelve un estado de cola.
+ * POST /api/ingestion/run - trigger or retry ingestion for a document version.
  */
 export async function POST(req: Request): Promise<Response> {
+  const url = new URL(req.url)
+  if (url.searchParams.has('organization_id') || url.searchParams.has('organizationId')) {
+    return new Response('Bad Request', { status: 400 })
+  }
+
   let body: unknown
   try {
     body = await req.json()
@@ -26,22 +32,26 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   try {
-    const { orgId } = await validateStudyAccess(parsed.data.studyId, ROLES.ORG_ADMIN)
+    const { userId, orgId, studyId, document, documentVersion } =
+      await validateDocumentVersionAccess(parsed.data.documentVersionId)
 
-    // organization_id viene del contexto validado, no del request.
-    const input = { ...parsed.data, organizationId: orgId }
-    void input
+    const result = await runIngestion({
+      userId,
+      orgId,
+      studyId,
+      documentId: document.id,
+      documentVersionId: documentVersion.id,
+    })
 
-    // TODO(paso-5): runIngestion(input) en background + audit ingestion.start.
     return Response.json(
-      { documentVersionId: parsed.data.documentVersionId, status: 'queued' as const },
+      {
+        documentId: result.documentId,
+        documentVersionId: result.documentVersionId,
+        status: result.status,
+      },
       { status: 202 },
     )
   } catch (err) {
-    if (err instanceof AccessError) {
-      return new Response(err.message, { status: err.status })
-    }
-    console.error('ingestion run route error', err)
-    return new Response('Internal Server Error', { status: 500 })
+    return handleApiError(err)
   }
 }

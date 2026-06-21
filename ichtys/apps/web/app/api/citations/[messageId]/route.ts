@@ -1,45 +1,81 @@
 import { z } from 'zod'
-import { AccessError, validateStudyAccess } from '@ichtys/auth'
+import { AccessError, handleApiError, validateMessageAccess } from '@ichtys/auth'
+import { auditLogs, db } from '@ichtys/db'
+import { getMessageCitations } from '../../../../lib/chat/history'
+import {
+  enforceSlidingWindowRateLimit,
+  getCitationsRateLimitConfig,
+  rateLimitResponse,
+} from '../../../../lib/security/rate-limit'
+import { getOrCreateRequestId, log, makeRecord } from '../../../../lib/observability/logger'
+
+/**
+ * GET /api/citations/[messageId]
+ *
+ * Returns citation payload for an assistant message after full tenant,
+ * object-level, and user-level validation.
+ */
 
 export const runtime = 'nodejs'
-
-const query = z.object({ studyId: z.string().uuid() })
 
 interface RouteContext {
   params: Promise<{ messageId: string }>
 }
 
-/**
- * GET /api/citations/[messageId]?studyId=... — devuelve el payload de citas de
- * un mensaje del assistant para el CitationPanel.
- *
- * Las citas se leen filtrando por org+study: nunca se devuelven citas de otro
- * tenant/estudio aunque el messageId fuese válido en otra org.
- *
- * Stub funcional: valida auth + study access y devuelve un array de citas vacío.
- */
 export async function GET(req: Request, { params }: RouteContext): Promise<Response> {
-  const { messageId } = await params
-  const url = new URL(req.url)
-  const parsed = query.safeParse({ studyId: url.searchParams.get('studyId') })
+  const requestId = getOrCreateRequestId(req)
+  const startMs = Date.now()
+  log(makeRecord({ requestId, level: 'info', event: 'api.request.started', endpoint: '/api/citations/[messageId]', method: 'GET' }))
 
-  if (!parsed.success || !z.string().uuid().safeParse(messageId).success) {
+  const { messageId } = await params
+
+  if (!z.string().uuid().safeParse(messageId).success) {
     return new Response('Bad Request', { status: 400 })
   }
 
   try {
-    const { orgId, study } = await validateStudyAccess(parsed.data.studyId)
-    void orgId
-    void study
+    const { userId, orgId, studyId, message } = await validateMessageAccess(messageId)
 
-    // TODO(paso-8): leer citations WHERE message_id, organization_id, study_id;
-    // audit citation.view.
-    return Response.json({ messageId, citations: [] as const }, { status: 200 })
-  } catch (err) {
-    if (err instanceof AccessError) {
-      return new Response(err.message, { status: err.status })
+    const citationsRlConfig = getCitationsRateLimitConfig()
+    const rateLimit = await enforceSlidingWindowRateLimit({
+      key: `citations:${userId}:${orgId}`,
+      limit: citationsRlConfig.limit,
+      windowSeconds: citationsRlConfig.windowSeconds,
+    })
+    if (rateLimit.limited) {
+      log(makeRecord({ requestId, level: 'warn', event: 'api.rate_limit.blocked', endpoint: '/api/citations/[messageId]', method: 'GET', userId, messageId, statusCode: 429 }))
+      return rateLimitResponse(rateLimit.retryAfterSeconds)
     }
-    console.error('citations route error', err)
-    return new Response('Internal Server Error', { status: 500 })
+
+    const conv = await db.query.conversations.findFirst({
+      where: (c, { and, eq }) =>
+        and(
+          eq(c.id, message.conversationId),
+          eq(c.userId, userId),
+          eq(c.organizationId, orgId),
+        ),
+    })
+
+    if (!conv) {
+      throw new AccessError('Conversation not found or access denied', 404)
+    }
+
+    const citations = await getMessageCitations(messageId, orgId, studyId)
+
+    await db.insert(auditLogs).values({
+      action: 'citation.view',
+      organizationId: orgId,
+      studyId,
+      userId,
+      resourceType: 'message',
+      resourceId: messageId,
+      metadata: { citationCount: citations.length },
+    })
+
+    log(makeRecord({ requestId, level: 'info', event: 'api.request.completed', endpoint: '/api/citations/[messageId]', method: 'GET', userId, messageId, studyId, statusCode: 200, durationMs: Date.now() - startMs }))
+    return Response.json({ messageId, citations }, { status: 200 })
+  } catch (err) {
+    log(makeRecord({ requestId, level: 'error', event: 'api.request.failed', endpoint: '/api/citations/[messageId]', method: 'GET', durationMs: Date.now() - startMs }))
+    return handleApiError(err)
   }
 }

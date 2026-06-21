@@ -1,0 +1,13 @@
+id,category,question,answer,confidence,citedDocumentName,citedDocumentType,citedPageStart,citedPageEnd,citedSectionTitle,responseCorrect,citationCorrect,insufficientEvidenceExpected,insufficientEvidenceReturned,leakageSuspected,sourceOpenedInUnder15Seconds,reviewerNotes,passFail
+SM-001,Elegibilidad,¿Un paciente con HbA1c de 9% cumple criterio de inclusión?,,,,,,,,,,no,no,no,,,""
+SM-002,Exclusión,¿Está excluido un paciente con antecedente de pancreatitis?,,,,,,,,,,no,no,no,,,""
+SM-003,Visita,¿Qué procedimientos corresponden en la visita 4?,,,,,,,,,,no,no,no,,,""
+SM-004,Ventana de visita,¿Cuál es la ventana permitida para la visita de seguimiento?,,,,,,,,,,no,no,no,,,""
+SM-005,Medicación concomitante,¿Está permitida metformina durante el estudio?,,,,,,,,,,no,no,no,,,""
+SM-006,Medicación prohibida,¿Qué medicamentos antidiabéticos están prohibidos?,,,,,,,,,,no,no,no,,,""
+SM-007,Muestras / laboratorio,¿Cómo se procesa y envía la muestra PK?,,,,,,,,,,no,no,no,,,""
+SM-008,Safety / SAE,¿Cuál es el timeline de reporte para un SAE?,,,,,,,,,,no,no,no,,,""
+SM-009,Dosis / interrupción,¿Qué hacer si el paciente omite una dosis?,,,,,,,,,,no,no,no,,,""
+SM-010,Monitor prep,¿Qué documentos o datos hay que tener disponibles para monitoreo?,,,,,,,,,,no,no,no,,,""
+SM-011,Fallback — variable inexistente,¿Cuál es el criterio para la variable X que no aparece en los documentos?,,,,,,,,,,yes,no,no,,,""
+SM-012,Fallback — visita/procedimiento inexistente,¿Qué dice el protocolo sobre la visita 99 y el procedimiento Y?,,,,,,,,,,yes,no,no,,,""

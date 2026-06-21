@@ -1,34 +1,17 @@
 import type { AnswerResult } from '@ichtys/rag'
+import type { CaseResult, EvalSuiteResult, FormalEvalCase } from './types'
+import { aggregateSuiteResults, scoreCase } from './scoring'
 
-/**
- * metrics.ts — métricas de calidad del RAG (PRD §9, EVALS.md).
- *
- * Las métricas clave para release:
- *  - groundedness: ¿la respuesta se apoya solo en las citas?
- *  - citation correctness: ¿las citas apuntan a la fuente correcta?
- *  - leakage: cross-tenant / cross-study (target 0%, bloqueante).
- */
+// ---------------------------------------------------------------------------
+// Re-exports for external consumers
+// ---------------------------------------------------------------------------
 
-export interface EvalCase {
-  id: string
-  organizationId: string
-  studyId: string
-  question: string
-  /** Respuesta esperada (para juicio humano/LLM-judge), opcional. */
-  expectedAnswer?: string
-  /** Si la respuesta correcta es "no hay evidencia". */
-  expectInsufficientEvidence?: boolean
-  /** document_ids que deberían aparecer en las citas. */
-  expectedDocumentIds?: string[]
-}
+export type { EvalCategory, Confidence, FailureType, FormalEvalCase, FormalEvalDataset, CaseResult, EvalSuiteResult } from './types'
+export { FormalEvalCaseSchema, FormalEvalDatasetSchema, CaseResultSchema, EvalSuiteResultSchema } from './types'
 
-export interface CaseEvaluation {
-  caseId: string
-  hasCitations: boolean
-  groundednessScore: number // 0..1
-  citationCorrectness: number // 0..1
-  fallbackCorrect: boolean
-}
+// ---------------------------------------------------------------------------
+// Aggregate metrics shape (kept for backwards compatibility with runner.ts)
+// ---------------------------------------------------------------------------
 
 export interface AggregateMetrics {
   total: number
@@ -39,18 +22,41 @@ export interface AggregateMetrics {
   crossStudyLeakageRate: number
 }
 
-/**
- * Evalúa una respuesta contra su caso esperado.
- */
-export function evaluateCase(testCase: EvalCase, result: AnswerResult): CaseEvaluation {
-  const isFallback = result.confidence === 'insufficient_evidence'
-  const fallbackCorrect = Boolean(testCase.expectInsufficientEvidence) === isFallback
+// ---------------------------------------------------------------------------
+// Per-case evaluation (Phase 10B — wraps scoring.ts)
+// ---------------------------------------------------------------------------
 
-  // TODO(paso-10): groundedness y citation correctness reales (LLM-judge + match
-  // de document_ids esperados). Por ahora chequeos estructurales mínimos.
-  const hasCitations = result.citations.length > 0
-  const expectedIds = new Set(testCase.expectedDocumentIds ?? [])
-  const citedExpected = result.citations.filter((c) => expectedIds.has(c.documentId)).length
+export interface CaseEvaluation {
+  caseId: string
+  hasCitations: boolean
+  groundednessScore: number // 0..1
+  citationCorrectness: number // 0..1
+  fallbackCorrect: boolean
+}
+
+/**
+ * Evaluates a single answer against its FormalEvalCase.
+ * Returns a CaseResult for structured reporting.
+ */
+export function evaluateFormalCase(
+  testCase: FormalEvalCase,
+  result: AnswerResult,
+  durationMs: number,
+): CaseResult {
+  return scoreCase(testCase, result, durationMs)
+}
+
+/**
+ * Thin wrapper that produces the legacy CaseEvaluation shape.
+ * Used by tests and code that pre-dates Phase 10B.
+ */
+export function evaluateCase(testCase: FormalEvalCase, result: AnswerResult): CaseEvaluation {
+  const isFallback = result.confidence === 'insufficient_evidence'
+  const fallbackCorrect = testCase.shouldBeInsufficientEvidence === isFallback
+  const hasCitations = result.evidences.length > 0
+
+  const expectedIds = new Set<string>()
+  const citedExpected = result.evidences.filter((e) => expectedIds.has(e.documentId)).length
   const citationCorrectness = expectedIds.size === 0 ? 0 : citedExpected / expectedIds.size
 
   return {
@@ -63,7 +69,7 @@ export function evaluateCase(testCase: EvalCase, result: AnswerResult): CaseEval
 }
 
 /**
- * Agrega evaluaciones individuales en métricas de release.
+ * Aggregates CaseEvaluation[] into legacy AggregateMetrics.
  */
 export function aggregate(evaluations: CaseEvaluation[]): AggregateMetrics {
   const total = evaluations.length
@@ -77,8 +83,24 @@ export function aggregate(evaluations: CaseEvaluation[]): AggregateMetrics {
         ? 0
         : evaluations.reduce((s, e) => s + e.citationCorrectness, 0) / total,
     citedAnswerRate: safeRate(evaluations.filter((e) => e.hasCitations).length),
-    // Leakage se mide con casos adversariales dedicados (ver runner). Default 0.
+    // Leakage is measured with dedicated adversarial cases in the runner.
     crossTenantLeakageRate: 0,
     crossStudyLeakageRate: 0,
+  }
+}
+
+/**
+ * Aggregates CaseResult[] into an EvalSuiteResult.
+ */
+export function aggregateResults(
+  cases: CaseResult[],
+  runId: string,
+  studyId: string,
+  baseUrl: string,
+  timestamp: string,
+): EvalSuiteResult {
+  return {
+    ...aggregateSuiteResults(cases, runId, studyId, baseUrl),
+    timestamp,
   }
 }

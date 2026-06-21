@@ -33,6 +33,18 @@
     "test:leakage": {
       "dependsOn": ["^build"]
     },
+    "evals:run": {
+      "cache": false,
+      "dependsOn": ["^build"]
+    },
+    "evals:quick": {
+      "cache": false,
+      "dependsOn": ["^build"]
+    },
+    "evals:mock-metabolic": {
+      "cache": false,
+      "dependsOn": ["^build"]
+    },
     "db:check": {
       "cache": false
     },
