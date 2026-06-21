@@ -256,7 +256,7 @@ type DocumentVersionDownloadGet = (
 let documentUploadPost: DocumentUploadPost
 let ingestionRunPost: DocumentUploadPost
 let documentVersionDownloadGet: DocumentVersionDownloadGet
-const maxPdfBytes = 4 * 1024 * 1024 // MAX_SERVER_UPLOAD_BYTES from upload route
+const maxPdfBytes = 50 * 1024 * 1024 // MAX_SERVER_UPLOAD_BYTES from upload route
 
 beforeAll(async () => {
   vi.doMock('../../../apps/web/app/api/documents/upload/blob-storage', () => ({

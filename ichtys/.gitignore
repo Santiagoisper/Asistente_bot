@@ -26,6 +26,8 @@ pnpm-debug.log*
 # Coverage / tests
 coverage/
 .nyc_output/
+packages/evals/docs/evals/results/eval-results-*.json
+packages/evals/docs/evals/results/eval-results-*.csv
 
 # Editor / OS
 .vscode/*
@@ -39,3 +41,4 @@ Thumbs.db
 
 # Drizzle
 packages/db/drizzle/
+.vercel
