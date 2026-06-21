@@ -1,0 +1,31 @@
+name: DB Check
+
+on:
+  pull_request:
+    branches: [main, claude/**]
+    paths:
+      - 'ichtys/packages/db/**'
+      - '.github/workflows/db-check.yml'
+
+jobs:
+  db-check:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.DATABASE_URL != '' && secrets.DATABASE_URL_UNPOOLED != '' }}
+    defaults:
+      run:
+        working-directory: ichtys
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: ichtys/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:check

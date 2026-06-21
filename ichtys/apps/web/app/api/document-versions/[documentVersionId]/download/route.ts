@@ -65,12 +65,13 @@ export async function GET(req: Request, context: RouteContext): Promise<Response
 
     const fileName = safeDownloadFileName(document.name)
     const pdf = await getPrivateDocumentPdf(documentVersion.blobKey)
+    const inline = new URL(req.url).searchParams.get('inline') === '1'
 
     await db.insert(auditLogs).values({
       organizationId: orgId,
       studyId,
       userId,
-      action: 'document.download',
+      action: inline ? 'document.view' : 'document.download',
       resourceType: 'document_version',
       resourceId: documentVersion.id,
       metadata: {
@@ -79,9 +80,13 @@ export async function GET(req: Request, context: RouteContext): Promise<Response
       },
     })
 
+    const disposition = inline
+      ? `inline; filename="${fileName}"`
+      : contentDispositionAttachment(fileName)
+
     const headers = new Headers({
       'Content-Type': 'application/pdf',
-      'Content-Disposition': contentDispositionAttachment(fileName),
+      'Content-Disposition': disposition,
       'Cache-Control': 'private, no-store',
     })
 
@@ -89,8 +94,6 @@ export async function GET(req: Request, context: RouteContext): Promise<Response
       headers.set('Content-Length', String(pdf.size))
     }
 
-    // TODO(preview): add an explicit inline mode once the product needs
-    // authenticated in-browser PDF preview.
     return new Response(pdf.stream, { status: 200, headers })
   } catch (err) {
     return handleApiError(err)

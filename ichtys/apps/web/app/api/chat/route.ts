@@ -39,6 +39,19 @@ import { getOrCreateRequestId, log, makeRecord } from '../../../lib/observabilit
 
 export const runtime = 'nodejs'
 
+async function devLogError(step: string, err: unknown): Promise<void> {
+  if (process.env.NODE_ENV !== 'development') return
+  const msg = err instanceof Error ? `${err.message}\n${err.stack ?? ''}` : String(err)
+  const line = `[chat:500] step=${step} ${new Date().toISOString()} | ${msg}\n`
+  console.error(line)
+  try {
+    const { appendFile } = await import('node:fs/promises')
+    const { join } = await import('node:path')
+    const { tmpdir } = await import('node:os')
+    await appendFile(join(tmpdir(), 'ichtys-rag-scores.log'), line)
+  } catch { /* non-critical */ }
+}
+
 const FORBIDDEN_ORG_FIELDS = ['orgId', 'organizationId', 'organization_id'] as const
 
 // Defined locally to avoid loading the DB client during test module resolution.
@@ -140,7 +153,8 @@ export async function POST(req: Request): Promise<Response> {
   let conversationHistory: Awaited<ReturnType<typeof loadConversationHistory>>
   try {
     conversationHistory = await loadConversationHistory({ conversationId, orgId, studyId })
-  } catch {
+  } catch (err) {
+    await devLogError('loadConversationHistory', err)
     return new Response('Internal Server Error', { status: 500 })
   }
 
@@ -148,7 +162,8 @@ export async function POST(req: Request): Promise<Response> {
   let userMessageId: string
   try {
     userMessageId = await persistUserMessage({ conversationId, orgId, studyId, question })
-  } catch {
+  } catch (err) {
+    await devLogError('persistUserMessage', err)
     return new Response('Internal Server Error', { status: 500 })
   }
 
@@ -167,7 +182,8 @@ export async function POST(req: Request): Promise<Response> {
         historyTurns: conversationHistory.length,
       },
     })
-  } catch {
+  } catch (err) {
+    await devLogError('writeAuditLog_requested', err)
     return new Response('Internal Server Error', { status: 500 })
   }
 
@@ -175,7 +191,8 @@ export async function POST(req: Request): Promise<Response> {
   let result: Awaited<ReturnType<typeof generateAnswerForStudy>>
   try {
     result = await generateAnswerForStudy({ studyId, question, documentType, topK, conversationHistory })
-  } catch {
+  } catch (ragErr) {
+    console.error('[POST /api/chat] generateAnswerForStudy failed:', ragErr)
     try {
       await writeAuditLog({
         action: 'rag.answer.failed',
@@ -184,10 +201,10 @@ export async function POST(req: Request): Promise<Response> {
         userId,
         resourceType: 'conversation',
         resourceId: conversationId,
-        metadata: { error: 'wrapper_error' },
+        metadata: { error: ragErr instanceof Error ? ragErr.message : 'wrapper_error' },
       })
     } catch {
-      return new Response('Internal Server Error', { status: 500 })
+      // audit write failure non-fatal
     }
     return new Response('Internal Server Error', { status: 500 })
   }
@@ -203,7 +220,8 @@ export async function POST(req: Request): Promise<Response> {
       confidence: result.confidence,
       evidences: result.evidences,
     })
-  } catch {
+  } catch (err) {
+    await devLogError('persistAssistantMessageAndCitations', err)
     return new Response('Internal Server Error', { status: 500 })
   }
 
@@ -222,7 +240,8 @@ export async function POST(req: Request): Promise<Response> {
         retrievalCount: result.retrievalCount,
       },
     })
-  } catch {
+  } catch (err) {
+    await devLogError('writeAuditLog_completed', err)
     return new Response('Internal Server Error', { status: 500 })
   }
 

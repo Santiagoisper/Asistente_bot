@@ -60,5 +60,6 @@ export const auditAction = [
   'auth.login',
   'auth.access_denied',
   'admin.action',
+  'study_spec.approved',
 ] as const
 export type AuditAction = (typeof auditAction)[number]

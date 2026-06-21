@@ -81,7 +81,4 @@ Resultado post-fix (cero warnings en los 4):
 
 ## Fuera de alcance de esta fase
 
-- Endpoint HTTP / integración con el pipeline de ingestion (el extractor no
-  persiste; expone `extractStudySpec` + `saveStudySpec` para la capa que siga).
-- UI de revisión/aprobación del spec.
 - Diff entre versiones (análisis de enmiendas).

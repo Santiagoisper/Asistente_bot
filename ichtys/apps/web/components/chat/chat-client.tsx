@@ -15,11 +15,12 @@ type ChatClientProps = {
   studyId: string
   studyName: string
   protocolNumber: string | null
+  initialConversationId?: string | null
 }
 
 const SAFE_ERROR_MESSAGE = 'No se pudo completar la operacion. Intenta nuevamente.'
 
-export default function ChatClient({ studyId, studyName, protocolNumber }: ChatClientProps) {
+export default function ChatClient({ studyId, studyName, protocolNumber, initialConversationId = null }: ChatClientProps) {
   const [conversations, setConversations] = useState<ConversationListItem[]>([])
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null)
   const [turns, setTurns] = useState<ChatTurn[]>([])
@@ -41,7 +42,11 @@ export default function ChatClient({ studyId, studyName, protocolNumber }: ChatC
         const loaded = await fetchConversations(studyId)
         if (cancelled) return
         setConversations(loaded)
-        setSelectedConversationId(loaded.at(0)?.conversationId ?? null)
+        if (initialConversationId && loaded.some((item) => item.conversationId === initialConversationId)) {
+          setSelectedConversationId(initialConversationId)
+        } else {
+          setSelectedConversationId(loaded.at(0)?.conversationId ?? null)
+        }
       } catch {
         if (cancelled) return
         setHistoryError('No se pudo cargar el historial. Podes iniciar una consulta nueva.')
@@ -55,7 +60,7 @@ export default function ChatClient({ studyId, studyName, protocolNumber }: ChatC
     return () => {
       cancelled = true
     }
-  }, [studyId])
+  }, [studyId, initialConversationId])
 
   useEffect(() => {
     let cancelled = false

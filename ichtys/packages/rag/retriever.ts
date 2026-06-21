@@ -16,7 +16,7 @@ import { embedQuery, EmbeddingError, type EmbeddingErrorCode } from '@ichtys/ing
  * retrieve global top-K and filter org/study in memory.
  */
 
-export const DEFAULT_TOP_K = 8
+export const DEFAULT_TOP_K = 12
 export const MAX_TOP_K = 20
 
 export type RetrievalErrorCode =

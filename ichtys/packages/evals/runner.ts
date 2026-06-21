@@ -390,9 +390,9 @@ export async function runMockMetabolicEvals(config: RunEvalsConfig): Promise<Eva
   // Bounded concurrency pool — N workers pull from a shared index.
   let nextIdx = 0
   async function worker(): Promise<void> {
-    while (true) {
+    while (nextIdx < cases.length) {
       const idx = nextIdx++
-      if (idx >= cases.length) break
+      if (idx >= cases.length) return
       await runCase(cases[idx]!, idx)
     }
   }
