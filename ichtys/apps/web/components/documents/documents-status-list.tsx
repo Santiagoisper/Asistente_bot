@@ -169,15 +169,18 @@ export function DocumentsStatusList({ items: initialItems, studyId }: DocumentsS
                       type="button"
                       disabled={
                         !item.latestVersionId ||
-                        busyVersionId === item.latestVersionId ||
-                        item.status === 'processing'
+                        busyVersionId === item.latestVersionId
                       }
                       onClick={() => {
                         void triggerReprocess(item)
                       }}
                       className="rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      {busyVersionId === item.latestVersionId ? 'Iniciando...' : 'Reprocesar'}
+                      {busyVersionId === item.latestVersionId
+                        ? 'Iniciando...'
+                        : item.status === 'processing'
+                          ? 'Forzar reprocesar'
+                          : 'Reprocesar'}
                     </button>
                   </td>
                 </tr>

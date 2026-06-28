@@ -109,11 +109,10 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
 
       setState((s) => ({ ...s, status: 'processing', progress: 100 }))
 
-      // Fire-and-forget: disparar ingestion sin bloquear la UI.
-      // El Lambda corre de forma independiente en Vercel; el polling del
-      // DocumentsStatusList va a mostrar el progreso real.
+      // Disparar ingestion. La route retorna 202 inmediatamente (usa after()
+      // internamente para correr en background). No necesitamos fire-and-forget.
       if (documentVersionId) {
-        void fetch('/api/ingestion/run', {
+        await fetch('/api/ingestion/run', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ documentVersionId }),
@@ -123,7 +122,7 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
       }
 
       // Pequeño delay para dar feedback visual antes de volver al idle.
-      await new Promise((r) => setTimeout(r, 1200))
+      await new Promise((r) => setTimeout(r, 800))
       stopTimer()
       setState((s) => ({ ...s, status: 'success' }))
 

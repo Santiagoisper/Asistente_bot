@@ -1,10 +1,11 @@
+import { after } from 'next/server'
 import { z } from 'zod'
 import { handleApiError, validateDocumentVersionAccess } from '@ichtys/auth'
 import { runIngestion } from '@ichtys/ingestion'
 
 export const runtime = 'nodejs'
 // Ingestion + spec extraction para un protocolo de 200+ páginas toma ~60-120s.
-// Vercel Pro soporta hasta 300s. Sin este valor el Lambda muere a los 10s default.
+// Vercel Pro soporta hasta 300s. El after() callback hereda este maxDuration.
 export const maxDuration = 300
 
 const triggerInput = z
@@ -14,7 +15,14 @@ const triggerInput = z
   .strict()
 
 /**
- * POST /api/ingestion/run - trigger or retry ingestion for a document version.
+ * POST /api/ingestion/run — dispara ingestion para un document version.
+ *
+ * Usa after() de Next.js 15 para retornar 202 de inmediato y correr la
+ * ingestion en background. Esto resuelve el problema de "Lambda killed by
+ * client disconnect" — el trabajo continúa aunque el cliente navegue o cierre.
+ *
+ * Sin after(): el Lambda vive mientras el cliente mantiene la conexión TCP.
+ * Con after(): el Lambda vive hasta que after() completa (hasta maxDuration).
  */
 export async function POST(req: Request): Promise<Response> {
   const url = new URL(req.url)
@@ -38,19 +46,29 @@ export async function POST(req: Request): Promise<Response> {
     const { userId, orgId, studyId, document, documentVersion } =
       await validateDocumentVersionAccess(parsed.data.documentVersionId)
 
-    const result = await runIngestion({
-      userId,
-      orgId,
-      studyId,
-      documentId: document.id,
-      documentVersionId: documentVersion.id,
+    // Encolar el trabajo en background. after() garantiza que el Lambda
+    // continúa corriendo después de que la respuesta HTTP es enviada —
+    // incluso si el cliente desconecta antes de que termine.
+    after(async () => {
+      try {
+        await runIngestion({
+          userId,
+          orgId,
+          studyId,
+          documentId: document.id,
+          documentVersionId: documentVersion.id,
+        })
+      } catch (err) {
+        console.error('[ingestion/run] after() error:', err)
+      }
     })
 
+    // Retornar inmediatamente — el cliente no necesita esperar el resultado.
     return Response.json(
       {
-        documentId: result.documentId,
-        documentVersionId: result.documentVersionId,
-        status: result.status,
+        documentId: document.id,
+        documentVersionId: documentVersion.id,
+        status: 'processing',
       },
       { status: 202 },
     )
