@@ -1,6 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm'
 import { db, studySpecs, type StudySpecRow } from '@ichtys/db'
 import { studySpecSchema, type StudySpec } from './study-spec'
+import type { ApprovedSpecExample } from './spec-extractor'
 
 /**
  * spec-store.ts — persistencia versionada del study spec.
@@ -53,6 +54,38 @@ export async function saveStudySpec(params: SaveStudySpecParams): Promise<SavedS
 
   if (!row) throw new Error('Failed to persist study spec')
   return row
+}
+
+/**
+ * Devuelve specs aprobados por humanos de la org para usar como few-shot.
+ * El orden es por fecha descendente (los más recientes primero).
+ * Estos ejemplos son el flywheel propietario de ALPHI: cada aprobación
+ * humana mejora las extracciones futuras de la misma organización.
+ */
+export async function getApprovedSpecExamples(params: {
+  orgId: string
+  limit?: number
+}): Promise<ApprovedSpecExample[]> {
+  const rows = await db
+    .select({
+      spec: studySpecs.spec,
+    })
+    .from(studySpecs)
+    .where(
+      and(
+        eq(studySpecs.organizationId, params.orgId),
+        eq(studySpecs.status, 'approved'),
+      ),
+    )
+    .orderBy(desc(studySpecs.updatedAt))
+    .limit(params.limit ?? 3)
+
+  return rows.map(row => {
+    const spec = studySpecSchema.safeParse(row.spec)
+    if (!spec.success) return null
+    const protocolCode = spec.data.identification.protocolCode ?? null
+    return { protocolCode, spec: spec.data }
+  }).filter((x): x is ApprovedSpecExample => x !== null)
 }
 
 /**

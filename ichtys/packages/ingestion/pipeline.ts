@@ -14,7 +14,7 @@ import { chunkPages } from './chunker'
 import { EmbeddingIndexingError, indexDocumentVersionChunks } from './indexer'
 import { parsePdf, PdfParseError } from './parser'
 import { extractStudySpec } from './spec-extractor'
-import { saveStudySpec } from './spec-store'
+import { getApprovedSpecExamples, saveStudySpec } from './spec-store'
 
 /**
  * pipeline.ts - ingestion orchestrator.
@@ -285,10 +285,23 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
     // Extraer study spec si el documento es un protocolo.
     // Fire-and-forget: los warnings se loguean pero no fallan el ingestion.
     if (document.documentType === 'protocol') {
-      extractStudySpec(parsedDocument.pages)
-        .then(({ spec, warnings, extractionModel }) => {
+      // Recuperar specs aprobados previos de la org para usar como few-shot.
+      // Si falla, continuamos sin ejemplos — el extractor funciona igual.
+      const fewShotExamples = await getApprovedSpecExamples({
+        orgId: parsedInput.orgId,
+        limit: 3,
+      }).catch(err => {
+        console.warn('[spec-extractor] Could not load few-shot examples:', err)
+        return []
+      })
+
+      extractStudySpec(parsedDocument.pages, fewShotExamples)
+        .then(({ spec, warnings, extractionModel, detectedLanguage }) => {
           if (warnings.length > 0) {
             console.warn(`[spec-extractor] warnings for documentVersionId=${parsedInput.documentVersionId}:`, warnings)
+          }
+          if (detectedLanguage) {
+            console.log(`[spec-extractor] detected language: ${detectedLanguage}`)
           }
           return saveStudySpec({
             orgId: parsedInput.orgId,
