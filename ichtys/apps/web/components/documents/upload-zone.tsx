@@ -83,7 +83,7 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
           else reject(new Error(`HTTP ${xhr.status}`))
         })
         xhr.addEventListener('error', () => reject(new Error('Network error')))
-        xhr.open('POST', '/api/upload')
+        xhr.open('POST', '/api/documents/upload')
         xhr.send(formData)
       })
 
