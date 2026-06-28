@@ -1,4 +1,7 @@
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
+
+// Disable worker in Node.js server environment (Vercel Lambda)
+GlobalWorkerOptions.workerSrc = ''
 
 /**
  * parser.ts - PDF text extraction, page by page.
