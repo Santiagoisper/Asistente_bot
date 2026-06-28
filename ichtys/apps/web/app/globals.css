@@ -1,3 +1,116 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ─── ALPHI Design Tokens ──────────────────────────────────────────────── */
+@layer base {
+  :root {
+    --alphi-navy:    #0D1F3C;
+    --alphi-teal:    #0891B2;
+    --alphi-sage:    #059669;
+    --alphi-amber:   #D97706;
+    --alphi-rose:    #DC2626;
+    --alphi-slate:   #F8FAFC;
+    --alphi-border:  #E2E8F0;
+    --alphi-muted:   #64748B;
+  }
+
+  html {
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--alphi-slate);
+    color: var(--alphi-navy);
+  }
+
+  /* Smooth scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #CBD5E1 transparent;
+  }
+  *::-webkit-scrollbar { width: 5px; height: 5px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 99px; }
+}
+
+/* ─── ALPHI Component Utilities ─────────────────────────────────────────── */
+@layer components {
+
+  /* Card base */
+  .alphi-card {
+    @apply bg-white rounded-xl border border-alphi-border shadow-alphi-card;
+  }
+
+  /* Primary button */
+  .alphi-btn-primary {
+    @apply inline-flex items-center gap-2 bg-alphi-navy text-white text-sm font-semibold
+           px-4 py-2 rounded-lg hover:bg-alphi-navydim active:scale-[0.98]
+           disabled:opacity-40 disabled:cursor-not-allowed
+           transition-all duration-150;
+  }
+
+  /* Secondary button */
+  .alphi-btn-secondary {
+    @apply inline-flex items-center gap-2 bg-white text-alphi-navy text-sm font-medium
+           px-4 py-2 rounded-lg border border-alphi-border
+           hover:bg-alphi-slate active:scale-[0.98]
+           disabled:opacity-40 disabled:cursor-not-allowed
+           transition-all duration-150;
+  }
+
+  /* Ghost button */
+  .alphi-btn-ghost {
+    @apply inline-flex items-center gap-1.5 text-alphi-muted text-sm font-medium
+           px-3 py-1.5 rounded-lg hover:bg-alphi-slate hover:text-alphi-navy
+           transition-all duration-150;
+  }
+
+  /* Input */
+  .alphi-input {
+    @apply w-full bg-white border border-alphi-border rounded-lg px-3 py-2
+           text-sm text-alphi-navy placeholder:text-alphi-muted/60
+           outline-none focus:ring-2 focus:ring-alphi-teal/30 focus:border-alphi-teal
+           transition-all duration-150;
+  }
+
+  /* Section label */
+  .alphi-label {
+    @apply text-xs font-semibold uppercase tracking-widest text-alphi-muted;
+  }
+
+  /* Pill / status badge */
+  .alphi-pill {
+    @apply inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold;
+  }
+}
+
+/* ─── Typing dots ────────────────────────────────────────────────────────── */
+.alphi-typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulseDot 1.4s ease-in-out infinite;
+}
+.alphi-typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.alphi-typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes pulseDot {
+  0%, 80%, 100% { transform: scale(0.55); opacity: 0.35; }
+  40%           { transform: scale(1);    opacity: 1;    }
+}
+
+/* ─── Footnote superscript links ─────────────────────────────────────────── */
+.alphi-footnote {
+  @apply inline-flex items-center justify-center w-4 h-4 rounded
+         bg-alphi-teal/10 text-alphi-teal text-[10px] font-bold
+         cursor-pointer hover:bg-alphi-teal/20 transition-colors
+         align-super leading-none ml-0.5;
+}
+
+/* ─── Chat message content ───────────────────────────────────────────────── */
+.alphi-answer-text p { margin-bottom: 0.4rem; }
+.alphi-answer-text p:last-child { margin-bottom: 0; }

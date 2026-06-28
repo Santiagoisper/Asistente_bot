@@ -53,7 +53,7 @@ let defaultClient: EmbeddingClient | null = null
 
 function getDefaultClient(): EmbeddingClient {
   if (!defaultClient) {
-    const openai = new OpenAI()
+    const openai = new OpenAI({ timeout: 20_000, maxRetries: 1 })
     defaultClient = {
       createEmbeddings: (input) => openai.embeddings.create(input),
     }

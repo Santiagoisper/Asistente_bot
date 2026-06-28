@@ -8,7 +8,8 @@
   "exports": {
     ".": "./answer-engine.ts",
     "./retriever": "./retriever.ts",
-    "./guardrails": "./guardrails.ts"
+    "./guardrails": "./guardrails.ts",
+    "./medical-annotator": "./medical-annotator.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

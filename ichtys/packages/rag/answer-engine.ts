@@ -277,10 +277,11 @@ export async function answerEngine(input: AnswerEngineInput): Promise<AnswerResu
     const result = await generateObject({
       model,
       schema: answerSchema,
+      mode: 'tool',
       system: SYSTEM_PROMPT,
       prompt: buildUserPrompt(question, context, conversationHistory),
     })
-    structured = result.object
+    structured = result.object as typeof structured
   } catch (err) {
     throw sanitizeLLMError(err)
   }
@@ -348,3 +349,88 @@ export async function generateAnswer(params: GenerateAnswerParams): Promise<Answ
 // Re-exports para consumidores del package
 export { retrieveRelevantChunks } from './retriever'
 export * from './guardrails'
+
+// ---------------------------------------------------------------------------
+// Streaming variant — yields tokens then a final metadata event
+// ---------------------------------------------------------------------------
+
+export type AnswerStreamEvent =
+  | { type: 'token'; text: string }
+  | { type: 'done'; confidence: Confidence; evidences: Evidence[]; fullAnswer: string }
+
+/**
+ * Streaming variant of answerEngine. Yields token events as the LLM generates
+ * the answer, then a final done event with confidence + evidences.
+ *
+ * Rules:
+ *  - Same guardrails as answerEngine (threshold, insufficient evidence path).
+ *  - Uses generateObject for reliable structured output (streamObject/partialObjectStream
+ *    yields 0 partials with claude-sonnet-4-6 and hangs on .object — incompatibility).
+ *  - NO HTTP, NO auth, NO retrieval — same as answerEngine.
+ */
+export async function* answerEngineStream(
+  input: AnswerEngineInput,
+): AsyncGenerator<AnswerStreamEvent> {
+  const { question, retrievedChunks, conversationHistory } = input
+
+  // 1. Filter by similarity threshold.
+  const aboveThreshold = filterByThreshold(retrievedChunks)
+  const assessment = assessEvidence(aboveThreshold)
+
+  // 2. Insufficient evidence short-circuit.
+  if (!assessment.hasEvidence) {
+    const msg = getInsufficientEvidenceMessage(question)
+    yield { type: 'token', text: msg }
+    yield { type: 'done', confidence: 'insufficient_evidence', evidences: [], fullAnswer: msg }
+    return
+  }
+
+  const context = buildContext(aboveThreshold)
+  const model = createModel()
+  const userPrompt = buildUserPrompt(question, context, conversationHistory)
+
+  // 3. Generate structured answer — generateObject is reliable with Anthropic.
+  //    streamObject/partialObjectStream consistently yields 0 partials with
+  //    claude-sonnet-4-6; generateObject avoids that incompatibility.
+  let finalObj: StructuredAnswer
+  try {
+    console.log('[answer-engine] calling Claude API...')
+    const result = await generateObject({
+      model,
+      schema: answerSchema,
+      mode: 'tool',
+      system: SYSTEM_PROMPT,
+      prompt: userPrompt,
+    })
+    finalObj = result.object as StructuredAnswer
+    console.log(`[answer-engine] response received, confidence=${finalObj.confidence}`)
+  } catch (err) {
+    console.error('[answer-engine] error:', err)
+    throw sanitizeLLMError(err)
+  }
+
+  // 4. LLM says insufficient evidence.
+  if (finalObj.confidence === 'insufficient_evidence') {
+    yield { type: 'token', text: finalObj.answer }
+    yield { type: 'done', confidence: 'insufficient_evidence', evidences: [], fullAnswer: finalObj.answer }
+    return
+  }
+
+  // 5. Map citation indices to real evidence objects.
+  const evidences = extractEvidences(aboveThreshold, finalObj.citationIndices)
+  if (evidences.length === 0) {
+    yield { type: 'token', text: finalObj.answer }
+    yield { type: 'done', confidence: 'insufficient_evidence', evidences: [], fullAnswer: finalObj.answer }
+    return
+  }
+
+  // 6. Emit answer as tokens then the done event.
+  //    Chunk into ~50-char pieces so the client renders progressively.
+  const CHUNK_SIZE = 50
+  const answer = finalObj.answer
+  for (let i = 0; i < answer.length; i += CHUNK_SIZE) {
+    yield { type: 'token', text: answer.slice(i, i + CHUNK_SIZE) }
+  }
+
+  yield { type: 'done', confidence: finalObj.confidence, evidences, fullAnswer: answer }
+}

@@ -3,7 +3,7 @@ import ChatClient from '../../../../../components/chat/chat-client'
 
 interface ChatPageProps {
   params: Promise<{ id: string }>
-  searchParams?: Promise<{ conversationId?: string }>
+  searchParams?: Promise<{ conversationId?: string; q?: string }>
 }
 
 export default async function StudyChatPage({ params, searchParams }: ChatPageProps) {
@@ -17,6 +17,7 @@ export default async function StudyChatPage({ params, searchParams }: ChatPagePr
       studyName={study.name}
       protocolNumber={study.protocolNumber}
       initialConversationId={query?.conversationId ?? null}
+      initialQuestion={query?.q ?? null}
     />
   )
 }

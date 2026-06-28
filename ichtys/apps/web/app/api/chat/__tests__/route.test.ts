@@ -44,7 +44,7 @@ const mocks = vi.hoisted(() => {
     validateStudyAccess: vi.fn(),
     handleApiError: vi
       .fn<(err: unknown) => Response>()
-      .mockImplementation((err) => {
+      .mockImplementation((err: unknown) => {
         if (err instanceof MockAccessError) {
           const status = err.status
           return new Response('Forbidden', { status })
@@ -60,7 +60,7 @@ const mocks = vi.hoisted(() => {
     enforceSlidingWindowRateLimit: vi.fn(),
     rateLimitResponse: vi
       .fn<(retryAfterSeconds: number) => Response>()
-      .mockImplementation((retryAfterSeconds) =>
+      .mockImplementation((retryAfterSeconds: number) =>
         new Response('Too Many Requests', {
           status: 429,
           headers: { 'Retry-After': String(retryAfterSeconds) },
@@ -529,7 +529,7 @@ describe('POST /api/chat — audit logs', () => {
     await POST(makeRequest({ studyId: mocks.STUDY_ID, question: 'test' }))
 
     const completedCall = mocks.writeAuditLog.mock.calls.find(
-      (call) => (call[0] as { action: string }).action === 'rag.answer.completed'
+      (call: unknown[]) => (call[0] as { action: string }).action === 'rag.answer.completed'
     )
     expect(completedCall).toBeDefined()
     const metadata = (completedCall![0] as { metadata: Record<string, unknown> }).metadata
@@ -550,7 +550,7 @@ describe('POST /api/chat — audit logs', () => {
     await POST(makeRequest({ studyId: mocks.STUDY_ID, question }))
 
     const requestedCall = mocks.writeAuditLog.mock.calls.find(
-      (call) => (call[0] as { action: string }).action === 'rag.answer.requested'
+      (call: unknown[]) => (call[0] as { action: string }).action === 'rag.answer.requested'
     )
     const metadata = (requestedCall![0] as { metadata?: Record<string, unknown> }).metadata ?? {}
     expect(JSON.stringify(metadata)).not.toContain('HbA1c')

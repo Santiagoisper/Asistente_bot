@@ -185,7 +185,7 @@ async function extractGroup<T>(
     prompt: `${instruction}\n\nPROTOCOL PAGES:\n${context}`,
     maxTokens: MAX_OUTPUT_TOKENS,
   })
-  return result.object
+  return result.object as T
 }
 
 // ---------------------------------------------------------------------------

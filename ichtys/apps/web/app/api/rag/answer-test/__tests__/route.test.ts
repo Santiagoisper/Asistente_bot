@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => {
     enforceSlidingWindowRateLimit: vi.fn(),
     rateLimitResponse: vi
       .fn<(retryAfterSeconds: number) => Response>()
-      .mockImplementation((retryAfterSeconds) =>
+      .mockImplementation((retryAfterSeconds: number) =>
         new Response('Too Many Requests', {
           status: 429,
           headers: { 'Retry-After': String(retryAfterSeconds) },

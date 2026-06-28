@@ -14,6 +14,7 @@ import {
 } from '@ichtys/db'
 import { AccessError, logServerError } from '@ichtys/auth'
 import type { ConversationTurn, Evidence } from '@ichtys/rag'
+import type { MedicalAnnotation } from '@ichtys/rag/medical-annotator'
 
 /**
  * persistence.ts — helpers server-only de persistencia de chat.
@@ -153,6 +154,7 @@ export async function persistAssistantMessageAndCitations(params: {
   answer: string
   confidence: AnswerConfidence
   evidences: Evidence[]
+  annotations?: MedicalAnnotation[]
 }): Promise<string> {
   return db.transaction(async (tx) => {
     // 1. Insertar mensaje del assistant.
@@ -165,6 +167,9 @@ export async function persistAssistantMessageAndCitations(params: {
         role: 'assistant',
         content: params.answer,
         confidence: params.confidence,
+        annotations: params.annotations && params.annotations.length > 0
+          ? params.annotations
+          : null,
       })
       .returning({ id: messages.id })
 

@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => {
     validateStudyAccess: vi.fn(),
     handleApiError: vi
       .fn<(err: unknown) => Response>()
-      .mockImplementation((err) =>
+      .mockImplementation((err: unknown) =>
         err instanceof MockAccessError
           ? new Response('Forbidden', { status: err.status })
           : new Response('Internal Server Error', { status: 500 }),

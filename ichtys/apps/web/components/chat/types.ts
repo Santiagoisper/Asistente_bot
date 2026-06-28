@@ -51,6 +51,19 @@ export type CitationItem = Evidence & {
   documentType: string
 }
 
+export type CodingSystem = 'SNOMED-CT' | 'LOINC'
+
+export type MedicalAnnotation = {
+  term: string
+  normalizedTerm: string
+  system: CodingSystem
+  code: string
+  display: string
+  startIndex: number
+  endIndex: number
+  fromDictionary: boolean
+}
+
 export type ChatTurn = {
   messageId: string
   role: 'user' | 'assistant'
@@ -59,4 +72,5 @@ export type ChatTurn = {
   evidences: Evidence[]
   retrievalCount?: number | null
   createdAt?: string
+  annotations?: MedicalAnnotation[]
 }

@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, real, timestamp, index } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, integer, real, timestamp, index, jsonb } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { organizations } from './organizations'
 import { studies } from './studies'
@@ -46,6 +46,12 @@ export const messages = pgTable(
     role: text('role', { enum: messageRole }).notNull(),
     content: text('content').notNull(),
     confidence: text('confidence', { enum: answerConfidence }),
+    /**
+     * SNOMED-CT / LOINC annotations detected in the assistant's answer.
+     * Nullable: null for user messages and answers with insufficient_evidence.
+     * Shape: MedicalAnnotation[] — see packages/rag/medical-annotator.ts.
+     */
+    annotations: jsonb('annotations'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({

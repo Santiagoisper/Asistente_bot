@@ -18,10 +18,14 @@ export const MIN_CHUNKS_FOR_ANSWER = 1
  * escala de similitud es más baja que la de modelos anteriores: en el estudio
  * mock metabólico (phase 10B) los pares relevantes puntúan ~0.40-0.55 y el
  * ruido queda <0.30. El valor histórico 0.75 filtraba el 100% de la evidencia
- * real y producía insufficient_evidence sistemático
- * (docs/decisions/phase-10a-smoke-test.md ya anticipaba este riesgo).
+ * real y producía insufficient_evidence sistemático.
+ *
+ * Rebajado a 0.15 tras smoke-test con protocolos reales en español (GZBO):
+ * el texto clínico en castellano produce scores más bajos con este modelo —
+ * los pares relevantes caen en ~0.15-0.30. El ruido real (<0.10) sigue
+ * filtrado. Recalibrar si aparecen falsos positivos sistemáticos.
  */
-export const MIN_SIMILARITY_THRESHOLD = 0.3
+export const MIN_SIMILARITY_THRESHOLD = 0.15
 
 /** Idiomas soportados para mensajes de fallback. Default: 'en'. */
 export type SupportedLanguage = 'en' | 'es'

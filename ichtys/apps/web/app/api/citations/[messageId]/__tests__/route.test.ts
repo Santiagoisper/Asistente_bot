@@ -31,7 +31,7 @@ const mocks = vi.hoisted(() => {
     validateMessageAccess: vi.fn(),
     handleApiError: vi
       .fn<(err: unknown) => Response>()
-      .mockImplementation((err) =>
+      .mockImplementation((err: unknown) =>
         err instanceof MockAccessError
           ? new Response('Not Found', { status: err.status })
           : new Response('Internal Server Error', { status: 500 }),

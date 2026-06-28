@@ -107,9 +107,14 @@ function parseParams(params: RetrieveParams): ParsedRetrieveParams {
   return parsed.data
 }
 
+const EMBED_TIMEOUT_MS = 15_000
+
 export async function embedRetrievalQuery(queryText: string): Promise<number[]> {
   try {
-    const embedding = await embedQuery(queryText)
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new RetrievalError('query_embedding_failed', 'Embedding timeout')), EMBED_TIMEOUT_MS),
+    )
+    const embedding = await Promise.race([embedQuery(queryText), timeout])
     validateEmbeddingDimensions(embedding)
     return embedding
   } catch (err) {
@@ -122,7 +127,9 @@ export async function embedRetrievalQuery(queryText: string): Promise<number[]> 
  */
 export async function retrieveRelevantChunks(params: RetrieveParams): Promise<RetrievedChunk[]> {
   const parsed = parseParams(params)
+  console.log('[retriever] embedding query...')
   const queryEmbedding = await embedRetrievalQuery(parsed.queryText)
+  console.log('[retriever] embedding done, running vector search...')
   const vector = vectorLiteral(queryEmbedding)
   const distance = sql<number>`${chunks.embedding} <=> ${vector}::vector`
   const similarityScore = sql<number>`1 - (${distance})`
