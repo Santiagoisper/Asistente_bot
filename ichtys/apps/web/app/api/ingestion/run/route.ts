@@ -3,6 +3,9 @@ import { handleApiError, validateDocumentVersionAccess } from '@ichtys/auth'
 import { runIngestion } from '@ichtys/ingestion'
 
 export const runtime = 'nodejs'
+// Ingestion + spec extraction para un protocolo de 200+ páginas toma ~60-120s.
+// Vercel Pro soporta hasta 300s. Sin este valor el Lambda muere a los 10s default.
+export const maxDuration = 300
 
 const triggerInput = z
   .object({

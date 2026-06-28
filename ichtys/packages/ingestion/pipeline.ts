@@ -283,40 +283,41 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
     const indexingResult = await indexDocumentVersionChunks(parsedInput)
 
     // Extraer study spec si el documento es un protocolo.
-    // Fire-and-forget: los warnings se loguean pero no fallan el ingestion.
+    // AWAITED: fire-and-forget no funciona en Lambda (el runtime se congela
+    // cuando se envía la respuesta HTTP, matando los calls a Claude pendientes).
     if (document.documentType === 'protocol') {
-      // Recuperar specs aprobados previos de la org para usar como few-shot.
-      // Si falla, continuamos sin ejemplos — el extractor funciona igual.
-      const fewShotExamples = await getApprovedSpecExamples({
-        orgId: parsedInput.orgId,
-        limit: 3,
-      }).catch(err => {
-        console.warn('[spec-extractor] Could not load few-shot examples:', err)
-        return []
-      })
+      try {
+        const fewShotExamples = await getApprovedSpecExamples({
+          orgId: parsedInput.orgId,
+          limit: 3,
+        }).catch(err => {
+          console.warn('[spec-extractor] Could not load few-shot examples:', err)
+          return []
+        })
 
-      extractStudySpec(parsedDocument.pages, fewShotExamples)
-        .then(({ spec, warnings, extractionModel, detectedLanguage }) => {
-          if (warnings.length > 0) {
-            console.warn(`[spec-extractor] warnings for documentVersionId=${parsedInput.documentVersionId}:`, warnings)
-          }
-          if (detectedLanguage) {
-            console.log(`[spec-extractor] detected language: ${detectedLanguage}`)
-          }
-          return saveStudySpec({
-            orgId: parsedInput.orgId,
-            studyId: parsedInput.studyId,
-            documentVersionId: parsedInput.documentVersionId,
-            spec,
-            extractionModel,
-          })
+        const { spec, warnings, extractionModel, detectedLanguage } =
+          await extractStudySpec(parsedDocument.pages, fewShotExamples)
+
+        if (warnings.length > 0) {
+          console.warn(`[spec-extractor] warnings for documentVersionId=${parsedInput.documentVersionId}:`, warnings)
+        }
+        if (detectedLanguage) {
+          console.log(`[spec-extractor] detected language: ${detectedLanguage}`)
+        }
+
+        const { id, version } = await saveStudySpec({
+          orgId: parsedInput.orgId,
+          studyId: parsedInput.studyId,
+          documentVersionId: parsedInput.documentVersionId,
+          spec,
+          extractionModel,
         })
-        .then(({ id, version }) => {
-          console.log(`[spec-extractor] saved draft spec id=${id} version=${version}`)
-        })
-        .catch((err) => {
-          console.error(`[spec-extractor] FAILED for documentVersionId=${parsedInput.documentVersionId}:`, err)
-        })
+        console.log(`[spec-extractor] saved draft spec id=${id} version=${version}`)
+      } catch (err) {
+        // El fallo del spec no falla la ingestion — el documento queda 'ready'
+        // pero sin spec. El usuario puede reprocesar o el sistema lo detectará.
+        console.error(`[spec-extractor] FAILED for documentVersionId=${parsedInput.documentVersionId}:`, err)
+      }
     }
 
     await db.transaction(async (tx) => {
