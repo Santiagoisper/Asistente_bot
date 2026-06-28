@@ -44,7 +44,7 @@ export default async function StudyDocumentsPage({ params }: DocumentsPageProps)
     <section className="mx-auto max-w-3xl space-y-6">
       <h1 className="text-xl font-semibold">Documentos</h1>
       <UploadZone studyId={studyId} />
-      <DocumentsStatusList items={items} />
+      <DocumentsStatusList items={items} studyId={studyId} />
     </section>
   )
 }

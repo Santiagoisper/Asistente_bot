@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useCallback, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 interface UploadZoneProps {
   studyId: string
@@ -17,6 +18,16 @@ const DOC_TYPES = [
   { label: 'Guia de visitas (SoA)', ext: 'PDF', tip: 'Schedule of Assessments detallado' },
   { label: 'Otro documento', ext: 'PDF/DOC/TXT', tip: 'Labs, instrucciones, budgets' },
 ]
+
+/** Mapeo índice → documentType para el backend. */
+const DOC_TYPE_VALUES = [
+  'protocol',
+  'investigator_brochure',
+  'other',
+  'other',
+  'other',
+  'other',
+] as const
 
 type UploadStatus = 'idle' | 'uploading' | 'processing' | 'success' | 'error'
 
@@ -37,9 +48,11 @@ const INITIAL_STATE: UploadState = {
 }
 
 export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
+  const router = useRouter()
   const [state, setState] = useState<UploadState>(INITIAL_STATE)
   const [isDragging, setIsDragging] = useState(false)
-  const [selectedDocType, setSelectedDocType] = useState<number | null>(null)
+  // Default a 0 (Protocolo) — el caso de uso principal de ALPHI.
+  const [selectedDocType, setSelectedDocType] = useState<number>(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -65,11 +78,7 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('studyId', studyId)
-    formData.append('documentType',
-      selectedDocType !== null
-        ? (['protocol', 'investigator_brochure', 'other', 'other', 'other', 'other'][selectedDocType] ?? 'other')
-        : 'other'
-    )
+    formData.append('documentType', DOC_TYPE_VALUES[selectedDocType] ?? 'other')
 
     try {
       const xhr = new XMLHttpRequest()
@@ -89,18 +98,46 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
         xhr.send(formData)
       })
 
+      // Parsear la respuesta para obtener el documentVersionId.
+      let documentVersionId: string | null = null
+      try {
+        const uploadResult = JSON.parse(xhr.responseText) as { documentVersionId?: string }
+        documentVersionId = uploadResult.documentVersionId ?? null
+      } catch {
+        // silencioso — el usuario puede reprocesar manualmente
+      }
+
       setState((s) => ({ ...s, status: 'processing', progress: 100 }))
-      await new Promise((r) => setTimeout(r, 1800))
+
+      // Fire-and-forget: disparar ingestion sin bloquear la UI.
+      // El Lambda corre de forma independiente en Vercel; el polling del
+      // DocumentsStatusList va a mostrar el progreso real.
+      if (documentVersionId) {
+        void fetch('/api/ingestion/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ documentVersionId }),
+        }).catch(() => {
+          // silencioso — el usuario puede reprocesar manualmente
+        })
+      }
+
+      // Pequeño delay para dar feedback visual antes de volver al idle.
+      await new Promise((r) => setTimeout(r, 1200))
       stopTimer()
       setState((s) => ({ ...s, status: 'success' }))
+
+      // Actualizar el server component para que aparezca el nuevo documento.
+      router.refresh()
       onUploadComplete?.()
+
       setTimeout(() => setState(INITIAL_STATE), 3200)
     } catch (err) {
       stopTimer()
       const msg = err instanceof Error ? err.message : 'Error desconocido'
       setState({ status: 'error', fileName: file.name, progress: 0, errorMessage: msg, elapsed: 0 })
     }
-  }, [studyId, selectedDocType, startTimer, stopTimer, onUploadComplete])
+  }, [studyId, selectedDocType, startTimer, stopTimer, onUploadComplete, router])
 
   const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -208,13 +245,13 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
   return (
     <div className="space-y-4">
       <div>
-        <p className="alphi-label mb-2">Tipo de documento (opcional)</p>
+        <p className="alphi-label mb-2">Tipo de documento</p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {DOC_TYPES.map((dt, idx) => (
             <button
               key={dt.label}
               type="button"
-              onClick={() => setSelectedDocType(idx === selectedDocType ? null : idx)}
+              onClick={() => setSelectedDocType(idx)}
               title={dt.tip}
               className={[
                 'rounded-lg border px-3 py-2 text-left text-xs transition-all duration-100',
@@ -228,7 +265,7 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
             </button>
           ))}
         </div>
-        {selectedDocType !== null && (
+        {DOC_TYPES[selectedDocType] && (
           <p className="mt-1.5 text-[11px] text-alphi-muted">
             {DOC_TYPES[selectedDocType]?.tip}
           </p>
