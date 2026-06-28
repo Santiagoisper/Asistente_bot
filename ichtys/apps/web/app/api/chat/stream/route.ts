@@ -223,14 +223,22 @@ export async function POST(req: Request): Promise<Response> {
             ? annotateAnswerSync(fullAnswer)
             : []
 
-        // 10d. Persist assistant message + citations + annotations atomically.
+        // 10d. Strip synthetic spec-chunk evidences before DB persistence.
+        //      Spec chunks have chunkId "spec:${specId}:${section}" — not real UUIDs.
+        //      Passing them to the citations table crashes with "invalid input syntax
+        //      for type uuid". Still emitted to client via done frame for UI display.
+        const persistableEvidences = finalEvidences.filter(
+          (e) => !e.chunkId.startsWith('spec:'),
+        )
+
+        // 10e. Persist assistant message + citations + annotations atomically.
         const assistantMessageId = await persistAssistantMessageAndCitations({
           conversationId,
           orgId,
           studyId,
           answer: fullAnswer,
           confidence: finalConfidence,
-          evidences: finalEvidences,
+          evidences: persistableEvidences,
           annotations: annotations.length > 0 ? annotations : undefined,
         })
 
