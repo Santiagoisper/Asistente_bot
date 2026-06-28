@@ -1,5 +1,6 @@
 {
-  "buildCommand": "pnpm run build",
+  "framework": "nextjs",
+  "buildCommand": "pnpm turbo run build --filter=@ichtys/web",
   "installCommand": "pnpm install --frozen-lockfile",
   "outputDirectory": "apps/web/.next"
 }
