@@ -1,10 +1,10 @@
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
-
-// Disable worker in Node.js server environment (Vercel Lambda)
-GlobalWorkerOptions.workerSrc = ''
+import pdfParse from 'pdf-parse'
 
 /**
  * parser.ts - PDF text extraction, page by page.
+ *
+ * Uses pdf-parse which ships its own CJS-compatible pdfjs builds — avoids the
+ * ESM-only / DOMMatrix issues that pdfjs-dist v6 causes in Next.js Lambda builds.
  *
  * OCR is out of scope for this phase. Scanned PDFs with no extractable text
  * fail with a controlled error so ingestion can mark the version as error.
@@ -60,21 +60,24 @@ function normalizePageText(items: readonly unknown[]): string {
  */
 export async function parsePdf(data: Buffer | Uint8Array): Promise<ParsedDocument> {
   try {
-    const pdfData = new Uint8Array(data)
-    const pdf = await getDocument({
-      data: pdfData,
-      disableFontFace: true,
-    }).promise
-
+    const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data)
     const pages: ParsedPage[] = []
-    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-      const page = await pdf.getPage(pageNumber)
-      const textContent = await page.getTextContent()
-      pages.push({
-        pageNumber,
-        rawText: normalizePageText(textContent.items),
-      })
-    }
+    let pageCounter = 0
+
+    await pdfParse(buffer, {
+      // pagerender is called sequentially for each page (1..numpages).
+      // Capture per-page text via closure; return value is appended to result.text.
+      pagerender: (pageData: { getTextContent: (opts?: object) => Promise<{ items: unknown[] }> }) => {
+        const currentPage = ++pageCounter
+        return pageData
+          .getTextContent({ normalizeWhitespace: false, disableCombineTextItems: false })
+          .then((textContent) => {
+            const rawText = normalizePageText(textContent.items)
+            pages.push({ pageNumber: currentPage, rawText })
+            return rawText
+          })
+      },
+    })
 
     if (!pages.some((page) => page.rawText.trim().length > 0)) {
       throw new PdfParseError(
@@ -83,7 +86,7 @@ export async function parsePdf(data: Buffer | Uint8Array): Promise<ParsedDocumen
       )
     }
 
-    return { pageCount: pdf.numPages, pages }
+    return { pageCount: pages.length, pages }
   } catch (err) {
     if (err instanceof PdfParseError) {
       throw err
