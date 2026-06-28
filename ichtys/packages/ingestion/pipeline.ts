@@ -1,4 +1,3 @@
-import { get } from '@vercel/blob'
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import {
@@ -138,28 +137,26 @@ async function readStream(stream: ReadableStream<Uint8Array>): Promise<Uint8Arra
   return buffer
 }
 
-async function downloadPrivateBlob(blobKey: string): Promise<Uint8Array> {
-  // Dev: leer del filesystem local donde el mock de upload guardó el PDF.
-  if (process.env.NODE_ENV === 'development') {
+async function downloadBlob(blobUrl: string): Promise<Uint8Array> {
+  // Dev mock: blobUrl is file:// pointing to local filesystem.
+  if (blobUrl.startsWith('file://')) {
     try {
       const { readFile } = await import('node:fs/promises')
-      const { join } = await import('node:path')
-      const { tmpdir } = await import('node:os')
-      const safeKey = blobKey.replace(/\//g, '__')
-      const localPath = join(tmpdir(), 'ichtys-dev-blobs', safeKey)
+      const localPath = blobUrl.replace('file://', '')
       console.log(`[DEV-MOCK Blob] Reading from local path: ${localPath}`)
       return await readFile(localPath)
     } catch (err) {
-      console.warn('[DEV-MOCK Blob] Local read failed, falling through to Vercel Blob:', err)
+      console.warn('[DEV-MOCK Blob] Local read failed:', err)
+      throw new IngestionPipelineError('blob_download_failed', 'Dev blob not found on local filesystem')
     }
   }
 
-  const result = await get(blobKey, { access: 'private', useCache: false })
-  if (!result || result.statusCode === 304 || !result.stream) {
-    throw new IngestionPipelineError('blob_download_failed', 'Could not download private blob')
+  const response = await fetch(blobUrl)
+  if (!response.ok || !response.body) {
+    throw new IngestionPipelineError('blob_download_failed', `Failed to fetch blob: ${response.status}`)
   }
 
-  return readStream(result.stream)
+  return readStream(response.body)
 }
 
 function sanitizeIngestionError(err: unknown): IngestionErrorCode {
@@ -225,7 +222,7 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
   await markProcessing(parsedInput)
 
   try {
-    const pdfData = await downloadPrivateBlob(documentVersion.blobKey)
+    const pdfData = await downloadBlob(documentVersion.blobUrl)
     const parsedDocument = await parsePdf(pdfData)
     const contentChunks = chunkPages(parsedDocument.pages)
 

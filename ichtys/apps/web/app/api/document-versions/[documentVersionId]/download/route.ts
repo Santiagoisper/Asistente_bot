@@ -64,7 +64,7 @@ export async function GET(req: Request, context: RouteContext): Promise<Response
       await validateDocumentVersionAccess(params.data.documentVersionId)
 
     const fileName = safeDownloadFileName(document.name)
-    const pdf = await getPrivateDocumentPdf(documentVersion.blobKey)
+    const pdf = await getPrivateDocumentPdf(documentVersion.blobUrl)
     const inline = new URL(req.url).searchParams.get('inline') === '1'
 
     await db.insert(auditLogs).values({
