@@ -299,10 +299,10 @@ function VisitsTable({ visits }: { visits: StudyVisit[] }) {
               <td className="px-4 py-3 font-semibold text-alphi-navy">{v.name}</td>
               <td className="px-4 py-3 text-alphi-muted">{v.label ?? <span className="text-alphi-border">—</span>}</td>
               <td className="px-4 py-3 font-mono text-alphi-muted">
-                {v.day != null ? v.day : <span className="text-alphi-border">—</span>}
+                {v.day !== null && v.day !== undefined ? v.day : <span className="text-alphi-border">—</span>}
               </td>
               <td className="px-4 py-3 font-mono text-alphi-muted">
-                {v.windowDays != null ? `±${v.windowDays}d` : <span className="text-alphi-border">—</span>}
+                {v.windowDays !== null && v.windowDays !== undefined ? `±${v.windowDays}d` : <span className="text-alphi-border">—</span>}
               </td>
               <td className="px-4 py-3">
                 {v.procedures.length > 0 ? (
