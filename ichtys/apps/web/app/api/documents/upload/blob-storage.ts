@@ -72,11 +72,17 @@ export async function putPrivateDocumentPdf({
   blobKey,
   file,
 }: PutPrivateDocumentPdfInput): Promise<StoredDocumentBlob> {
-  const useRealBlob = process.env.BLOB_UPLOAD_ENABLED === 'true' && process.env.BLOB_READ_WRITE_TOKEN
-  console.log(`[blob-storage] useRealBlob=${useRealBlob}`)
+  const useRealBlob = !!process.env.BLOB_READ_WRITE_TOKEN
+  console.log(`[blob-storage] useRealBlob=${useRealBlob} env=${process.env.NODE_ENV}`)
 
   if (!useRealBlob) {
-    console.log('[blob-storage] Using DEV mock — writing to local filesystem')
+    if (process.env.NODE_ENV !== 'development') {
+      console.error(
+        '[blob-storage] BLOB_READ_WRITE_TOKEN not set — falling back to dev mock in production. Blobs will be lost between Lambda invocations.',
+      )
+    } else {
+      console.log('[blob-storage] Using DEV mock — writing to local filesystem')
+    }
     return putPrivateBlobDev(blobKey, file)
   }
 
