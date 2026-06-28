@@ -31,7 +31,7 @@ async function putPrivateBlobProduction(
     const buffer = await file.arrayBuffer()
 
     const blob = await put(blobKey, Buffer.from(buffer), {
-      access: 'private',
+      access: 'public',
       addRandomSuffix: false,
       allowOverwrite: false,
       contentType: 'application/pdf',
