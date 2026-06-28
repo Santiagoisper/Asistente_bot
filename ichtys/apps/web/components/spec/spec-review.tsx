@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import Link from 'next/link'
 import type { StudySpec, StudyEndpoint, StudyVisit } from '@ichtys/ingestion'
 import type { MedicalAnnotation } from '@ichtys/rag/medical-annotator'
@@ -115,23 +115,75 @@ function CodingChip({ annotation }: { annotation: MedicalAnnotation }) {
   )
 }
 
+// ---------------------------------------------------------------------------
+// CriteriaCard — with inline editing
+// ---------------------------------------------------------------------------
+
 function CriteriaCard({
   criterion,
   studyId,
+  isDraft,
+  onSave,
 }: {
   criterion: AnnotatedCriterion
   studyId: string
+  /** Only show edit controls when spec is still in draft */
+  isDraft: boolean
+  /** Called with the new text; should throw on API error */
+  onSave: (newText: string) => Promise<void>
 }) {
-  const [hovered, setHovered] = useState(false)
+  const [hovered, setHovered]     = useState(false)
+  const [editing, setEditing]     = useState(false)
+  const [draftText, setDraftText] = useState(criterion.text)
+  const [saving, setSaving]       = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
   const codes = dedupe(criterion.annotations)
+
+  // Sync displayed text with parent state changes (e.g. after save)
+  // criterion.text is the source of truth from parent
+  const displayText = editing ? draftText : criterion.text
+
+  function handleEditStart() {
+    setDraftText(criterion.text)
+    setSaveError(null)
+    setEditing(true)
+  }
+
+  function handleCancel() {
+    setDraftText(criterion.text)
+    setSaveError(null)
+    setEditing(false)
+  }
+
+  async function handleSave() {
+    const trimmed = draftText.trim()
+    if (!trimmed) return
+    if (trimmed === criterion.text.trim()) {
+      setEditing(false)
+      return
+    }
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await onSave(trimmed)
+      setEditing(false)
+    } catch {
+      setSaveError('Error al guardar. Intentá de nuevo.')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <li
       className={[
         'group relative rounded-lg border transition-all duration-150',
-        hovered
-          ? 'border-alphi-teal/40 bg-alphi-teallit/30 shadow-alphi-card'
-          : 'border-alphi-border bg-white',
+        editing
+          ? 'border-alphi-teal/60 bg-alphi-teallit/20 shadow-alphi-card'
+          : hovered
+            ? 'border-alphi-teal/40 bg-alphi-teallit/30 shadow-alphi-card'
+            : 'border-alphi-border bg-white',
       ].join(' ')}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -143,11 +195,35 @@ function CriteriaCard({
         </span>
 
         <div className="flex-1 min-w-0 space-y-2">
-          {/* Criterion text */}
-          <p className="text-sm leading-relaxed text-alphi-navy">{criterion.text}</p>
+          {/* Criterion text or textarea */}
+          {editing ? (
+            <textarea
+              value={draftText}
+              onChange={(e) => setDraftText(e.target.value)}
+              rows={Math.max(3, Math.ceil(draftText.length / 80))}
+              className={[
+                'w-full rounded-md border px-3 py-2 text-sm leading-relaxed text-alphi-navy',
+                'border-alphi-teal/40 bg-white focus:border-alphi-teal focus:outline-none',
+                'resize-y placeholder:text-alphi-muted',
+              ].join(' ')}
+              autoFocus
+              disabled={saving}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') handleCancel()
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void handleSave()
+              }}
+            />
+          ) : (
+            <p className="text-sm leading-relaxed text-alphi-navy">{displayText}</p>
+          )}
 
-          {/* SNOMED / LOINC chips */}
-          {codes.length > 0 && (
+          {/* Error message */}
+          {saveError && (
+            <p className="text-xs text-red-500">{saveError}</p>
+          )}
+
+          {/* SNOMED / LOINC chips — keep visible even in edit mode */}
+          {codes.length > 0 && !editing && (
             <div className="flex flex-wrap gap-1">
               {codes.map((ann) => (
                 <CodingChip key={ann.code} annotation={ann} />
@@ -160,27 +236,76 @@ function CriteriaCard({
             <ConfidenceDot confidence={criterion.confidence} />
             <SourcePagesBadge pages={criterion.sourcePages} />
           </div>
+
+          {/* Edit action buttons (shown below text when in editing mode) */}
+          {editing && (
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={() => void handleSave()}
+                disabled={saving || !draftText.trim()}
+                className={[
+                  'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5',
+                  'text-xs font-semibold text-white bg-alphi-navy',
+                  'hover:bg-alphi-navydim transition-colors',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                ].join(' ')}
+              >
+                {saving ? 'Guardando…' : '✓ Guardar'}
+              </button>
+              <button
+                onClick={handleCancel}
+                disabled={saving}
+                className={[
+                  'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5',
+                  'text-xs font-semibold text-alphi-muted border border-alphi-border',
+                  'bg-white hover:bg-alphi-slate transition-colors',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                ].join(' ')}
+              >
+                Cancelar
+              </button>
+              <span className="text-[10px] text-alphi-muted">⌘↵ para guardar · Esc para cancelar</span>
+            </div>
+          )}
         </div>
 
-        {/* Ask ALPHI button — visible on hover */}
-        <div
-          className={[
-            'shrink-0 self-center transition-opacity duration-150',
-            hovered ? 'opacity-100' : 'opacity-0',
-          ].join(' ')}
-        >
-          <Link
-            href={askAlphiUrl(studyId, criterion.text)}
+        {/* Right-side action buttons — visible on hover, hidden in edit mode */}
+        {!editing && (
+          <div
             className={[
-              'inline-flex items-center gap-1 rounded-md px-2.5 py-1.5',
-              'text-xs font-semibold text-alphi-teal border border-alphi-teal/30',
-              'bg-white hover:bg-alphi-teallit transition-colors whitespace-nowrap',
+              'shrink-0 self-center flex flex-col gap-1.5 transition-opacity duration-150',
+              hovered ? 'opacity-100' : 'opacity-0',
             ].join(' ')}
           >
-            Preguntar a ALPHI
-            <span className="text-[10px]">→</span>
-          </Link>
-        </div>
+            {/* Edit button — only for drafts */}
+            {isDraft && (
+              <button
+                onClick={handleEditStart}
+                title="Editar criterio"
+                className={[
+                  'inline-flex items-center gap-1 rounded-md px-2.5 py-1.5',
+                  'text-xs font-semibold text-alphi-navy border border-alphi-border',
+                  'bg-white hover:bg-alphi-slate transition-colors whitespace-nowrap',
+                ].join(' ')}
+              >
+                ✎ Editar
+              </button>
+            )}
+
+            {/* Ask ALPHI button */}
+            <Link
+              href={askAlphiUrl(studyId, criterion.text)}
+              className={[
+                'inline-flex items-center gap-1 rounded-md px-2.5 py-1.5',
+                'text-xs font-semibold text-alphi-teal border border-alphi-teal/30',
+                'bg-white hover:bg-alphi-teallit transition-colors whitespace-nowrap',
+              ].join(' ')}
+            >
+              Preguntar a ALPHI
+              <span className="text-[10px]">→</span>
+            </Link>
+          </div>
+        )}
       </div>
     </li>
   )
@@ -192,12 +317,16 @@ function CriteriaSection({
   icon,
   studyId,
   borderColor,
+  isDraft,
+  onSaveCriterion,
 }: {
   items: AnnotatedCriterion[]
   label: string
   icon: string
   studyId: string
   borderColor: string
+  isDraft: boolean
+  onSaveCriterion: (index: number, newText: string) => Promise<void>
 }) {
   if (items.length === 0) {
     return (
@@ -215,10 +344,21 @@ function CriteriaSection({
           {label}
           <span className="ml-2 font-normal text-alphi-muted">({items.length})</span>
         </h3>
+        {isDraft && (
+          <span className="ml-1 text-[10px] text-alphi-muted">
+            — pasá el cursor sobre un criterio para editarlo
+          </span>
+        )}
       </div>
       <ol className="space-y-2">
         {items.map((c, i) => (
-          <CriteriaCard key={i} criterion={c} studyId={studyId} />
+          <CriteriaCard
+            key={i}
+            criterion={c}
+            studyId={studyId}
+            isDraft={isDraft}
+            onSave={(newText) => onSaveCriterion(i, newText)}
+          />
         ))}
       </ol>
     </div>
@@ -345,12 +485,18 @@ export default function SpecReview({
   annotatedInclusion,
   annotatedExclusion,
 }: SpecReviewProps) {
-  const [activeTab, setActiveTab] = useState<Tab>('eligibility')
-  const [approving, setApproving]   = useState(false)
-  const [approved, setApproved]     = useState(status === 'approved')
+  const [activeTab, setActiveTab]     = useState<Tab>('eligibility')
+  const [approving, setApproving]     = useState(false)
+  const [approved, setApproved]       = useState(status === 'approved')
+
+  // Local mutable copies — updated optimistically on each criterion save
+  const [localSpec, setLocalSpec]             = useState<StudySpec>(spec)
+  const [localInclusion, setLocalInclusion]   = useState<AnnotatedCriterion[]>(annotatedInclusion)
+  const [localExclusion, setLocalExclusion]   = useState<AnnotatedCriterion[]>(annotatedExclusion)
 
   const currentStatus: 'draft' | 'approved' | 'superseded' = approved ? 'approved' : status
   const statusCfg = STATUS_CONFIG[currentStatus]
+  const isDraft = currentStatus === 'draft'
 
   async function handleApprove() {
     setApproving(true)
@@ -362,16 +508,60 @@ export default function SpecReview({
     }
   }
 
-  const totalCriteria = annotatedInclusion.length + annotatedExclusion.length
+  /**
+   * Persists a single criterion text edit to the DB, then updates local state
+   * so the UI reflects the correction without a page reload.
+   */
+  const saveCriterion = useCallback(
+    async (type: 'inclusion' | 'exclusion', index: number, newText: string) => {
+      const updatedSpec: StudySpec = {
+        ...localSpec,
+        ...(type === 'inclusion'
+          ? {
+              inclusionCriteria: localSpec.inclusionCriteria.map((c, i) =>
+                i === index ? { ...c, text: newText } : c,
+              ),
+            }
+          : {
+              exclusionCriteria: localSpec.exclusionCriteria.map((c, i) =>
+                i === index ? { ...c, text: newText } : c,
+              ),
+            }),
+      }
+
+      const res = await fetch(`/api/studies/${studyId}/spec/${specId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ spec: updatedSpec }),
+      })
+
+      if (!res.ok) throw new Error('API error')
+
+      // Optimistic update — reflects the change without refetch
+      setLocalSpec(updatedSpec)
+      if (type === 'inclusion') {
+        setLocalInclusion((prev) =>
+          prev.map((c, i) => (i === index ? { ...c, text: newText } : c)),
+        )
+      } else {
+        setLocalExclusion((prev) =>
+          prev.map((c, i) => (i === index ? { ...c, text: newText } : c)),
+        )
+      }
+    },
+    [localSpec, studyId, specId],
+  )
+
+  const totalCriteria = localInclusion.length + localExclusion.length
   const totalCodes = new Set([
-    ...annotatedInclusion.flatMap((c) => c.annotations.map((a) => a.code)),
-    ...annotatedExclusion.flatMap((c) => c.annotations.map((a) => a.code)),
+    ...localInclusion.flatMap((c) => c.annotations.map((a) => a.code)),
+    ...localExclusion.flatMap((c) => c.annotations.map((a) => a.code)),
   ]).size
 
   const TABS: { key: Tab; label: string; count: number }[] = [
     { key: 'eligibility', label: 'Elegibilidad',  count: totalCriteria },
-    { key: 'endpoints',   label: 'Endpoints',     count: spec.endpoints.length },
-    { key: 'visits',      label: 'Visitas / SoA', count: spec.visits.length },
+    { key: 'endpoints',   label: 'Endpoints',     count: localSpec.endpoints.length },
+    { key: 'visits',      label: 'Visitas / SoA', count: localSpec.visits.length },
   ]
 
   return (
@@ -381,9 +571,9 @@ export default function SpecReview({
       <div className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm ${statusCfg.bg} ${statusCfg.text}`}>
         <span className="font-mono text-base leading-none">{statusCfg.icon}</span>
         <span className="font-medium">{statusCfg.label}</span>
-        {currentStatus === 'draft' && !approved && (
+        {isDraft && (
           <span className="ml-1 text-amber-600">
-            — Revisa cada criterio y aprueba cuando el spec sea fiel al protocolo.
+            — Editá y corregí los criterios que necesiten ajuste, luego aprobá.
           </span>
         )}
       </div>
@@ -425,8 +615,8 @@ export default function SpecReview({
           </div>
         </div>
 
-        {/* Approve button */}
-        {currentStatus === 'draft' && (
+        {/* Approve button — only shown in draft */}
+        {isDraft && (
           <button
             onClick={handleApprove}
             disabled={approving}
@@ -494,28 +684,36 @@ export default function SpecReview({
             )}
 
             <CriteriaSection
-              items={annotatedInclusion}
+              items={localInclusion}
               label="Criterios de inclusión"
               icon="✅"
               studyId={studyId}
               borderColor="border-alphi-sage"
+              isDraft={isDraft}
+              onSaveCriterion={(index, newText) =>
+                saveCriterion('inclusion', index, newText)
+              }
             />
             <CriteriaSection
-              items={annotatedExclusion}
+              items={localExclusion}
               label="Criterios de exclusión"
               icon="🚫"
               studyId={studyId}
               borderColor="border-alphi-rose"
+              isDraft={isDraft}
+              onSaveCriterion={(index, newText) =>
+                saveCriterion('exclusion', index, newText)
+              }
             />
           </>
         )}
 
         {activeTab === 'endpoints' && (
-          <EndpointsTable endpoints={spec.endpoints} />
+          <EndpointsTable endpoints={localSpec.endpoints} />
         )}
 
         {activeTab === 'visits' && (
-          <VisitsTable visits={spec.visits} />
+          <VisitsTable visits={localSpec.visits} />
         )}
       </div>
     </div>

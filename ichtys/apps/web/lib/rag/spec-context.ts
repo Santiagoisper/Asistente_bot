@@ -1,7 +1,7 @@
 import { getLatestStudySpec } from '@ichtys/ingestion'
 import { studySpecSchema } from '@ichtys/ingestion'
 import type { StudySpec } from '@ichtys/ingestion'
-import type { RetrievedChunk } from '@ichtys/rag'
+import type { RetrievedChunk } from '@ichtys/rag/retriever'
 
 /**
  * spec-context.ts — inyección de spec como contexto garantizado en el chat.
