@@ -16,6 +16,7 @@ import {
 } from '../../../../lib/security/rate-limit'
 import { getOrCreateRequestId, log, makeRecord } from '../../../../lib/observability/logger'
 import { expandShortQueryForRetrieval } from '../../../../lib/rag/query-expander'
+import { getSpecContextChunks } from '../../../../lib/rag/spec-context'
 import { annotateAnswerSync } from '@ichtys/rag/medical-annotator'
 import type { Confidence } from '@ichtys/rag'
 import type { Evidence } from '@ichtys/rag'
@@ -173,20 +174,34 @@ export async function POST(req: Request): Promise<Response> {
         // 10a. Retrieval.
         const retrievalQuery = expandShortQueryForRetrieval({ question, studyName, protocolNumber })
         console.log(`[stream:${requestId}] starting retrieval`)
-        const retrievedChunks = await retrieveRelevantChunks({
-          queryText: retrievalQuery,
-          orgId,
-          studyId,
-          topK,
-          documentType,
-        })
-        console.log(`[stream:${requestId}] retrieval done — ${retrievedChunks.length} chunks`)
-        retrievalCount = retrievedChunks.length
+        const [retrievedChunks, specContext] = await Promise.all([
+          retrieveRelevantChunks({
+            queryText: retrievalQuery,
+            orgId,
+            studyId,
+            topK: topK ?? 20, // Aumentado de 12 a 20 para mayor cobertura
+            documentType,
+          }),
+          // Inyección de spec: si el intent de la pregunta es claro, prepend
+          // el spec estructurado como virtual chunks con score=1.0.
+          // Corre en paralelo con el retrieval — no agrega latencia.
+          getSpecContextChunks({ question, orgId, studyId }),
+        ])
+
+        // Spec chunks van PRIMERO: el LLM los ve como [1], [2], etc.
+        // El conocimiento estructurado tiene prioridad sobre el texto raw.
+        const allChunks = [...specContext.chunks, ...retrievedChunks]
+
+        console.log(
+          `[stream:${requestId}] retrieval done — ${retrievedChunks.length} chunks ` +
+          `+ ${specContext.chunks.length} spec chunks (intent: ${specContext.specFound ? 'matched' : 'none'})`,
+        )
+        retrievalCount = allChunks.length
 
         // 10b. Stream LLM answer.
         const eventGen: AsyncGenerator<AnswerStreamEvent> = answerEngineStream({
           question,
-          retrievedChunks,
+          retrievedChunks: allChunks,
           conversationHistory,
         })
 
