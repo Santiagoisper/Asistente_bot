@@ -1,7 +1,19 @@
-import { pgTable, uuid, text, timestamp } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, timestamp, jsonb } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { sites } from './sites'
 import { studies } from './studies'
+
+/**
+ * RAG config per organization.
+ * Allows tuning similarity threshold and topK per org without a redeploy.
+ * Nullable — falls back to system defaults (MIN_SIMILARITY_THRESHOLD, DEFAULT_TOP_K).
+ */
+export interface OrgRagConfig {
+  /** Minimum cosine similarity to consider a chunk as evidence. Default: 0.15 */
+  similarityThreshold?: number
+  /** Max chunks to retrieve. Default: 20. Hard cap: 20. */
+  topK?: number
+}
 
 /**
  * organizations — tenant raíz.
@@ -12,6 +24,11 @@ export const organizations = pgTable('organizations', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   clerkOrgId: text('clerk_org_id').notNull().unique(),
+  /**
+   * Per-org RAG tuning. Nullable — system defaults apply when absent.
+   * Schema: { similarityThreshold?: number, topK?: number }
+   */
+  ragConfig: jsonb('rag_config').$type<OrgRagConfig>(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })

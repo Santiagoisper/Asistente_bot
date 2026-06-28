@@ -1,8 +1,10 @@
 import { z } from 'zod'
 import { handleApiError, validateStudyAccess } from '@ichtys/auth'
 import { retrieveRelevantChunks, answerEngineStream } from '@ichtys/rag'
+import { getOrgRagConfig } from '@ichtys/db'
 import type { AnswerStreamEvent } from '@ichtys/rag'
 import {
+  generateAndPersistConversationTitle,
   getOrCreateConversation,
   loadConversationHistory,
   persistAssistantMessageAndCitations,
@@ -157,7 +159,18 @@ export async function POST(req: Request): Promise<Response> {
     return new Response('Internal Server Error', { status: 500 })
   }
 
-  // 10. Return SSE stream.
+  // 9b. Load org RAG config (threshold + topK) — falls back to system defaults.
+  const orgRagConfig = await getOrgRagConfig(orgId).catch(() => null)
+
+  // 10. Kick off auto-title for new conversations (fire-and-forget, non-blocking).
+  //     Haiku + 6-word title ≈ 300-500 ms — will resolve before the LLM stream ends.
+  //     If it fails, title stays null and we swallow the error.
+  const isNewConversation = !inputConversationId
+  const titlePromise: Promise<string | null> = isNewConversation
+    ? generateAndPersistConversationTitle({ conversationId, question, studyName }).catch(() => null)
+    : Promise.resolve(null)
+
+  // 11. Return SSE stream.
   const stream = new ReadableStream({
     async start(controller) {
       const enqueue = (obj: Record<string, unknown>) => controller.enqueue(sseEncode(obj))
@@ -179,7 +192,7 @@ export async function POST(req: Request): Promise<Response> {
             queryText: retrievalQuery,
             orgId,
             studyId,
-            topK: topK ?? 20, // Aumentado de 12 a 20 para mayor cobertura
+            topK: topK ?? orgRagConfig?.topK ?? 20,
             documentType,
           }),
           // Inyección de spec: si el intent de la pregunta es claro, prepend
@@ -203,6 +216,7 @@ export async function POST(req: Request): Promise<Response> {
           question,
           retrievedChunks: allChunks,
           conversationHistory,
+          similarityThreshold: orgRagConfig?.similarityThreshold,
         })
 
         for await (const event of eventGen) {
@@ -268,6 +282,16 @@ export async function POST(req: Request): Promise<Response> {
         // 10g. Annotation frame — emitted after done so client has the messageId bound.
         if (annotations.length > 0) {
           enqueue({ type: 'annotations', annotations })
+        }
+
+        // 10h. Title frame — only for new conversations. titlePromise started before
+        //      the stream loop, so Haiku has been running concurrently; await here
+        //      is nearly instant in the happy path.
+        if (isNewConversation) {
+          const title = await titlePromise
+          if (title) {
+            enqueue({ type: 'title', conversationId, title })
+          }
         }
       } catch (err) {
         console.error('[POST /api/chat/stream] error:', err)

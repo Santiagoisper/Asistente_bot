@@ -59,6 +59,8 @@ export type AnswerEngineInput = {
   question: string
   retrievedChunks: RetrievedChunk[]
   conversationHistory?: ConversationTurn[]
+  /** Per-org similarity threshold override. Defaults to MIN_SIMILARITY_THRESHOLD. */
+  similarityThreshold?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -371,10 +373,10 @@ export type AnswerStreamEvent =
 export async function* answerEngineStream(
   input: AnswerEngineInput,
 ): AsyncGenerator<AnswerStreamEvent> {
-  const { question, retrievedChunks, conversationHistory } = input
+  const { question, retrievedChunks, conversationHistory, similarityThreshold } = input
 
-  // 1. Filter by similarity threshold.
-  const aboveThreshold = filterByThreshold(retrievedChunks)
+  // 1. Filter by similarity threshold (per-org override or system default).
+  const aboveThreshold = filterByThreshold(retrievedChunks, similarityThreshold)
   const assessment = assessEvidence(aboveThreshold)
 
   // 2. Insufficient evidence short-circuit.

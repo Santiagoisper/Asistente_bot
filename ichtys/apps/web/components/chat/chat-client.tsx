@@ -35,12 +35,14 @@ type StreamStartFrame       = { type: 'start';       conversationId: string; use
 type StreamTokenFrame       = { type: 'token';       text: string }
 type StreamDoneFrame        = { type: 'done';        assistantMessageId: string; confidence: AnswerConfidence; evidences: Evidence[]; retrievalCount: number; conversationId: string }
 type StreamAnnotationsFrame = { type: 'annotations'; annotations: MedicalAnnotation[] }
+type StreamTitleFrame       = { type: 'title';       conversationId: string; title: string }
 type StreamErrorFrame       = { type: 'error' }
-type StreamFrame = StreamStartFrame | StreamTokenFrame | StreamDoneFrame | StreamAnnotationsFrame | StreamErrorFrame
+type StreamFrame = StreamStartFrame | StreamTokenFrame | StreamDoneFrame | StreamAnnotationsFrame | StreamTitleFrame | StreamErrorFrame
 
 function isStartFrame(f: StreamFrame):       f is StreamStartFrame       { return f.type === 'start' }
 function isDoneFrame(f: StreamFrame):        f is StreamDoneFrame        { return f.type === 'done' }
 function isAnnotationsFrame(f: StreamFrame): f is StreamAnnotationsFrame { return f.type === 'annotations' }
+function isTitleFrame(f: StreamFrame):       f is StreamTitleFrame       { return f.type === 'title' }
 
 function parseFrame(line: string): StreamFrame | null {
   if (!line.startsWith('data: ')) return null
@@ -247,6 +249,16 @@ export default function ChatClient({
                 i === lastAssistantIdx ? { ...t, annotations: frame.annotations } : t
               )
             })
+
+          } else if (isTitleFrame(frame)) {
+            // Update sidebar title for the new conversation in real-time.
+            setConversations((prev) =>
+              prev.map((c) =>
+                c.conversationId === frame.conversationId
+                  ? { ...c, title: frame.title }
+                  : c
+              )
+            )
 
           } else if (frame.type === 'error') {
             throw new Error('stream_error')

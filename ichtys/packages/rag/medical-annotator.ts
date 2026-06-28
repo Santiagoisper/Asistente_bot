@@ -321,6 +321,7 @@ const LOINC_DICT: Record<string, DictEntry> = {
   'aspartato aminotransferasa':       ['1920-8',  'Aspartate aminotransferase [Enzymatic activity/volume] in Serum or Plasma'],
   'aspartate aminotransferase':       ['1920-8',  'Aspartate aminotransferase [Enzymatic activity/volume] in Serum or Plasma'],
   'fosfatasa alcalina':               ['6768-6',  'Alkaline phosphatase [Enzymatic activity/volume] in Serum or Plasma'],
+  'fa':                               ['6768-6',  'Alkaline phosphatase [Enzymatic activity/volume] in Serum or Plasma'],
   'alkaline phosphatase':             ['6768-6',  'Alkaline phosphatase [Enzymatic activity/volume] in Serum or Plasma'],
   'bilirrubina total':                ['1975-2',  'Bilirubin.total [Mass/volume] in Serum or Plasma'],
   'bilirrubina':                      ['1975-2',  'Bilirubin.total [Mass/volume] in Serum or Plasma'],
@@ -665,6 +666,15 @@ function scanDictionary(text: string): MedicalAnnotation[] {
 // ---------------------------------------------------------------------------
 
 /**
+ * Synchronous dictionary-only annotation. < 1 ms. No I/O.
+ * Use this on the streaming hot-path (stream route, spec criterion saves).
+ * Returns raw annotations — deduplicate with `dedupe()` in the caller if needed.
+ */
+export function annotateAnswerSync(text: string): MedicalAnnotation[] {
+  return scanDictionary(text)
+}
+
+/**
  * Annotate a clinical answer text with SNOMED-CT and LOINC codes.
  *
  * Performance contract:
@@ -785,15 +795,6 @@ export async function annotateAnswer(input: AnnotateAnswerInput): Promise<Annota
   ].sort((a, b) => a.startIndex - b.startIndex)
 
   return { annotations: allAnnotations, stats }
-}
-
-/**
- * Quick synchronous helper — dictionary only, no async overhead.
- * Use this in streaming paths where you want annotations for the final answer
- * without any additional latency.
- */
-export function annotateAnswerSync(text: string): MedicalAnnotation[] {
-  return scanDictionary(text)
 }
 
 // ---------------------------------------------------------------------------

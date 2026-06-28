@@ -345,6 +345,7 @@ function createTenantFixture(): TenantFixture {
       id: orgId,
       name: crypto.randomUUID(),
       clerkOrgId,
+      ragConfig: null,
       createdAt,
       updatedAt: createdAt,
     },

@@ -47,6 +47,7 @@ const mocks = vi.hoisted(() => ({
   documentVersionsFindFirst: vi.fn<FindFirst<DocumentVersion>>(),
   documentsFindFirst: vi.fn<FindFirst<Document>>(),
   get: vi.fn<(pathname: string, options: { access: 'private'; useCache: false }) => Promise<BlobGetResult | null>>(),
+  fetchMock: vi.fn<typeof fetch>(),
   parsePdf: vi.fn<() => Promise<{ pageCount: number; pages: { pageNumber: number; rawText: string }[] }>>(),
   indexDocumentVersionChunks: vi.fn<
     (input: RunIngestionInput) => Promise<{ embeddedChunkCount: number }>
@@ -220,13 +221,15 @@ describe('runIngestion', () => {
     vi.clearAllMocks()
     mocks.operations.length = 0
     mocks.transaction.mockImplementation(async (callback) => callback(createDbClient()))
+    // Mock global fetch — pipeline uses fetch(blobUrl) for public blobs.
+    vi.stubGlobal('fetch', mocks.fetchMock)
+    mocks.fetchMock.mockResolvedValue(new Response(createBlobStream()))
   })
 
   it('inserts pages and chunks with organization_id and study_id, embeds chunks, then marks ready', async () => {
     const fixture = createFixture()
     mocks.documentVersionsFindFirst.mockResolvedValue(fixture.documentVersion)
     mocks.documentsFindFirst.mockResolvedValue(fixture.document)
-    mocks.get.mockResolvedValue({ stream: createBlobStream() })
     mocks.parsePdf.mockResolvedValue({
       pageCount: 2,
       pages: [
@@ -292,7 +295,6 @@ describe('runIngestion', () => {
     const fixture = createFixture()
     mocks.documentVersionsFindFirst.mockResolvedValue(fixture.documentVersion)
     mocks.documentsFindFirst.mockResolvedValue(fixture.document)
-    mocks.get.mockResolvedValue({ stream: createBlobStream() })
     mocks.parsePdf.mockRejectedValue(new Error('raw parser stack'))
 
     const result = await runIngestion(fixture.input)
@@ -317,7 +319,6 @@ describe('runIngestion', () => {
     const fixture = createFixture()
     mocks.documentVersionsFindFirst.mockResolvedValue(fixture.documentVersion)
     mocks.documentsFindFirst.mockResolvedValue(fixture.document)
-    mocks.get.mockResolvedValue({ stream: createBlobStream() })
     mocks.parsePdf.mockResolvedValue({
       pageCount: 1,
       pages: [{ pageNumber: 1, rawText: 'Eligibility criteria require documented lab review.' }],

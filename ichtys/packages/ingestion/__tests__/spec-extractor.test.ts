@@ -25,8 +25,6 @@ vi.mock('ai', () => ({ generateObject: mocks.generateObject }))
 import {
   buildSectionContext,
   extractStudySpec,
-  locateSection,
-  MAX_SECTION_PAGES,
   SPEC_EXTRACTION_SYSTEM_PROMPT,
 } from '../spec-extractor'
 import { studySpecSchema } from '../study-spec'
@@ -66,6 +64,19 @@ const EMPTY_GROUPS = {
 /** Configura generateObject para responder según el contenido del prompt. */
 function mockExtractionByPrompt() {
   mocks.generateObject.mockImplementation(({ prompt }: { prompt: string }) => {
+    // Semantic locator call — returns page ranges based on which sections are present.
+    if (prompt.startsWith('COMPACT PAGE MAP:')) {
+      const hasEndpoints = prompt.includes('[P44]')
+      return Promise.resolve({
+        object: {
+          identification: { pageStart: 1, pageEnd: 2 },
+          eligibility: { pageStart: 52, pageEnd: 59 },
+          endpoints: hasEndpoints ? { pageStart: 44, pageEnd: 48 } : { pageStart: null, pageEnd: null },
+          visits: { pageStart: 18, pageEnd: 20 },
+          detectedLanguage: 'es',
+        },
+      })
+    }
     if (prompt.includes('protocol identification')) {
       return Promise.resolve({ object: EMPTY_GROUPS.identification })
     }
@@ -81,7 +92,7 @@ function mockExtractionByPrompt() {
         },
       })
     }
-    if (prompt.includes('objectives and their endpoints')) {
+    if (prompt.includes('objectives and their') && prompt.includes('endpoints')) {
       return Promise.resolve({
         object: {
           endpoints: [
@@ -105,56 +116,6 @@ function mockExtractionByPrompt() {
 
 beforeEach(() => {
   vi.clearAllMocks()
-})
-
-// ---------------------------------------------------------------------------
-// locateSection
-// ---------------------------------------------------------------------------
-
-describe('locateSection', () => {
-  const eligibility = {
-    start: /^5\.?1\.?[ \t]+criterios de inclusi[oó]n/im,
-    end: /^(?:5\.?3\.?[ \t]+\S|6\.?[ \t]+intervenci)/im,
-  }
-
-  it('skips the table of contents and locates the section body (last match wins)', () => {
-    const range = locateSection(makeProtocolPages(), eligibility)
-    expect(range).toEqual({ pageStart: 52, pageEnd: 59 })
-  })
-
-  it('returns null when the start heading does not exist', () => {
-    const range = locateSection(makeProtocolPages(), {
-      start: /^9\.?\s+sección inexistente/im,
-      end: /^10\.?\s+otra/im,
-    })
-    expect(range).toBeNull()
-  })
-
-  it('caps the range at maxPages when the closing heading is missing', () => {
-    const pages = [page(10, '5.1 Criterios de inclusión\ntexto')]
-    const range = locateSection(pages, eligibility, 5)
-    expect(range).toEqual({ pageStart: 10, pageEnd: 14 })
-  })
-
-  it('default cap is MAX_SECTION_PAGES', () => {
-    const pages = [page(10, '5.1 Criterios de inclusión\ntexto')]
-    const range = locateSection(pages, eligibility)
-    expect(range).toEqual({ pageStart: 10, pageEnd: 10 + MAX_SECTION_PAGES - 1 })
-  })
-
-  it('does not close the range on a bare page-number line ("53\\n") — regression GZBP', () => {
-    // El footer "53" seguido de salto de línea NO es el heading 5.3: si el
-    // separador fuera \s+ (cruza newlines), la sección se cerraría en p53 y
-    // las exclusiones (p54-58) quedarían fuera del contexto del LLM.
-    const pages = [
-      page(52, '5.1 Criterios de inclusión\n1. Adultos mayores de 18 años'),
-      page(53, 'CONFIDENCIAL J11-MC-GZBP\n53\nAprobado el 3 de mayo\n5.2 Criterios de exclusión'),
-      page(54, '8. Tienen un cambio autorreportado en el peso corporal'),
-      page(59, '5.3 Consideraciones sobre estilo de vida\nDieta y ejercicio'),
-    ]
-    const range = locateSection(pages, eligibility)
-    expect(range).toEqual({ pageStart: 52, pageEnd: 59 })
-  })
 })
 
 // ---------------------------------------------------------------------------
@@ -186,7 +147,8 @@ describe('extractStudySpec', () => {
     expect(result.spec.exclusionCriteria[0]?.number).toBe('36')
     expect(result.spec.endpoints[0]?.type).toBe('primary')
     expect(result.spec.visits[0]?.windowDays).toBe(3)
-    expect(mocks.generateObject).toHaveBeenCalledTimes(4)
+    // 1 semantic-locator call + 4 extraction group calls
+    expect(mocks.generateObject).toHaveBeenCalledTimes(5)
   })
 
   it('sends only the located section pages to each group prompt', async () => {
@@ -222,7 +184,7 @@ describe('extractStudySpec', () => {
 
     expect(result.spec.endpoints).toEqual([])
     expect(result.warnings).toEqual([
-      expect.stringContaining('endpoints: section heading not found'),
+      expect.stringContaining('endpoints: section not located by semantic locator'),
     ])
     // Los demás grupos no se ven afectados.
     expect(result.spec.inclusionCriteria).toHaveLength(1)

@@ -2,6 +2,7 @@ import { and, desc, eq } from 'drizzle-orm'
 import { db, studySpecs, type StudySpecRow } from '@ichtys/db'
 import { studySpecSchema, type StudySpec } from './study-spec'
 import type { ApprovedSpecExample } from './spec-extractor'
+import { SEED_SPEC_EXAMPLE } from './seed-spec-example'
 
 /**
  * spec-store.ts — persistencia versionada del study spec.
@@ -80,12 +81,21 @@ export async function getApprovedSpecExamples(params: {
     .orderBy(desc(studySpecs.updatedAt))
     .limit(params.limit ?? 3)
 
-  return rows.map(row => {
+  const examples = rows.map(row => {
     const spec = studySpecSchema.safeParse(row.spec)
     if (!spec.success) return null
     const protocolCode = spec.data.identification.protocolCode ?? null
     return { protocolCode, spec: spec.data }
   }).filter((x): x is ApprovedSpecExample => x !== null)
+
+  // Flywheel bootstrap: si no hay specs aprobados reales, inyectar el seed
+  // canónico para que el extractor tenga siempre al menos un ejemplo de formato.
+  // El seed es compile-time — no toca DB, costo 0 cuando hay specs reales.
+  if (examples.length === 0) {
+    return [SEED_SPEC_EXAMPLE]
+  }
+
+  return examples
 }
 
 /**

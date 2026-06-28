@@ -15,6 +15,8 @@ import {
 import { AccessError, logServerError } from '@ichtys/auth'
 import type { ConversationTurn, Evidence } from '@ichtys/rag'
 import type { MedicalAnnotation } from '@ichtys/rag/medical-annotator'
+import { generateText } from 'ai'
+import { createAnthropic } from '@ai-sdk/anthropic'
 
 /**
  * persistence.ts — helpers server-only de persistencia de chat.
@@ -230,6 +232,49 @@ export async function persistAssistantMessageAndCitations(params: {
 
     return assistantMsg.id
   })
+}
+
+// ---------------------------------------------------------------------------
+// Auto-title
+// ---------------------------------------------------------------------------
+
+/**
+ * Genera un título de ≤6 palabras para una conversación nueva usando Haiku
+ * y persiste el resultado. Diseñada para llamarse fire-and-forget — si falla,
+ * el título queda null y la conversación sigue funcionando.
+ *
+ * Corre concurrentemente con el stream del LLM; Haiku tarda ~300-500 ms para
+ * esta carga, por lo que el result estará listo antes de que el stream termine.
+ */
+export async function generateAndPersistConversationTitle(params: {
+  conversationId: string
+  question: string
+  studyName: string | null
+}): Promise<string | null> {
+  const anthropic = createAnthropic()
+
+  const contextLine = params.studyName
+    ? `Study: ${params.studyName}\nQuestion: ${params.question}`
+    : `Question: ${params.question}`
+
+  const { text } = await generateText({
+    model: anthropic('claude-haiku-4-5'),
+    system:
+      'You generate ultra-short conversation titles. Return ONLY the title: 6 words or fewer, no punctuation, no quotes, no explanation. Title should summarize what the user is asking about.',
+    prompt: contextLine,
+    maxTokens: 20,
+    temperature: 0.3,
+  })
+
+  const title = text.trim().replace(/^["']|["']$/g, '').slice(0, 100)
+  if (!title) return null
+
+  await db
+    .update(conversations)
+    .set({ title, updatedAt: new Date() })
+    .where(eq(conversations.id, params.conversationId))
+
+  return title
 }
 
 // ---------------------------------------------------------------------------

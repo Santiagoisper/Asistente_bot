@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, lt } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   auditLogs,
@@ -375,6 +375,47 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
       errorMessage,
     }
   }
+}
+
+/**
+ * Detecta y recupera document versions atascadas en status='processing'.
+ *
+ * Una versión se considera "atascada" cuando lleva más de thresholdMinutes
+ * en processing sin actualizarse. Esto ocurre si el worker crasheó, el
+ * Lambda se congeló, o hubo un error de red durante la ingestion.
+ *
+ * Seguro de llamar periódicamente desde un job scheduler o health-check.
+ * Idempotente: si no hay docs atascados, no hace nada.
+ *
+ * @returns Número de versiones recuperadas.
+ */
+export async function checkAndRecoverStuckDocs(
+  thresholdMinutes = 60,
+): Promise<number> {
+  const cutoff = new Date(Date.now() - thresholdMinutes * 60 * 1000)
+
+  const updated = await db
+    .update(documentVersions)
+    .set({
+      status: 'error',
+      errorMessage: 'stuck_timeout',
+    })
+    .where(
+      and(
+        eq(documentVersions.status, 'processing'),
+        lt(documentVersions.createdAt, cutoff),
+      ),
+    )
+    .returning({ id: documentVersions.id })
+
+  if (updated.length > 0) {
+    console.warn(
+      `[pipeline] checkAndRecoverStuckDocs: marked ${updated.length} stuck doc(s) as error/stuck_timeout`,
+      updated.map((u) => u.id),
+    )
+  }
+
+  return updated.length
 }
 
 export { parsePdf } from './parser'

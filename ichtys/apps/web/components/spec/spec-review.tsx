@@ -365,7 +365,166 @@ function CriteriaSection({
   )
 }
 
-function EndpointsTable({ endpoints }: { endpoints: StudyEndpoint[] }) {
+// ---------------------------------------------------------------------------
+// EndpointRow — with inline editing
+// ---------------------------------------------------------------------------
+
+function EndpointRow({
+  endpoint,
+  index,
+  isDraft,
+  onSave,
+}: {
+  endpoint: StudyEndpoint
+  index: number
+  isDraft: boolean
+  onSave: (index: number, updated: Pick<StudyEndpoint, 'objective' | 'endpoint'>) => Promise<void>
+}) {
+  const [hovered, setHovered]         = useState(false)
+  const [editing, setEditing]         = useState(false)
+  const [draftObjective, setDraftObjective] = useState(endpoint.objective)
+  const [draftEndpoint, setDraftEndpoint]   = useState(endpoint.endpoint)
+  const [saving, setSaving]           = useState(false)
+  const [saveError, setSaveError]     = useState<string | null>(null)
+
+  const cfg = ENDPOINT_CONFIG[endpoint.type]
+
+  function handleEditStart() {
+    setDraftObjective(endpoint.objective)
+    setDraftEndpoint(endpoint.endpoint)
+    setSaveError(null)
+    setEditing(true)
+  }
+
+  function handleCancel() {
+    setDraftObjective(endpoint.objective)
+    setDraftEndpoint(endpoint.endpoint)
+    setSaveError(null)
+    setEditing(false)
+  }
+
+  async function handleSave() {
+    const obj = draftObjective.trim()
+    const ep  = draftEndpoint.trim()
+    if (!obj || !ep) return
+    if (obj === endpoint.objective.trim() && ep === endpoint.endpoint.trim()) {
+      setEditing(false)
+      return
+    }
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await onSave(index, { objective: obj, endpoint: ep })
+      setEditing(false)
+    } catch {
+      setSaveError('Error al guardar. Intentá de nuevo.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <tr
+      className={[
+        'align-top transition-colors',
+        editing ? 'bg-alphi-teallit/20' : hovered ? 'bg-alphi-slate/50' : '',
+      ].join(' ')}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <td className="px-4 py-3">
+        <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${cfg.bg} ${cfg.text}`}>
+          {cfg.label}
+        </span>
+      </td>
+
+      {editing ? (
+        <>
+          <td className="px-4 py-3" colSpan={2}>
+            <div className="space-y-2">
+              <div>
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-alphi-muted">Objetivo</p>
+                <textarea
+                  value={draftObjective}
+                  onChange={(e) => setDraftObjective(e.target.value)}
+                  rows={Math.max(2, Math.ceil(draftObjective.length / 80))}
+                  disabled={saving}
+                  autoFocus
+                  className="w-full rounded-md border border-alphi-teal/40 bg-white px-3 py-2 text-sm leading-relaxed text-alphi-navy focus:border-alphi-teal focus:outline-none resize-y"
+                  onKeyDown={(e) => { if (e.key === 'Escape') handleCancel() }}
+                />
+              </div>
+              <div>
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-alphi-muted">Criterio de valoración</p>
+                <textarea
+                  value={draftEndpoint}
+                  onChange={(e) => setDraftEndpoint(e.target.value)}
+                  rows={Math.max(2, Math.ceil(draftEndpoint.length / 80))}
+                  disabled={saving}
+                  className="w-full rounded-md border border-alphi-teal/40 bg-white px-3 py-2 text-sm leading-relaxed text-alphi-navy focus:border-alphi-teal focus:outline-none resize-y"
+                  onKeyDown={(e) => { if (e.key === 'Escape') handleCancel() }}
+                />
+              </div>
+              {saveError && <p className="text-xs text-red-500">{saveError}</p>}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => void handleSave()}
+                  disabled={saving || !draftObjective.trim() || !draftEndpoint.trim()}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-alphi-navy px-3 py-1.5 text-xs font-semibold text-white hover:bg-alphi-navydim disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                >
+                  {saving ? 'Guardando…' : '✓ Guardar'}
+                </button>
+                <button
+                  onClick={handleCancel}
+                  disabled={saving}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-alphi-border bg-white px-3 py-1.5 text-xs font-semibold text-alphi-muted hover:bg-alphi-slate disabled:opacity-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <span className="text-[10px] text-alphi-muted">Esc para cancelar</span>
+              </div>
+            </div>
+          </td>
+        </>
+      ) : (
+        <>
+          <td className="px-4 py-3 text-alphi-navy leading-relaxed">{endpoint.objective}</td>
+          <td className="px-4 py-3 text-alphi-muted leading-relaxed">{endpoint.endpoint}</td>
+        </>
+      )}
+
+      <td className="px-4 py-3">
+        <div className="flex flex-col gap-1">
+          <ConfidenceDot confidence={endpoint.confidence} />
+          <SourcePagesBadge pages={endpoint.sourcePages} />
+          {isDraft && !editing && (
+            <button
+              onClick={handleEditStart}
+              className={[
+                'mt-1 inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold',
+                'border border-alphi-border bg-white text-alphi-navy hover:bg-alphi-slate transition-colors',
+                'whitespace-nowrap',
+                hovered ? 'opacity-100' : 'opacity-0',
+              ].join(' ')}
+            >
+              ✎ Editar
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
+  )
+}
+
+function EndpointsTable({
+  endpoints,
+  isDraft,
+  onSaveEndpoint,
+}: {
+  endpoints: StudyEndpoint[]
+  isDraft: boolean
+  onSaveEndpoint: (index: number, updated: Pick<StudyEndpoint, 'objective' | 'endpoint'>) => Promise<void>
+}) {
   if (endpoints.length === 0) {
     return (
       <div className="rounded-lg border border-alphi-border bg-alphi-slate px-4 py-6 text-center text-sm text-alphi-muted">
@@ -386,33 +545,251 @@ function EndpointsTable({ endpoints }: { endpoints: StudyEndpoint[] }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-alphi-border bg-white">
-          {endpoints.map((e, i) => {
-            const cfg = ENDPOINT_CONFIG[e.type]
-            return (
-              <tr key={i} className="align-top hover:bg-alphi-slate/50 transition-colors">
-                <td className="px-4 py-3">
-                  <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${cfg.bg} ${cfg.text}`}>
-                    {cfg.label}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-alphi-navy leading-relaxed">{e.objective}</td>
-                <td className="px-4 py-3 text-alphi-muted leading-relaxed">{e.endpoint}</td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-col gap-1">
-                    <ConfidenceDot confidence={e.confidence} />
-                    <SourcePagesBadge pages={e.sourcePages} />
-                  </div>
-                </td>
-              </tr>
-            )
-          })}
+          {endpoints.map((e, i) => (
+            <EndpointRow
+              key={i}
+              endpoint={e}
+              index={i}
+              isDraft={isDraft}
+              onSave={onSaveEndpoint}
+            />
+          ))}
         </tbody>
       </table>
     </div>
   )
 }
 
-function VisitsTable({ visits }: { visits: StudyVisit[] }) {
+// ---------------------------------------------------------------------------
+// VisitRow — with inline editing
+// ---------------------------------------------------------------------------
+
+type VisitDraft = {
+  name: string
+  label: string
+  day: string
+  windowDays: string
+  procedures: string // CSV string; split on save
+}
+
+function VisitRow({
+  visit,
+  index,
+  isDraft,
+  onSave,
+}: {
+  visit: StudyVisit
+  index: number
+  isDraft: boolean
+  onSave: (index: number, updated: Partial<StudyVisit>) => Promise<void>
+}) {
+  const [hovered, setHovered]   = useState(false)
+  const [editing, setEditing]   = useState(false)
+  const [draft, setDraft]       = useState<VisitDraft>({
+    name: visit.name,
+    label: visit.label ?? '',
+    day: visit.day !== null && visit.day !== undefined ? String(visit.day) : '',
+    windowDays: visit.windowDays !== null && visit.windowDays !== undefined ? String(visit.windowDays) : '',
+    procedures: visit.procedures.join(', '),
+  })
+  const [saving, setSaving]     = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  function handleEditStart() {
+    setDraft({
+      name: visit.name,
+      label: visit.label ?? '',
+      day: visit.day !== null && visit.day !== undefined ? String(visit.day) : '',
+      windowDays: visit.windowDays !== null && visit.windowDays !== undefined ? String(visit.windowDays) : '',
+      procedures: visit.procedures.join(', '),
+    })
+    setSaveError(null)
+    setEditing(true)
+  }
+
+  function handleCancel() {
+    setSaveError(null)
+    setEditing(false)
+  }
+
+  async function handleSave() {
+    if (!draft.name.trim()) return
+    const updated: Partial<StudyVisit> = {
+      name: draft.name.trim(),
+      label: draft.label.trim() || null,
+      day: draft.day.trim() !== '' ? parseInt(draft.day, 10) : null,
+      windowDays: draft.windowDays.trim() !== '' ? parseInt(draft.windowDays, 10) : null,
+      procedures: draft.procedures
+        .split(',')
+        .map((p) => p.trim())
+        .filter(Boolean),
+    }
+    // Validate day/windowDays are integers if provided
+    if (updated.day !== null && isNaN(updated.day as number)) {
+      setSaveError('El día debe ser un número entero.')
+      return
+    }
+    if (updated.windowDays !== null && (isNaN(updated.windowDays as number) || (updated.windowDays as number) < 0)) {
+      setSaveError('La ventana debe ser un entero ≥ 0.')
+      return
+    }
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await onSave(index, updated)
+      setEditing(false)
+    } catch {
+      setSaveError('Error al guardar. Intentá de nuevo.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <tr className="align-top bg-alphi-teallit/20">
+        <td className="px-4 py-3" colSpan={5}>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-alphi-muted">Nombre de visita</p>
+              <input
+                type="text"
+                value={draft.name}
+                onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+                disabled={saving}
+                autoFocus
+                className="w-full rounded-md border border-alphi-teal/40 bg-white px-3 py-1.5 text-sm text-alphi-navy focus:border-alphi-teal focus:outline-none"
+                onKeyDown={(e) => { if (e.key === 'Escape') handleCancel() }}
+              />
+            </div>
+            <div>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-alphi-muted">Etiqueta temporal</p>
+              <input
+                type="text"
+                value={draft.label}
+                onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))}
+                disabled={saving}
+                placeholder="Ej: Semana 12"
+                className="w-full rounded-md border border-alphi-border bg-white px-3 py-1.5 text-sm text-alphi-navy focus:border-alphi-teal focus:outline-none"
+              />
+            </div>
+            <div>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-alphi-muted">Día nominal</p>
+              <input
+                type="number"
+                value={draft.day}
+                onChange={(e) => setDraft((d) => ({ ...d, day: e.target.value }))}
+                disabled={saving}
+                placeholder="Ej: 1, -28"
+                className="w-full rounded-md border border-alphi-border bg-white px-3 py-1.5 font-mono text-sm text-alphi-navy focus:border-alphi-teal focus:outline-none"
+              />
+            </div>
+            <div>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-alphi-muted">Ventana (días ±)</p>
+              <input
+                type="number"
+                min={0}
+                value={draft.windowDays}
+                onChange={(e) => setDraft((d) => ({ ...d, windowDays: e.target.value }))}
+                disabled={saving}
+                placeholder="Ej: 3"
+                className="w-full rounded-md border border-alphi-border bg-white px-3 py-1.5 font-mono text-sm text-alphi-navy focus:border-alphi-teal focus:outline-none"
+              />
+            </div>
+            <div className="col-span-2">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-alphi-muted">
+                Procedimientos <span className="font-normal normal-case">(separados por coma)</span>
+              </p>
+              <textarea
+                value={draft.procedures}
+                onChange={(e) => setDraft((d) => ({ ...d, procedures: e.target.value }))}
+                rows={3}
+                disabled={saving}
+                placeholder="Signos vitales, Analítica de laboratorio, ECG"
+                className="w-full rounded-md border border-alphi-border bg-white px-3 py-2 text-sm leading-relaxed text-alphi-navy focus:border-alphi-teal focus:outline-none resize-y"
+              />
+            </div>
+          </div>
+          {saveError && <p className="mt-2 text-xs text-red-500">{saveError}</p>}
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              onClick={() => void handleSave()}
+              disabled={saving || !draft.name.trim()}
+              className="inline-flex items-center gap-1.5 rounded-md bg-alphi-navy px-3 py-1.5 text-xs font-semibold text-white hover:bg-alphi-navydim disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+            >
+              {saving ? 'Guardando…' : '✓ Guardar'}
+            </button>
+            <button
+              onClick={handleCancel}
+              disabled={saving}
+              className="inline-flex items-center gap-1.5 rounded-md border border-alphi-border bg-white px-3 py-1.5 text-xs font-semibold text-alphi-muted hover:bg-alphi-slate disabled:opacity-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <span className="text-[10px] text-alphi-muted">Esc para cancelar</span>
+          </div>
+        </td>
+      </tr>
+    )
+  }
+
+  return (
+    <tr
+      className={['align-top transition-colors', hovered ? 'bg-alphi-slate/50' : ''].join(' ')}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <td className="px-4 py-3">
+        <div className="flex items-start gap-2">
+          <span className="font-semibold text-alphi-navy">{visit.name}</span>
+          {isDraft && (
+            <button
+              onClick={handleEditStart}
+              className={[
+                'shrink-0 inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold',
+                'border border-alphi-border bg-white text-alphi-navy hover:bg-alphi-slate transition-colors',
+                'whitespace-nowrap',
+                hovered ? 'opacity-100' : 'opacity-0',
+              ].join(' ')}
+            >
+              ✎ Editar
+            </button>
+          )}
+        </div>
+      </td>
+      <td className="px-4 py-3 text-alphi-muted">{visit.label ?? <span className="text-alphi-border">—</span>}</td>
+      <td className="px-4 py-3 font-mono text-alphi-muted">
+        {visit.day !== null && visit.day !== undefined ? visit.day : <span className="text-alphi-border">—</span>}
+      </td>
+      <td className="px-4 py-3 font-mono text-alphi-muted">
+        {visit.windowDays !== null && visit.windowDays !== undefined ? `±${visit.windowDays}d` : <span className="text-alphi-border">—</span>}
+      </td>
+      <td className="px-4 py-3">
+        {visit.procedures.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {visit.procedures.map((p, j) => (
+              <span key={j} className="inline-block rounded bg-alphi-slate px-1.5 py-0.5 text-[11px] text-alphi-muted">
+                {p}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <span className="text-alphi-border">—</span>
+        )}
+      </td>
+    </tr>
+  )
+}
+
+function VisitsTable({
+  visits,
+  isDraft,
+  onSaveVisit,
+}: {
+  visits: StudyVisit[]
+  isDraft: boolean
+  onSaveVisit: (index: number, updated: Partial<StudyVisit>) => Promise<void>
+}) {
   if (visits.length === 0) {
     return (
       <div className="rounded-lg border border-alphi-border bg-alphi-slate px-4 py-6 text-center text-sm text-alphi-muted">
@@ -435,32 +812,13 @@ function VisitsTable({ visits }: { visits: StudyVisit[] }) {
         </thead>
         <tbody className="divide-y divide-alphi-border bg-white">
           {visits.map((v, i) => (
-            <tr key={i} className="align-top hover:bg-alphi-slate/50 transition-colors">
-              <td className="px-4 py-3 font-semibold text-alphi-navy">{v.name}</td>
-              <td className="px-4 py-3 text-alphi-muted">{v.label ?? <span className="text-alphi-border">—</span>}</td>
-              <td className="px-4 py-3 font-mono text-alphi-muted">
-                {v.day !== null && v.day !== undefined ? v.day : <span className="text-alphi-border">—</span>}
-              </td>
-              <td className="px-4 py-3 font-mono text-alphi-muted">
-                {v.windowDays !== null && v.windowDays !== undefined ? `±${v.windowDays}d` : <span className="text-alphi-border">—</span>}
-              </td>
-              <td className="px-4 py-3">
-                {v.procedures.length > 0 ? (
-                  <div className="flex flex-wrap gap-1">
-                    {v.procedures.map((p, j) => (
-                      <span
-                        key={j}
-                        className="inline-block rounded bg-alphi-slate px-1.5 py-0.5 text-[11px] text-alphi-muted"
-                      >
-                        {p}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <span className="text-alphi-border">—</span>
-                )}
-              </td>
-            </tr>
+            <VisitRow
+              key={i}
+              visit={v}
+              index={i}
+              isDraft={isDraft}
+              onSave={onSaveVisit}
+            />
           ))}
         </tbody>
       </table>
@@ -494,6 +852,36 @@ export default function SpecReview({
   const [localInclusion, setLocalInclusion]   = useState<AnnotatedCriterion[]>(annotatedInclusion)
   const [localExclusion, setLocalExclusion]   = useState<AnnotatedCriterion[]>(annotatedExclusion)
 
+  /**
+   * Re-computes SNOMED/LOINC annotations for a single criterion after it's been
+   * edited. Calls GET /api/annotate and updates the local annotated list.
+   * Fire-and-forget — annotation errors never block the save flow.
+   */
+  function reAnnotateCriterion(
+    type: 'inclusion' | 'exclusion',
+    index: number,
+    newText: string,
+  ) {
+    void (async () => {
+      try {
+        const res = await fetch(`/api/annotate?text=${encodeURIComponent(newText)}`)
+        if (!res.ok) return
+        const { annotations } = await res.json() as { annotations: MedicalAnnotation[] }
+        if (type === 'inclusion') {
+          setLocalInclusion((prev) =>
+            prev.map((c, i) => (i === index ? { ...c, annotations } : c)),
+          )
+        } else {
+          setLocalExclusion((prev) =>
+            prev.map((c, i) => (i === index ? { ...c, annotations } : c)),
+          )
+        }
+      } catch {
+        // Non-critical — silently swallow
+      }
+    })()
+  }
+
   const currentStatus: 'draft' | 'approved' | 'superseded' = approved ? 'approved' : status
   const statusCfg = STATUS_CONFIG[currentStatus]
   const isDraft = currentStatus === 'draft'
@@ -506,6 +894,17 @@ export default function SpecReview({
     } finally {
       setApproving(false)
     }
+  }
+
+  /** Persists a spec update to the DB via PATCH and updates local state. */
+  async function patchSpec(updatedSpec: StudySpec) {
+    const res = await fetch(`/api/studies/${studyId}/spec/${specId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spec: updatedSpec }),
+    })
+    if (!res.ok) throw new Error('API error')
+    return updatedSpec
   }
 
   /**
@@ -529,13 +928,7 @@ export default function SpecReview({
             }),
       }
 
-      const res = await fetch(`/api/studies/${studyId}/spec/${specId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ spec: updatedSpec }),
-      })
-
-      if (!res.ok) throw new Error('API error')
+      await patchSpec(updatedSpec)
 
       // Optimistic update — reflects the change without refetch
       setLocalSpec(updatedSpec)
@@ -548,6 +941,39 @@ export default function SpecReview({
           prev.map((c, i) => (i === index ? { ...c, text: newText } : c)),
         )
       }
+
+      // Re-compute SNOMED/LOINC chips for the edited criterion (fire-and-forget)
+      reAnnotateCriterion(type, index, newText)
+    },
+    [localSpec, studyId, specId],
+  )
+
+  /** Persists an endpoint objective/endpoint text edit. */
+  const saveEndpoint = useCallback(
+    async (index: number, updated: Pick<StudyEndpoint, 'objective' | 'endpoint'>) => {
+      const updatedSpec: StudySpec = {
+        ...localSpec,
+        endpoints: localSpec.endpoints.map((e, i) =>
+          i === index ? { ...e, ...updated } : e,
+        ),
+      }
+      await patchSpec(updatedSpec)
+      setLocalSpec(updatedSpec)
+    },
+    [localSpec, studyId, specId],
+  )
+
+  /** Persists a visit field edit (name, label, day, windowDays, procedures). */
+  const saveVisit = useCallback(
+    async (index: number, updated: Partial<StudyVisit>) => {
+      const updatedSpec: StudySpec = {
+        ...localSpec,
+        visits: localSpec.visits.map((v, i) =>
+          i === index ? { ...v, ...updated } : v,
+        ),
+      }
+      await patchSpec(updatedSpec)
+      setLocalSpec(updatedSpec)
     },
     [localSpec, studyId, specId],
   )
@@ -709,11 +1135,19 @@ export default function SpecReview({
         )}
 
         {activeTab === 'endpoints' && (
-          <EndpointsTable endpoints={localSpec.endpoints} />
+          <EndpointsTable
+            endpoints={localSpec.endpoints}
+            isDraft={isDraft}
+            onSaveEndpoint={saveEndpoint}
+          />
         )}
 
         {activeTab === 'visits' && (
-          <VisitsTable visits={localSpec.visits} />
+          <VisitsTable
+            visits={localSpec.visits}
+            isDraft={isDraft}
+            onSaveVisit={saveVisit}
+          />
         )}
       </div>
     </div>
