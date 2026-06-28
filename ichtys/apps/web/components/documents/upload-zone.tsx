@@ -65,9 +65,11 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('studyId', studyId)
-    if (selectedDocType !== null) {
-      formData.append('docType', DOC_TYPES[selectedDocType]?.label ?? '')
-    }
+    formData.append('documentType',
+      selectedDocType !== null
+        ? (['protocol', 'investigator_brochure', 'other', 'other', 'other', 'other'][selectedDocType] ?? 'other')
+        : 'other'
+    )
 
     try {
       const xhr = new XMLHttpRequest()
