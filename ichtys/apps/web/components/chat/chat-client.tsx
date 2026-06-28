@@ -267,7 +267,8 @@ export default function ChatClient({
   }, [question, studyId, selectedConvId])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canSend) {
+    // Enter alone → submit. Shift+Enter → new line (default). Cmd/Ctrl+Enter → also submit.
+    if (e.key === 'Enter' && !e.shiftKey && canSend) {
       e.preventDefault()
       e.currentTarget.form?.requestSubmit()
     }
@@ -376,7 +377,7 @@ export default function ChatClient({
                 ref={textareaRef}
                 rows={2}
                 className="alphi-input min-h-[64px] max-h-40 resize-none pr-24"
-                placeholder="Pregunta sobre criterios, visitas, muestras, medicacion, safety..."
+                placeholder="Pregunta sobre criterios, visitas, muestras, medicacion, safety... (Enter para enviar · Shift+Enter nueva línea)"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 onKeyDown={handleKeyDown}
