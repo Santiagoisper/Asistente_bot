@@ -18,7 +18,10 @@ export function SpecReextractButton({ studyId }: { studyId: string }) {
         setMessage(payload.error ?? 'No se pudo iniciar la re-extracción.')
         return
       }
-      setMessage(payload.message ?? 'Re-extracción iniciada. Actualizá en unos minutos.')
+      setMessage(
+        payload.message ??
+          'Re-extracción iniciada (3–5 min). No vuelvas a clickear — actualizá la página cuando termine.',
+      )
     } catch {
       setMessage('Error de red al iniciar la re-extracción.')
     } finally {

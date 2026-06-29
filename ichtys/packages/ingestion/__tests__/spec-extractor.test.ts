@@ -25,6 +25,7 @@ vi.mock('ai', () => ({ generateObject: mocks.generateObject }))
 import {
   buildSectionContext,
   extractStudySpec,
+  samplePageTextForMap,
   SPEC_EXTRACTION_SYSTEM_PROMPT,
 } from '../spec-extractor'
 import { studySpecSchema } from '../study-spec'
@@ -199,6 +200,21 @@ describe('extractStudySpec', () => {
     // El primer call (identification, en paralelo) falló — campos null.
     expect(result.warnings.length).toBeGreaterThan(0)
     expect(() => studySpecSchema.parse(result.spec)).not.toThrow()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// samplePageTextForMap — headers repetidos (Sanofi, etc.)
+// ---------------------------------------------------------------------------
+
+describe('samplePageTextForMap', () => {
+  it('salta header Sanofi repetido y expone contenido de sección', () => {
+    const header =
+      'Protocolo de ensayo clínico SAR231893 - EFC18365 - dupilumab 26 - JUL - 2024 Versión número: 1 Propiedad de Grupo Sanofi; estrictamente confidencial Página 37 '
+    const body = 'Afecciones médicas E 01. Participantes con diagnóstico de lesiones activas'
+    const snippet = samplePageTextForMap(header + body, 37)
+    expect(snippet).toContain('Afecciones médicas')
+    expect(snippet).not.toMatch(/^Protocolo de ensayo/)
   })
 })
 

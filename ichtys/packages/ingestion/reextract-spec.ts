@@ -57,6 +57,14 @@ export async function reextractStudySpec(params: {
   )
 
   const validated = studySpecSchema.parse(spec)
+
+  if (!isMeaningfulSpec(validated)) {
+    const detail = warnings.length > 0 ? warnings.join('; ') : 'localizador sin secciones'
+    throw new Error(
+      `La extracción no produjo criterios, endpoints ni visitas. ${detail}`,
+    )
+  }
+
   const { id, version } = await saveStudySpec({
     orgId: params.orgId,
     studyId: params.studyId,

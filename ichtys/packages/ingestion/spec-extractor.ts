@@ -110,10 +110,42 @@ const sectionMapSchema = z.object({
 
 type SectionMap = z.infer<typeof sectionMapSchema>
 
-/** Mapa compacto: número de página + primeros ~120 chars del texto. */
+/** Mapa compacto: número de página + texto representativo (sin headers repetidos). */
+export const COMPACT_MAP_SNIPPET_CHARS = 200
+
+/**
+ * Muestra texto útil de una página para el mapa compacto del localizador.
+ * Protocolos Sanofi/Pfizer/etc. repiten un header largo en cada página que
+ * ocupa los primeros ~150 chars — si solo leemos el inicio, el localizador
+ * nunca ve títulos de sección ni criterios (causa principal de specs vacíos).
+ */
+export function samplePageTextForMap(rawText: string, pageNumber: number): string {
+  const normalized = rawText.replace(/\s+/g, ' ').trim()
+  if (!normalized) return ''
+
+  const pageMarkers = [
+    new RegExp(`P[áa]gina\\s+${pageNumber}\\s*`, 'i'),
+    new RegExp(`Page\\s+${pageNumber}\\s*`, 'i'),
+    new RegExp(`Pag\\.?\\s+${pageNumber}\\s*`, 'i'),
+  ]
+  for (const re of pageMarkers) {
+    const m = re.exec(normalized)
+    if (m && m.index !== undefined) {
+      const start = m.index + m[0].length
+      const snippet = normalized.slice(start, start + COMPACT_MAP_SNIPPET_CHARS).trim()
+      if (snippet.length >= 24) return snippet
+    }
+  }
+
+  // Fallback: saltar ~15% inicial (header típico) o 160 chars, lo que sea menor.
+  const skip = Math.min(180, Math.max(0, Math.floor(normalized.length * 0.12)))
+  const fallback = normalized.slice(skip, skip + COMPACT_MAP_SNIPPET_CHARS).trim()
+  return fallback.length > 0 ? fallback : normalized.slice(0, COMPACT_MAP_SNIPPET_CHARS)
+}
+
 function buildCompactPageMap(pages: ParsedPage[]): string {
   return pages
-    .map(p => `[P${p.pageNumber}] ${p.rawText.slice(0, 120).replace(/\s+/g, ' ').trim()}`)
+    .map(p => `[P${p.pageNumber}] ${samplePageTextForMap(p.rawText, p.pageNumber)}`)
     .join('\n')
 }
 
@@ -182,6 +214,61 @@ function toSectionRange(
     lastPage,
   )
   return { pageStart: loc.pageStart, pageEnd }
+}
+
+/** Fallback por keywords cuando el localizador semántico no encuentra una sección. */
+const SECTION_KEYWORDS: Record<'eligibility' | 'endpoints' | 'visits', RegExp[]> = {
+  eligibility: [
+    /criterios?\s+de\s+inclusi[oó]n/i,
+    /criterios?\s+de\s+exclusi[oó]n/i,
+    /criterios?\s+de\s+elegibilidad/i,
+    /inclusion\s+criteria/i,
+    /exclusion\s+criteria/i,
+    /eligibility\s+criteria/i,
+    /poblaci[oó]n\s+de\s+estudio/i,
+    /subject\s+selection/i,
+  ],
+  endpoints: [
+    /objetivos?\s+(y\s+)?(criterios?\s+de\s+valoraci[oó]n|endpoints?)/i,
+    /study\s+objectives/i,
+    /primary\s+endpoint/i,
+    /endpoints?\s+primarios?/i,
+    /variables?\s+de\s+eficacia/i,
+  ],
+  visits: [
+    /cronograma\s+de\s+actividades/i,
+    /schedule\s+of\s+activities/i,
+    /schedule\s+of\s+assessments/i,
+    /plan\s+de\s+visitas/i,
+    /\bSoA\b/,
+    /tabla\s+de\s+visitas/i,
+  ],
+}
+
+function locateSectionByKeywords(
+  pages: ParsedPage[],
+  keywords: RegExp[],
+  maxPages = MAX_SECTION_PAGES,
+): SectionRange | null {
+  const hits = pages.filter((p) => keywords.some((re) => re.test(p.rawText)))
+  if (hits.length === 0) return null
+  const pageStart = hits[0]!.pageNumber
+  const lastHit = hits[hits.length - 1]!.pageNumber
+  const lastPage = pages[pages.length - 1]?.pageNumber ?? pageStart
+  const pageEnd = Math.min(pageStart + maxPages - 1, lastHit + 8, lastPage)
+  return { pageStart, pageEnd }
+}
+
+function enrichSectionMapWithKeywords(sectionMap: SectionMap, pages: ParsedPage[]): SectionMap {
+  const enriched = { ...sectionMap }
+  for (const group of ['eligibility', 'endpoints', 'visits'] as const) {
+    if (sectionMap[group].pageStart !== null) continue
+    const range = locateSectionByKeywords(pages, SECTION_KEYWORDS[group])
+    if (range) {
+      enriched[group] = { pageStart: range.pageStart, pageEnd: range.pageEnd }
+    }
+  }
+  return enriched
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -379,6 +466,9 @@ export async function extractStudySpec(
       detectedLanguage: 'unknown',
     }
   }
+
+  // Completar secciones que el localizador semántico no encontró (headers repetidos, etc.)
+  sectionMap = enrichSectionMapWithKeywords(sectionMap, pages)
 
   const detectedLanguage =
     sectionMap.detectedLanguage === 'unknown' ? null : sectionMap.detectedLanguage
