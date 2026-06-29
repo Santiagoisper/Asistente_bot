@@ -168,11 +168,15 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
   if (status === 'success') {
     return (
       <div className="alphi-card flex flex-col items-center gap-3 px-6 py-8 text-center">
-        <span className="text-5xl text-alphi-sage">&#10003;</span>
+        <span className="text-5xl text-alphi-teal">&#8682;</span>
         <div>
-          <p className="text-base font-bold text-alphi-navy">Documento procesado</p>
+          <p className="text-base font-bold text-alphi-navy">Documento subido</p>
           <p className="mt-0.5 text-sm text-alphi-muted">
-            <strong>{fileName}</strong> ya esta disponible para consultas.
+            <strong>{fileName}</strong> se esta procesando en segundo plano.
+          </p>
+          <p className="mt-1 text-xs text-alphi-muted">
+            Segui el avance en la tabla de estado mas abajo. Puede tardar 1-2 minutos
+            en protocolos largos; el spec y las consultas quedan disponibles al finalizar.
           </p>
         </div>
         <button type="button" onClick={handleReset} className="alphi-btn-secondary mt-1">
