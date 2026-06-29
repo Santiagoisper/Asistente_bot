@@ -9,7 +9,8 @@
     ".": "./answer-engine.ts",
     "./retriever": "./retriever.ts",
     "./guardrails": "./guardrails.ts",
-    "./medical-annotator": "./medical-annotator.ts"
+    "./medical-annotator": "./medical-annotator.ts",
+    "./terminology-answer": "./terminology-answer.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -165,7 +165,35 @@ artefacto local del reviewer.
 
 ---
 
-## 6. Relación con tests unitarios
+## 6. Codificación clínica (SNOMED-CT / LOINC)
+
+Cuando el usuario pide el código de terminología de un concepto, el RAG puro
+respondía `insufficient_evidence` (el protocolo no contiene códigos). El camino
+híbrido de terminología (ver `terminology-answer.ts` y `terminology-intent.ts`)
+compone dos bloques: lo que dice el protocolo + una codificación **sugerida**,
+marcada explícitamente como externa al documento.
+
+Casos de referencia (verificar en el chat, ruta `/api/chat/stream`):
+
+| # | Pregunta | Comportamiento esperado |
+|---|----------|--------------------------|
+| T-01 | "diabetes tipo 1, ¿no tenés referencia en SNOMED-CT?" | Confianza ≠ `insufficient_evidence`; tarjeta con `SNOMED-CT 46635009` marcada "Sugerencia externa" + disclaimer |
+| T-02 | "¿Lo podés asociar ahora a un código de SNOMED-CT?" | Igual que T-01; reusa el concepto de la conversación si el protocolo lo menciona |
+| T-03 | "¿Cuál es el código SNOMED de la insuficiencia renal crónica?" | Sugiere `709044004` con disclaimer; cita el protocolo si lo menciona |
+| T-04 | "¿Qué código LOINC corresponde a HbA1c?" | Sugiere el código LOINC del diccionario; disclaimer presente |
+| T-05 | "¿Cuál es el código SNOMED de <biomarcador inexistente>?" | `insufficient_evidence` con mensaje específico (ni protocolo ni diccionario) |
+
+Invariantes (cubiertos por unit tests):
+- El código siempre se presenta como sugerencia externa, nunca como contenido del protocolo.
+- La confianza nunca es `high` para una sugerencia de terminología (máximo `medium`).
+- El disclaimer acompaña siempre a los códigos.
+
+Tests: `packages/rag/__tests__/terminology-answer.test.ts`,
+`apps/web/lib/rag/__tests__/terminology-intent.test.ts`.
+
+---
+
+## 7. Relación con tests unitarios
 
 - `pnpm test:leakage` → tests deterministas de aislamiento (DB/retriever).
 - `pnpm evals:run` → evaluación end-to-end del answer engine sobre el dataset.

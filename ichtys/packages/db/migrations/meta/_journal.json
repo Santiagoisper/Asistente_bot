@@ -29,6 +29,13 @@
       "when": 1751270400000,
       "tag": "0003_org_rag_config",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1751356800000,
+      "tag": "0004_ingestion_jobs_and_spec_terminology",
+      "breakpoints": true
     }
   ]
 }

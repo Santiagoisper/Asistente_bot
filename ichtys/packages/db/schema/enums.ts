@@ -22,6 +22,10 @@ export type DocumentType = (typeof documentType)[number]
 export const documentVersionStatus = ['pending', 'processing', 'ready', 'error'] as const
 export type DocumentVersionStatus = (typeof documentVersionStatus)[number]
 
+/** Estado de un job de ingestión encolado (bulk import u otros workers). */
+export const ingestionJobStatus = ['pending', 'processing', 'ready', 'error'] as const
+export type IngestionJobStatus = (typeof ingestionJobStatus)[number]
+
 export const messageRole = ['user', 'assistant'] as const
 export type MessageRole = (typeof messageRole)[number]
 

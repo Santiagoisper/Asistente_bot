@@ -13,7 +13,8 @@
     "./indexer": "./indexer.ts",
     "./study-spec": "./study-spec.ts",
     "./spec-extractor": "./spec-extractor.ts",
-    "./spec-store": "./spec-store.ts"
+    "./spec-store": "./spec-store.ts",
+    "./ingestion-jobs": "./ingestion-jobs.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

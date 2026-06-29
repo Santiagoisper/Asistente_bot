@@ -675,6 +675,53 @@ export function annotateAnswerSync(text: string): MedicalAnnotation[] {
 }
 
 /**
+ * A terminology code suggested for a clinical concept mentioned in a question.
+ *
+ * IMPORTANT: this is NOT evidence from a protocol document. It is a mapping to a
+ * standard coding system (SNOMED-CT / LOINC) from the validated local dictionary.
+ * Callers MUST present it as an external suggestion, clearly separated from any
+ * document-grounded answer (see ADR-004).
+ */
+export type TerminologySuggestion = {
+  /** Concept span as found in the source text. */
+  term: string
+  system: CodingSystem
+  code: string
+  /** Canonical display name from the coding system. */
+  display: string
+  /** Provenance of the code. Always 'dictionary' in v1 (live API disabled). */
+  source: 'dictionary'
+}
+
+/**
+ * Look up terminology codes for clinical concepts mentioned in `text`.
+ *
+ * Reuses the dictionary scanner (longest-match-first, word-boundary aware) so a
+ * phrase like "diabetes tipo 1" resolves to the specific code (46635009) rather
+ * than the generic "diabetes". Results are deduplicated by system+code.
+ *
+ * Dictionary-only — synchronous, < 1 ms, no I/O. Returns [] when nothing matches.
+ */
+export function lookupTerminology(text: string): TerminologySuggestion[] {
+  const annotations = scanDictionary(text)
+  const seen = new Set<string>()
+  const suggestions: TerminologySuggestion[] = []
+  for (const a of annotations) {
+    const key = `${a.system}:${a.code}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    suggestions.push({
+      term: a.term,
+      system: a.system,
+      code: a.code,
+      display: a.display,
+      source: 'dictionary',
+    })
+  }
+  return suggestions
+}
+
+/**
  * Annotate a clinical answer text with SNOMED-CT and LOINC codes.
  *
  * Performance contract:

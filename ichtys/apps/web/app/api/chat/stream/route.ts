@@ -19,7 +19,10 @@ import {
 import { getOrCreateRequestId, log, makeRecord } from '../../../../lib/observability/logger'
 import { expandShortQueryForRetrieval } from '../../../../lib/rag/query-expander'
 import { getSpecContextChunks } from '../../../../lib/rag/spec-context'
+import { detectTerminologyIntent } from '../../../../lib/rag/terminology-intent'
 import { annotateAnswerSync } from '@ichtys/rag/medical-annotator'
+import { buildTerminologyAnswer } from '@ichtys/rag/terminology-answer'
+import type { TerminologySuggestion } from '@ichtys/rag/medical-annotator'
 import type { Confidence } from '@ichtys/rag'
 import type { Evidence } from '@ichtys/rag'
 
@@ -182,6 +185,13 @@ export async function POST(req: Request): Promise<Response> {
       let fullAnswer = ''
       let finalConfidence: Confidence = 'insufficient_evidence'
       let finalEvidences: Evidence[] = []
+      let terminologySuggestions: TerminologySuggestion[] = []
+      let protocolMentionsFound = false
+
+      // Preguntas de codificación clínica (SNOMED-CT / LOINC). Cuando hay intent,
+      // bufferizamos la respuesta del engine y la componemos con la sugerencia
+      // de terminología en vez de emitir tokens directo (ver terminology-answer.ts).
+      const terminologyIntent = detectTerminologyIntent(question)
 
       try {
         // 10a. Retrieval.
@@ -219,15 +229,51 @@ export async function POST(req: Request): Promise<Response> {
           similarityThreshold: orgRagConfig?.similarityThreshold,
         })
 
+        // Para preguntas de terminología bufferizamos sin emitir tokens: la
+        // respuesta del engine es el Bloque A, que recién compondremos con el
+        // Bloque B (codificación sugerida) antes de stremear el texto final.
+        const streamEngineTokens = !terminologyIntent.isTerminologyQuery
+        let engineAnswer = ''
+        let engineConfidence: Confidence = 'insufficient_evidence'
+        let engineEvidences: Evidence[] = []
+
         for await (const event of eventGen) {
           if (event.type === 'token') {
-            fullAnswer += event.text
-            enqueue({ type: 'token', text: event.text })
+            engineAnswer += event.text
+            if (streamEngineTokens) {
+              fullAnswer += event.text
+              enqueue({ type: 'token', text: event.text })
+            }
           } else {
-            finalConfidence = event.confidence
-            finalEvidences = event.evidences
-            fullAnswer = event.fullAnswer
+            engineConfidence = event.confidence
+            engineEvidences = event.evidences
+            engineAnswer = event.fullAnswer
           }
+        }
+
+        if (terminologyIntent.isTerminologyQuery) {
+          // Componer respuesta híbrida (protocolo + codificación sugerida).
+          const composed = buildTerminologyAnswer({
+            protocolAnswer: engineAnswer,
+            protocolConfidence: engineConfidence,
+            suggestions: terminologyIntent.suggestions,
+          })
+
+          terminologySuggestions = composed.terminologySuggestions
+          protocolMentionsFound = composed.protocolMentionsFound
+          finalConfidence = composed.confidence
+          finalEvidences = composed.protocolMentionsFound ? engineEvidences : []
+
+          // Stremear el texto compuesto en chunks para render progresivo.
+          const CHUNK_SIZE = 50
+          for (let i = 0; i < composed.answer.length; i += CHUNK_SIZE) {
+            enqueue({ type: 'token', text: composed.answer.slice(i, i + CHUNK_SIZE) })
+          }
+          fullAnswer = composed.answer
+        } else {
+          finalConfidence = engineConfidence
+          finalEvidences = engineEvidences
+          fullAnswer = engineAnswer
         }
 
         // 10c. Medical annotations — run BEFORE persist so they are stored together.
@@ -277,6 +323,8 @@ export async function POST(req: Request): Promise<Response> {
           evidences: finalEvidences,
           retrievalCount,
           conversationId,
+          terminologySuggestions,
+          protocolMentionsFound,
         })
 
         // 10g. Annotation frame — emitted after done so client has the messageId bound.

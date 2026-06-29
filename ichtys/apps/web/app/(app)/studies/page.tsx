@@ -52,7 +52,15 @@ export default async function StudiesPage() {
             {activeCount} activo{activeCount !== 1 ? 's' : ''} &middot; {studyList.length} en total
           </p>
         </div>
-        <CreateStudyForm />
+        <div className="flex items-center gap-2">
+          <Link href="/library" className="alphi-btn-secondary text-sm">
+            Librería
+          </Link>
+          <Link href="/studies/import" className="alphi-btn-secondary text-sm">
+            Importar varios
+          </Link>
+          <CreateStudyForm />
+        </div>
       </div>
 
       {studyList.length === 0 ? (

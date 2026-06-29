@@ -96,7 +96,7 @@ export function EvidenceCard({
       )}
 
       <p
-        className={['text-[12px] leading-relaxed text-alphi-navy/80 italic', isLong ? 'max-h-24 overflow-hidden' : ''].join(' ')}
+        className={['text-[13px] leading-6 text-alphi-navy/80 italic', isLong ? 'max-h-24 overflow-hidden' : ''].join(' ')}
         data-full-excerpt={evidence.excerpt}
       >
         &ldquo;{evidence.excerpt}&rdquo;
@@ -169,7 +169,7 @@ function HighlightedPageText({ pageText, excerpt }: { pageText: string; excerpt:
   if (!match) {
     // Sin match exacto: mostramos el texto completo sin resaltar (el pasaje
     // citado se ve igual arriba del visor).
-    return <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-alphi-navy/80">{pageText}</p>
+    return <p className="whitespace-pre-wrap text-[13px] leading-6 text-alphi-navy/80">{pageText}</p>
   }
 
   const before = pageText.slice(0, match.index)
@@ -177,7 +177,7 @@ function HighlightedPageText({ pageText, excerpt }: { pageText: string; excerpt:
   const after = pageText.slice(match.index + match[0].length)
 
   return (
-    <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-alphi-navy/80">
+    <p className="whitespace-pre-wrap text-[13px] leading-6 text-alphi-navy/80">
       {before}
       <span ref={markRef} className="rounded bg-alphi-amber/30 px-0.5 font-medium text-alphi-navy">
         {hit}
@@ -258,7 +258,7 @@ export function EvidenceList({
   return (
     <>
       <div className="mt-4 space-y-2" aria-label="Fuentes citadas">
-        <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-alphi-muted">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-alphi-muted">
           Fuentes citadas
         </p>
         {evidences.map((evidence, idx) => (
@@ -306,7 +306,7 @@ export function EvidenceList({
                 className="h-1/2 w-full border-b border-alphi-border lg:h-full lg:w-1/2 lg:border-b-0 lg:border-r"
               />
               <div className="h-1/2 w-full overflow-y-auto bg-alphi-slate/40 px-5 py-4 lg:h-full lg:w-1/2">
-                <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-alphi-muted">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-alphi-muted">
                   Texto de la página {viewerPage}
                 </p>
                 {viewerLoading ? (

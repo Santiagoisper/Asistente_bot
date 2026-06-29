@@ -9,7 +9,7 @@ import {
 import { ConfidenceBadge } from './confidence-badge'
 import { EvidenceList, renderAnswerWithFootnotes } from './evidence-list'
 import { AlphiLogo } from '../ui/alphi-logo'
-import type { AnswerConfidence, ChatTurn, ConversationListItem, Evidence, MedicalAnnotation, MessageItem } from './types'
+import type { AnswerConfidence, ChatTurn, ConversationListItem, Evidence, MedicalAnnotation, MessageItem, TerminologySuggestion } from './types'
 
 type ChatClientProps = {
   studyId: string
@@ -33,7 +33,7 @@ const SUGGESTED = [
 // SSE frame types from /api/chat/stream
 type StreamStartFrame       = { type: 'start';       conversationId: string; userMessageId: string }
 type StreamTokenFrame       = { type: 'token';       text: string }
-type StreamDoneFrame        = { type: 'done';        assistantMessageId: string; confidence: AnswerConfidence; evidences: Evidence[]; retrievalCount: number; conversationId: string }
+type StreamDoneFrame        = { type: 'done';        assistantMessageId: string; confidence: AnswerConfidence; evidences: Evidence[]; retrievalCount: number; conversationId: string; terminologySuggestions?: TerminologySuggestion[]; protocolMentionsFound?: boolean }
 type StreamAnnotationsFrame = { type: 'annotations'; annotations: MedicalAnnotation[] }
 type StreamTitleFrame       = { type: 'title';       conversationId: string; title: string }
 type StreamErrorFrame       = { type: 'error' }
@@ -237,6 +237,8 @@ export default function ChatClient({
                       confidence: frame.confidence,
                       evidences: frame.confidence === 'insufficient_evidence' ? [] : frame.evidences,
                       retrievalCount: frame.retrievalCount,
+                      terminologySuggestions: frame.terminologySuggestions ?? [],
+                      protocolMentionsFound: frame.protocolMentionsFound ?? false,
                     }
                   : t
               )
@@ -478,7 +480,7 @@ function ChatMessage({
     return (
       <div className="flex justify-end">
         <div className="max-w-[75%] rounded-2xl rounded-tr-md bg-alphi-navy px-4 py-3 text-white shadow-alphi-card">
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">{turn.content}</p>
+          <p className="whitespace-pre-wrap text-[15px] leading-7">{turn.content}</p>
         </div>
       </div>
     )
@@ -501,7 +503,7 @@ function ChatMessage({
           </div>
 
           {/* Answer text with streaming cursor */}
-          <div className="whitespace-pre-wrap text-sm leading-relaxed text-alphi-navy">
+          <div className="alphi-answer-text whitespace-pre-wrap text-alphi-navy">
             {turn.content ? (
               <>
                 {renderAnswerWithFootnotes(turn.content, turn.evidences, onFootnoteClick)}
@@ -522,13 +524,25 @@ function ChatMessage({
             )}
           </div>
 
-          {/* Insufficient evidence notice (only after streaming done) */}
-          {!isStreaming && turn.confidence === 'insufficient_evidence' && (
-            <div className="mt-3 rounded-lg border border-alphi-amber/30 bg-alphi-amber/10 px-3 py-2 text-xs text-alphi-amber">
+          {/* Insufficient evidence notice (only after streaming done).
+              Se omite cuando hay codificación sugerida: la respuesta de terminología
+              SÍ trae información útil, no es un caso de evidencia insuficiente. */}
+          {!isStreaming &&
+            turn.confidence === 'insufficient_evidence' &&
+            (turn.terminologySuggestions?.length ?? 0) === 0 && (
+            <div className="mt-3 rounded-lg border border-alphi-amber/30 bg-alphi-amber/10 px-3 py-2 text-sm text-alphi-amber">
               {(turn.retrievalCount ?? 0) === 0
                 ? 'No encontré fragmentos relevantes en los documentos indexados para esa pregunta.'
                 : 'Fragmentos encontrados pero no alcanzaron el umbral de relevancia. Intenta una pregunta mas especifica.'}
             </div>
+          )}
+
+          {/* Terminology result card — codificación sugerida (SNOMED-CT / LOINC) */}
+          {!isStreaming && (turn.terminologySuggestions?.length ?? 0) > 0 && (
+            <TerminologyResultCard
+              suggestions={turn.terminologySuggestions ?? []}
+              protocolMentionsFound={turn.protocolMentionsFound ?? false}
+            />
           )}
 
           {/* Evidence cards (only after streaming done) */}
@@ -621,6 +635,86 @@ function MedicalAnnotationChips({ annotations }: { annotations: MedicalAnnotatio
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Terminology result card — codificación sugerida (SNOMED-CT / LOINC)
+// ---------------------------------------------------------------------------
+
+function suggestionUrl(s: TerminologySuggestion): string {
+  return s.system === 'SNOMED-CT'
+    ? `${SNOMED_BROWSER}${s.code}&edition=MAIN`
+    : `${LOINC_URL}${s.code}/`
+}
+
+const TERMINOLOGY_DISCLAIMER =
+  'Estos códigos no provienen del protocolo. Son una sugerencia de terminología clínica estándar para los conceptos mencionados.'
+
+function TerminologyResultCard({
+  suggestions,
+  protocolMentionsFound,
+}: {
+  suggestions: TerminologySuggestion[]
+  protocolMentionsFound: boolean
+}) {
+  const deduped = suggestions.filter(
+    (s, idx, arr) => arr.findIndex((o) => o.system === s.system && o.code === s.code) === idx,
+  )
+
+  return (
+    <div className="mt-3 rounded-lg border border-alphi-teal/30 bg-alphi-teal/5 p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-alphi-teal">
+          Codificación sugerida
+        </p>
+        <span className="inline-flex items-center rounded-full border border-alphi-teal/40 bg-alphi-teal/10 px-2 py-0.5 text-[10px] font-medium text-alphi-teal">
+          Sugerencia externa
+        </span>
+      </div>
+
+      {!protocolMentionsFound && (
+        <p className="mb-2 text-sm text-alphi-muted">
+          El protocolo no incluye códigos de terminología clínica para este concepto.
+        </p>
+      )}
+
+      <ul className="flex flex-col gap-2">
+        {deduped.map((s) => {
+          const isSnomed = s.system === 'SNOMED-CT'
+          return (
+            <li
+              key={`${s.system}:${s.code}`}
+              className="flex items-center justify-between gap-3 rounded-md border border-alphi-border/60 bg-white px-3 py-2"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-alphi-navy">{s.display}</p>
+                <p className="text-xs text-alphi-muted">{s.term}</p>
+              </div>
+              <a
+                href={suggestionUrl(s)}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`Abrir ${s.system} ${s.code}`}
+                className={[
+                  'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium no-underline transition-all duration-100',
+                  isSnomed
+                    ? 'border-alphi-teal/30 bg-alphi-teal/10 text-alphi-teal hover:border-alphi-teal/60 hover:bg-alphi-teal/20'
+                    : 'border-alphi-sage/30 bg-alphi-sage/10 text-alphi-sage hover:border-alphi-sage/60 hover:bg-alphi-sage/20',
+                ].join(' ')}
+              >
+                <span className="text-[10px] font-bold uppercase tracking-wide">
+                  {isSnomed ? 'SCT' : 'LOINC'}
+                </span>
+                <span>{s.code}</span>
+              </a>
+            </li>
+          )
+        })}
+      </ul>
+
+      <p className="mt-2 text-xs italic text-alphi-muted">{TERMINOLOGY_DISCLAIMER}</p>
     </div>
   )
 }

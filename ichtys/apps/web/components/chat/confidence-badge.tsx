@@ -27,7 +27,7 @@ const CONFIG: Record<AnswerConfidence, { label: string; badgeClass: string; dotC
 export function ConfidenceBadge({ confidence }: { confidence: AnswerConfidence }) {
   const cfg = CONFIG[confidence]
   return (
-    <span className={['inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold', cfg.badgeClass].join(' ')}>
+    <span className={['inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium', cfg.badgeClass].join(' ')}>
       <span className={['h-1.5 w-1.5 rounded-full', cfg.dotClass].join(' ')} />
       {cfg.label}
     </span>

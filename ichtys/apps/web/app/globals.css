@@ -19,11 +19,13 @@
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    font-size: 16px;
   }
 
   body {
     background-color: var(--alphi-slate);
     color: var(--alphi-navy);
+    line-height: 1.6;
   }
 
   /* Smooth scrollbar */
@@ -112,7 +114,12 @@
 }
 
 /* ─── Chat message content ───────────────────────────────────────────────── */
-.alphi-answer-text p { margin-bottom: 0.4rem; }
+/* Lectura cómoda estilo Claude: cuerpo 15px, interlineado generoso. */
+.alphi-answer-text {
+  font-size: 0.9375rem; /* 15px */
+  line-height: 1.7;
+}
+.alphi-answer-text p { margin-bottom: 0.6rem; }
 .alphi-answer-text p:last-child { margin-bottom: 0; }
 
 /* ─── Clerk popovers (OrganizationSwitcher / UserButton) ─────────────────────

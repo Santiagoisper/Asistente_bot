@@ -64,6 +64,15 @@ export type MedicalAnnotation = {
   fromDictionary: boolean
 }
 
+/** Código de terminología sugerido para una pregunta de codificación clínica. */
+export type TerminologySuggestion = {
+  term: string
+  system: CodingSystem
+  code: string
+  display: string
+  source: 'dictionary'
+}
+
 export type ChatTurn = {
   messageId: string
   role: 'user' | 'assistant'
@@ -73,4 +82,8 @@ export type ChatTurn = {
   retrievalCount?: number | null
   createdAt?: string
   annotations?: MedicalAnnotation[]
+  /** Sugerencias de codificación (SNOMED-CT / LOINC) para preguntas de terminología. */
+  terminologySuggestions?: TerminologySuggestion[]
+  /** true si el protocolo aportó evidencia grounded sobre el concepto consultado. */
+  protocolMentionsFound?: boolean
 }

@@ -38,6 +38,11 @@ export const studySpecs = pgTable(
     status: text('status', { enum: studySpecStatus }).notNull().default('draft'),
     /** StudySpec serializado — validado con Zod antes de cada insert. */
     spec: jsonb('spec').notNull(),
+    /**
+     * Códigos SNOMED-CT / LOINC pre-computados al aprobar el spec.
+     * Null en borradores; se llena en study_spec.approved.
+     */
+    terminologyAnnotations: jsonb('terminology_annotations'),
     /** Modelo LLM usado en la extracción (trazabilidad regulatoria). */
     extractionModel: text('extraction_model').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

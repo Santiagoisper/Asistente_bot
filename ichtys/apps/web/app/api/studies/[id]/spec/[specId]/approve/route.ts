@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { AccessError, validateStudyAccess } from '@ichtys/auth'
 import { and, auditLogs, db, eq, ne, studySpecs } from '@ichtys/db'
+import { studySpecSchema } from '@ichtys/ingestion/study-spec'
+import { extractSpecTerminology } from '../../../../../../../lib/rag/spec-terminology'
 
 interface RouteParams {
   params: Promise<{ id: string; specId: string }>
@@ -13,7 +15,6 @@ export async function POST(_req: Request, { params }: RouteParams) {
     const { userId, orgId } = await validateStudyAccess(studyId, 'study_admin')
 
     await db.transaction(async (tx) => {
-      // Verificar que el spec pertenece a este tenant y estudio
       const target = await tx.query.studySpecs.findFirst({
         where: and(
           eq(studySpecs.id, specId),
@@ -24,13 +25,27 @@ export async function POST(_req: Request, { params }: RouteParams) {
 
       if (!target) throw new AccessError('Spec not found', 404)
       if (target.status === 'approved') {
-        return // idempotente
+        return
       }
 
-      // Aprobar este spec
+      // Pre-computar terminología y persistirla en la columna dedicada (0004).
+      let terminologyAnnotations: ReturnType<typeof extractSpecTerminology> | null = null
+      try {
+        const parsedSpec = studySpecSchema.safeParse(target.spec)
+        if (parsedSpec.success) {
+          terminologyAnnotations = extractSpecTerminology(parsedSpec.data)
+        }
+      } catch {
+        // Non-critical: aprobar igual sin terminología.
+      }
+
       await tx
         .update(studySpecs)
-        .set({ status: 'approved', updatedAt: new Date() })
+        .set({
+          status: 'approved',
+          terminologyAnnotations,
+          updatedAt: new Date(),
+        })
         .where(
           and(
             eq(studySpecs.id, specId),
@@ -39,7 +54,6 @@ export async function POST(_req: Request, { params }: RouteParams) {
           ),
         )
 
-      // Superseder versiones anteriores aprobadas o draft (todas las demás)
       await tx
         .update(studySpecs)
         .set({ status: 'superseded', updatedAt: new Date() })
@@ -59,7 +73,10 @@ export async function POST(_req: Request, { params }: RouteParams) {
         action: 'study_spec.approved',
         resourceType: 'study_spec',
         resourceId: specId,
-        metadata: { version: target.version },
+        metadata: {
+          version: target.version,
+          terminologyCount: terminologyAnnotations?.length ?? 0,
+        },
       })
     })
 
