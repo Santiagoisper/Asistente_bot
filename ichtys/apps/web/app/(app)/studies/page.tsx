@@ -1,16 +1,37 @@
 import Link from 'next/link'
-import { auth } from '@clerk/nextjs/server'
+import { auth, clerkClient } from '@clerk/nextjs/server'
 import { db, eq, organizations, studies } from '@ichtys/db'
 import { CreateStudyForm } from '../../../components/documents/create-study-form'
+
+async function resolveOrProvisionOrg(clerkOrgId: string) {
+  const existing = await db.query.organizations.findFirst({
+    where: eq(organizations.clerkOrgId, clerkOrgId),
+  })
+  if (existing) return existing
+
+  let orgName = clerkOrgId
+  try {
+    const client = await clerkClient()
+    const clerkOrg = await client.organizations.getOrganization({ organizationId: clerkOrgId })
+    orgName = clerkOrg.name || clerkOrgId
+  } catch {
+    // Non-critical fallback
+  }
+
+  const [provisioned] = await db
+    .insert(organizations)
+    .values({ clerkOrgId, name: orgName })
+    .returning()
+
+  return provisioned ?? null
+}
 
 export default async function StudiesPage() {
   const { orgId: clerkOrgId } = await auth()
   let studyList: { id: string; name: string; protocolNumber: string | null; status: string; createdAt: Date }[] = []
 
   if (clerkOrgId) {
-    const org = await db.query.organizations.findFirst({
-      where: eq(organizations.clerkOrgId, clerkOrgId),
-    })
+    const org = await resolveOrProvisionOrg(clerkOrgId)
     if (org) {
       studyList = await db.query.studies.findMany({
         where: eq(studies.organizationId, org.id),
