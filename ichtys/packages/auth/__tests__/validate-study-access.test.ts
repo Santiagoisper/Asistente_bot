@@ -1059,7 +1059,7 @@ describe('object-level authorization', () => {
     expect(response.headers.get('Content-Type')).toBe('application/pdf')
     expect(response.headers.get('Content-Disposition')).toMatch(/^attachment; filename=".+\.pdf"$/)
     expect(response.headers.get('Cache-Control')).toBe('private, no-store')
-    expect(mocks.getPrivateDocumentPdf).toHaveBeenCalledWith(fixture.documentVersion.blobKey)
+    expect(mocks.getPrivateDocumentPdf).toHaveBeenCalledWith(fixture.documentVersion.blobUrl)
     expect(body).not.toContain(fixture.documentVersion.blobKey)
     expect(body).not.toContain(fixture.documentVersion.blobUrl)
   })

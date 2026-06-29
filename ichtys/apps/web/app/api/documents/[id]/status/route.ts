@@ -35,13 +35,18 @@ export async function GET(_req: Request, { params }: RouteContext): Promise<Resp
       throw new Error('Authorized document has no document version')
     }
 
+    // Sanitize error messages — never return raw internal messages (may contain
+    // stack traces or sensitive details). Map to a safe user-facing string.
+    const safeErrorMessage =
+      latestVersion.status === 'error' ? 'Document processing failed' : null
+
     return Response.json(
       {
         documentId: document.id,
         latestDocumentVersionId: latestVersion.id,
         status: latestVersion.status,
         pageCount: latestVersion.pageCount,
-        errorMessage: latestVersion.status === 'error' ? latestVersion.errorMessage : null,
+        errorMessage: safeErrorMessage,
         createdAt: latestVersion.createdAt,
       },
       { status: 200 },

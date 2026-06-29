@@ -498,7 +498,7 @@ function ChatMessage({
           {!isStreaming && turn.confidence === 'insufficient_evidence' && (
             <div className="mt-3 rounded-lg border border-alphi-amber/30 bg-alphi-amber/10 px-3 py-2 text-xs text-alphi-amber">
               {(turn.retrievalCount ?? 0) === 0
-                ? 'No encontre fragmentos relevantes en los documentos indexados para esa pregunta.'
+                ? 'No encontré fragmentos relevantes en los documentos indexados para esa pregunta.'
                 : 'Fragmentos encontrados pero no alcanzaron el umbral de relevancia. Intenta una pregunta mas especifica.'}
             </div>
           )}
