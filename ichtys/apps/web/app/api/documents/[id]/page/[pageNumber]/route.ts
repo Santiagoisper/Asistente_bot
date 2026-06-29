@@ -46,6 +46,9 @@ export async function GET(_req: Request, { params }: RouteContext): Promise<Resp
         documentVersionId: ctx.documentVersion.id,
         pageNumber: ctx.page.pageNumber,
         openUrl: inlineUrl,
+        // Texto extraído de la página — usado por el visor para resaltar el
+        // pasaje citado sobre el contenido real de la página.
+        pageText: ctx.page.rawText ?? '',
       },
       { status: 200 },
     )

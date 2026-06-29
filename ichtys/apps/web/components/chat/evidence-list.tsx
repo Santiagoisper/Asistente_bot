@@ -127,6 +127,62 @@ export function EvidenceCard({
 
 /* ── EvidenceList ──────────────────────────────────────────────────────── */
 
+/**
+ * Construye un regex tolerante a espacios a partir del pasaje citado, para
+ * localizarlo dentro del texto de la página aunque difieran los saltos de línea.
+ */
+function buildExcerptRegex(excerpt: string): RegExp | null {
+  const cleaned = excerpt.trim().replace(/\s+/g, ' ')
+  if (cleaned.length < 8) return null
+  const needle = cleaned.slice(0, 240)
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+')
+  try {
+    return new RegExp(escaped, 'i')
+  } catch {
+    return null
+  }
+}
+
+/** Renderiza el texto de la página con el pasaje citado resaltado (<mark>). */
+function HighlightedPageText({ pageText, excerpt }: { pageText: string; excerpt: string }) {
+  const markRef = React.useRef<HTMLSpanElement>(null)
+
+  React.useEffect(() => {
+    markRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [pageText, excerpt])
+
+  if (!pageText) {
+    return (
+      <p className="text-xs text-alphi-muted">
+        No hay texto extraído disponible para esta página.
+      </p>
+    )
+  }
+
+  const regex = buildExcerptRegex(excerpt)
+  const match = regex ? regex.exec(pageText) : null
+
+  if (!match) {
+    // Sin match exacto: mostramos el texto completo sin resaltar (el pasaje
+    // citado se ve igual arriba del visor).
+    return <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-alphi-navy/80">{pageText}</p>
+  }
+
+  const before = pageText.slice(0, match.index)
+  const hit = pageText.slice(match.index, match.index + match[0].length)
+  const after = pageText.slice(match.index + match[0].length)
+
+  return (
+    <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-alphi-navy/80">
+      {before}
+      <span ref={markRef} className="rounded bg-alphi-amber/30 px-0.5 font-medium text-alphi-navy">
+        {hit}
+      </span>
+      {after}
+    </p>
+  )
+}
+
 export function EvidenceList({
   evidences,
   highlightIndex,
@@ -137,24 +193,45 @@ export function EvidenceList({
   const [viewerUrl, setViewerUrl] = useState<string | null>(null)
   const [viewerTitle, setViewerTitle] = useState<string>('')
   const [viewerExcerpt, setViewerExcerpt] = useState<string>('')
+  const [viewerPageText, setViewerPageText] = useState<string>('')
+  const [viewerPage, setViewerPage] = useState<number | null>(null)
+  const [viewerLoading, setViewerLoading] = useState(false)
 
   if (evidences.length === 0) return null
 
   async function openInlineViewer(evidence: Evidence): Promise<void> {
     if (evidence.pageStart === null || evidence.pageStart === undefined) return
+    setViewerLoading(true)
+    setViewerTitle(evidence.documentName ?? 'Documento')
+    setViewerExcerpt(evidence.excerpt)
+    setViewerPage(evidence.pageStart)
+    setViewerPageText('')
     try {
       const res = await fetch(
         `/api/documents/${encodeURIComponent(evidence.documentId)}/page/${evidence.pageStart}`,
       )
-      if (!res.ok) return
-      const payload = (await res.json()) as { openUrl?: string }
-      if (!payload.openUrl) return
-      setViewerTitle(evidence.documentName ?? 'Documento')
-      setViewerExcerpt(evidence.excerpt)
+      if (!res.ok) {
+        setViewerLoading(false)
+        return
+      }
+      const payload = (await res.json()) as { openUrl?: string; pageText?: string }
+      if (!payload.openUrl) {
+        setViewerLoading(false)
+        return
+      }
+      setViewerPageText(payload.pageText ?? '')
       setViewerUrl(payload.openUrl)
     } catch {
       // non-blocking
+    } finally {
+      setViewerLoading(false)
     }
+  }
+
+  function closeViewer(): void {
+    setViewerUrl(null)
+    setViewerPageText('')
+    setViewerPage(null)
   }
 
   return (
@@ -176,25 +253,48 @@ export function EvidenceList({
 
       {viewerUrl ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-alphi-navy/70 p-4 backdrop-blur-sm">
-          <div className="animate-slide-up flex h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-alphi-modal">
+          <div className="animate-slide-up flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-alphi-modal">
             <div className="flex items-center justify-between border-b border-alphi-border px-5 py-3">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold text-alphi-navy">{viewerTitle}</p>
-                <p className="mt-0.5 truncate text-xs text-alphi-muted">{viewerExcerpt}</p>
+                <p className="truncate text-sm font-bold text-alphi-navy">
+                  {viewerTitle}
+                  {viewerPage !== null && (
+                    <span className="ml-2 rounded bg-alphi-slate px-1.5 py-0.5 font-mono text-[10px] text-alphi-muted">
+                      p. {viewerPage}
+                    </span>
+                  )}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-alphi-muted">
+                  Pasaje citado resaltado sobre el texto de la página
+                </p>
               </div>
               <button
                 type="button"
                 className="alphi-btn-secondary ml-4 shrink-0"
-                onClick={() => setViewerUrl(null)}
+                onClick={closeViewer}
               >
                 Cerrar
               </button>
             </div>
-            <iframe
-              title="Visor de evidencia ALPHI"
-              src={viewerUrl}
-              className="h-full w-full"
-            />
+
+            {/* Dos paneles: PDF a la izquierda, texto resaltado a la derecha */}
+            <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+              <iframe
+                title="Visor de evidencia ALPHI"
+                src={viewerUrl}
+                className="h-1/2 w-full border-b border-alphi-border lg:h-full lg:w-1/2 lg:border-b-0 lg:border-r"
+              />
+              <div className="h-1/2 w-full overflow-y-auto bg-alphi-slate/40 px-5 py-4 lg:h-full lg:w-1/2">
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-alphi-muted">
+                  Texto de la página {viewerPage}
+                </p>
+                {viewerLoading ? (
+                  <p className="text-xs text-alphi-muted">Cargando texto de la página...</p>
+                ) : (
+                  <HighlightedPageText pageText={viewerPageText} excerpt={viewerExcerpt} />
+                )}
+              </div>
+            </div>
           </div>
         </div>
       ) : null}
