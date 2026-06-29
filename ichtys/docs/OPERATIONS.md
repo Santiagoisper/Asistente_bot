@@ -102,3 +102,70 @@ Cuando falle un bloqueante:
 - Seguridad/leakage: detener release y escalar inmediato.
 - Build/deploy: escalar a owner de infraestructura.
 - Calidad clínica: escalar a reviewer clínico del piloto.
+
+---
+
+## 9) Migraciones de base de datos (CRÍTICO — lección del incidente 2026-06-28)
+
+Las migraciones Drizzle **NO se aplican automáticamente** en el deploy de Vercel.
+Cada vez que se agrega o modifica el schema Drizzle, se debe ejecutar el siguiente paso **antes** de deployar a producción:
+
+```bash
+# Verificar qué migraciones están pendientes (solo lectura)
+cd ichtys
+pnpm --filter @ichtys/db drizzle-kit status
+
+# Aplicar migraciones pendientes contra la DB de prod
+# IMPORTANTE: requiere DATABASE_URL apuntando a prod (usar con cuidado)
+pnpm --filter @ichtys/db drizzle-kit migrate
+```
+
+**Checklist pre-deploy cuando hay cambios de schema:**
+
+- [ ] Revisar `packages/db/migrations/meta/_journal.json` — ¿hay entradas nuevas?
+- [ ] Aplicar migración en staging primero, verificar funcionamiento
+- [ ] Aplicar migración en producción ANTES de promover el deploy
+- [ ] Confirmar con `SELECT column_name FROM information_schema.columns WHERE table_name = '<tabla>'`
+
+**Referencia del incidente:** commit `39832d8` agregó `organizations.rag_config` pero la migración `0003_org_rag_config.sql` no fue aplicada en prod, causando un error `403` en Server Components que leen `organizations`. Fix: `ALTER TABLE "organizations" ADD COLUMN IF NOT EXISTS "rag_config" jsonb;` ejecutado manualmente.
+
+---
+
+## 10) Roadmap de features pendientes (estado al 2026-06-28)
+
+### Implementado y en producción
+
+| Feature | Descripción |
+|---|---|
+| FW — Few-shot seed | Ejemplos de specs aprobadas alimentan el extractor |
+| SD — Stuck docs recovery | `checkAndRecoverStuckDocs()` limpia docs trabados |
+| EV — Edición inline | Endpoints y visitas editables desde spec-review |
+| T4 — Auto-title | Haiku genera títulos para conversaciones nuevas vía SSE |
+| T1 — SNOMED re-anotación | Re-computa chips SNOMED/LOINC post-edición de criterio |
+| T2 — Per-org RAG config | `organizations.rag_config` permite tuning de threshold y topK por org |
+
+### Pendiente (en orden de prioridad/dependencia)
+
+#### T3 — Spec version diff
+- **Qué:** Comparar dos versiones de un spec para detectar cambios de criterios/endpoints/visitas.
+- **Por qué:** Base para enmiendas (E2). Un diff legible permite al PI ver exactamente qué cambió al actualizar el protocolo.
+- **Dependencias:** Requiere que `study_specs` tenga múltiples versiones por estudio (ya soportado via `version` int).
+- **Estimación:** 1–2 días. Implementar `diff-spec.ts` + UI en `/studies/[id]/spec/diff`.
+
+#### E1 — Filtrado por tipo de documento en chat
+- **Qué:** Permitir al usuario filtrar la búsqueda RAG por tipo de documento (protocolo, IB, manual de laboratorio, etc.).
+- **Por qué:** La UI de chat tiene un selector de tipo de documento, y el backend (`POST /api/chat/stream`) ya acepta `documentType` en el body. Solo falta conectar el selector en la UI con el parámetro de la llamada.
+- **Dependencias:** Ninguna — el backend está listo.
+- **Estimación:** 0.5 días. Wiring de `documentType` selector → request body en `chat-client.tsx`.
+
+#### E3 — Export del spec aprobado (PDF/Word)
+- **Qué:** Botón "Exportar spec" que genera un PDF o Word con el spec estructurado (criterios, endpoints, visitas) del spec aprobado.
+- **Por qué:** Los monitors y el PI necesitan compartir el spec en formato imprimible para revisión regulatoria.
+- **Dependencias:** Ninguna.
+- **Estimación:** 1–2 días. Usar `@react-pdf/renderer` o exportación a Word vía `docx` npm.
+
+#### E2 — Enmiendas de protocolo
+- **Qué:** Cuando se sube una nueva versión del protocolo, detectar automáticamente cambios respecto al spec aprobado anterior, y presentar un flujo de revisión de enmiendas.
+- **Por qué:** En investigación clínica, las enmiendas son eventos formales que requieren documentación y aprobación. Un flujo asistido reduce errores de omisión.
+- **Dependencias:** T3 (spec version diff) debe estar implementado primero.
+- **Estimación:** 3–5 días (incluye UI de revisión de enmiendas + persistencia).
