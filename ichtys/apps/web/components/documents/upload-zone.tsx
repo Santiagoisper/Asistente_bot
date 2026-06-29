@@ -8,15 +8,17 @@ interface UploadZoneProps {
   onUploadComplete?: () => void
 }
 
-const ACCEPT_TYPES = ['.pdf', '.docx', '.doc', '.txt']
+// El motor de ingesta solo procesa PDF por ahora (parsePdf / pdf-parse).
+// docx/doc/txt todavia no estan soportados — la UI debe reflejar la realidad.
+const ACCEPT_TYPES = ['.pdf']
 
 const DOC_TYPES = [
   { label: 'Protocolo / Enmiendas', ext: 'PDF', tip: 'ICH M11, versiones con track changes' },
   { label: 'Manual del Investigador', ext: 'PDF', tip: 'IB, IBs anteriores para comparar' },
-  { label: 'Consentimiento (ICF)', ext: 'PDF/DOC', tip: 'Versiones aprobadas por CEBR' },
-  { label: 'SOPs del sitio', ext: 'DOC/PDF', tip: 'Procedimientos operativos locales' },
+  { label: 'Consentimiento (ICF)', ext: 'PDF', tip: 'Versiones aprobadas por CEBR (en PDF)' },
+  { label: 'SOPs del sitio', ext: 'PDF', tip: 'Procedimientos operativos locales (en PDF)' },
   { label: 'Guia de visitas (SoA)', ext: 'PDF', tip: 'Schedule of Assessments detallado' },
-  { label: 'Otro documento', ext: 'PDF/DOC/TXT', tip: 'Labs, instrucciones, budgets' },
+  { label: 'Otro documento', ext: 'PDF', tip: 'Labs, instrucciones, budgets (en PDF)' },
 ]
 
 /** Mapeo índice → documentType para el backend. */
@@ -72,6 +74,23 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
 
   const handleFile = useCallback(async (file: File) => {
     if (!file) return
+
+    // Validacion temprana: solo PDF. Evita un 415 cript­ico del servidor y da
+    // un mensaje claro al usuario.
+    const isPdf =
+      file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+    if (!isPdf) {
+      setState({
+        status: 'error',
+        fileName: file.name,
+        progress: 0,
+        errorMessage:
+          'Por ahora solo se procesan archivos PDF. Convertí el documento a PDF e intentá de nuevo.',
+        elapsed: 0,
+      })
+      return
+    }
+
     setState({ status: 'uploading', fileName: file.name, progress: 0, errorMessage: null, elapsed: 0 })
     startTimer()
 
@@ -297,7 +316,7 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
             {isDragging ? 'Soltar aqui' : 'Arrastra el documento o hace clic'}
           </p>
           <p className="mt-0.5 text-xs text-alphi-muted">
-            Formatos: {ACCEPT_TYPES.join(', ')} hasta 50 MB
+            Formato: PDF (hasta 50 MB). Otros formatos: convertí a PDF por ahora.
           </p>
         </div>
         <span className="alphi-btn-secondary pointer-events-none text-xs">
