@@ -114,3 +114,54 @@
 /* ─── Chat message content ───────────────────────────────────────────────── */
 .alphi-answer-text p { margin-bottom: 0.4rem; }
 .alphi-answer-text p:last-child { margin-bottom: 0; }
+
+/* ─── Clerk popovers (OrganizationSwitcher / UserButton) ─────────────────────
+   Clerk inyecta su CSS con alta especificidad y sobreescribe las clases que
+   pasamos por `appearance`. Forzamos la paleta ALPHI sobre las clases estables
+   `.cl-*` para garantizar legibilidad (texto navy sobre fondo blanco). */
+.cl-organizationSwitcherPopoverCard,
+.cl-userButtonPopoverCard,
+.cl-popoverBox,
+.cl-card {
+  background-color: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  box-shadow: 0 10px 30px -10px rgba(13, 31, 60, 0.25) !important;
+  border-radius: 0.75rem !important;
+}
+
+/* Texto principal dentro de cualquier popover de Clerk */
+.cl-organizationSwitcherPopoverCard *,
+.cl-userButtonPopoverCard *,
+.cl-popoverBox * {
+  color: #0D1F3C !important;
+}
+
+/* Identificadores secundarios / texto atenuado */
+.cl-organizationPreviewSecondaryIdentifier,
+.cl-userPreviewSecondaryIdentifier,
+.cl-organizationSwitcherPopoverActionButton__icon,
+.cl-userButtonPopoverActionButton__icon {
+  color: #64748B !important;
+}
+
+/* Hover de filas y botones de acción */
+.cl-organizationSwitcherPreviewButton:hover,
+.cl-organizationSwitcherPopoverActionButton:hover,
+.cl-userButtonPopoverActionButton:hover {
+  background-color: #F8FAFC !important;
+}
+
+/* Áreas de acciones y footer */
+.cl-organizationSwitcherPopoverActions,
+.cl-organizationSwitcherPopoverFooter,
+.cl-userButtonPopoverActions,
+.cl-userButtonPopoverFooter {
+  background-color: #F8FAFC !important;
+  border-top: 1px solid #E2E8F0 !important;
+}
+
+/* Acento primario (íconos/links de acción) */
+.cl-organizationSwitcherPopoverActionButton__primary,
+.cl-internal-icon[data-color="primary"] {
+  color: #0891B2 !important;
+}
