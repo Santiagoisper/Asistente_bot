@@ -243,23 +243,43 @@ export function DocumentsStatusList({ items: initialItems, studyId }: DocumentsS
                     )}
                   </td>
                   <td className="px-3 py-2">
-                    <button
-                      type="button"
-                      disabled={
-                        !item.latestVersionId ||
-                        busyVersionId === item.latestVersionId
-                      }
-                      onClick={() => {
-                        void triggerReprocess(item)
-                      }}
-                      className="rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      {busyVersionId === item.latestVersionId
-                        ? 'Iniciando...'
-                        : item.status === 'processing'
-                          ? 'Forzar reprocesar'
-                          : 'Reprocesar'}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {item.latestVersionId ? (
+                        <>
+                          <a
+                            href={`/api/document-versions/${item.latestVersionId}/download?inline=1`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded-md border border-alphi-teal/40 px-2 py-1 text-xs font-medium text-alphi-teal hover:bg-alphi-teal/10"
+                          >
+                            Ver
+                          </a>
+                          <a
+                            href={`/api/document-versions/${item.latestVersionId}/download`}
+                            className="rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                          >
+                            Descargar
+                          </a>
+                        </>
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={
+                          !item.latestVersionId ||
+                          busyVersionId === item.latestVersionId
+                        }
+                        onClick={() => {
+                          void triggerReprocess(item)
+                        }}
+                        className="rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {busyVersionId === item.latestVersionId
+                          ? 'Iniciando...'
+                          : item.status === 'processing'
+                            ? 'Forzar reprocesar'
+                            : 'Reprocesar'}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
