@@ -16,10 +16,37 @@ export type DocumentStatusItem = {
 }
 
 const POLL_INTERVAL_MS = 4_000
+/** Refresco del contador de progreso (animación fluida). */
+const PROGRESS_TICK_MS = 700
 
 /** True si algún item sigue en vuelo (necesita polling). */
 function needsPolling(items: DocumentStatusItem[]): boolean {
   return items.some((i) => i.status === 'processing' || i.status === 'pending')
+}
+
+/**
+ * Progreso estimado (0-100) en función del tiempo transcurrido procesando.
+ *
+ * No es un porcentaje "real" reportado por el backend (la ingesta corre en
+ * segundo plano sin canal de progreso incremental); es una curva asintótica
+ * calibrada al tiempo típico de un protocolo. Sube rápido al principio y se
+ * desacelera acercándose al 96%, donde espera a que el estado pase a 'ready'
+ * (momento en que la UI salta a 100%). Da feedback honesto de "sigue trabajando"
+ * sin mentir diciendo que terminó.
+ */
+function estimateProgress(elapsedMs: number): number {
+  const tau = 30_000 // constante de tiempo (~30s)
+  const raw = 96 * (1 - Math.exp(-elapsedMs / tau))
+  return Math.min(96, Math.max(4, Math.round(raw)))
+}
+
+/** Etiqueta de etapa aproximada según el progreso. */
+function stageLabel(pct: number): string {
+  if (pct < 15) return 'Subiendo y parseando el PDF...'
+  if (pct < 40) return 'Extrayendo y dividiendo el texto...'
+  if (pct < 68) return 'Indexando fragmentos (embeddings)...'
+  if (pct < 92) return 'Extrayendo spec con IA...'
+  return 'Finalizando...'
 }
 
 interface DocumentsStatusListProps {
@@ -31,12 +58,52 @@ export function DocumentsStatusList({ items: initialItems, studyId }: DocumentsS
   const [items, setItems] = useState<DocumentStatusItem[]>(initialItems)
   const [busyVersionId, setBusyVersionId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [now, setNow] = useState<number>(() => Date.now())
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // versionId → timestamp (reloj del cliente) en que lo vimos procesando por
+  // primera vez. Resiliente a reprocesos: se resetea al volver a 'processing'.
+  const startTimesRef = useRef<Map<string, number>>(new Map())
 
   // Sincronizar con cambios de prop (e.g. después de router.refresh()).
   useEffect(() => {
     setItems(initialItems)
   }, [initialItems])
+
+  // Registrar/limpiar el inicio de procesamiento por versión.
+  useEffect(() => {
+    const map = startTimesRef.current
+    const activeIds = new Set<string>()
+    for (const item of items) {
+      if (!item.latestVersionId) continue
+      if (item.status === 'processing' || item.status === 'pending') {
+        activeIds.add(item.latestVersionId)
+        if (!map.has(item.latestVersionId)) map.set(item.latestVersionId, Date.now())
+      }
+    }
+    // Limpiar entradas de versiones que ya terminaron.
+    for (const key of map.keys()) {
+      if (!activeIds.has(key)) map.delete(key)
+    }
+  }, [items])
+
+  // Tick para animar la barra de progreso mientras hay procesamiento activo.
+  useEffect(() => {
+    if (needsPolling(items)) {
+      if (!tickRef.current) {
+        tickRef.current = setInterval(() => setNow(Date.now()), PROGRESS_TICK_MS)
+      }
+    } else if (tickRef.current) {
+      clearInterval(tickRef.current)
+      tickRef.current = null
+    }
+    return () => {
+      if (tickRef.current) {
+        clearInterval(tickRef.current)
+        tickRef.current = null
+      }
+    }
+  }, [items])
 
   const fetchDocuments = useCallback(async () => {
     try {
@@ -154,7 +221,18 @@ export function DocumentsStatusList({ items: initialItems, studyId }: DocumentsS
                   <td className="px-3 py-2 text-gray-900">{item.documentName}</td>
                   <td className="px-3 py-2 text-gray-700">{item.documentType}</td>
                   <td className="px-3 py-2">
-                    <StatusPill status={item.status} />
+                    {item.status === 'processing' || item.status === 'pending' ? (
+                      <ProgressIndicator
+                        startedAt={
+                          item.latestVersionId
+                            ? startTimesRef.current.get(item.latestVersionId) ?? now
+                            : now
+                        }
+                        now={now}
+                      />
+                    ) : (
+                      <StatusPill status={item.status} />
+                    )}
                   </td>
                   <td className="px-3 py-2 text-gray-700">{item.pageCount ?? '—'}</td>
                   <td className="max-w-xs px-3 py-2 text-gray-700">
@@ -189,6 +267,34 @@ export function DocumentsStatusList({ items: initialItems, studyId }: DocumentsS
           </table>
         </div>
       )}
+    </div>
+  )
+}
+
+function ProgressIndicator({ startedAt, now }: { startedAt: number; now: number }) {
+  const elapsedMs = Math.max(0, now - startedAt)
+  const pct = estimateProgress(elapsedMs)
+  const seconds = Math.floor(elapsedMs / 1000)
+
+  return (
+    <div className="min-w-[150px] space-y-1">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-alphi-teal">{pct}%</span>
+        <span className="font-mono text-[10px] text-gray-400">{seconds}s</span>
+      </div>
+      <div
+        className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100"
+        role="progressbar"
+        aria-valuenow={pct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <div
+          className="h-full rounded-full bg-alphi-teal transition-all duration-700 ease-out"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="text-[10px] leading-tight text-gray-500">{stageLabel(pct)}</p>
     </div>
   )
 }
