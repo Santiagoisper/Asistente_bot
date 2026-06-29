@@ -361,6 +361,38 @@ describe('answerEngine — excerpt handling', () => {
 
     expect(result.evidences[0]!.excerpt).toBe(shortContent)
   })
+
+  it('centers the excerpt on the chunk fragment relevant to the question/answer', async () => {
+    // Reproduce el caso reportado: chunk multi-página cuyo INICIO es texto no
+    // relacionado (anticuerpos) y cuyo pasaje relevante (timeline de SAE) está
+    // en el medio. El excerpt debe centrarse en el pasaje relevante.
+    // Prefijo no relacionado lo bastante largo (>EXCERPT_MAX_CHARS) como para que
+    // el enfoque anterior (primeros 600 chars) NO incluyera el pasaje del SAE.
+    const irrelevant = 'Se analizaran las muestras de suero para detectar anticuerpos anti-pegozafermina. '.repeat(12)
+    const relevant =
+      'El evento adverso serio debe notificarse a 89bio dentro de las 24 horas desde que se toma conocimiento, hasta 28 dias despues de la ultima dosis. '
+    const trailing = 'Procedimientos medicos como endoscopia o apendicectomia se registran aparte. '.repeat(8)
+    const content = irrelevant + relevant + trailing
+    const chunk = makeChunk({ content, similarityScore: 0.9 })
+    mocks.generateObject.mockResolvedValueOnce(
+      makeLLMResponse({
+        answer:
+          'El SAE debe notificarse dentro de las 24 horas, hasta 28 dias despues de la ultima dosis [1].',
+        confidence: 'high',
+        citationIndices: [1],
+      })
+    )
+
+    const result = await answerEngine(
+      makeInput([chunk], 'cual es el timeline del reporte de un SAE?')
+    )
+
+    const excerpt = result.evidences[0]!.excerpt
+    // El prefijo de 600 chars NO contiene el pasaje del SAE; el excerpt relevante sí.
+    expect(truncateExcerpt(content)).not.toContain('24 horas')
+    expect(excerpt).toContain('24 horas')
+    expect(excerpt).toContain('89bio')
+  })
 })
 
 // ---------------------------------------------------------------------------

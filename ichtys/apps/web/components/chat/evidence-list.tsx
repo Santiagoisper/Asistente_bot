@@ -132,7 +132,11 @@ export function EvidenceCard({
  * localizarlo dentro del texto de la página aunque difieran los saltos de línea.
  */
 function buildExcerptRegex(excerpt: string): RegExp | null {
-  const cleaned = excerpt.trim().replace(/\s+/g, ' ')
+  const cleaned = excerpt
+    .replace(/^\s*…\s*/, '')
+    .replace(/\s*…\s*$/, '')
+    .trim()
+    .replace(/\s+/g, ' ')
   if (cleaned.length < 8) return null
   const needle = cleaned.slice(0, 240)
   const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+')
@@ -200,27 +204,44 @@ export function EvidenceList({
   if (evidences.length === 0) return null
 
   async function openInlineViewer(evidence: Evidence): Promise<void> {
-    if (evidence.pageStart === null || evidence.pageStart === undefined) return
+    const start = evidence.pageStart
+    if (start === null || start === undefined) return
+    const end = evidence.pageEnd ?? start
     setViewerLoading(true)
     setViewerTitle(evidence.documentName ?? 'Documento')
     setViewerExcerpt(evidence.excerpt)
-    setViewerPage(evidence.pageStart)
+    setViewerPage(start)
     setViewerPageText('')
+    setViewerUrl(null)
+
+    // En chunks multi-página el pasaje citado puede estar en cualquier página
+    // del rango [pageStart, pageEnd]. Recorremos el rango y elegimos la primera
+    // página cuyo texto contiene el excerpt; si ninguna coincide, usamos la
+    // primera página disponible.
+    const regex = buildExcerptRegex(evidence.excerpt)
+    const lastPage = Math.min(end, start + 4)
+    type PageHit = { openUrl: string; pageText: string; page: number }
+    let firstOk: PageHit | null = null
+    let matched: PageHit | null = null
+
     try {
-      const res = await fetch(
-        `/api/documents/${encodeURIComponent(evidence.documentId)}/page/${evidence.pageStart}`,
-      )
-      if (!res.ok) {
-        setViewerLoading(false)
-        return
+      for (let p = start; p <= lastPage && !matched; p++) {
+        const res = await fetch(
+          `/api/documents/${encodeURIComponent(evidence.documentId)}/page/${p}`,
+        )
+        if (!res.ok) continue
+        const payload = (await res.json()) as { openUrl?: string; pageText?: string }
+        if (!payload.openUrl) continue
+        const hit: PageHit = { openUrl: payload.openUrl, pageText: payload.pageText ?? '', page: p }
+        if (!firstOk) firstOk = hit
+        if (regex && hit.pageText && regex.test(hit.pageText)) matched = hit
       }
-      const payload = (await res.json()) as { openUrl?: string; pageText?: string }
-      if (!payload.openUrl) {
-        setViewerLoading(false)
-        return
+      const pick = matched ?? firstOk
+      if (pick) {
+        setViewerPage(pick.page)
+        setViewerPageText(pick.pageText)
+        setViewerUrl(pick.openUrl)
       }
-      setViewerPageText(payload.pageText ?? '')
-      setViewerUrl(payload.openUrl)
     } catch {
       // non-blocking
     } finally {

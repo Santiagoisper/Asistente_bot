@@ -157,6 +157,101 @@ export function truncateExcerpt(content: string, maxChars = EXCERPT_MAX_CHARS): 
   return (lastSpace > 0 ? truncated.slice(0, lastSpace) : truncated) + '…'
 }
 
+/** Stopwords ES/EN para no puntuar términos vacíos al rankear el excerpt. */
+const EXCERPT_STOPWORDS = new Set([
+  'el','la','los','las','un','una','unos','unas','de','del','al','y','o','u','en','a','que','se','su','sus',
+  'con','por','para','como','cual','cuales','es','son','ser','este','esta','estos','estas','lo','le','les',
+  'no','si','mas','muy','sin','sobre','entre','cuando','donde','cada','todo','todos','toda','todas','hay',
+  'han','ha','fue','sera','the','an','and','or','of','to','in','is','are','for','on','at','as','by','with',
+  'that','this','these','those','from','what','which','when','where','how','be','was','were','has','have',
+  'had','it','its','about','into','than','then','there',
+])
+
+function normalizeForMatch(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+}
+
+/** Términos significativos de la consulta (palabras >=4 y números). */
+function extractQueryTerms(query: string): Set<string> {
+  const tokens = normalizeForMatch(query).split(/[^a-z0-9]+/).filter(Boolean)
+  const terms = new Set<string>()
+  for (const t of tokens) {
+    if (/^\d+$/.test(t)) {
+      terms.add(t)
+      continue
+    }
+    if (t.length >= 4 && !EXCERPT_STOPWORDS.has(t)) terms.add(t)
+  }
+  return terms
+}
+
+/**
+ * Selecciona la ventana de ~maxChars del chunk MÁS relevante a la consulta
+ * (pregunta + respuesta), en lugar de devolver siempre el prefijo. En chunks
+ * grandes/multi-página el prefijo puede caer en texto no relacionado (p. ej. el
+ * final de la sección anterior), haciendo que la cita y el resaltado apunten al
+ * pasaje equivocado aunque la respuesta sí esté fundada más adelante en el mismo
+ * chunk. Esto centra el excerpt en la zona con más coincidencias de términos.
+ * Si no hay términos o coincidencias, cae al prefijo truncado (comportamiento
+ * previo).
+ */
+export function selectRelevantExcerpt(
+  content: string,
+  query: string,
+  maxChars = EXCERPT_MAX_CHARS,
+): string {
+  if (content.length <= maxChars) return content
+  const terms = extractQueryTerms(query)
+  if (terms.size === 0) return truncateExcerpt(content, maxChars)
+
+  const norm = normalizeForMatch(content)
+  const hits: number[] = []
+  for (const term of terms) {
+    let from = 0
+    let i = norm.indexOf(term, from)
+    while (i !== -1) {
+      hits.push(i)
+      from = i + term.length
+      i = norm.indexOf(term, from)
+    }
+  }
+  if (hits.length === 0) return truncateExcerpt(content, maxChars)
+  hits.sort((a, b) => a - b)
+
+  // Ventana de maxChars con más coincidencias (dos punteros sobre posiciones).
+  let bestCount = 0
+  let bestCenter = hits[0]!
+  let l = 0
+  for (let r = 0; r < hits.length; r++) {
+    while (hits[r]! - hits[l]! > maxChars) l++
+    const count = r - l + 1
+    if (count > bestCount) {
+      bestCount = count
+      bestCenter = Math.floor((hits[l]! + hits[r]!) / 2)
+    }
+  }
+
+  let start = Math.max(0, bestCenter - Math.floor(maxChars / 2))
+  const end = Math.min(content.length, start + maxChars)
+  start = Math.max(0, end - maxChars)
+
+  const prefix = start > 0 ? '…' : ''
+  const suffix = end < content.length ? '…' : ''
+  let snippet = content.slice(start, end)
+  // Recortar palabras parciales en los bordes.
+  if (prefix) {
+    const sp = snippet.indexOf(' ')
+    if (sp > 0 && sp < 40) snippet = snippet.slice(sp + 1)
+  }
+  if (suffix) {
+    const sp = snippet.lastIndexOf(' ')
+    if (sp > snippet.length - 40 && sp > 0) snippet = snippet.slice(0, sp)
+  }
+  const budget = maxChars - prefix.length - suffix.length
+  if (snippet.length > budget) snippet = snippet.slice(0, budget)
+  return prefix + snippet.trim() + suffix
+}
+
 /**
  * Construye el bloque de contexto numerado (1-based) que se inyecta en el
  * prompt. El índice es el que el LLM usa para citar [n].
@@ -206,7 +301,11 @@ function buildUserPrompt(
  * Índices fuera de rango o repetidos se ignoran silenciosamente.
  * Los excerpts se truncan para no exponer chunks completos.
  */
-function extractEvidences(chunks: RetrievedChunk[], indices: number[]): Evidence[] {
+function extractEvidences(
+  chunks: RetrievedChunk[],
+  indices: number[],
+  query: string,
+): Evidence[] {
   const seen = new Set<string>()
   const evidences: Evidence[] = []
 
@@ -223,7 +322,7 @@ function extractEvidences(chunks: RetrievedChunk[], indices: number[]): Evidence
       pageStart: chunk.pageStart,
       pageEnd: chunk.pageEnd,
       sectionTitle: chunk.sectionTitle,
-      excerpt: truncateExcerpt(chunk.content),
+      excerpt: selectRelevantExcerpt(chunk.content, query),
     })
   }
 
@@ -297,8 +396,13 @@ export async function answerEngine(input: AnswerEngineInput): Promise<AnswerResu
     }
   }
 
-  // 5. Mapear índices a evidencias reales.
-  const evidences = extractEvidences(aboveThreshold, structured.citationIndices)
+  // 5. Mapear índices a evidencias reales. La consulta (pregunta + respuesta)
+  //    guía la selección del fragmento citado más relevante dentro del chunk.
+  const evidences = extractEvidences(
+    aboveThreshold,
+    structured.citationIndices,
+    `${question}\n${structured.answer}`,
+  )
 
   // 6. Invariante: high/medium/low requieren evidencias. Si el LLM devuelve
   //    citationIndices que no mapean a chunks válidos, degradar.
@@ -418,8 +522,13 @@ export async function* answerEngineStream(
     return
   }
 
-  // 5. Map citation indices to real evidence objects.
-  const evidences = extractEvidences(aboveThreshold, finalObj.citationIndices)
+  // 5. Map citation indices to real evidence objects. Question + answer guide
+  //    which fragment of each chunk is the most relevant to cite/highlight.
+  const evidences = extractEvidences(
+    aboveThreshold,
+    finalObj.citationIndices,
+    `${question}\n${finalObj.answer}`,
+  )
   if (evidences.length === 0) {
     yield { type: 'token', text: finalObj.answer }
     yield { type: 'done', confidence: 'insufficient_evidence', evidences: [], fullAnswer: finalObj.answer }
