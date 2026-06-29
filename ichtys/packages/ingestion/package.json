@@ -14,7 +14,8 @@
     "./study-spec": "./study-spec.ts",
     "./spec-extractor": "./spec-extractor.ts",
     "./spec-store": "./spec-store.ts",
-    "./ingestion-jobs": "./ingestion-jobs.ts"
+    "./ingestion-jobs": "./ingestion-jobs.ts",
+    "./reextract-spec": "./reextract-spec.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

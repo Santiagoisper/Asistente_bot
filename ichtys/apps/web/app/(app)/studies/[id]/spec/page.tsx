@@ -1,7 +1,8 @@
 import { validateStudyAccess } from '@ichtys/auth'
-import { getLatestStudySpec, studySpecSchema } from '@ichtys/ingestion'
+import { getLatestStudySpec, studySpecSchema, isMeaningfulSpec } from '@ichtys/ingestion'
 import { annotateAnswerSync } from '@ichtys/rag/medical-annotator'
 import SpecReview from '../../../../../components/spec/spec-review'
+import { SpecReextractButton } from '../../../../../components/spec/spec-reextract-button'
 import type { EligibilityCriterion } from '@ichtys/ingestion'
 import type { MedicalAnnotation } from '@ichtys/rag/medical-annotator'
 
@@ -48,13 +49,27 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
   }
 
   const spec = studySpecSchema.parse(row.spec)
+  const meaningful = isMeaningfulSpec(spec)
 
   // Annotate criteria with SNOMED-CT / LOINC — deterministic, < 2 ms total
   const annotatedInclusion = annotateCriteria(spec.inclusionCriteria)
   const annotatedExclusion = annotateCriteria(spec.exclusionCriteria)
 
   return (
-    <SpecReview
+    <div className="space-y-4">
+      {!meaningful && (
+        <div className="rounded-xl border border-alphi-amber/40 bg-alphi-amber/10 px-4 py-3 text-sm text-alphi-navy">
+          <p className="font-semibold">Spec parcial — solo identificación del protocolo</p>
+          <p className="mt-1 text-alphi-muted">
+            ALPHI extrajo el código y título, pero no los criterios, endpoints ni visitas.
+            El documento sí está indexado para el chat. Podés re-intentar la extracción del spec.
+          </p>
+          <div className="mt-3">
+            <SpecReextractButton studyId={studyId} />
+          </div>
+        </div>
+      )}
+      <SpecReview
       specId={row.id}
       studyId={studyId}
       version={row.version}
@@ -65,5 +80,6 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
       annotatedInclusion={annotatedInclusion}
       annotatedExclusion={annotatedExclusion}
     />
+    </div>
   )
 }

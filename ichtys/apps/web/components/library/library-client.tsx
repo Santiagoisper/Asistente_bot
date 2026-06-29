@@ -23,13 +23,15 @@ export type LibraryRow = {
   visitCount: number
   terminology: LibraryTerminology[]
   createdAt: string
+  specPartial?: boolean
 }
 
 const MAX_TERMINOLOGY_CHIPS = 8
 
 type SpecFilter = 'all' | 'approved' | 'draft' | 'none'
 
-function specStatusLabel(status: LibraryRow['specStatus']): string {
+function specStatusLabel(status: LibraryRow['specStatus'], partial?: boolean): string {
+  if (partial && status === 'draft') return 'Spec parcial'
   switch (status) {
     case 'approved':
       return 'Spec aprobado'
@@ -148,7 +150,7 @@ export function LibraryClient({ rows }: { rows: LibraryRow[] }) {
                   {r.title && <p className="mt-0.5 truncate text-sm text-alphi-muted">{r.title}</p>}
                 </div>
                 <span className={['shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-medium', specStatusClass(r.specStatus)].join(' ')}>
-                  {specStatusLabel(r.specStatus)}
+                  {specStatusLabel(r.specStatus, r.specPartial)}
                 </span>
               </div>
 

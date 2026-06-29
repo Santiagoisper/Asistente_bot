@@ -1,6 +1,6 @@
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { db, eq, organizations, studies, documentVersions, studySpecs } from '@ichtys/db'
-import { studySpecSchema } from '@ichtys/ingestion/study-spec'
+import { studySpecSchema, isMeaningfulSpec } from '@ichtys/ingestion'
 import { extractSpecTerminology, parseTerminologyAnnotations, readLegacySpecTerminology } from '../../../lib/rag/spec-terminology'
 import { LibraryClient, type LibraryRow } from '../../../components/library/library-client'
 
@@ -56,14 +56,26 @@ export default async function LibraryPage() {
         }
       }
 
-      // Spec de mayor versión por estudio (specs ya viene ordenado desc por version).
-      const latestSpecByStudy = new Map<string, (typeof specs)[number]>()
+      // Spec de mayor versión con contenido útil por estudio.
+      const specsByStudy = new Map<string, (typeof specs)[number][]>()
       for (const sp of specs) {
-        if (!latestSpecByStudy.has(sp.studyId)) latestSpecByStudy.set(sp.studyId, sp)
+        const list = specsByStudy.get(sp.studyId) ?? []
+        list.push(sp)
+        specsByStudy.set(sp.studyId, list)
       }
 
       rows = studyList.map((study) => {
-        const spec = latestSpecByStudy.get(study.id)
+        const studySpecsList = specsByStudy.get(study.id) ?? []
+        studySpecsList.sort((a, b) => b.version - a.version)
+        let spec: (typeof specs)[number] | undefined
+        for (const sp of studySpecsList) {
+          const parsed = studySpecSchema.safeParse(sp.spec)
+          if (parsed.success && isMeaningfulSpec(parsed.data)) {
+            spec = sp
+            break
+          }
+        }
+        spec ??= studySpecsList[0]
         const parsed = spec ? studySpecSchema.safeParse(spec.spec) : null
         const data = parsed?.success ? parsed.data : null
 
@@ -87,6 +99,7 @@ export default async function LibraryPage() {
           visitCount: data?.visits.length ?? 0,
           terminology: terminology.map((t) => ({ system: t.system, code: t.code, display: t.display })),
           createdAt: study.createdAt.toISOString(),
+          specPartial: spec ? (parsed?.success ? !isMeaningfulSpec(parsed.data) : true) : false,
         }
       })
     }

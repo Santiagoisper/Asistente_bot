@@ -1,7 +1,7 @@
 import { after } from 'next/server'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { auditLogs, db, documents, documentVersions, eq, ingestionJobs, organizations, studies } from '@ichtys/db'
-import { runIngestionJobBatch } from '@ichtys/ingestion/ingestion-jobs'
+import { runSingleIngestionJobById } from '@ichtys/ingestion/ingestion-jobs'
 import { putPrivateDocumentPdf } from '../../documents/upload/blob-storage'
 import {
   enforceSlidingWindowRateLimit,
@@ -284,13 +284,19 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   if (queuedCount > 0) {
-    after(async () => {
-      try {
-        await runIngestionJobBatch({ batchId, orgId: org.id })
-      } catch (err) {
-        console.error('[bulk-import] batch worker error:', err)
-      }
-    })
+    // Un after() por job: cada protocolo tiene hasta maxDuration propio en Vercel
+    // y la extracción de spec (4+ llamadas LLM) no compite con otros del lote.
+    for (const item of results) {
+      if (item.status !== 'queued' || !item.jobId) continue
+      const jobId = item.jobId
+      after(async () => {
+        try {
+          await runSingleIngestionJobById(jobId, org.id)
+        } catch (err) {
+          console.error(`[bulk-import] job ${jobId} error:`, err)
+        }
+      })
+    }
   }
 
   log(makeRecord({ requestId, level: 'info', event: 'api.request.completed', endpoint: '/api/studies/bulk-import', method: 'POST', userId, statusCode: 202 }))

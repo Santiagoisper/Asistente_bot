@@ -28,6 +28,15 @@ export async function runIngestionJobBatch(params: {
   }
 }
 
+/** Procesa un job individual (exportado para encolar after() por documento). */
+export async function runSingleIngestionJobById(jobId: string, orgId: string): Promise<void> {
+  const job = await db.query.ingestionJobs.findFirst({
+    where: and(eq(ingestionJobs.id, jobId), eq(ingestionJobs.organizationId, orgId)),
+  })
+  if (!job || job.status === 'ready' || job.status === 'error') return
+  await runSingleIngestionJob(job)
+}
+
 async function runSingleIngestionJob(
   job: typeof ingestionJobs.$inferSelect,
 ): Promise<void> {

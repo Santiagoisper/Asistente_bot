@@ -4,6 +4,20 @@ import { studySpecSchema, type StudySpec } from './study-spec'
 import type { ApprovedSpecExample } from './spec-extractor'
 import { SEED_SPEC_EXAMPLE } from './seed-spec-example'
 
+/** Puntuación para elegir el spec "efectivo" cuando hay versiones vacías. */
+export function specRichness(spec: StudySpec): number {
+  return (
+    spec.inclusionCriteria.length +
+    spec.exclusionCriteria.length +
+    spec.endpoints.length +
+    spec.visits.length
+  )
+}
+
+export function isMeaningfulSpec(spec: StudySpec): boolean {
+  return specRichness(spec) > 0
+}
+
 /**
  * spec-store.ts — persistencia versionada del study spec.
  *
@@ -101,6 +115,9 @@ export async function getApprovedSpecExamples(params: {
 /**
  * Devuelve la última versión del spec del estudio (cualquier status), o la
  * última aprobada si `approvedOnly`.
+ *
+ * Si la versión más alta es un "shell" vacío (p. ej. re-extracción fallida),
+ * devuelve la versión anterior con contenido útil.
  */
 export async function getLatestStudySpec(params: {
   orgId: string
@@ -119,7 +136,16 @@ export async function getLatestStudySpec(params: {
       params.approvedOnly ? and(tenantFilter, eq(studySpecs.status, 'approved')) : tenantFilter,
     )
     .orderBy(desc(studySpecs.version))
-    .limit(1)
+    .limit(10)
 
+  if (rows.length === 0) return null
+
+  for (const row of rows) {
+    const parsed = studySpecSchema.safeParse(row.spec)
+    if (!parsed.success) continue
+    if (isMeaningfulSpec(parsed.data)) return row
+  }
+
+  // Fallback: última versión aunque sea solo identificación (mejor que null).
   return rows[0] ?? null
 }
