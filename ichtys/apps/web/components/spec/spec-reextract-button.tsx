@@ -13,14 +13,18 @@ export function SpecReextractButton({ studyId }: { studyId: string }) {
       const res = await fetch(`/api/studies/${encodeURIComponent(studyId)}/spec/reextract`, {
         method: 'POST',
       })
-      const payload = (await res.json()) as { message?: string; error?: string }
+      const payload = (await res.json()) as {
+        message?: string
+        error?: string
+        richness?: number
+      }
       if (!res.ok) {
-        setMessage(payload.error ?? 'No se pudo iniciar la re-extracción.')
+        setMessage(payload.error ?? 'No se pudo completar la re-extracción.')
         return
       }
       setMessage(
         payload.message ??
-          'Re-extracción iniciada (3–5 min). No vuelvas a clickear — actualizá la página cuando termine.',
+          `Re-extracción completada (${payload.richness ?? '?'} ítems). Actualizá la página.`,
       )
     } catch {
       setMessage('Error de red al iniciar la re-extracción.')
@@ -37,7 +41,7 @@ export function SpecReextractButton({ studyId }: { studyId: string }) {
         disabled={loading}
         onClick={() => void handleClick()}
       >
-        {loading ? 'Iniciando…' : 'Re-extraer spec completo'}
+        {loading ? 'Extrayendo (2–5 min)…' : 'Re-extraer spec completo'}
       </button>
       {message && <p className="mt-2 text-xs text-alphi-muted">{message}</p>}
     </div>
