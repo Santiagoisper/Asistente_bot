@@ -180,6 +180,7 @@ export async function POST(req: Request): Promise<Response> {
 
       // Emit start frame immediately so the client can bind the IDs.
       enqueue({ type: 'start', conversationId, userMessageId })
+      enqueue({ type: 'status', phase: 'searching' })
 
       let retrievalCount = 0
       let fullAnswer = ''
@@ -220,6 +221,7 @@ export async function POST(req: Request): Promise<Response> {
           `+ ${specContext.chunks.length} spec chunks (intent: ${specContext.specFound ? 'matched' : 'none'})`,
         )
         retrievalCount = allChunks.length
+        enqueue({ type: 'status', phase: 'generating' })
 
         // 10b. Stream LLM answer.
         const eventGen: AsyncGenerator<AnswerStreamEvent> = answerEngineStream({
@@ -241,6 +243,9 @@ export async function POST(req: Request): Promise<Response> {
           if (event.type === 'token') {
             engineAnswer += event.text
             if (streamEngineTokens) {
+              if (fullAnswer.length === 0) {
+                enqueue({ type: 'status', phase: 'writing' })
+              }
               fullAnswer += event.text
               enqueue({ type: 'token', text: event.text })
             }
@@ -265,6 +270,7 @@ export async function POST(req: Request): Promise<Response> {
           finalEvidences = composed.protocolMentionsFound ? engineEvidences : []
 
           // Stremear el texto compuesto en chunks para render progresivo.
+          enqueue({ type: 'status', phase: 'writing' })
           const CHUNK_SIZE = 50
           for (let i = 0; i < composed.answer.length; i += CHUNK_SIZE) {
             enqueue({ type: 'token', text: composed.answer.slice(i, i + CHUNK_SIZE) })

@@ -1,4 +1,4 @@
-import { generateObject } from 'ai'
+import { generateObject, streamText } from 'ai'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { z } from 'zod'
 import { answerConfidence } from '@ichtys/db'
@@ -108,6 +108,34 @@ CRITICAL RULES:
 9. For counting or enumeration questions (e.g., "how many visits", "cuantas visitas"), you MAY count items that are explicitly listed or tabulated in the excerpts and report the count with appropriate confidence. Do not infer items not visible in the excerpts.
 
 For citationIndices: return the 1-based numbers of the excerpts you cited (e.g., if you cited [1] and [3], return [1, 3]).`
+
+/** Variante streaming: misma regla de grounding, pero la salida es markdown plano con [n] inline. */
+export const STREAM_ANSWER_SYSTEM_PROMPT = `${SYSTEM_PROMPT}
+
+OUTPUT FORMAT:
+- Respond ONLY with the answer text in markdown (no JSON, no wrapper).
+- Include inline citation numbers [1], [2], etc. for every claim, matching the excerpt numbers in the context.`
+
+export const confidenceOnlySchema = z.object({
+  confidence: z.enum(answerConfidence),
+})
+
+/** Extrae índices 1-based únicos de citas [n] presentes en la respuesta. */
+export function extractCitationIndicesFromAnswer(answer: string, maxIndex: number): number[] {
+  const seen = new Set<number>()
+  const indices: number[] = []
+  const re = /\[(\d+)\]/g
+  let m: RegExpExecArray | null
+  // biome-ignore lint: intentional assignment in condition
+  while ((m = re.exec(answer)) !== null) {
+    const n = parseInt(m[1] ?? '', 10)
+    if (n >= 1 && n <= maxIndex && !seen.has(n)) {
+      seen.add(n)
+      indices.push(n)
+    }
+  }
+  return indices
+}
 
 // ---------------------------------------------------------------------------
 // Schema de salida estructurada del LLM
@@ -465,13 +493,38 @@ export type AnswerStreamEvent =
   | { type: 'done'; confidence: Confidence; evidences: Evidence[]; fullAnswer: string }
 
 /**
+ * Evalúa confianza de una respuesta ya generada contra el mismo contexto.
+ * Llamada rápida post-stream para no bloquear la emisión de tokens.
+ */
+async function evaluateStreamedAnswerConfidence(
+  question: string,
+  context: string,
+  fullAnswer: string,
+  model: ReturnType<ReturnType<typeof createAnthropic>>,
+): Promise<Confidence> {
+  try {
+    const result = await generateObject({
+      model,
+      schema: confidenceOnlySchema,
+      mode: 'tool',
+      system:
+        'You evaluate whether a clinical answer is fully supported by the provided document excerpts. ' +
+        'Return insufficient_evidence if the answer speculates, extrapolates, or is not supported by the excerpts.',
+      prompt: `USER QUESTION:\n${question}\n\nDOCUMENT EXCERPTS:\n${context}\n\nGENERATED ANSWER:\n${fullAnswer}\n\nRate confidence for this answer.`,
+    })
+    return result.object.confidence
+  } catch {
+    return 'medium'
+  }
+}
+
+/**
  * Streaming variant of answerEngine. Yields token events as the LLM generates
  * the answer, then a final done event with confidence + evidences.
  *
  * Rules:
  *  - Same guardrails as answerEngine (threshold, insufficient evidence path).
- *  - Uses generateObject for reliable structured output (streamObject/partialObjectStream
- *    yields 0 partials with claude-sonnet-4-6 and hangs on .object — incompatibility).
+ *  - Uses streamText for real-time token streaming; confidence via post-hoc eval.
  *  - NO HTTP, NO auth, NO retrieval — same as answerEngine.
  */
 export async function* answerEngineStream(
@@ -495,53 +548,52 @@ export async function* answerEngineStream(
   const model = createModel()
   const userPrompt = buildUserPrompt(question, context, conversationHistory)
 
-  // 3. Generate structured answer — generateObject is reliable with Anthropic.
-  //    streamObject/partialObjectStream consistently yields 0 partials with
-  //    claude-sonnet-4-6; generateObject avoids that incompatibility.
-  let finalObj: StructuredAnswer
+  // 3. Stream answer text token-by-token from the LLM.
+  let fullAnswer = ''
   try {
-    console.log('[answer-engine] calling Claude API...')
-    const result = await generateObject({
+    const streamResult = streamText({
       model,
-      schema: answerSchema,
-      mode: 'tool',
-      system: SYSTEM_PROMPT,
+      system: STREAM_ANSWER_SYSTEM_PROMPT,
       prompt: userPrompt,
     })
-    finalObj = result.object as StructuredAnswer
-    console.log(`[answer-engine] response received, confidence=${finalObj.confidence}`)
+
+    for await (const chunk of streamResult.textStream) {
+      fullAnswer += chunk
+      yield { type: 'token', text: chunk }
+    }
+
+    fullAnswer = (await streamResult.text) || fullAnswer
   } catch (err) {
-    console.error('[answer-engine] error:', err)
+    console.error('[answer-engine] stream error:', err)
     throw sanitizeLLMError(err)
   }
 
-  // 4. LLM says insufficient evidence.
-  if (finalObj.confidence === 'insufficient_evidence') {
-    yield { type: 'token', text: finalObj.answer }
-    yield { type: 'done', confidence: 'insufficient_evidence', evidences: [], fullAnswer: finalObj.answer }
+  if (!fullAnswer.trim()) {
+    const msg = getInsufficientEvidenceMessage(question)
+    yield { type: 'done', confidence: 'insufficient_evidence', evidences: [], fullAnswer: msg }
     return
   }
 
-  // 5. Map citation indices to real evidence objects. Question + answer guide
-  //    which fragment of each chunk is the most relevant to cite/highlight.
+  // 4. Post-stream confidence eval (no bloquea tokens — corre después del stream).
+  const confidence = await evaluateStreamedAnswerConfidence(question, context, fullAnswer, model)
+
+  if (confidence === 'insufficient_evidence') {
+    yield { type: 'done', confidence: 'insufficient_evidence', evidences: [], fullAnswer }
+    return
+  }
+
+  // 5. Map citation indices from inline [n] markers to evidence objects.
+  const citationIndices = extractCitationIndicesFromAnswer(fullAnswer, aboveThreshold.length)
   const evidences = extractEvidences(
     aboveThreshold,
-    finalObj.citationIndices,
-    `${question}\n${finalObj.answer}`,
+    citationIndices,
+    `${question}\n${fullAnswer}`,
   )
+
   if (evidences.length === 0) {
-    yield { type: 'token', text: finalObj.answer }
-    yield { type: 'done', confidence: 'insufficient_evidence', evidences: [], fullAnswer: finalObj.answer }
+    yield { type: 'done', confidence: 'insufficient_evidence', evidences: [], fullAnswer }
     return
   }
 
-  // 6. Emit answer as tokens then the done event.
-  //    Chunk into ~50-char pieces so the client renders progressively.
-  const CHUNK_SIZE = 50
-  const answer = finalObj.answer
-  for (let i = 0; i < answer.length; i += CHUNK_SIZE) {
-    yield { type: 'token', text: answer.slice(i, i + CHUNK_SIZE) }
-  }
-
-  yield { type: 'done', confidence: finalObj.confidence, evidences, fullAnswer: answer }
+  yield { type: 'done', confidence, evidences, fullAnswer }
 }

@@ -32,18 +32,20 @@ const SUGGESTED = [
 ]
 
 // SSE frame types from /api/chat/stream
+type StreamStatusFrame     = { type: 'status'; phase: 'searching' | 'generating' | 'writing' }
 type StreamStartFrame       = { type: 'start';       conversationId: string; userMessageId: string }
 type StreamTokenFrame       = { type: 'token';       text: string }
 type StreamDoneFrame        = { type: 'done';        assistantMessageId: string; confidence: AnswerConfidence; evidences: Evidence[]; retrievalCount: number; conversationId: string; terminologySuggestions?: TerminologySuggestion[]; protocolMentionsFound?: boolean }
 type StreamAnnotationsFrame = { type: 'annotations'; annotations: MedicalAnnotation[] }
 type StreamTitleFrame       = { type: 'title';       conversationId: string; title: string }
 type StreamErrorFrame       = { type: 'error' }
-type StreamFrame = StreamStartFrame | StreamTokenFrame | StreamDoneFrame | StreamAnnotationsFrame | StreamTitleFrame | StreamErrorFrame
+type StreamFrame = StreamStartFrame | StreamTokenFrame | StreamDoneFrame | StreamAnnotationsFrame | StreamTitleFrame | StreamStatusFrame | StreamErrorFrame
 
 function isStartFrame(f: StreamFrame):       f is StreamStartFrame       { return f.type === 'start' }
 function isDoneFrame(f: StreamFrame):        f is StreamDoneFrame        { return f.type === 'done' }
 function isAnnotationsFrame(f: StreamFrame): f is StreamAnnotationsFrame { return f.type === 'annotations' }
 function isTitleFrame(f: StreamFrame):       f is StreamTitleFrame       { return f.type === 'title' }
+function isStatusFrame(f: StreamFrame):      f is StreamStatusFrame      { return f.type === 'status' }
 
 function parseFrame(line: string): StreamFrame | null {
   if (!line.startsWith('data: ')) return null
@@ -167,6 +169,7 @@ export default function ChatClient({
       confidence: null,
       evidences: [],
       retrievalCount: null,
+      streamingPhase: 'searching',
     }
     setTurns((prev) => [...prev, pendingUserTurn, streamingTurn])
     setStreamingTurnId(streamId)
@@ -221,7 +224,16 @@ export default function ChatClient({
             // Append token to streaming assistant bubble
             setTurns((prev) =>
               prev.map((t) =>
-                t.messageId === streamId ? { ...t, content: t.content + frame.text } : t
+                t.messageId === streamId
+                  ? { ...t, content: t.content + frame.text, streamingPhase: 'writing' }
+                  : t
+              )
+            )
+
+          } else if (isStatusFrame(frame)) {
+            setTurns((prev) =>
+              prev.map((t) =>
+                t.messageId === streamId ? { ...t, streamingPhase: frame.phase } : t
               )
             )
 
@@ -240,6 +252,7 @@ export default function ChatClient({
                       retrievalCount: frame.retrievalCount,
                       terminologySuggestions: frame.terminologySuggestions ?? [],
                       protocolMentionsFound: frame.protocolMentionsFound ?? false,
+                      streamingPhase: null,
                     }
                   : t
               )
@@ -466,6 +479,18 @@ export default function ChatClient({
 // Sub-components
 // ---------------------------------------------------------------------------
 
+function streamingStatusLabel(phase: ChatTurn['streamingPhase']): string {
+  switch (phase) {
+    case 'generating':
+      return 'generando respuesta...'
+    case 'writing':
+      return 'escribiendo...'
+    case 'searching':
+    default:
+      return 'buscando en documentos...'
+  }
+}
+
 function ChatMessage({
   turn,
   isStreaming,
@@ -498,7 +523,7 @@ function ChatMessage({
             {isStreaming && (
               <span className="inline-flex items-center gap-1 text-[11px] text-alphi-teal">
                 <TypingDots />
-                <span className="ml-0.5">escribiendo</span>
+                <span className="ml-0.5">{streamingStatusLabel(turn.streamingPhase)}</span>
               </span>
             )}
           </div>
@@ -507,11 +532,15 @@ function ChatMessage({
           <div className="alphi-answer-text text-alphi-navy">
             {turn.content ? (
               <>
-                <AnswerContent
-                  text={turn.content}
-                  evidences={turn.evidences}
-                  onFootnoteClick={onFootnoteClick}
-                />
+                {isStreaming ? (
+                  <p className="whitespace-pre-wrap">{turn.content}</p>
+                ) : (
+                  <AnswerContent
+                    text={turn.content}
+                    evidences={turn.evidences}
+                    onFootnoteClick={onFootnoteClick}
+                  />
+                )}
                 {isStreaming && (
                   <span
                     className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-alphi-teal align-middle"
@@ -523,7 +552,7 @@ function ChatMessage({
               isStreaming && (
                 <span className="inline-flex items-center gap-1 text-alphi-muted text-xs">
                   <TypingDots />
-                  <span className="ml-1">buscando en documentos...</span>
+                  <span className="ml-1">{streamingStatusLabel(turn.streamingPhase)}</span>
                 </span>
               )
             )}

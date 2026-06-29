@@ -86,4 +86,6 @@ export type ChatTurn = {
   terminologySuggestions?: TerminologySuggestion[]
   /** true si el protocolo aportó evidencia grounded sobre el concepto consultado. */
   protocolMentionsFound?: boolean
+  /** Fase activa mientras el turno se está streameando (solo UI). */
+  streamingPhase?: 'searching' | 'generating' | 'writing' | null
 }

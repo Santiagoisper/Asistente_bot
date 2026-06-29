@@ -9,17 +9,19 @@ const mocks = vi.hoisted(() => {
   const anthropicProviderFn = vi.fn().mockReturnValue(mockModel)
   const createAnthropicFn = vi.fn().mockReturnValue(anthropicProviderFn)
   const generateObjectFn = vi.fn()
+  const streamTextFn = vi.fn()
 
   return {
     mockModel,
     anthropicProviderFn,
     createAnthropic: createAnthropicFn,
     generateObject: generateObjectFn,
+    streamText: streamTextFn,
   }
 })
 
 vi.mock('@ai-sdk/anthropic', () => ({ createAnthropic: mocks.createAnthropic }))
-vi.mock('ai', () => ({ generateObject: mocks.generateObject }))
+vi.mock('ai', () => ({ generateObject: mocks.generateObject, streamText: mocks.streamText }))
 
 // @ichtys/db: mock para evitar que el cliente DB tire error por DATABASE_URL faltante.
 // Se proveen todos los valores que answer-engine.ts y retriever.ts necesitan.
@@ -47,12 +49,14 @@ vi.mock('@ichtys/ingestion/embedder', () => ({
 
 import {
   answerEngine,
+  answerEngineStream,
   AnswerEngineError,
   EXCERPT_MAX_CHARS,
   HISTORY_TURN_MAX_CHARS,
   MAX_HISTORY_TURNS,
   SYSTEM_PROMPT,
   truncateExcerpt,
+  extractCitationIndicesFromAnswer,
   buildContext,
   buildHistoryBlock,
 } from '../answer-engine'
@@ -715,5 +719,62 @@ describe('answerEngine — conversationHistory', () => {
     expect(result.confidence).toBe('insufficient_evidence')
     expect(result.evidences).toEqual([])
     expect(mocks.generateObject).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// extractCitationIndicesFromAnswer
+// ---------------------------------------------------------------------------
+
+describe('extractCitationIndicesFromAnswer', () => {
+  it('extrae índices únicos en orden de aparición', () => {
+    expect(extractCitationIndicesFromAnswer('Foo [1] bar [3] y [1]', 5)).toEqual([1, 3])
+  })
+
+  it('ignora índices fuera de rango', () => {
+    expect(extractCitationIndicesFromAnswer('Ref [9]', 3)).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// answerEngineStream — streaming real via streamText
+// ---------------------------------------------------------------------------
+
+describe('answerEngineStream', () => {
+  it('emite tokens del streamText antes del evento done', async () => {
+    async function* fakeStream() {
+      yield 'Plazo de '
+      yield '24 horas [1]'
+    }
+    mocks.streamText.mockReturnValue({
+      textStream: fakeStream(),
+      text: Promise.resolve('Plazo de 24 horas [1]'),
+    })
+    mocks.generateObject.mockResolvedValueOnce({ object: { confidence: 'high' } })
+
+    const chunk = makeChunk({
+      content: 'Notify within 24 hours of SAE awareness.',
+      similarityScore: 0.92,
+    })
+    const events: Array<{ type: string; text?: string; confidence?: string }> = []
+    for await (const event of answerEngineStream(makeInput([chunk]))) {
+      events.push(event)
+    }
+
+    const tokens = events.filter((e) => e.type === 'token').map((e) => e.text).join('')
+    expect(tokens).toBe('Plazo de 24 horas [1]')
+    expect(events.at(-1)).toMatchObject({ type: 'done', confidence: 'high' })
+    expect(mocks.streamText).toHaveBeenCalled()
+    expect(mocks.generateObject).toHaveBeenCalledTimes(1)
+  })
+
+  it('no llama streamText cuando no hay evidencia suficiente', async () => {
+    const events: Array<{ type: string; text?: string; confidence?: string }> = []
+    for await (const event of answerEngineStream(makeInput([]))) {
+      events.push(event)
+    }
+
+    expect(mocks.streamText).not.toHaveBeenCalled()
+    expect(events.at(-1)).toMatchObject({ type: 'done', confidence: 'insufficient_evidence' })
   })
 })
