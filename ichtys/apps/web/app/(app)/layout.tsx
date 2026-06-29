@@ -16,9 +16,59 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <OrganizationSwitcher
               hidePersonal
               appearance={{
+                variables: {
+                  colorBackground:       '#FFFFFF',
+                  colorText:             '#0D1F3C',
+                  colorTextSecondary:    '#64748B',
+                  colorPrimary:          '#0891B2',
+                  colorNeutral:          '#0D1F3C',
+                  colorInputBackground:  '#F8FAFC',
+                  colorInputText:        '#0D1F3C',
+                  borderRadius:          '0.75rem',
+                  fontFamily:            'inherit',
+                },
                 elements: {
-                  organizationSwitcherTrigger: 'text-white/80 hover:text-white',
-                  organizationPreviewTextContainer: 'text-white',
+                  // ── Trigger (inside dark nav header) ────────────────────
+                  organizationSwitcherTrigger:
+                    'text-white/80 hover:text-white hover:bg-white/10 rounded-lg px-2 py-1 transition-colors',
+                  organizationPreviewTextContainer:
+                    'text-white',
+                  organizationPreviewMainIdentifier:
+                    'text-white font-semibold text-sm',
+                  organizationPreviewSecondaryIdentifier:
+                    'text-white/60 text-xs',
+                  organizationSwitcherTriggerIcon:
+                    'text-white/60',
+
+                  // ── Popup card ───────────────────────────────────────────
+                  organizationSwitcherPopoverCard:
+                    'bg-white border border-[#E2E8F0] shadow-xl rounded-xl overflow-hidden',
+                  organizationSwitcherPopoverMain:
+                    'bg-white',
+
+                  // ── Org preview rows inside popup ────────────────────────
+                  organizationSwitcherPreviewButton:
+                    'hover:bg-[#F8FAFC] rounded-lg',
+                  organizationPreview__organizationSwitcherTrigger:
+                    'text-[#0D1F3C]',
+
+                  // ── Action buttons (Create org / Manage) ─────────────────
+                  organizationSwitcherPopoverActions:
+                    'border-t border-[#E2E8F0] bg-[#F8FAFC]',
+                  organizationSwitcherPopoverActionButton:
+                    'text-[#0D1F3C] hover:bg-[#E2E8F0] rounded-lg font-medium text-sm',
+                  organizationSwitcherPopoverActionButtonText:
+                    'text-[#0D1F3C]',
+                  organizationSwitcherPopoverActionButtonIcon:
+                    'text-[#64748B]',
+
+                  // ── Footer ────────────────────────────────────────────────
+                  organizationSwitcherPopoverFooter:
+                    'border-t border-[#E2E8F0] bg-[#F8FAFC]',
+
+                  // ── Notification badge ────────────────────────────────────
+                  notificationBadge:
+                    'bg-[#0891B2] text-white',
                 },
               }}
             />
