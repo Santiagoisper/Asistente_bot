@@ -7,7 +7,8 @@ import {
   fetchMessageCitations,
 } from './chat-api'
 import { ConfidenceBadge } from './confidence-badge'
-import { EvidenceList, renderAnswerWithFootnotes } from './evidence-list'
+import { AnswerContent } from './answer-content'
+import { EvidenceList } from './evidence-list'
 import { AlphiLogo } from '../ui/alphi-logo'
 import type { AnswerConfidence, ChatTurn, ConversationListItem, Evidence, MedicalAnnotation, MessageItem, TerminologySuggestion } from './types'
 
@@ -503,10 +504,14 @@ function ChatMessage({
           </div>
 
           {/* Answer text with streaming cursor */}
-          <div className="alphi-answer-text whitespace-pre-wrap text-alphi-navy">
+          <div className="alphi-answer-text text-alphi-navy">
             {turn.content ? (
               <>
-                {renderAnswerWithFootnotes(turn.content, turn.evidences, onFootnoteClick)}
+                <AnswerContent
+                  text={turn.content}
+                  evidences={turn.evidences}
+                  onFootnoteClick={onFootnoteClick}
+                />
                 {isStreaming && (
                   <span
                     className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-alphi-teal align-middle"

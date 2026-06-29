@@ -11,6 +11,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <Link href="/dashboard" className="flex items-center">
             <AlphiLogo variant="full" height={28} theme="white" />
           </Link>
+          <nav className="hidden items-center gap-1 sm:flex" aria-label="Navegación principal">
+            <Link
+              href="/studies"
+              className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              Estudios
+            </Link>
+            <Link
+              href="/library"
+              className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              Librería
+            </Link>
+          </nav>
           <span className="hidden h-5 w-px bg-white/20 sm:block" />
           <div className="hidden sm:block">
             <OrganizationSwitcher
