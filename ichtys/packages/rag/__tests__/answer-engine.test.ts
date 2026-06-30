@@ -20,7 +20,18 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('@ai-sdk/anthropic', () => ({ createAnthropic: mocks.createAnthropic }))
+vi.mock('@ichtys/llm', () => ({
+  runWithLlmFallback: vi.fn(async (_opts: unknown, run: (model: unknown) => Promise<unknown>) => ({
+    result: await run(mocks.mockModel, 'anthropic'),
+    provider: 'anthropic',
+    modelId: 'claude-sonnet-4-6',
+  })),
+  createLanguageModel: vi.fn().mockReturnValue(mocks.mockModel),
+  getDefaultProviderPreference: vi.fn().mockReturnValue('anthropic'),
+  isAnthropicConfigured: vi.fn().mockReturnValue(true),
+  isGoogleConfigured: vi.fn().mockReturnValue(false),
+  isProviderQuotaError: vi.fn().mockReturnValue(false),
+}))
 vi.mock('ai', () => ({ generateObject: mocks.generateObject, streamText: mocks.streamText }))
 
 // @ichtys/db: mock para evitar que el cliente DB tire error por DATABASE_URL faltante.

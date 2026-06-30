@@ -25,6 +25,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^1.0.6",
     "@ichtys/db": "workspace:*",
+    "@ichtys/llm": "workspace:*",
     "@vercel/blob": "^2.4.0",
     "ai": "^4.0.30",
     "drizzle-orm": "^0.38.2",

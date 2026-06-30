@@ -13,6 +13,11 @@ export interface OrgRagConfig {
   similarityThreshold?: number
   /** Max chunks to retrieve. Default: 20. Hard cap: 20. */
   topK?: number
+  /**
+   * Proveedor LLM para chat y extracción de specs.
+   * `auto` = Claude primero; si cuota agotada, Gemini (si hay API key).
+   */
+  llmProvider?: 'anthropic' | 'google' | 'auto'
 }
 
 /**

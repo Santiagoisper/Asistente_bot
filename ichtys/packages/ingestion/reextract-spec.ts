@@ -1,5 +1,6 @@
 import { and, asc, eq } from 'drizzle-orm'
 import { db, documents, pages } from '@ichtys/db'
+import { getOrgRagConfig } from '@ichtys/db'
 import type { ParsedPage } from './parser'
 import { extractStudySpec } from './spec-extractor'
 import { getApprovedSpecExamples, saveStudySpec } from './spec-store'
@@ -51,9 +52,12 @@ export async function reextractStudySpec(params: {
     limit: 3,
   }).catch(() => [])
 
+  const orgRag = await getOrgRagConfig(params.orgId)
+
   const { spec, warnings, extractionModel } = await extractStudySpec(
     parsedPages,
     fewShotExamples,
+    { llmProviderPreference: orgRag.llmProvider },
   )
 
   const validated = studySpecSchema.parse(spec)

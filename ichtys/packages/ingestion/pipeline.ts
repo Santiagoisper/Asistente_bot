@@ -15,6 +15,7 @@ import { EmbeddingIndexingError, indexDocumentVersionChunks } from './indexer'
 import { parsePdf, PdfParseError } from './parser'
 import { extractStudySpec } from './spec-extractor'
 import { getApprovedSpecExamples, saveStudySpec } from './spec-store'
+import { getOrgRagConfig } from '@ichtys/db'
 
 /**
  * pipeline.ts - ingestion orchestrator.
@@ -295,8 +296,12 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
           return []
         })
 
+        const orgRag = await getOrgRagConfig(parsedInput.orgId).catch(() => null)
+
         const { spec, warnings, extractionModel, detectedLanguage } =
-          await extractStudySpec(parsedDocument.pages, fewShotExamples)
+          await extractStudySpec(parsedDocument.pages, fewShotExamples, {
+            llmProviderPreference: orgRag?.llmProvider ?? 'auto',
+          })
 
         if (warnings.length > 0) {
           console.warn(`[spec-extractor] warnings for documentVersionId=${parsedInput.documentVersionId}:`, warnings)

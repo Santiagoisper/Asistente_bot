@@ -1,7 +1,16 @@
 import { generateObject, streamText } from 'ai'
-import { createAnthropic } from '@ai-sdk/anthropic'
 import { z } from 'zod'
 import { answerConfidence } from '@ichtys/db'
+import {
+  createLanguageModel,
+  getDefaultProviderPreference,
+  isAnthropicConfigured,
+  isGoogleConfigured,
+  isProviderQuotaError,
+  runWithLlmFallback,
+  type LlmProviderId,
+  type LlmProviderPreference,
+} from '@ichtys/llm'
 import { retrieveRelevantChunks, type RetrievedChunk } from './retriever'
 import {
   assessEvidence,
@@ -61,6 +70,8 @@ export type AnswerEngineInput = {
   conversationHistory?: ConversationTurn[]
   /** Per-org similarity threshold override. Defaults to MIN_SIMILARITY_THRESHOLD. */
   similarityThreshold?: number
+  /** Per-org LLM provider preference (anthropic | google | auto). */
+  llmProviderPreference?: LlmProviderPreference
 }
 
 // ---------------------------------------------------------------------------
@@ -153,10 +164,13 @@ export type StructuredAnswer = z.infer<typeof answerSchema>
 // Helpers internos
 // ---------------------------------------------------------------------------
 
-function createModel() {
-  const anthropic = createAnthropic()
-  const modelId = process.env.ANSWER_MODEL ?? 'claude-sonnet-4-6'
-  return anthropic(modelId)
+function resolveProviderOrder(preference?: LlmProviderPreference): LlmProviderId[] {
+  const resolved = preference ?? getDefaultProviderPreference()
+  return resolved === 'auto' ? ['anthropic', 'google'] : [resolved]
+}
+
+function isProviderConfigured(provider: LlmProviderId): boolean {
+  return provider === 'google' ? isGoogleConfigured() : isAnthropicConfigured()
 }
 
 function statusFromError(err: unknown): number | null {
@@ -399,18 +413,23 @@ export async function answerEngine(input: AnswerEngineInput): Promise<AnswerResu
 
   // 3. Construir prompt y llamar al LLM.
   const context = buildContext(aboveThreshold)
-  const model = createModel()
 
   let structured: StructuredAnswer
   try {
-    const result = await generateObject({
-      model,
-      schema: answerSchema,
-      mode: 'tool',
-      system: SYSTEM_PROMPT,
-      prompt: buildUserPrompt(question, context, conversationHistory),
-    })
-    structured = result.object as typeof structured
+    const { result } = await runWithLlmFallback(
+      { purpose: 'answer', providerPreference: input.llmProviderPreference },
+      async (model) => {
+        const result = await generateObject({
+          model,
+          schema: answerSchema,
+          mode: 'tool',
+          system: SYSTEM_PROMPT,
+          prompt: buildUserPrompt(question, context, conversationHistory),
+        })
+        return result.object as StructuredAnswer
+      },
+    )
+    structured = result
   } catch (err) {
     throw sanitizeLLMError(err)
   }
@@ -500,19 +519,25 @@ async function evaluateStreamedAnswerConfidence(
   question: string,
   context: string,
   fullAnswer: string,
-  model: ReturnType<ReturnType<typeof createAnthropic>>,
+  llmProviderPreference?: LlmProviderPreference,
 ): Promise<Confidence> {
   try {
-    const result = await generateObject({
-      model,
-      schema: confidenceOnlySchema,
-      mode: 'tool',
-      system:
-        'You evaluate whether a clinical answer is fully supported by the provided document excerpts. ' +
-        'Return insufficient_evidence if the answer speculates, extrapolates, or is not supported by the excerpts.',
-      prompt: `USER QUESTION:\n${question}\n\nDOCUMENT EXCERPTS:\n${context}\n\nGENERATED ANSWER:\n${fullAnswer}\n\nRate confidence for this answer.`,
-    })
-    return result.object.confidence
+    const { result } = await runWithLlmFallback(
+      { purpose: 'answer', providerPreference: llmProviderPreference },
+      async (model) => {
+        const evalResult = await generateObject({
+          model,
+          schema: confidenceOnlySchema,
+          mode: 'tool',
+          system:
+            'You evaluate whether a clinical answer is fully supported by the provided document excerpts. ' +
+            'Return insufficient_evidence if the answer speculates, extrapolates, or is not supported by the excerpts.',
+          prompt: `USER QUESTION:\n${question}\n\nDOCUMENT EXCERPTS:\n${context}\n\nGENERATED ANSWER:\n${fullAnswer}\n\nRate confidence for this answer.`,
+        })
+        return evalResult.object.confidence
+      },
+    )
+    return result
   } catch {
     return 'medium'
   }
@@ -530,7 +555,8 @@ async function evaluateStreamedAnswerConfidence(
 export async function* answerEngineStream(
   input: AnswerEngineInput,
 ): AsyncGenerator<AnswerStreamEvent> {
-  const { question, retrievedChunks, conversationHistory, similarityThreshold } = input
+  const { question, retrievedChunks, conversationHistory, similarityThreshold, llmProviderPreference } =
+    input
 
   // 1. Filter by similarity threshold (per-org override or system default).
   const aboveThreshold = filterByThreshold(retrievedChunks, similarityThreshold)
@@ -545,27 +571,44 @@ export async function* answerEngineStream(
   }
 
   const context = buildContext(aboveThreshold)
-  const model = createModel()
   const userPrompt = buildUserPrompt(question, context, conversationHistory)
+  const providerOrder = resolveProviderOrder(llmProviderPreference)
+  const preference = llmProviderPreference ?? getDefaultProviderPreference()
 
-  // 3. Stream answer text token-by-token from the LLM.
+  // 3. Stream answer text token-by-token; fallback a Gemini si Claude sin cuota.
   let fullAnswer = ''
-  try {
-    const streamResult = streamText({
-      model,
-      system: STREAM_ANSWER_SYSTEM_PROMPT,
-      prompt: userPrompt,
-    })
+  let streamed = false
 
-    for await (const chunk of streamResult.textStream) {
-      fullAnswer += chunk
-      yield { type: 'token', text: chunk }
+  for (let i = 0; i < providerOrder.length; i++) {
+    const provider = providerOrder[i]!
+    if (!isProviderConfigured(provider)) continue
+
+    const model = createLanguageModel(provider, 'answer')
+    try {
+      const streamResult = streamText({
+        model,
+        system: STREAM_ANSWER_SYSTEM_PROMPT,
+        prompt: userPrompt,
+      })
+
+      for await (const chunk of streamResult.textStream) {
+        fullAnswer += chunk
+        streamed = true
+        yield { type: 'token', text: chunk }
+      }
+
+      fullAnswer = (await streamResult.text) || fullAnswer
+      break
+    } catch (err) {
+      const isLast = i === providerOrder.length - 1
+      const canFallback = preference === 'auto' && !isLast && isProviderQuotaError(err)
+      if (canFallback && !streamed) {
+        console.warn(`[answer-engine] ${provider} quota error — retrying with fallback`)
+        continue
+      }
+      console.error('[answer-engine] stream error:', err)
+      throw sanitizeLLMError(err)
     }
-
-    fullAnswer = (await streamResult.text) || fullAnswer
-  } catch (err) {
-    console.error('[answer-engine] stream error:', err)
-    throw sanitizeLLMError(err)
   }
 
   if (!fullAnswer.trim()) {
@@ -575,7 +618,12 @@ export async function* answerEngineStream(
   }
 
   // 4. Post-stream confidence eval (no bloquea tokens — corre después del stream).
-  const confidence = await evaluateStreamedAnswerConfidence(question, context, fullAnswer, model)
+  const confidence = await evaluateStreamedAnswerConfidence(
+    question,
+    context,
+    fullAnswer,
+    llmProviderPreference,
+  )
 
   if (confidence === 'insufficient_evidence') {
     yield { type: 'done', confidence: 'insufficient_evidence', evidences: [], fullAnswer }

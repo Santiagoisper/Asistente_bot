@@ -13,8 +13,11 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('@ai-sdk/anthropic', () => ({
-  createAnthropic: vi.fn().mockReturnValue(mocks.anthropicProviderFn),
+vi.mock('@ichtys/llm', () => ({
+  runWithLlmFallback: vi.fn(async (_opts: unknown, run: (model: unknown) => Promise<unknown>) => {
+    const result = await run(mocks.mockModel)
+    return { result, provider: 'anthropic', modelId: 'claude-sonnet-4-6' }
+  }),
 }))
 vi.mock('ai', () => ({ generateObject: mocks.generateObject }))
 

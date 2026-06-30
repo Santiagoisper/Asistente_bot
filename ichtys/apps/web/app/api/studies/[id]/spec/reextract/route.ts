@@ -12,6 +12,11 @@ function formatReextractError(err: unknown): string {
   if (/invalid x-api-key|authentication|401|403/i.test(msg)) {
     return 'La clave ANTHROPIC_API_KEY en Vercel parece inválida o faltante. Revisá Environment Variables → Production.'
   }
+  const usageLimit = /regain access on (\d{4}-\d{2}-\d{2})/i.exec(msg)
+  if (/usage limits|rate limit|429/i.test(msg)) {
+    const when = usageLimit?.[1] ?? 'la próxima ventana de facturación'
+    return `Cuota de Anthropic agotada (se renueva ~${when} UTC). Configurá GOOGLE_GENERATIVE_AI_API_KEY y elegí «Automático» o «Gemini» en Ajustes, o esperá a que renueve la cuota.`
+  }
   return msg
 }
 

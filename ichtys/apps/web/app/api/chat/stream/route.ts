@@ -229,6 +229,7 @@ export async function POST(req: Request): Promise<Response> {
           retrievedChunks: allChunks,
           conversationHistory,
           similarityThreshold: orgRagConfig?.similarityThreshold,
+          llmProviderPreference: orgRagConfig?.llmProvider,
         })
 
         // Para preguntas de terminología bufferizamos sin emitir tokens: la

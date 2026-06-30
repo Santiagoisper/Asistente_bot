@@ -18,6 +18,7 @@
     "@ichtys/auth": "workspace:*",
     "@ichtys/db": "workspace:*",
     "@ichtys/ingestion": "workspace:*",
+    "@ichtys/llm": "workspace:*",
     "@ichtys/rag": "workspace:*",
     "@ichtys/ui": "workspace:*",
     "@vercel/blob": "^2.4.0",

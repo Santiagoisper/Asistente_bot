@@ -1,0 +1,24 @@
+{
+  "name": "@ichtys/llm",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^1.0.6",
+    "@ai-sdk/google": "^1.0.12",
+    "ai": "^4.0.30"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.8"
+  }
+}

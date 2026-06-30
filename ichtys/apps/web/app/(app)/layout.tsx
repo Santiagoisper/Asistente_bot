@@ -24,6 +24,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             >
               Librería
             </Link>
+            <Link
+              href="/settings"
+              className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              Ajustes
+            </Link>
           </nav>
           <span className="hidden h-5 w-px bg-white/20 sm:block" />
           <div className="hidden sm:block">

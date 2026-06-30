@@ -1,6 +1,6 @@
 import { generateObject } from 'ai'
-import { createAnthropic } from '@ai-sdk/anthropic'
 import { z } from 'zod'
+import { runWithLlmFallback, type LlmProviderPreference } from '@ichtys/llm'
 import type { ParsedPage } from './parser'
 import {
   eligibilityCriterionSchema,
@@ -79,9 +79,31 @@ export function getExtractionModelId(): string {
   return process.env.SPEC_EXTRACTION_MODEL ?? 'claude-sonnet-4-6'
 }
 
-function createModel() {
-  const anthropic = createAnthropic()
-  return anthropic(getExtractionModelId())
+export interface ExtractStudySpecOptions {
+  llmProviderPreference?: LlmProviderPreference
+}
+
+async function generateSpecObject<T>(params: {
+  schema: z.ZodType<T>
+  system: string
+  prompt: string
+  maxTokens?: number
+  providerPreference?: LlmProviderPreference
+}): Promise<{ object: T; modelId: string }> {
+  const { result, modelId } = await runWithLlmFallback(
+    { purpose: 'spec', providerPreference: params.providerPreference },
+    async (model) => {
+      const response = await generateObject({
+        model,
+        schema: params.schema,
+        system: params.system,
+        prompt: params.prompt,
+        maxTokens: params.maxTokens,
+      })
+      return response.object as T
+    },
+  )
+  return { object: result, modelId }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -153,12 +175,15 @@ function buildCompactPageMap(pages: ParsedPage[]): string {
  * Localiza las secciones clave usando Claude sobre un mapa compacto.
  * Funciona en cualquier idioma y formato de protocolo.
  */
-export async function locateSectionsSemantic(pages: ParsedPage[]): Promise<SectionMap> {
+export async function locateSectionsSemantic(
+  pages: ParsedPage[],
+  providerPreference?: LlmProviderPreference,
+): Promise<SectionMap> {
   const compactMap = buildCompactPageMap(pages)
 
-  const { object } = await generateObject({
-    model: createModel(),
+  const { object } = await generateSpecObject({
     schema: sectionMapSchema,
+    providerPreference,
     system: `You are a clinical trial protocol document structure analyzer. Given a compact page map (page number + opening ~120 characters of each page), locate key sections of the protocol.
 
 WHAT TO LOCATE:
@@ -412,15 +437,16 @@ async function extractGroup<T>(
   instruction: string,
   context: string,
   fewShotContext: string,
-): Promise<T> {
-  const result = await generateObject({
-    model: createModel(),
+  providerPreference?: LlmProviderPreference,
+): Promise<{ data: T; modelId: string }> {
+  const { object, modelId } = await generateSpecObject({
     schema,
+    providerPreference,
     system: SPEC_EXTRACTION_SYSTEM_PROMPT,
     prompt: `${instruction}${fewShotContext}\n\nPROTOCOL PAGES:\n${context}`,
     maxTokens: MAX_OUTPUT_TOKENS,
   })
-  return result.object as T
+  return { data: object, modelId }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -437,14 +463,18 @@ async function extractGroup<T>(
 export async function extractStudySpec(
   pages: ParsedPage[],
   fewShotExamples: ApprovedSpecExample[] = [],
+  options: ExtractStudySpecOptions = {},
 ): Promise<ExtractStudySpecResult> {
   const warnings: string[] = []
+  const llmProviderPreference = options.llmProviderPreference
+  let extractionModelUsed = getExtractionModelId()
 
   // ── Fase 1: Localización semántica ────────────────────────────────────────
   let sectionMap: SectionMap
 
   try {
-    sectionMap = await locateSectionsSemantic(pages)
+    const located = await locateSectionsSemantic(pages, llmProviderPreference)
+    sectionMap = located
     console.log(
       `[spec-extractor] semantic-location lang=${sectionMap.detectedLanguage}` +
       ` eligibility=P${sectionMap.eligibility.pageStart}-${sectionMap.eligibility.pageEnd}` +
@@ -486,12 +516,15 @@ export async function extractStudySpec(
     }
     const fewShot = buildFewShotContext(fewShotExamples, group)
     try {
-      return await extractGroup(
+      const extracted = await extractGroup(
         schema,
         GROUP_INSTRUCTIONS[group],
         buildSectionContext(pagesInRange(pages, range)),
         fewShot,
+        llmProviderPreference,
       )
+      extractionModelUsed = extracted.modelId
+      return extracted.data
     } catch (err) {
       const cause = err instanceof Error ? err.message : String(err)
       warnings.push(`${group}: extraction failed (P${range.pageStart}–P${range.pageEnd}) — ${cause}`)
@@ -505,12 +538,15 @@ export async function extractStudySpec(
     const idPages = range ? pagesInRange(pages, range) : pages.filter(p => p.pageNumber <= 5)
     const fewShot = buildFewShotContext(fewShotExamples, 'identification')
     try {
-      return await extractGroup(
+      const extracted = await extractGroup(
         identificationGroupSchema,
         GROUP_INSTRUCTIONS.identification,
         buildSectionContext(idPages),
         fewShot,
+        llmProviderPreference,
       )
+      extractionModelUsed = extracted.modelId
+      return extracted.data
     } catch (err) {
       const cause = err instanceof Error ? err.message : String(err)
       warnings.push(`identification: extraction failed — ${cause}`)
@@ -538,5 +574,5 @@ export async function extractStudySpec(
     visits: visits.visits,
   })
 
-  return { spec, warnings, extractionModel: getExtractionModelId(), detectedLanguage }
+  return { spec, warnings, extractionModel: extractionModelUsed, detectedLanguage }
 }
