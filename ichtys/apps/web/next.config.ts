@@ -6,8 +6,9 @@ const monorepoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  // Evita que Next.js tome ~/package-lock.json como workspace root del monorepo.
-  outputFileTracingRoot: monorepoRoot,
+  // Solo en local: evita que Next tome ~/package-lock.json como workspace root.
+  // En Vercel rompe el file tracing y falla con "next-server/server.runtime.prod.js".
+  ...(process.env.VERCEL ? {} : { outputFileTracingRoot: monorepoRoot }),
   // Los packages del monorepo se transpilan desde TS directamente.
   transpilePackages: [
     '@ichtys/db',
