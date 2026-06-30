@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { handleApiError, validateStudyAccess } from '@ichtys/auth'
 import { retrieveRelevantChunks, answerEngineStream } from '@ichtys/rag'
-import { getOrgRagConfig } from '@ichtys/db'
+import { getOrgLlmApiKeys, getOrgRagConfig, resolveLlmApiKey } from '@ichtys/db'
 import type { AnswerStreamEvent } from '@ichtys/rag'
 import {
   generateAndPersistConversationTitle,
@@ -164,6 +164,8 @@ export async function POST(req: Request): Promise<Response> {
 
   // 9b. Load org RAG config (threshold + topK) — falls back to system defaults.
   const orgRagConfig = await getOrgRagConfig(orgId).catch(() => null)
+  const orgLlmApiKeys = await getOrgLlmApiKeys(orgId).catch(() => ({}))
+  const openAiApiKey = resolveLlmApiKey('openai', orgLlmApiKeys)
 
   // 10. Kick off auto-title for new conversations (fire-and-forget, non-blocking).
   //     Haiku + 6-word title ≈ 300-500 ms — will resolve before the LLM stream ends.
@@ -205,6 +207,7 @@ export async function POST(req: Request): Promise<Response> {
             studyId,
             topK: topK ?? orgRagConfig?.topK ?? 20,
             documentType,
+            openAiApiKey,
           }),
           // Inyección de spec: si el intent de la pregunta es claro, prepend
           // el spec estructurado como virtual chunks con score=1.0.
@@ -230,6 +233,7 @@ export async function POST(req: Request): Promise<Response> {
           conversationHistory,
           similarityThreshold: orgRagConfig?.similarityThreshold,
           llmProviderPreference: orgRagConfig?.llmProvider,
+          llmApiKeys: orgLlmApiKeys,
         })
 
         // Para preguntas de terminología bufferizamos sin emitir tokens: la

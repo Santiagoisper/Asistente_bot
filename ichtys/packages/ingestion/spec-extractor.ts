@@ -1,6 +1,6 @@
 import { generateObject } from 'ai'
 import { z } from 'zod'
-import { runWithLlmFallback, type LlmProviderPreference } from '@ichtys/llm'
+import { runWithLlmFallback, type LlmProviderPreference, type OrgLlmApiKeys } from '@ichtys/llm'
 import type { ParsedPage } from './parser'
 import {
   eligibilityCriterionSchema,
@@ -81,6 +81,7 @@ export function getExtractionModelId(): string {
 
 export interface ExtractStudySpecOptions {
   llmProviderPreference?: LlmProviderPreference
+  llmApiKeys?: OrgLlmApiKeys | null
 }
 
 async function generateSpecObject<T>(params: {
@@ -89,9 +90,10 @@ async function generateSpecObject<T>(params: {
   prompt: string
   maxTokens?: number
   providerPreference?: LlmProviderPreference
+  orgApiKeys?: OrgLlmApiKeys | null
 }): Promise<{ object: T; modelId: string }> {
   const { result, modelId } = await runWithLlmFallback(
-    { purpose: 'spec', providerPreference: params.providerPreference },
+    { purpose: 'spec', providerPreference: params.providerPreference, orgApiKeys: params.orgApiKeys },
     async (model) => {
       const response = await generateObject({
         model,
@@ -178,12 +180,14 @@ function buildCompactPageMap(pages: ParsedPage[]): string {
 export async function locateSectionsSemantic(
   pages: ParsedPage[],
   providerPreference?: LlmProviderPreference,
+  orgApiKeys?: OrgLlmApiKeys | null,
 ): Promise<SectionMap> {
   const compactMap = buildCompactPageMap(pages)
 
   const { object } = await generateSpecObject({
     schema: sectionMapSchema,
     providerPreference,
+    orgApiKeys,
     system: `You are a clinical trial protocol document structure analyzer. Given a compact page map (page number + opening ~120 characters of each page), locate key sections of the protocol.
 
 WHAT TO LOCATE:
@@ -438,10 +442,12 @@ async function extractGroup<T>(
   context: string,
   fewShotContext: string,
   providerPreference?: LlmProviderPreference,
+  orgApiKeys?: OrgLlmApiKeys | null,
 ): Promise<{ data: T; modelId: string }> {
   const { object, modelId } = await generateSpecObject({
     schema,
     providerPreference,
+    orgApiKeys,
     system: SPEC_EXTRACTION_SYSTEM_PROMPT,
     prompt: `${instruction}${fewShotContext}\n\nPROTOCOL PAGES:\n${context}`,
     maxTokens: MAX_OUTPUT_TOKENS,
@@ -467,13 +473,14 @@ export async function extractStudySpec(
 ): Promise<ExtractStudySpecResult> {
   const warnings: string[] = []
   const llmProviderPreference = options.llmProviderPreference
+  const llmApiKeys = options.llmApiKeys
   let extractionModelUsed = getExtractionModelId()
 
   // ── Fase 1: Localización semántica ────────────────────────────────────────
   let sectionMap: SectionMap
 
   try {
-    const located = await locateSectionsSemantic(pages, llmProviderPreference)
+    const located = await locateSectionsSemantic(pages, llmProviderPreference, llmApiKeys)
     sectionMap = located
     console.log(
       `[spec-extractor] semantic-location lang=${sectionMap.detectedLanguage}` +
@@ -522,6 +529,7 @@ export async function extractStudySpec(
         buildSectionContext(pagesInRange(pages, range)),
         fewShot,
         llmProviderPreference,
+        llmApiKeys,
       )
       extractionModelUsed = extracted.modelId
       return extracted.data
@@ -544,6 +552,7 @@ export async function extractStudySpec(
         buildSectionContext(idPages),
         fewShot,
         llmProviderPreference,
+        llmApiKeys,
       )
       extractionModelUsed = extracted.modelId
       return extracted.data

@@ -4,12 +4,12 @@ import { answerConfidence } from '@ichtys/db'
 import {
   createLanguageModel,
   getDefaultProviderPreference,
-  isAnthropicConfigured,
-  isGoogleConfigured,
-  isProviderQuotaError,
+  isProviderConfigured,
+  isProviderFallbackError,
+  resolveProviderChain,
   runWithLlmFallback,
-  type LlmProviderId,
   type LlmProviderPreference,
+  type OrgLlmApiKeys,
 } from '@ichtys/llm'
 import { retrieveRelevantChunks, type RetrievedChunk } from './retriever'
 import {
@@ -72,6 +72,8 @@ export type AnswerEngineInput = {
   similarityThreshold?: number
   /** Per-org LLM provider preference (anthropic | google | auto). */
   llmProviderPreference?: LlmProviderPreference
+  /** API keys LLM propias de la org (prioridad sobre env del servidor). */
+  llmApiKeys?: OrgLlmApiKeys | null
 }
 
 // ---------------------------------------------------------------------------
@@ -163,15 +165,6 @@ export type StructuredAnswer = z.infer<typeof answerSchema>
 // ---------------------------------------------------------------------------
 // Helpers internos
 // ---------------------------------------------------------------------------
-
-function resolveProviderOrder(preference?: LlmProviderPreference): LlmProviderId[] {
-  const resolved = preference ?? getDefaultProviderPreference()
-  return resolved === 'auto' ? ['anthropic', 'google'] : [resolved]
-}
-
-function isProviderConfigured(provider: LlmProviderId): boolean {
-  return provider === 'google' ? isGoogleConfigured() : isAnthropicConfigured()
-}
 
 function statusFromError(err: unknown): number | null {
   if (typeof err !== 'object' || err === null) return null
@@ -417,7 +410,11 @@ export async function answerEngine(input: AnswerEngineInput): Promise<AnswerResu
   let structured: StructuredAnswer
   try {
     const { result } = await runWithLlmFallback(
-      { purpose: 'answer', providerPreference: input.llmProviderPreference },
+      {
+        purpose: 'answer',
+        providerPreference: input.llmProviderPreference,
+        orgApiKeys: input.llmApiKeys,
+      },
       async (model) => {
         const result = await generateObject({
           model,
@@ -520,10 +517,15 @@ async function evaluateStreamedAnswerConfidence(
   context: string,
   fullAnswer: string,
   llmProviderPreference?: LlmProviderPreference,
+  llmApiKeys?: OrgLlmApiKeys | null,
 ): Promise<Confidence> {
   try {
     const { result } = await runWithLlmFallback(
-      { purpose: 'answer', providerPreference: llmProviderPreference },
+      {
+        purpose: 'answer',
+        providerPreference: llmProviderPreference,
+        orgApiKeys: llmApiKeys,
+      },
       async (model) => {
         const evalResult = await generateObject({
           model,
@@ -555,7 +557,7 @@ async function evaluateStreamedAnswerConfidence(
 export async function* answerEngineStream(
   input: AnswerEngineInput,
 ): AsyncGenerator<AnswerStreamEvent> {
-  const { question, retrievedChunks, conversationHistory, similarityThreshold, llmProviderPreference } =
+  const { question, retrievedChunks, conversationHistory, similarityThreshold, llmProviderPreference, llmApiKeys } =
     input
 
   // 1. Filter by similarity threshold (per-org override or system default).
@@ -572,18 +574,20 @@ export async function* answerEngineStream(
 
   const context = buildContext(aboveThreshold)
   const userPrompt = buildUserPrompt(question, context, conversationHistory)
-  const providerOrder = resolveProviderOrder(llmProviderPreference)
+  const providerOrder = resolveProviderChain(llmProviderPreference)
   const preference = llmProviderPreference ?? getDefaultProviderPreference()
 
-  // 3. Stream answer text token-by-token; fallback a Gemini si Claude sin cuota.
+  // 3. Stream answer text token-by-token; fallback en cadena auto.
   let fullAnswer = ''
   let streamed = false
+  let lastStreamError: unknown
 
   for (let i = 0; i < providerOrder.length; i++) {
     const provider = providerOrder[i]!
-    if (!isProviderConfigured(provider)) continue
+    if (!isProviderConfigured(provider, llmApiKeys)) continue
 
-    const model = createLanguageModel(provider, 'answer')
+    const model = createLanguageModel(provider, 'answer', llmApiKeys)
+    streamed = false
     try {
       const streamResult = streamText({
         model,
@@ -598,12 +602,22 @@ export async function* answerEngineStream(
       }
 
       fullAnswer = (await streamResult.text) || fullAnswer
+      if (fullAnswer.trim()) break
+
+      const isLast = i === providerOrder.length - 1
+      if (preference === 'auto' && !isLast) {
+        console.warn(`[answer-engine] ${provider} returned empty response — trying next provider`)
+        fullAnswer = ''
+        continue
+      }
       break
     } catch (err) {
+      lastStreamError = err
       const isLast = i === providerOrder.length - 1
-      const canFallback = preference === 'auto' && !isLast && isProviderQuotaError(err)
+      const canFallback = preference === 'auto' && !isLast && isProviderFallbackError(err)
       if (canFallback && !streamed) {
-        console.warn(`[answer-engine] ${provider} quota error — retrying with fallback`)
+        console.warn(`[answer-engine] ${provider} failed — trying next provider (${(err as Error).message?.slice(0, 120)})`)
+        fullAnswer = ''
         continue
       }
       console.error('[answer-engine] stream error:', err)
@@ -612,6 +626,7 @@ export async function* answerEngineStream(
   }
 
   if (!fullAnswer.trim()) {
+    if (lastStreamError) throw sanitizeLLMError(lastStreamError)
     const msg = getInsufficientEvidenceMessage(question)
     yield { type: 'done', confidence: 'insufficient_evidence', evidences: [], fullAnswer: msg }
     return
@@ -623,6 +638,7 @@ export async function* answerEngineStream(
     context,
     fullAnswer,
     llmProviderPreference,
+    llmApiKeys,
   )
 
   if (confidence === 'insufficient_evidence') {

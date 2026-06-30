@@ -28,7 +28,18 @@ export interface ResolvedOrgRagConfig {
 }
 
 function normalizeLlmProvider(value: unknown): OrgLlmProvider {
-  if (value === 'anthropic' || value === 'google' || value === 'auto') return value
+  if (
+    value === 'anthropic' ||
+    value === 'openai' ||
+    value === 'google' ||
+    value === 'groq' ||
+    value === 'glm' ||
+    value === 'auto'
+  ) {
+    return value
+  }
+  // Migración suave desde config antigua
+  if (value === 'gemini') return 'google'
   return 'auto'
 }
 

@@ -1,7 +1,8 @@
 import { auth } from '@clerk/nextjs/server'
 import { and, eq } from 'drizzle-orm'
-import { db, organizations, studies, type Study } from '@ichtys/db'
+import { db, studies, type Study } from '@ichtys/db'
 import { isRole, roleSatisfies, type Role } from './roles'
+import { resolveOrProvisionOrganization } from './resolve-org'
 
 /**
  * Error de acceso. Las API routes lo traducen a 401/403 con mensaje genérico
@@ -48,9 +49,7 @@ export async function validateStudyAccess(
     throw new AccessError('Unauthorized', 401)
   }
 
-  const org = await db.query.organizations.findFirst({
-    where: eq(organizations.clerkOrgId, clerkOrgId),
-  })
+  const org = await resolveOrProvisionOrganization(clerkOrgId)
 
   if (!org) {
     throw new AccessError('Organization not found', 403)

@@ -16,6 +16,7 @@ import { parsePdf, PdfParseError } from './parser'
 import { extractStudySpec } from './spec-extractor'
 import { getApprovedSpecExamples, saveStudySpec } from './spec-store'
 import { getOrgRagConfig } from '@ichtys/db'
+import { getOrgLlmApiKeys } from '@ichtys/db'
 
 /**
  * pipeline.ts - ingestion orchestrator.
@@ -297,10 +298,12 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
         })
 
         const orgRag = await getOrgRagConfig(parsedInput.orgId).catch(() => null)
+        const orgLlmKeys = await getOrgLlmApiKeys(parsedInput.orgId).catch(() => ({}))
 
         const { spec, warnings, extractionModel, detectedLanguage } =
           await extractStudySpec(parsedDocument.pages, fewShotExamples, {
             llmProviderPreference: orgRag?.llmProvider ?? 'auto',
+            llmApiKeys: orgLlmKeys,
           })
 
         if (warnings.length > 0) {

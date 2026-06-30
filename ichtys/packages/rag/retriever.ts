@@ -40,6 +40,8 @@ export interface RetrieveParams {
   studyId: string
   topK?: number
   documentType?: DocumentType
+  /** OpenAI key de la org (embeddings). Si no se pasa, usa env del servidor. */
+  openAiApiKey?: string
 }
 
 export interface RetrievedChunk {
@@ -60,6 +62,7 @@ const retrieveParamsSchema = z.object({
   studyId: z.string().uuid(),
   topK: z.number().int().positive().max(MAX_TOP_K).default(DEFAULT_TOP_K),
   documentType: z.enum(documentType).optional(),
+  openAiApiKey: z.string().min(8).optional(),
 })
 
 type ParsedRetrieveParams = z.infer<typeof retrieveParamsSchema>
@@ -109,12 +112,18 @@ function parseParams(params: RetrieveParams): ParsedRetrieveParams {
 
 const EMBED_TIMEOUT_MS = 15_000
 
-export async function embedRetrievalQuery(queryText: string): Promise<number[]> {
+export async function embedRetrievalQuery(
+  queryText: string,
+  openAiApiKey?: string,
+): Promise<number[]> {
   try {
     const timeout = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new RetrievalError('query_embedding_failed', 'Embedding timeout')), EMBED_TIMEOUT_MS),
     )
-    const embedding = await Promise.race([embedQuery(queryText), timeout])
+    const embedding = await Promise.race([
+      embedQuery(queryText, { openAiApiKey }),
+      timeout,
+    ])
     validateEmbeddingDimensions(embedding)
     return embedding
   } catch (err) {
@@ -128,7 +137,7 @@ export async function embedRetrievalQuery(queryText: string): Promise<number[]> 
 export async function retrieveRelevantChunks(params: RetrieveParams): Promise<RetrievedChunk[]> {
   const parsed = parseParams(params)
   console.log('[retriever] embedding query...')
-  const queryEmbedding = await embedRetrievalQuery(parsed.queryText)
+  const queryEmbedding = await embedRetrievalQuery(parsed.queryText, parsed.openAiApiKey)
   console.log('[retriever] embedding done, running vector search...')
   const vector = vectorLiteral(queryEmbedding)
   const distance = sql<number>`${chunks.embedding} <=> ${vector}::vector`

@@ -48,7 +48,22 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
     )
   }
 
-  const spec = studySpecSchema.parse(row.spec)
+  const parsed = studySpecSchema.safeParse(row.spec)
+  if (!parsed.success) {
+    return (
+      <div className="rounded-xl border border-alphi-rose/30 bg-alphi-rose/5 px-4 py-6 text-center">
+        <p className="text-sm font-semibold text-alphi-navy">Spec corrupto en base de datos</p>
+        <p className="mt-2 text-sm text-alphi-muted">
+          La versión v{row.version} no cumple el schema actual. Podés re-extraer el spec desde el protocolo indexado.
+        </p>
+        <div className="mt-4">
+          <SpecReextractButton studyId={studyId} />
+        </div>
+      </div>
+    )
+  }
+
+  const spec = parsed.data
   const meaningful = isMeaningfulSpec(spec)
 
   // Annotate criteria with SNOMED-CT / LOINC — deterministic, < 2 ms total

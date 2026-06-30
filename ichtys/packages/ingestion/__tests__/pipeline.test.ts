@@ -153,6 +153,8 @@ vi.mock('@ichtys/db', () => ({
   documents: mocks.tables.documents,
   documentVersions: mocks.tables.documentVersions,
   pages: mocks.tables.pages,
+  getOrgRagConfig: vi.fn(async () => ({ llmProvider: 'auto', similarityThreshold: 0.15, topK: 12 })),
+  getOrgLlmApiKeys: vi.fn(async () => ({})),
 }))
 
 import { runIngestion, type RunIngestionInput } from '../pipeline'

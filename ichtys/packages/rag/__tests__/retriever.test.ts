@@ -258,7 +258,7 @@ describe('embedRetrievalQuery', () => {
     const embedding = await embedRetrievalQuery('eligibility criteria')
 
     expect(embedding).toHaveLength(1536)
-    expect(mocks.embedQuery).toHaveBeenCalledWith('eligibility criteria')
+    expect(mocks.embedQuery).toHaveBeenCalledWith('eligibility criteria', { openAiApiKey: undefined })
   })
 
   it('sanitizes provider errors without logging the query text', async () => {

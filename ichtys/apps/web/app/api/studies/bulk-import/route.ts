@@ -1,6 +1,7 @@
 import { after } from 'next/server'
-import { auth, clerkClient } from '@clerk/nextjs/server'
-import { auditLogs, db, documents, documentVersions, eq, ingestionJobs, organizations, studies } from '@ichtys/db'
+import { auth } from '@clerk/nextjs/server'
+import { resolveOrProvisionOrganization } from '@ichtys/auth'
+import { auditLogs, db, documents, documentVersions, ingestionJobs, studies } from '@ichtys/db'
 import { runSingleIngestionJobById } from '@ichtys/ingestion/ingestion-jobs'
 import { putPrivateDocumentPdf } from '../../documents/upload/blob-storage'
 import {
@@ -33,30 +34,6 @@ function safeBlobFileName(fileName: string): string {
 
 function buildBlobKey(fileName: string): string {
   return `clinical-documents/${crypto.randomUUID()}/${safeBlobFileName(fileName)}`
-}
-
-async function resolveOrProvisionOrg(clerkOrgId: string) {
-  const existing = await db.query.organizations.findFirst({
-    where: eq(organizations.clerkOrgId, clerkOrgId),
-  })
-  if (existing) return existing
-
-  let orgName = clerkOrgId
-  try {
-    const client = await clerkClient()
-    const clerkOrg = await client.organizations.getOrganization({ organizationId: clerkOrgId })
-    orgName = clerkOrg.name || clerkOrgId
-  } catch {
-    // Non-critical
-  }
-
-  const [provisioned] = await db
-    .insert(organizations)
-    .values({ clerkOrgId, name: orgName })
-    .returning()
-
-  if (!provisioned) throw new Error('Failed to provision organization')
-  return provisioned
 }
 
 type BulkItemResult = {
@@ -105,10 +82,8 @@ export async function POST(req: Request): Promise<Response> {
   })
   if (rateLimit.limited) return rateLimitResponse(rateLimit.retryAfterSeconds)
 
-  let org: Awaited<ReturnType<typeof resolveOrProvisionOrg>>
-  try {
-    org = await resolveOrProvisionOrg(clerkOrgId)
-  } catch {
+  const org = await resolveOrProvisionOrganization(clerkOrgId)
+  if (!org) {
     return new Response('Internal Server Error', { status: 500 })
   }
 

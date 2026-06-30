@@ -1,3 +1,5 @@
 export * from './types'
+export * from './keys'
 export * from './provider'
+export * from './provider-health'
 export * from './fallback'

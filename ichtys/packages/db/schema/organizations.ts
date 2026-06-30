@@ -15,9 +15,9 @@ export interface OrgRagConfig {
   topK?: number
   /**
    * Proveedor LLM para chat y extracción de specs.
-   * `auto` = Claude primero; si cuota agotada, Gemini (si hay API key).
+   * `auto` = Claude → OpenAI → Groq → GLM (salta sin API key).
    */
-  llmProvider?: 'anthropic' | 'google' | 'auto'
+  llmProvider?: 'anthropic' | 'openai' | 'google' | 'groq' | 'glm' | 'auto'
 }
 
 /**
@@ -34,6 +34,8 @@ export const organizations = pgTable('organizations', {
    * Schema: { similarityThreshold?: number, topK?: number }
    */
   ragConfig: jsonb('rag_config').$type<OrgRagConfig>(),
+  /** API keys LLM por org (AES-256-GCM, JSON cifrado). Solo org_admin. */
+  llmApiKeysEncrypted: text('llm_api_keys_encrypted'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })

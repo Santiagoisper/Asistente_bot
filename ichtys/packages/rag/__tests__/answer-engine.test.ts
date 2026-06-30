@@ -22,15 +22,15 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('@ichtys/llm', () => ({
   runWithLlmFallback: vi.fn(async (_opts: unknown, run: (model: unknown) => Promise<unknown>) => ({
-    result: await run(mocks.mockModel, 'anthropic'),
+    result: await run(mocks.mockModel),
     provider: 'anthropic',
     modelId: 'claude-sonnet-4-6',
   })),
   createLanguageModel: vi.fn().mockReturnValue(mocks.mockModel),
-  getDefaultProviderPreference: vi.fn().mockReturnValue('anthropic'),
-  isAnthropicConfigured: vi.fn().mockReturnValue(true),
-  isGoogleConfigured: vi.fn().mockReturnValue(false),
-  isProviderQuotaError: vi.fn().mockReturnValue(false),
+  getDefaultProviderPreference: vi.fn().mockReturnValue('auto'),
+  resolveProviderChain: vi.fn().mockReturnValue(['anthropic']),
+  isProviderConfigured: vi.fn().mockReturnValue(true),
+  isProviderFallbackError: vi.fn().mockReturnValue(false),
 }))
 vi.mock('ai', () => ({ generateObject: mocks.generateObject, streamText: mocks.streamText }))
 

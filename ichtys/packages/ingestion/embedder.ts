@@ -47,19 +47,18 @@ export interface EmbeddingClient {
 export interface EmbedBatchOptions {
   batchSize?: number
   client?: EmbeddingClient
+  openAiApiKey?: string
 }
 
-let defaultClient: EmbeddingClient | null = null
-
-function getDefaultClient(): EmbeddingClient {
-  if (!defaultClient) {
-    const openai = new OpenAI({ timeout: 20_000, maxRetries: 1 })
-    defaultClient = {
-      createEmbeddings: (input) => openai.embeddings.create(input),
-    }
+function getDefaultClient(apiKey?: string): EmbeddingClient {
+  const openai = new OpenAI({
+    apiKey: apiKey ?? process.env.OPENAI_API_KEY,
+    timeout: 20_000,
+    maxRetries: 1,
+  })
+  return {
+    createEmbeddings: (input) => openai.embeddings.create(input),
   }
-
-  return defaultClient
 }
 
 function getBatchSize(options: EmbedBatchOptions): number {
@@ -124,7 +123,7 @@ export async function embedBatch(
 ): Promise<EmbeddingResult[]> {
   if (texts.length === 0) return []
 
-  const client = options.client ?? getDefaultClient()
+  const client = options.client ?? getDefaultClient(options.openAiApiKey)
   const batchSize = getBatchSize(options)
   const results: EmbeddingResult[] = []
 
@@ -161,8 +160,8 @@ export async function embedBatch(
 /**
  * Embedding of one query, used by future retrieval.
  */
-export async function embedQuery(text: string): Promise<number[]> {
-  const [result] = await embedBatch([text])
+export async function embedQuery(text: string, options: EmbedBatchOptions = {}): Promise<number[]> {
+  const [result] = await embedBatch([text], options)
   if (!result) {
     throw new EmbeddingError('embedding_provider_error', 'Embedding provider omitted a query result')
   }

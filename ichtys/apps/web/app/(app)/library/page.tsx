@@ -1,38 +1,16 @@
-import { auth, clerkClient } from '@clerk/nextjs/server'
-import { db, eq, organizations, studies, documentVersions, studySpecs } from '@ichtys/db'
+import { auth } from '@clerk/nextjs/server'
+import { resolveOrProvisionOrganization } from '@ichtys/auth'
+import { db, eq, studies, documentVersions, studySpecs } from '@ichtys/db'
 import { studySpecSchema, isMeaningfulSpec } from '@ichtys/ingestion'
 import { extractSpecTerminology, parseTerminologyAnnotations, readLegacySpecTerminology } from '../../../lib/rag/spec-terminology'
 import { LibraryClient, type LibraryRow } from '../../../components/library/library-client'
-
-async function resolveOrProvisionOrg(clerkOrgId: string) {
-  const existing = await db.query.organizations.findFirst({
-    where: eq(organizations.clerkOrgId, clerkOrgId),
-  })
-  if (existing) return existing
-
-  let orgName = clerkOrgId
-  try {
-    const client = await clerkClient()
-    const clerkOrg = await client.organizations.getOrganization({ organizationId: clerkOrgId })
-    orgName = clerkOrg.name || clerkOrgId
-  } catch {
-    // Non-critical fallback
-  }
-
-  const [provisioned] = await db
-    .insert(organizations)
-    .values({ clerkOrgId, name: orgName })
-    .returning()
-
-  return provisioned ?? null
-}
 
 export default async function LibraryPage() {
   const { orgId: clerkOrgId } = await auth()
   let rows: LibraryRow[] = []
 
   if (clerkOrgId) {
-    const org = await resolveOrProvisionOrg(clerkOrgId)
+    const org = await resolveOrProvisionOrganization(clerkOrgId)
     if (org) {
       const [studyList, versions, specs] = await Promise.all([
         db.query.studies.findMany({
