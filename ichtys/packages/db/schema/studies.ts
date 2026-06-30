@@ -4,6 +4,7 @@ import { organizations } from './organizations'
 import { sites } from './sites'
 import { documents } from './documents'
 import { conversations } from './conversations'
+import { subjects } from './subjects'
 import { studyStatus } from './enums'
 
 /**
@@ -34,6 +35,7 @@ export const studiesRelations = relations(studies, ({ one, many }) => ({
   }),
   documents: many(documents),
   conversations: many(conversations),
+  subjects: many(subjects),
 }))
 
 export type Study = typeof studies.$inferSelect

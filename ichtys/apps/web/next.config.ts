@@ -1,12 +1,20 @@
 import type { NextConfig } from 'next'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const monorepoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Evita que Next.js tome ~/package-lock.json como workspace root del monorepo.
+  outputFileTracingRoot: monorepoRoot,
   // Los packages del monorepo se transpilan desde TS directamente.
   transpilePackages: [
     '@ichtys/db',
     '@ichtys/auth',
+    '@ichtys/crypto',
     '@ichtys/ingestion',
+    '@ichtys/llm',
     '@ichtys/rag',
     '@ichtys/ui',
   ],

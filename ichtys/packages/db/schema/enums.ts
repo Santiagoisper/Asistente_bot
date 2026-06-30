@@ -40,6 +40,16 @@ export type AnswerConfidence = (typeof answerConfidence)[number]
 export const studySpecStatus = ['draft', 'approved', 'superseded'] as const
 export type StudySpecStatus = (typeof studySpecStatus)[number]
 
+/** Ciclo de vida del sujeto en el sitio (Fase 1 — screening module). */
+export const subjectStatus = [
+  'screening',
+  'enrolled',
+  'screen_failed',
+  'withdrawn',
+  'completed',
+] as const
+export type SubjectStatus = (typeof subjectStatus)[number]
+
 export const auditAction = [
   'document.upload',
   'document.download',
@@ -65,5 +75,9 @@ export const auditAction = [
   'auth.access_denied',
   'admin.action',
   'study_spec.approved',
+  'subject.create',
+  'subject.view',
+  'evolution.create',
+  'evolution.view',
 ] as const
 export type AuditAction = (typeof auditAction)[number]

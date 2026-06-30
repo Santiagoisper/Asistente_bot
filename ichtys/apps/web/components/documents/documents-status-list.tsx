@@ -19,6 +19,26 @@ const POLL_INTERVAL_MS = 4_000
 /** Refresco del contador de progreso (animación fluida). */
 const PROGRESS_TICK_MS = 700
 
+const INGESTION_ERROR_LABELS: Record<string, string> = {
+  embedding_config_missing:
+    'Falta GROQ_API_KEY (o OPENAI_API_KEY) en apps/web/.env.local. Reiniciá pnpm dev y reprocesá.',
+  embedding_provider_error:
+    'El proveedor de embeddings rechazó la solicitud. Revisá la API key y el saldo.',
+  embedding_rate_limited: 'OpenAI limitó la tasa de requests. Esperá unos minutos y reprocesá.',
+  embedding_dimension_mismatch: 'Error interno de dimensiones de embedding. Contactá soporte.',
+  embedding_internal_error: 'Error interno al indexar el documento.',
+  pdf_text_extraction_failed: 'No se pudo extraer texto del PDF.',
+  pdf_contains_no_extractable_text: 'El PDF no tiene texto seleccionable (puede ser escaneado).',
+  blob_download_failed: 'No se pudo leer el archivo almacenado. Volvé a subirlo.',
+  stuck_timeout: 'El procesamiento quedó colgado. Usá Reprocesar.',
+  ingestion_internal_error: 'Error interno de ingesta.',
+}
+
+function formatIngestionError(code: string | null): string | null {
+  if (!code) return null
+  return INGESTION_ERROR_LABELS[code] ?? code
+}
+
 /** True si algún item sigue en vuelo (necesita polling). */
 function needsPolling(items: DocumentStatusItem[]): boolean {
   return items.some((i) => i.status === 'processing' || i.status === 'pending')
@@ -237,7 +257,7 @@ export function DocumentsStatusList({ items: initialItems, studyId }: DocumentsS
                   <td className="px-3 py-2 text-gray-700">{item.pageCount ?? '—'}</td>
                   <td className="max-w-xs px-3 py-2 text-gray-700">
                     {item.errorMessage ? (
-                      <span className="break-words">{item.errorMessage}</span>
+                      <span className="break-words">{formatIngestionError(item.errorMessage)}</span>
                     ) : (
                       '—'
                     )}

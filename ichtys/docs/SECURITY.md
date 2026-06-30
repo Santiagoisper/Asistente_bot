@@ -434,3 +434,31 @@ Fields **never** logged (PHI and secrets protection):
 - `authorization`, `cookie`, `token`, `secret`, `password` — credentials
 - `rawBody`, `formData` — unstructured payloads
 - Stack traces are never included in client responses
+
+---
+
+## 18. PHI field-level encryption (Fase 0 — Compliance Foundation)
+
+Before the clinical subjects module (evolutions, labs, screening) processes real
+patient data, field-level encryption must be configured and documented.
+
+Implementation:
+- Package `@ichtys/crypto` — AES-256-GCM, wire format `v1:iv:tag:ciphertext`
+- Environment variable `PHI_ENCRYPTION_KEY` (32 bytes, 64-char hex)
+- Key generation: `node scripts/generate-phi-key.mjs`
+- ADR: `docs/decisions/phi-field-encryption.md`
+
+Target fields (Fase 1 schema):
+- `clinical_evolutions.content`
+- `patient_profiles.profile_json`
+
+Rules:
+- Encrypt before INSERT/UPDATE; decrypt only in authorized API handlers after
+  auth + tenant validation.
+- Never log plaintext or ciphertext of PHI fields.
+- Never embed PHI fields in pgvector or send to embedding APIs.
+- Key rotation requires a re-encryption job (see `docs/compliance/BACKUP-AND-DR.md` §6).
+- Production PHI is **blocked** until DPA/BAA tracker items are signed — see
+  `docs/compliance/README.md` checklist.
+
+Full compliance documentation: `docs/compliance/` (DPIA, HIPAA, ISMS, CSV plan).

@@ -1,3 +1,4 @@
+import './ensure-ws-env'
 import { Pool, neonConfig } from '@neondatabase/serverless'
 import { drizzle } from 'drizzle-orm/neon-serverless'
 import ws from 'ws'
@@ -12,7 +13,10 @@ import * as schema from './schema'
  *
  * En entornos Node (no edge) el driver necesita un WebSocket constructor:
  * se inyecta `ws`. En edge/Vercel el runtime ya provee WebSocket nativo.
+ *
+ * Local dev: `ensure-ws-env` desactiva bufferutil antes de cargar `ws`.
  */
+
 if (!neonConfig.webSocketConstructor) {
   neonConfig.webSocketConstructor = ws
 }

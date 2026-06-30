@@ -27,14 +27,20 @@ export function CreateStudyForm() {
         }),
       })
       if (!res.ok) {
-        setError('No se pudo crear el estudio. Intentá de nuevo.')
+        const detail = res.status === 401
+          ? 'Sesión expirada. Volvé a iniciar sesión.'
+          : res.status >= 500
+            ? 'Error del servidor al crear el estudio. Revisá la consola del servidor.'
+            : 'No se pudo crear el estudio. Intentá de nuevo.'
+        setError(detail)
         return
       }
       const study = (await res.json()) as { id: string }
       router.push(`/studies/${study.id}/documents`)
       router.refresh()
-    } catch {
-      setError('Error de red. Revisá tu conexión.')
+    } catch (err) {
+      console.error('[CreateStudyForm]', err)
+      setError('No se pudo conectar con el servidor. ¿Está corriendo pnpm dev?')
     } finally {
       setLoading(false)
     }

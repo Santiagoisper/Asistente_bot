@@ -1,6 +1,7 @@
 .pnpm-store/
 invalid-skills-inventory.csv
 ichtys/.claude/
+ichtys/.cursor/
 ichtys/logs/
-
+.DS_Store
 .vercel

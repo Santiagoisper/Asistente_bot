@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "dev": "WS_NO_BUFFER_UTIL=true WS_NO_UTF_8_VALIDATE=true next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -16,6 +16,7 @@
     "@ai-sdk/anthropic": "^1.0.6",
     "@clerk/nextjs": "^6.9.6",
     "@ichtys/auth": "workspace:*",
+    "@ichtys/crypto": "workspace:*",
     "@ichtys/db": "workspace:*",
     "@ichtys/ingestion": "workspace:*",
     "@ichtys/llm": "workspace:*",

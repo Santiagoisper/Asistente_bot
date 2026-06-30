@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 
 const TABS = [
   { label: 'Chat',       suffix: 'chat',      icon: '💬' },
+  { label: 'Sujetos',    suffix: 'subjects',  icon: '👤' },
   { label: 'Documentos', suffix: 'documents',  icon: '📄' },
   { label: 'Spec',       suffix: 'spec',       icon: '🔬' },
   { label: 'Historial',  suffix: 'history',    icon: '📋' },

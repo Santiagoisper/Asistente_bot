@@ -4,6 +4,16 @@ vi.mock('@ichtys/db', () => ({
   EMBEDDING_DIMENSIONS: 1536,
 }))
 
+vi.mock('../embedding-config', () => ({
+  resolveEmbeddingProvider: () => 'openai',
+  getEmbeddingModel: () => 'text-embedding-3-small',
+  getEmbeddingApiKey: () => 'test-key',
+  getEmbeddingBaseUrl: () => undefined,
+  formatEmbeddingInput: (text: string) => text,
+  GROQ_EMBEDDING_MODEL: 'nomic-embed-text-v1_5',
+  OPENAI_EMBEDDING_MODEL: 'text-embedding-3-small',
+}))
+
 import {
   EMBEDDING_MODEL,
   EmbeddingError,
@@ -86,6 +96,22 @@ describe('embedBatch', () => {
       code: 'embedding_provider_error',
     })
     expect(consoleError).not.toHaveBeenCalled()
+  })
+
+  it('pads smaller provider vectors to the configured schema dimensions', async () => {
+    const client768: EmbeddingClient = {
+      createEmbeddings: async (input) => ({
+        data: input.input.map((_, index) => ({
+          embedding: createEmbedding(index + 1).slice(0, 768),
+          index,
+        })),
+      }),
+    }
+
+    const results = await embedBatch(['short vector'], { client: client768 })
+
+    expect(results[0]?.embedding).toHaveLength(1536)
+    expect(results[0]?.embedding.slice(768)).toEqual(Array(768).fill(0))
   })
 
   it('maps rate limits and dimension mismatches to controlled error codes', async () => {

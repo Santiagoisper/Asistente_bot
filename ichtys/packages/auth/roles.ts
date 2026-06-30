@@ -50,3 +50,11 @@ export function canAdministerStudy(role: Role): boolean {
 export function canAdministerOrg(role: Role): boolean {
   return role === ROLES.ORG_ADMIN
 }
+
+/**
+ * Acceso a datos clínicos de sujetos (PHI pseudonimizado).
+ * read_only_monitor queda excluido — ver docs/compliance/ACCESS-CONTROL-POLICY.md
+ */
+export function canAccessPhiData(role: Role): boolean {
+  return roleSatisfies(role, ROLES.PRINCIPAL_INVESTIGATOR)
+}

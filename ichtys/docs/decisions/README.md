@@ -59,6 +59,7 @@ Qué se decidió, en una o dos oraciones claras y accionables.
 |-----|--------|--------|
 | 0001 | (pendiente) Pipeline RAG propio sin LangChain/LlamaIndex | propuesto |
 | 0002 | (pendiente) Aislamiento de tenant en la query, no en la app | propuesto |
+| 005 | Field-level PHI encryption (`@ichtys/crypto`) | aceptado |
 
 Las decisiones "no patear" del PRD (§14) —tenant isolation, cita obligatoria,
 audit log y dataset de evaluación desde el día 1— son la base de estos ADRs.

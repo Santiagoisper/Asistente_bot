@@ -50,6 +50,7 @@ export interface IngestionResult {
 
 export type IngestionErrorCode =
   | 'blob_download_failed'
+  | 'embedding_config_missing'
   | 'embedding_dimension_mismatch'
   | 'embedding_internal_error'
   | 'embedding_provider_error'
