@@ -79,5 +79,7 @@ export const auditAction = [
   'subject.view',
   'evolution.create',
   'evolution.view',
+  'profile.view',
+  'screening.view',
 ] as const
 export type AuditAction = (typeof auditAction)[number]

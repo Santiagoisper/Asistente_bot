@@ -16,6 +16,7 @@
     "@ai-sdk/anthropic": "^1.0.6",
     "@clerk/nextjs": "^6.9.6",
     "@ichtys/auth": "workspace:*",
+    "@ichtys/clinical": "workspace:*",
     "@ichtys/crypto": "workspace:*",
     "@ichtys/db": "workspace:*",
     "@ichtys/ingestion": "workspace:*",

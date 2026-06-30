@@ -13,6 +13,7 @@ const nextConfig: NextConfig = {
   transpilePackages: [
     '@ichtys/db',
     '@ichtys/auth',
+    '@ichtys/clinical',
     '@ichtys/crypto',
     '@ichtys/ingestion',
     '@ichtys/llm',

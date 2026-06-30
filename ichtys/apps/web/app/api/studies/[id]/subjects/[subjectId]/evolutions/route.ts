@@ -8,6 +8,7 @@ import {
   PhiConfigError,
 } from '../../../../../../../lib/subjects/phi-fields'
 import { createEvolutionSchema } from '../../../../../../../lib/subjects/schemas'
+import { refreshPatientProfileFromEvolution } from '../../../../../../../lib/subjects/patient-profile-service'
 
 export const runtime = 'nodejs'
 
@@ -114,12 +115,27 @@ export async function POST(
       },
     })
 
+    let profileUpdated = false
+    try {
+      await refreshPatientProfileFromEvolution({
+        orgId,
+        studyId: study.id,
+        subjectId: subject.id,
+        evolutionId: evolution.id,
+        evolutionContent: parsed.data.content,
+      })
+      profileUpdated = true
+    } catch (profileErr) {
+      console.error('[evolution.create] profile refresh failed:', profileErr)
+    }
+
     return Response.json(
       {
         id: evolution.id,
         visitLabel: evolution.visitLabel,
         content: parsed.data.content,
         piiWarnings,
+        profileUpdated,
         createdAt: evolution.createdAt.toISOString(),
       },
       { status: 201 },

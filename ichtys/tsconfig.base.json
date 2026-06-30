@@ -21,7 +21,9 @@
       "@ichtys/crypto": ["packages/crypto/index.ts"],
       "@ichtys/crypto/*": ["packages/crypto/*"],
       "@ichtys/llm": ["packages/llm/index.ts"],
-      "@ichtys/llm/*": ["packages/llm/*"]
+      "@ichtys/llm/*": ["packages/llm/*"],
+      "@ichtys/clinical": ["packages/clinical/index.ts"],
+      "@ichtys/clinical/*": ["packages/clinical/*"]
     },
 
     "resolveJsonModule": true,
