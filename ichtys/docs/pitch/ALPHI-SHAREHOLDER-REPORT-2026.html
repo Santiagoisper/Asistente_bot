@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ALPHI — Informe ejecutivo para accionistas · Julio 2026</title>
+  <style>
+    :root {
+      --navy: #0D1F3C;
+      --navydim: #162847;
+      --teal: #0891B2;
+      --teallit: #E0F2FE;
+      --sage: #059669;
+      --amber: #D97706;
+      --rose: #DC2626;
+      --slate: #F8FAFC;
+      --border: #E2E8F0;
+      --muted: #64748B;
+      --white: #ffffff;
+      --shadow: 0 4px 6px -1px rgba(13,31,60,0.10), 0 2px 4px -2px rgba(13,31,60,0.06);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--slate);
+      color: var(--navy);
+      line-height: 1.55;
+      font-size: 15px;
+    }
+    a { color: var(--teal); }
+    a:hover { text-decoration: underline; }
+
+    /* Header */
+    .hero {
+      background: linear-gradient(135deg, var(--navy) 0%, var(--navydim) 100%);
+      color: var(--white);
+      padding: 2rem 1.5rem 1.25rem;
+    }
+    .hero-inner { max-width: 1100px; margin: 0 auto; }
+    .hero-brand {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+    .hero-brand img { height: 36px; width: auto; }
+    .hero-brand .alphi-icon { height: 40px; width: 40px; }
+    .hero-brand-sep { opacity: 0.35; font-size: 1.25rem; font-weight: 300; }
+    .hero-brand-caption {
+      font-size: 0.72rem;
+      opacity: 0.7;
+      width: 100%;
+      margin-top: -0.35rem;
+    }
+    .hero-eyebrow {
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--teallit);
+      font-weight: 600;
+    }
+    .hero h1 { font-size: 1.85rem; margin: 0.35rem 0 0.5rem; font-weight: 700; }
+    .hero-meta { font-size: 0.85rem; opacity: 0.85; display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; }
+    .badge-conf {
+      display: inline-block;
+      background: rgba(217,119,6,0.25);
+      border: 1px solid rgba(217,119,6,0.5);
+      color: #fde68a;
+      font-size: 0.7rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-weight: 600;
+      margin-top: 0.75rem;
+    }
+
+    /* Tabs */
+    .tabs-wrap {
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 1px 3px rgba(13,31,60,0.06);
+    }
+    .tabs {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      overflow-x: auto;
+      scrollbar-width: thin;
+      gap: 0;
+      padding: 0 0.5rem;
+    }
+    .tab-btn {
+      flex-shrink: 0;
+      border: none;
+      background: transparent;
+      padding: 0.9rem 1rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+    .tab-btn:hover { color: var(--navy); }
+    .tab-btn.active {
+      color: var(--teal);
+      border-bottom-color: var(--teal);
+    }
+
+    /* Content */
+    .main { max-width: 1100px; margin: 0 auto; padding: 1.75rem 1.5rem 3rem; }
+    .panel { display: none; animation: fadeIn 0.25s ease; }
+    .panel.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+    h2 { font-size: 1.35rem; margin-bottom: 1rem; color: var(--navy); }
+    h3 { font-size: 1.05rem; margin: 1.5rem 0 0.65rem; color: var(--navydim); }
+    p { margin-bottom: 0.85rem; }
+    ul, ol { margin: 0 0 1rem 1.25rem; }
+    li { margin-bottom: 0.35rem; }
+
+    .card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem 1.35rem;
+      margin-bottom: 1.25rem;
+      box-shadow: var(--shadow);
+    }
+    .card-highlight { border-left: 4px solid var(--teal); }
+    .quote {
+      background: var(--teallit);
+      border-left: 4px solid var(--teal);
+      padding: 1rem 1.25rem;
+      border-radius: 0 8px 8px 0;
+      font-style: italic;
+      margin: 1rem 0;
+    }
+    .alert {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      font-size: 0.9rem;
+      margin-bottom: 1.25rem;
+    }
+    .alert strong { color: var(--amber); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      margin-bottom: 1rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.55rem 0.75rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #E8EEF4; font-weight: 600; }
+    tr:nth-child(even) td { background: #fafbfc; }
+
+    .status-ok { color: var(--sage); font-weight: 600; }
+    .status-warn { color: var(--amber); font-weight: 600; }
+    .status-bad { color: var(--rose); font-weight: 600; }
+
+    .pillars {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+    .pillar {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+      text-align: center;
+    }
+    .pillar-num {
+      display: inline-block;
+      width: 28px; height: 28px;
+      background: var(--teal);
+      color: white;
+      border-radius: 50%;
+      line-height: 28px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    .pillar h4 { font-size: 0.95rem; margin-bottom: 0.35rem; }
+    .pillar p { font-size: 0.82rem; color: var(--muted); margin: 0; }
+
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+    .tier {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem;
+      background: var(--white);
+    }
+    .tier.featured { border-color: var(--teal); box-shadow: var(--shadow); }
+    .tier h4 { font-size: 1.1rem; margin-bottom: 0.25rem; }
+    .tier .price { font-size: 1.5rem; font-weight: 700; color: var(--teal); margin: 0.75rem 0; }
+    .tier ul { list-style: none; margin: 0; padding: 0; font-size: 0.88rem; }
+    .tier li { padding: 0.25rem 0; }
+    .tier li::before { content: "✓ "; color: var(--teal); font-weight: 700; }
+
+    .flow {
+      background: #f1f5f9;
+      border-radius: 8px;
+      padding: 1rem;
+      font-family: Consolas, monospace;
+      font-size: 0.78rem;
+      line-height: 1.6;
+      overflow-x: auto;
+      white-space: pre;
+      margin: 1rem 0;
+    }
+
+    .link-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 0.75rem;
+    }
+    .link-card {
+      display: block;
+      padding: 0.85rem 1rem;
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      text-decoration: none;
+      color: inherit;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .link-card:hover {
+      border-color: var(--teal);
+      box-shadow: var(--shadow);
+      text-decoration: none;
+    }
+    .link-card strong { display: block; color: var(--navy); margin-bottom: 0.2rem; }
+    .link-card span { font-size: 0.8rem; color: var(--muted); word-break: break-all; }
+
+    .progress-bar {
+      background: var(--border);
+      border-radius: 6px;
+      height: 10px;
+      overflow: hidden;
+      margin: 0.35rem 0 0.75rem;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--teal), var(--sage));
+      border-radius: 6px;
+    }
+
+    footer {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    @media print {
+      .tabs-wrap { position: static; }
+      .tab-btn { display: none; }
+      .panel { display: block !important; page-break-inside: avoid; margin-bottom: 2rem; }
+      .hero { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="hero-brand">
+      <a href="https://www.ichtys.com.ar/" target="_blank" rel="noopener" title="ICHtYS Technology SA">
+        <img src="brands/ichtys-logo.png" alt="ICHtYS Technology" />
+      </a>
+      <span class="hero-brand-sep" aria-hidden="true">×</span>
+      <img class="alphi-icon" src="brands/alphi-icon.svg" alt="ALPHI" />
+      <span class="hero-brand-caption">ALPHI es un producto de <strong>ICHtYS TECHNOLOGY SA</strong> — asistente documental clínico con IA</span>
+    </div>
+    <p class="hero-eyebrow">CINME / Innova Trials · Julio 2026</p>
+    <h1>ALPHI — Informe ejecutivo para accionistas</h1>
+    <div class="hero-meta">
+      <span>Asistente documental clínico con RAG</span>
+      <span>sisbert@cinme.com.ar</span>
+      <span><a href="https://asistente-bot-five.vercel.app" style="color:#7dd3fc">asistente-bot-five.vercel.app</a></span>
+    </div>
+    <span class="badge-conf">Confidencial — uso interno y accionistas</span>
+  </div>
+</header>
+
+<nav class="tabs-wrap" role="tablist" aria-label="Secciones del informe">
+  <div class="tabs">
+    <button class="tab-btn active" role="tab" aria-selected="true" data-tab="resumen">Resumen</button>
+    <button class="tab-btn" role="tab" aria-selected="false" data-tab="producto">Producto</button>
+    <button class="tab-btn" role="tab" aria-selected="false" data-tab="tecnologia">Tecnología</button>
+    <button class="tab-btn" role="tab" aria-selected="false" data-tab="competencia">Competencia</button>
+    <button class="tab-btn" role="tab" aria-selected="false" data-tab="estado">Estado &amp; Compliance</button>
+    <button class="tab-btn" role="tab" aria-selected="false" data-tab="demo">Demo &amp; Links</button>
+    <button class="tab-btn" role="tab" aria-selected="false" data-tab="negocio">Precios &amp; Negocio</button>
+    <button class="tab-btn" role="tab" aria-selected="false" data-tab="roadmap">Roadmap &amp; Riesgos</button>
+  </div>
+</nav>
+
+<main class="main">
+
+  <!-- RESUMEN -->
+  <section id="resumen" class="panel active" role="tabpanel">
+    <h2>Resumen ejecutivo</h2>
+    <div class="card card-highlight">
+      <p><strong>ALPHI</strong> es un asistente documental clínico con inteligencia artificial para <strong>sitios de ensayo clínico</strong> (CRC, enfermería, investigadores, monitores). Responde preguntas sobre protocolos, IBs y manuales de <strong>200–400 páginas</strong>, con <strong>citas obligatorias</strong> al documento fuente. Si no hay evidencia suficiente, <strong>no responde</strong> — no inventa.</p>
+    </div>
+
+    <div class="quote">En una frase: Construimos el producto difícil (trial-ops regulado), no el producto fácil (chat genérico sobre PDFs). El código está; falta cerrar validación en sitio y escalar comercialmente.</div>
+
+    <table>
+      <thead><tr><th>Dimensión</th><th>Estado julio 2026</th></tr></thead>
+      <tbody>
+        <tr><td>Producto MVP</td><td class="status-ok">✅ Funcional en producción</td></tr>
+        <tr><td>Diferenciador técnico</td><td>Grounding-only + multi-tenant + audit trail</td></tr>
+        <tr><td>Compliance Fase 0</td><td class="status-ok">✅ Cerrada (DPA, DPIA, HIPAA, 13+ políticas)</td></tr>
+        <tr><td>Validación CSV (Part 11)</td><td class="status-warn">🟡 ~70 % — IQ/OQ/IT PASS; PQ piloto pendiente</td></tr>
+        <tr><td>Certificaciones ISO</td><td class="status-bad">🔴 ISMS lite; sin auditor externo aún</td></tr>
+        <tr><td>Ingresos</td><td>Pre-revenue; piloto CINME en preparación</td></tr>
+        <tr><td>Go-live PHI real</td><td class="status-bad">🔴 Bloqueado hasta PQ + VSR firmado</td></tr>
+      </tbody>
+    </table>
+
+    <div class="alert"><strong>Declaración de exactitud:</strong> ALPHI <em>no está certificado</em> bajo FDA Part 11, EMA Annex 11 ni ISO 27001/27701/42001. Las afirmaciones de cumplimiento se refieren a alineación documental y controles técnicos verificables, no a certificación formal.</div>
+  </section>
+
+  <!-- PRODUCTO -->
+  <section id="producto" class="panel" role="tabpanel">
+    <h2>Qué es ALPHI</h2>
+    <p>Plataforma web multi-tenant B2B que combina tres pilares:</p>
+    <div class="pillars">
+      <div class="pillar"><span class="pillar-num">1</span><h4>Chat RAG</h4><p>Preguntas con respuestas ancladas y citas clickeables</p></div>
+      <div class="pillar"><span class="pillar-num">2</span><h4>Study Spec</h4><p>Criterios, visitas, endpoints extraídos del protocolo</p></div>
+      <div class="pillar"><span class="pillar-num">3</span><h4>Módulo clínico</h4><p>Sujetos, evoluciones cifradas, screening, labs OCR</p></div>
+    </div>
+
+    <h3>Usuarios objetivo</h3>
+    <table>
+      <thead><tr><th>Rol</th><th>Uso principal</th></tr></thead>
+      <tbody>
+        <tr><td>CRC / Research Nurse</td><td>Elegibilidad, visitas, labs, medicación en sala</td></tr>
+        <tr><td>PI / Sub-I</td><td>Verificación rápida con evidencia trazable</td></tr>
+        <tr><td>Monitor / CRA</td><td>Validar respuestas con fuente auditable</td></tr>
+        <tr><td>Sponsor / Admin</td><td>Gobernanza multi-estudio, configuración</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Qué NO es ALPHI</h3>
+    <ul>
+      <li>No es un CTMS completo (Medidata, Veeva)</li>
+      <li>No es generador de epicrisis para consultorio (Pacientry)</li>
+      <li>No es ChatGPT sobre PDFs sin trazabilidad</li>
+      <li>No está certificado FDA Part 11 ni ISO 27001 (aún)</li>
+    </ul>
+
+    <h3>El problema que resolvemos</h3>
+    <ul>
+      <li>Paciente en sala → la coordinadora no puede salir 15 min a buscar en el PDF</li>
+      <li>Monitor pide evidencia trazable de una decisión operacional</li>
+      <li>Onboarding de staff nuevo en estudios complejos</li>
+      <li>Evento adverso → verificar timeline SAE/SUSAR en minutos</li>
+    </ul>
+
+    <div class="quote">La fuente trazable es el producto, no el chat.</div>
+
+    <h3>Contrato de producto (no negociable)</h3>
+    <ol>
+      <li><strong>Grounding-only</strong> — solo responde desde documentos del estudio activo</li>
+      <li><strong>Citas obligatorias</strong> — cada afirmación lleva referencia verificable</li>
+      <li><strong>LLM extrae, reglas deciden</strong> — el modelo no es juez de elegibilidad final</li>
+      <li><strong>Human-in-the-loop</strong> — spec, OCR labs e inclusiones críticas requieren confirmación humana</li>
+      <li><strong>Fail safe</strong> — <code>unknown</code> / <code>insufficient_evidence</code> &gt; falso positivo</li>
+    </ol>
+
+    <h3>Funcionalidades MVP en producción</h3>
+    <table>
+      <thead><tr><th>Módulo</th><th>Estado</th></tr></thead>
+      <tbody>
+        <tr><td>Multi-tenant (Clerk Orgs)</td><td class="status-ok">✅</td></tr>
+        <tr><td>Upload PDF + chunking + embeddings</td><td class="status-ok">✅</td></tr>
+        <tr><td>Chat grounded + citas + abstención</td><td class="status-ok">✅</td></tr>
+        <tr><td>Study Spec (extracción + aprobación + diff)</td><td class="status-ok">✅</td></tr>
+        <tr><td>Screening determinista vs spec</td><td class="status-ok">✅</td></tr>
+        <tr><td>Sujetos + evoluciones cifradas AES-256-GCM</td><td class="status-ok">✅</td></tr>
+        <tr><td>Labs OCR con revisión humana</td><td class="status-ok">✅</td></tr>
+        <tr><td>Audit trail + Admin RAG + Trust/Legal</td><td class="status-ok">✅</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- TECNOLOGÍA -->
+  <section id="tecnologia" class="panel" role="tabpanel">
+    <h2>Visión de ingeniería</h2>
+    <table>
+      <thead><tr><th>Capa</th><th>Tecnología</th></tr></thead>
+      <tbody>
+        <tr><td>Frontend</td><td>Next.js 15 App Router, TypeScript, Tailwind</td></tr>
+        <tr><td>Auth / multi-tenant</td><td>Clerk Organizations + RBAC</td></tr>
+        <tr><td>Base de datos</td><td>Neon Postgres + pgvector</td></tr>
+        <tr><td>Almacenamiento</td><td>Vercel Blob (PDFs privados)</td></tr>
+        <tr><td>IA</td><td>Anthropic Claude (chat/extracción) + OpenAI embeddings</td></tr>
+        <tr><td>Hosting / CI</td><td>Vercel + GitHub Actions + Turborepo/pnpm</td></tr>
+        <tr><td>Cifrado PHI</td><td>@ichtys/crypto — AES-256-GCM field-level</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Decisiones de diseño clave</h3>
+    <table>
+      <thead><tr><th>Decisión</th><th>Por qué</th></tr></thead>
+      <tbody>
+        <tr><td>Aislamiento org+study antes del vector search</td><td>Un bug de leakage es catastrófico en ensayos</td></tr>
+        <tr><td>Rule engine determinista para screening</td><td>Part 11 exige reproducibilidad; LLM no decide</td></tr>
+        <tr><td>Cifrado field-level en evoluciones</td><td>HIPAA/GDPR at-rest en DB compartida</td></tr>
+        <tr><td>Gate <code>validate:product</code></td><td>7 checks en un comando — evidencia CSV repetible</td></tr>
+        <tr><td>29 tests OQ en CI</td><td>Cada push valida módulo clínico automáticamente</td></tr>
+        <tr><td>Pre-redacción antes de LLM</td><td>DNI, email, teléfono nunca salen al proveedor</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Flujo RAG (simplificado)</h3>
+    <div class="flow">Pregunta → Auth org+study → Embed → Vector search FILTRADO
+  → ¿Similarity ≥ threshold? → No → insufficient_evidence
+  → Sí → LLM grounded → Respuesta + citas → Audit log</div>
+
+    <h3>Flujo de ingesta</h3>
+    <div class="flow">Upload PDF → Vercel Blob → Parse por página → Chunking
+  → Embeddings OpenAI → pgvector → status: ready → Chat RAG</div>
+  </section>
+
+  <!-- COMPETENCIA -->
+  <section id="competencia" class="panel" role="tabpanel">
+    <h2>Diferenciación frente a la competencia global</h2>
+    <table>
+      <thead>
+        <tr><th></th><th>Pacientry</th><th>ALPHI</th><th>CTMS clásico</th><th>ChatGPT</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Qué hace</td><td>Epicrisis, CIE-11, OCR médico</td><td>RAG + citas + screening</td><td>Ops trial end-to-end</td><td>Chat genérico</td></tr>
+        <tr><td>Buyer</td><td>Médico individual</td><td>Sponsor / CRO / red</td><td>Enterprise pharma</td><td>Cualquiera</td></tr>
+        <tr><td>Regulación</td><td>ToS "experimental"</td><td>Framework CSV + compliance</td><td>Part 11 maduro</td><td>Sin compliance clínico</td></tr>
+        <tr><td>Trazabilidad</td><td>Baja</td><td>Citas + audit trail</td><td>Alta (rígido/caro)</td><td>Ninguna</td></tr>
+        <tr><td>Precio</td><td>~USD 0.59/epicrisis</td><td>B2B por estudio/sitio</td><td>Enterprise six-figure</td><td>USD 20/mes</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Foso competitivo</h3>
+    <ol>
+      <li>Grounding-only como contrato de producto — verificable con eval SM-001..012</li>
+      <li>13+ políticas de compliance + implementación técnica (cifrado, audit, leakage tests)</li>
+      <li>BAAs/DPA firmados con procesadores antes de PHI real</li>
+      <li>Validación CSV con trazabilidad URS → FRS → tests (RTM v1.0)</li>
+      <li>Barrera regulatoria — un competidor self-serve tarda años en replicar sin equipo QA/CSV</li>
+    </ol>
+
+    <h3>Qué NO copiamos (a propósito)</h3>
+    <ul>
+      <li>Disclaimer "experimental / declinamos responsabilidad clínica"</li>
+      <li>Diagnósticos diferenciales generativos sin evidencia</li>
+      <li>Claims inflados de certificación Part 11 o ISO</li>
+    </ul>
+  </section>
+
+  <!-- ESTADO -->
+  <section id="estado" class="panel" role="tabpanel">
+    <h2>Dónde estamos parados hoy</h2>
+
+    <div class="card">
+      <p><strong>Etapa 0 — Producto MVP</strong></p>
+      <div class="progress-bar"><div class="progress-fill" style="width:100%"></div></div>
+      <p class="status-ok">CERRADA</p>
+      <p style="margin-top:1rem"><strong>Etapa 1 — Legal pre-PHI</strong></p>
+      <div class="progress-bar"><div class="progress-fill" style="width:90%"></div></div>
+      <p class="status-ok">CERRADA (04-jul-2026)</p>
+      <p style="margin-top:1rem"><strong>Etapa 2 — Validación CSV</strong></p>
+      <div class="progress-bar"><div class="progress-fill" style="width:70%"></div></div>
+      <p class="status-warn">EN CURSO (~70 %)</p>
+      <p style="margin-top:1rem"><strong>Etapa 3 — Go-live PHI piloto</strong></p>
+      <div class="progress-bar"><div class="progress-fill" style="width:5%"></div></div>
+      <p class="status-bad">PENDIENTE</p>
+    </div>
+
+    <h3>Por marco regulatorio</h3>
+    <table>
+      <thead><tr><th>Marco</th><th>¿Certificado?</th><th>Madurez</th><th>Próximo hito</th></tr></thead>
+      <tbody>
+        <tr><td>FDA 21 CFR Part 11</td><td>No</td><td>~70 %</td><td>PQ piloto + VSR</td></tr>
+        <tr><td>EMA Annex 11</td><td>No</td><td>~65 %</td><td>Igual que Part 11</td></tr>
+        <tr><td>GDPR</td><td>No (no existe sello)</td><td>~80 % docs</td><td>Asignar DPO</td></tr>
+        <tr><td>HIPAA</td><td>No</td><td>~75 %</td><td>Security Officer</td></tr>
+        <tr><td>ISO 27001</td><td>No</td><td>~35 %</td><td>SOC 2 readiness Q4 2026</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Evidencia verificable (julio 2026)</h3>
+    <table>
+      <thead><tr><th>Gate</th><th>Resultado</th></tr></thead>
+      <tbody>
+        <tr><td><code>validate:product</code></td><td class="status-ok">7/7 OK</td></tr>
+        <tr><td>OQ tests</td><td class="status-ok">29/29 PASS (CI)</td></tr>
+        <tr><td>IT PHI</td><td class="status-ok">4/4 PASS</td></tr>
+        <tr><td>IQ prod</td><td class="status-ok">11/11 OK</td></tr>
+        <tr><td>Eval RAG SM-001..012</td><td class="status-ok">12/12 PASS</td></tr>
+        <tr><td>Leakage cross-tenant</td><td class="status-ok">0 fallos</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- DEMO -->
+  <section id="demo" class="panel" role="tabpanel">
+    <h2>Guía de demostración — links en vivo</h2>
+    <div class="alert">Todos los documentos del demo son <strong>ficticios, sin PHI real</strong>. Ideal para mostrar a accionistas sin riesgo de privacidad.</div>
+
+    <h3>Superficie pública (sin login)</h3>
+    <div class="link-grid">
+      <a class="link-card" href="https://asistente-bot-five.vercel.app/trust" target="_blank" rel="noopener"><strong>Trust Center</strong><span>asistente-bot-five.vercel.app/trust</span></a>
+      <a class="link-card" href="https://asistente-bot-five.vercel.app/pricing" target="_blank" rel="noopener"><strong>Precios</strong><span>asistente-bot-five.vercel.app/pricing</span></a>
+      <a class="link-card" href="https://asistente-bot-five.vercel.app/roi" target="_blank" rel="noopener"><strong>Calculadora ROI</strong><span>asistente-bot-five.vercel.app/roi</span></a>
+      <a class="link-card" href="https://asistente-bot-five.vercel.app/privacy" target="_blank" rel="noopener"><strong>Privacidad</strong><span>asistente-bot-five.vercel.app/privacy</span></a>
+      <a class="link-card" href="https://asistente-bot-five.vercel.app/terms" target="_blank" rel="noopener"><strong>Términos</strong><span>asistente-bot-five.vercel.app/terms</span></a>
+    </div>
+
+    <h3>Producto (con login INNOVA TRIALS)</h3>
+    <div class="link-grid">
+      <a class="link-card" href="https://asistente-bot-five.vercel.app/sign-in" target="_blank" rel="noopener"><strong>Login</strong><span>asistente-bot-five.vercel.app/sign-in</span></a>
+      <a class="link-card" href="https://asistente-bot-five.vercel.app/studies" target="_blank" rel="noopener"><strong>Lista de estudios</strong><span>asistente-bot-five.vercel.app/studies</span></a>
+      <a class="link-card" href="https://asistente-bot-five.vercel.app/studies/508fa9c9-dbb9-49aa-abd5-7f7fe968bbc6/chat" target="_blank" rel="noopener"><strong>Chat RAG (demo T2D)</strong><span>.../studies/508fa9c9-.../chat</span></a>
+      <a class="link-card" href="https://asistente-bot-five.vercel.app/studies/508fa9c9-dbb9-49aa-abd5-7f7fe968bbc6/spec" target="_blank" rel="noopener"><strong>Study Spec</strong><span>.../studies/508fa9c9-.../spec</span></a>
+      <a class="link-card" href="https://asistente-bot-five.vercel.app/studies/508fa9c9-dbb9-49aa-abd5-7f7fe968bbc6/documents" target="_blank" rel="noopener"><strong>Documentos</strong><span>.../studies/508fa9c9-.../documents</span></a>
+      <a class="link-card" href="https://asistente-bot-five.vercel.app/settings" target="_blank" rel="noopener"><strong>Settings RAG</strong><span>asistente-bot-five.vercel.app/settings</span></a>
+    </div>
+
+    <h3>6 preguntas para el chat (copy-paste)</h3>
+    <table>
+      <thead><tr><th>#</th><th>Pregunta</th><th>Resultado esperado</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>¿Un paciente con HbA1c de 9% cumple criterio de inclusión?</td><td>Cita §3.1 Inclusion; rango 7–10%</td></tr>
+        <tr><td>2</td><td>¿Está excluido un paciente con antecedente de pancreatitis?</td><td>Cita §3.2 Exclusion</td></tr>
+        <tr><td>3</td><td>¿Qué procedimientos corresponden en la visita 4?</td><td>Cita Schedule of Assessments</td></tr>
+        <tr><td>4</td><td>¿Cuál es la ventana permitida para la visita de seguimiento?</td><td>Cita Visit Windows; V6 ±7 días</td></tr>
+        <tr><td>5</td><td>¿Está permitida metformina durante el estudio?</td><td>Cita Concomitant Medication</td></tr>
+        <tr><td>6</td><td>¿Qué medicamentos antidiabéticos están prohibidos?</td><td>Cita Prohibited Medication</td></tr>
+        <tr><td>7 ⚠</td><td>¿Cuál es la dosis recomendada de warfarina para este estudio?</td><td><code>insufficient_evidence</code> — no inventar</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- NEGOCIO -->
+  <section id="negocio" class="panel" role="tabpanel">
+    <h2>Modelo de negocio y precios</h2>
+    <div class="alert"><strong>Estado honesto:</strong> MVP pre-validación, pre-revenue. Billing automatizado (Stripe) planificado post go-live con PHI. Hoy el acceso es por acuerdo comercial.</div>
+
+    <p>Cobramos por <strong>estudio activo</strong> o <strong>sitio en red</strong>, no por usuario individual. Buyer: sponsor, CRO, red de centros.</p>
+
+    <div class="pricing-grid">
+      <div class="tier">
+        <h4>Pilot</h4>
+        <p style="font-size:0.85rem;color:var(--muted)">1 estudio, hasta 10 documentos</p>
+        <div class="price">Contactar</div>
+        <ul>
+          <li>Chat RAG con citas obligatorias</li>
+          <li>Extracción de study spec</li>
+          <li>Screening orientativo</li>
+          <li>Onboarding asistido</li>
+        </ul>
+      </div>
+      <div class="tier featured">
+        <h4>Site / Red</h4>
+        <p style="font-size:0.85rem;color:var(--muted)">Por sitio activo o red de sitios</p>
+        <div class="price">Contactar</div>
+        <ul>
+          <li>Multi-estudio por organización</li>
+          <li>Config RAG por org</li>
+          <li>Audit log y aislamiento tenant</li>
+          <li>Soporte operacional</li>
+        </ul>
+      </div>
+      <div class="tier">
+        <h4>Enterprise</h4>
+        <p style="font-size:0.85rem;color:var(--muted)">Sponsor / CRO</p>
+        <div class="price">Custom</div>
+        <ul>
+          <li>DPA/BAA con subprocesadores</li>
+          <li>Trust center bajo NDA</li>
+          <li>Roadmap CSV / validación formal</li>
+          <li>SLA y despliegue dedicado</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Etapas comerciales</h3>
+    <table>
+      <thead><tr><th>Etapa</th><th>Oferta</th><th>Estado</th></tr></thead>
+      <tbody>
+        <tr><td>Demo</td><td>Estudio mock T2D gratuito</td><td class="status-ok">✅ Disponible</td></tr>
+        <tr><td>Piloto</td><td>1 sitio, N estudios, soporte CSV</td><td class="status-warn">🟡 CINME en preparación</td></tr>
+        <tr><td>Enterprise</td><td>Multi-sitio, DPA/BAA, SLA</td><td class="status-bad">🔴 Post-PQ</td></tr>
+      </tbody>
+    </table>
+
+    <p style="margin-top:1rem">Calculadora ROI interactiva: <a href="https://asistente-bot-five.vercel.app/roi" target="_blank" rel="noopener">asistente-bot-five.vercel.app/roi</a></p>
+    <p>Contacto comercial: <a href="mailto:sisbert@cinme.com.ar?subject=Demo%20ALPHI">sisbert@cinme.com.ar</a></p>
+  </section>
+
+  <!-- ROADMAP -->
+  <section id="roadmap" class="panel" role="tabpanel">
+    <h2>Roadmap y riesgos</h2>
+    <table>
+      <thead><tr><th>Hito</th><th>Timeline</th><th>Prerequisito</th></tr></thead>
+      <tbody>
+        <tr><td>PQ piloto CINME (5 usuarios)</td><td>Q3 2026</td><td>Usuarios disponibles</td></tr>
+        <tr><td>VSR firmado</td><td>Post-PQ</td><td>Quality + Clinical + Security</td></tr>
+        <tr><td>Go-live PHI real (1 sitio)</td><td>Q3–Q4 2026</td><td>VSR</td></tr>
+        <tr><td>SOC 2 Type I readiness</td><td>Q4 2026</td><td>Roles ISMS asignados</td></tr>
+        <tr><td>ISO 27001 gap assessment</td><td>H1 2027</td><td>SOC 2</td></tr>
+        <tr><td>Multi-sitio / billing</td><td>2027</td><td>Go-live piloto exitoso</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Uso de capital (orientativo)</h3>
+    <ol>
+      <li>Cerrar validación CSV + PQ + roles compliance</li>
+      <li>Superficie GTM (demo, trust, primer piloto pagado)</li>
+      <li>OCR PDF escaneado para protocolos reales</li>
+      <li>Primer contrato sponsor LATAM cardiometabólico</li>
+    </ol>
+
+    <h3>Riesgos y mitigaciones</h3>
+    <table>
+      <thead><tr><th>Riesgo</th><th>Impacto</th><th>Mitigación</th></tr></thead>
+      <tbody>
+        <tr><td>Retraso PQ por usuarios piloto</td><td>Alto</td><td>Protocolo listo; agendar ventana CINME</td></tr>
+        <tr><td>Due diligence exige ISO certificado</td><td>Medio</td><td>Roadmap SOC2/ISO; ISMS lite hoy</td></tr>
+        <tr><td>Competidor "AI for trials" sin CSV</td><td>Medio</td><td>Foso = profundidad regulada</td></tr>
+        <tr><td>Breach PHI</td><td>Crítico</td><td>Sin PHI real hasta VSR; cifrado + leakage tests</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Aprobación</h3>
+    <table>
+      <thead><tr><th>Rol</th><th>Nombre</th><th>Fecha</th><th>Firma</th></tr></thead>
+      <tbody>
+        <tr><td>CEO / Fundador</td><td>Santiago Isbert</td><td></td><td></td></tr>
+        <tr><td>Sponsor / CINME</td><td></td><td></td><td></td></tr>
+        <tr><td>Directorio / Accionistas</td><td></td><td></td><td></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+</main>
+
+<footer>
+  ALPHI / Ichtys — Innova Trials · Julio 2026 · Confidencial<br />
+  Informe basado en evidencia del repositorio al 4 de julio de 2026. No constituye certificación regulatoria.
+</footer>
+
+<script>
+  (function () {
+    const buttons = document.querySelectorAll('.tab-btn');
+    const panels = document.querySelectorAll('.panel');
+
+    function activate(id) {
+      buttons.forEach(function (btn) {
+        var on = btn.dataset.tab === id;
+        btn.classList.toggle('active', on);
+        btn.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+      panels.forEach(function (panel) {
+        panel.classList.toggle('active', panel.id === id);
+      });
+      history.replaceState(null, '', '#' + id);
+    }
+
+    buttons.forEach(function (btn) {
+      btn.addEventListener('click', function () { activate(btn.dataset.tab); });
+    });
+
+    var hash = location.hash.replace('#', '');
+    if (hash && document.getElementById(hash)) activate(hash);
+
+    document.addEventListener('keydown', function (e) {
+      if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+      var tabs = Array.from(buttons);
+      var idx = tabs.findIndex(function (b) { return b.classList.contains('active'); });
+      if (idx < 0) return;
+      var next = e.key === 'ArrowRight' ? Math.min(idx + 1, tabs.length - 1) : Math.max(idx - 1, 0);
+      activate(tabs[next].dataset.tab);
+      tabs[next].focus();
+    });
+  })();
+</script>
+</body>
+</html>

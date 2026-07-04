@@ -13,18 +13,17 @@ interface AlphiLogoProps {
 /**
  * ALPHI — Clinical Document Intelligence
  *
- * Mark: α helix estilizado formado por dos arcos que encierran un punto
- * central (representa la partícula alpha de la estadística clínica y el
- * helix del ADN). Azul navy + acento teal.
+ * Mark: asistente IA clínico — cabeza de robot con cruz médica y pulso de datos.
+ * Producto de ICHTYS TECHNOLOGY SA (https://www.ichtys.com.ar/)
  */
 export function AlphiLogo({ variant = 'full', height = 32, theme = 'light', className = '' }: AlphiLogoProps) {
-  const navyColor  = theme === 'white' ? '#FFFFFF' : '#0D1F3C'
-  const tealColor  = theme === 'dark'  ? '#38BDF8' : '#0891B2'
-  const textColor  = theme === 'white' ? '#FFFFFF' : '#0D1F3C'
+  const navyColor = theme === 'white' ? '#FFFFFF' : '#0D1F3C'
+  const tealColor = theme === 'dark' ? '#38BDF8' : '#0891B2'
+  const textColor = theme === 'white' ? '#FFFFFF' : '#0D1F3C'
 
-  const iconWidth  = height
+  const iconWidth = height
   const iconHeight = height
-  const fullWidth  = variant === 'full' ? height * 4.2 : variant === 'icon' ? height : height * 3.0
+  const fullWidth = variant === 'full' ? height * 4.2 : variant === 'icon' ? height : height * 3.0
 
   if (variant === 'icon') {
     return (
@@ -38,7 +37,7 @@ export function AlphiLogo({ variant = 'full', height = 32, theme = 'light', clas
         aria-label="ALPHI"
         role="img"
       >
-        <AlphiMark navy={navyColor} teal={tealColor} />
+        <AlphiRobotMark navy={navyColor} teal={tealColor} theme={theme} />
       </svg>
     )
   }
@@ -60,7 +59,6 @@ export function AlphiLogo({ variant = 'full', height = 32, theme = 'light', clas
     )
   }
 
-  // full
   return (
     <svg
       width={fullWidth}
@@ -72,7 +70,7 @@ export function AlphiLogo({ variant = 'full', height = 32, theme = 'light', clas
       aria-label="ALPHI — Clinical Document Intelligence"
       role="img"
     >
-      <AlphiMark navy={navyColor} teal={tealColor} />
+      <AlphiRobotMark navy={navyColor} teal={tealColor} theme={theme} />
       <g transform="translate(50, 4)">
         <AlphiWordmark color={textColor} teal={tealColor} />
       </g>
@@ -80,39 +78,47 @@ export function AlphiLogo({ variant = 'full', height = 32, theme = 'light', clas
   )
 }
 
-function AlphiMark({ navy, teal }: { navy: string; teal: string }) {
+function AlphiRobotMark({
+  navy,
+  teal,
+  theme,
+}: {
+  navy: string
+  teal: string
+  theme: 'light' | 'dark' | 'white'
+}) {
+  const faceFill = theme === 'white' ? '#162847' : '#FFFFFF'
+  const faceStroke = theme === 'white' ? '#FFFFFF' : navy
+  const eyeFill = teal
+
   return (
     <>
-      {/* Background pill */}
+      {/* Background */}
       <rect width="40" height="40" rx="10" fill={navy} />
 
-      {/* α mark — two arcs forming the alpha letter, abstracted as clinical precision */}
-      {/* Left arc */}
-      <path
-        d="M 13 26 C 10 22 10 14 16 11 C 19 9.5 22 10 24 12"
-        stroke={teal}
-        strokeWidth="2.8"
-        strokeLinecap="round"
-        fill="none"
-      />
-      {/* Right arc / descender */}
-      <path
-        d="M 24 12 C 27 15 27.5 21 25 25 C 23 28 20 29 17 27"
-        stroke="#FFFFFF"
-        strokeWidth="2.8"
-        strokeLinecap="round"
-        fill="none"
-        strokeOpacity="0.85"
-      />
-      {/* Descender tail */}
-      <path
-        d="M 24 12 L 28 28"
-        stroke={teal}
-        strokeWidth="2.8"
-        strokeLinecap="round"
-      />
-      {/* Center dot — data point / precision */}
-      <circle cx="20" cy="19.5" r="2.2" fill={teal} />
+      {/* Antenna */}
+      <line x1="20" y1="6" x2="20" y2="10" stroke={teal} strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="20" cy="5" r="2" fill={teal} />
+
+      {/* Head */}
+      <rect x="10" y="10" width="20" height="16" rx="5" fill={faceFill} stroke={faceStroke} strokeWidth="1.2" strokeOpacity="0.15" />
+
+      {/* Visor / eyes */}
+      <rect x="13.5" y="15" width="5" height="4" rx="1.2" fill={eyeFill} opacity="0.9" />
+      <rect x="21.5" y="15" width="5" height="4" rx="1.2" fill={eyeFill} opacity="0.9" />
+      <circle cx="16" cy="17" r="0.8" fill={faceFill} />
+      <circle cx="24" cy="17" r="0.8" fill={faceFill} />
+
+      {/* Smile indicator — data line */}
+      <path d="M15 23.5 Q20 26 25 23.5" stroke={teal} strokeWidth="1.4" strokeLinecap="round" fill="none" opacity="0.85" />
+
+      {/* Medical cross on chest */}
+      <rect x="18.2" y="28.5" width="3.6" height="1.2" rx="0.4" fill={teal} />
+      <rect x="19.4" y="27.3" width="1.2" height="3.6" rx="0.4" fill={teal} />
+
+      {/* Side ear modules — sensors */}
+      <rect x="7.5" y="16" width="2.2" height="5" rx="1" fill={teal} opacity="0.55" />
+      <rect x="30.3" y="16" width="2.2" height="5" rx="1" fill={teal} opacity="0.55" />
     </>
   )
 }
@@ -120,7 +126,6 @@ function AlphiMark({ navy, teal }: { navy: string; teal: string }) {
 function AlphiWordmark({ color, teal }: { color: string; teal: string }) {
   return (
     <>
-      {/* ALPHI lettering — using SVG text for crispness */}
       <text
         x="0"
         y="24"
@@ -143,7 +148,6 @@ function AlphiWordmark({ color, teal }: { color: string; teal: string }) {
       >
         I
       </text>
-      {/* Tagline */}
       <text
         x="1"
         y="34"

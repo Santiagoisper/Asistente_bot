@@ -1,5 +1,7 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
+import { AlphiLogo } from '../ui/alphi-logo'
+import { IchtysLogo } from '../ui/ichtys-logo'
 
 const NAV = [
   { href: '/pricing', label: 'Precios' },
@@ -13,7 +15,6 @@ const DEMO_MAILTO = 'mailto:sisbert@cinme.com.ar?subject=Demo%20ALPHI%20Ichtys'
 
 interface MarketingShellProps {
   children: ReactNode
-  /** Optional eyebrow above page title */
   eyebrow?: string
   title?: string
   description?: string
@@ -24,8 +25,12 @@ export function MarketingShell({ children, eyebrow, title, description }: Market
     <div className="min-h-screen bg-alphi-slate/30">
       <header className="border-b border-alphi-border bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-4">
-          <Link href="/sign-in" className="text-sm font-bold text-alphi-navy">
-            Ichtys <span className="font-normal text-alphi-muted">/ ALPHI</span>
+          <Link href="/sign-in" className="flex items-center gap-3">
+            <IchtysLogo height={26} />
+            <span className="text-alphi-muted/40" aria-hidden="true">
+              ×
+            </span>
+            <AlphiLogo variant="full" height={28} theme="light" />
           </Link>
           <nav className="hidden items-center gap-5 text-xs font-medium text-alphi-muted md:flex">
             {NAV.map((item) => (
@@ -59,8 +64,13 @@ export function MarketingShell({ children, eyebrow, title, description }: Market
       </main>
 
       <footer className="border-t border-alphi-border bg-white py-8">
-        <div className="mx-auto flex max-w-5xl flex-col items-center gap-3 px-6 text-center text-xs text-alphi-muted md:flex-row md:justify-between">
-          <p>© 2026 Ichtys/ALPHI · MVP pre-validación · Sin PHI real en producción</p>
+        <div className="mx-auto flex max-w-5xl flex-col items-center gap-4 px-6 text-center text-xs text-alphi-muted md:flex-row md:justify-between">
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <IchtysLogo height={22} showLink />
+            <span className="text-alphi-muted/50">presenta</span>
+            <AlphiLogo variant="icon" height={22} />
+          </div>
+          <p>© 2026 · MVP pre-validación · Sin PHI real en producción</p>
           <div className="flex flex-wrap justify-center gap-4">
             {NAV.map((item) => (
               <Link key={item.href} href={item.href} className="hover:text-alphi-teal">

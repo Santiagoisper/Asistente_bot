@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { OrganizationSwitcher, UserButton } from '@clerk/nextjs'
 import { AlphiLogo } from '../../components/ui/alphi-logo'
+import { IchtysLogo } from '../../components/ui/ichtys-logo'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -109,13 +110,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </main>
 
       <footer className="border-t border-alphi-border bg-white px-6 py-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <IchtysLogo height={20} showLink />
+            <span className="text-[10px] text-alphi-muted/50">×</span>
+            <AlphiLogo variant="icon" height={20} />
+          </div>
           <p className="text-[11px] text-alphi-muted">
-            ALPHI &copy; 2026 - Responde solo desde documentos cargados. Verificar siempre con el protocolo original.
+            Responde solo desde documentos cargados. Verificar siempre con el protocolo original.
           </p>
-          <p className="hidden text-[11px] text-alphi-muted sm:block">
-            v1.0 MVP - CINME / Innova Trials
-          </p>
+          <p className="hidden text-[11px] text-alphi-muted sm:block">v1.0 MVP · CINME / Innova Trials</p>
         </div>
       </footer>
     </div>
