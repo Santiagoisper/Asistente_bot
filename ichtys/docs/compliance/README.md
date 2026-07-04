@@ -33,7 +33,7 @@ Establecer la base **antes de procesar PHI** (Protected Health Information / dat
 | 12 | Gobernanza IA | [AI-GOVERNANCE.md](./AI-GOVERNANCE.md) | ✅ Documentado | Sí |
 | 13 | ISMS overview | [ISMS-OVERVIEW.md](./ISMS-OVERVIEW.md) | ✅ Documentado | Sí |
 | 14 | Cifrado field-level PHI | [`@ichtys/crypto`](../../packages/crypto/) | ✅ Implementado | Sí |
-| 15 | `PHI_ENCRYPTION_KEY` en prod | Vercel env | ⏳ Pendiente | **Sí** |
+| 15 | `PHI_ENCRYPTION_KEY` en prod | Vercel env | ✅ Configurada (verificado 2026-07-04) | **Sí** |
 
 **Criterio de salida Fase 0:** ítems 8, 9/10 (según jurisdicción activa) y 15 completados + revisión interna firmada.
 

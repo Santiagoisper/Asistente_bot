@@ -29,4 +29,5 @@ Checklist del plan de pitch — marcar manualmente antes de la reunión con inve
 ## Deploy prod (opcional)
 
 - [x] Push + Vercel deploy con rutas GTM
-- [ ] `CRON_SECRET` configurado (scheduler SD)
+- [x] `CRON_SECRET` configurado (Vercel Production + GitHub Actions; verificado 2026-07-04)
+- [x] `PHI_ENCRYPTION_KEY` en prod (sujeto TEST-PHI via API → 201 + cleanup OK)

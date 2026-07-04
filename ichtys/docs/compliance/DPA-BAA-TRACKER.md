@@ -1,8 +1,25 @@
 # DPA / BAA Tracker — Procesadores de datos Ichtys
 
 **Versión:** 1.0  
-**Última actualización:** 2026-06-30  
+**Última actualización:** 2026-07-04  
 **Owner:** Legal / DPO
+
+---
+
+## 0. Próximas acciones (coordinación — iniciar ya)
+
+| # | Acción | Responsable | Plazo sugerido | Estado |
+|---|--------|-------------|----------------|--------|
+| L1 | Enviar solicitud DPA a Neon (proyecto `fragrant-sun-79639780`) | Legal / Ops | Semana 1 | ⬜ |
+| L2 | Aceptar DPA Vercel (dashboard → Legal) | Legal | Semana 1 | ⬜ |
+| L3 | Solicitar DPA Clerk + confirmar región datos | Legal | Semana 1 | ⬜ |
+| L4 | Contactar Anthropic sales — BAA API o zero-retention certificado | Legal | Semana 1–2 | ⬜ |
+| L5 | Activar BAA OpenAI (org settings) si embeddings tocan texto clínico | Legal + Eng | Semana 2 | ⬜ |
+| L6 | Revisión legal DPIA borrador ([DPIA.md](./DPIA.md)) | DPO | Semana 2 | ⬜ |
+| L7 | Revisión legal HIPAA RA ([HIPAA-RISK-ASSESSMENT.md](./HIPAA-RISK-ASSESSMENT.md)) | Legal US | Semana 2 | ⬜ |
+| L8 | Revisión interna Fase 0 — criterio de salida pre-PHI real | CINME / Innova | Post L1–L7 | ⬜ |
+
+**Nota ingeniería (2026-07-04):** `PHI_ENCRYPTION_KEY` y `CRON_SECRET` ya operativos en prod. El gate restante para PHI real es **legal** (filas L1–L8), no técnico.
 
 ---
 

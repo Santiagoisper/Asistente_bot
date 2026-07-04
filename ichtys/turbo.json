@@ -18,7 +18,8 @@
     "CLERK_SECRET_KEY",
     "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
     "NEXT_PUBLIC_APP_URL",
-    "PHI_ENCRYPTION_KEY"
+    "PHI_ENCRYPTION_KEY",
+    "CRON_SECRET"
   ],
   "tasks": {
     "build": {

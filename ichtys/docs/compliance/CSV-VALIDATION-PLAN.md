@@ -33,14 +33,14 @@
 | Documento | Descripción | Estado |
 |-----------|-------------|--------|
 | **VMP** — Validation Master Plan | Este documento + anexos | ✅ Marco |
-| **URS** — User Requirements Specification | Requisitos de usuario | ⬜ Fase 1 |
-| **FRS** — Functional Requirements Specification | Requisitos funcionales derivados | ⬜ Fase 1 |
+| **URS** — User Requirements Specification | Requisitos de usuario | 🟡 Borrador v0.1 ([URS.md](./URS.md)) |
+| **FRS** — Functional Requirements Specification | Requisitos funcionales derivados | 🟡 Borrador v0.1 ([FRS.md](./FRS.md)) |
 | **DS** — Design Specification | Arquitectura técnica | Parcial (ARCHITECTURE.md) |
 | **RA** — Risk Assessment | DPIA + HIPAA + FMEA módulos | Parcial |
 | **IQ** — Installation Qualification | Env, keys, DB schema | ⬜ Pre-prod PHI |
 | **OQ** — Operational Qualification | Tests funcionales | ⬜ Pre-prod PHI |
 | **PQ** — Performance Qualification | UAT con sitio piloto | ⬜ Pre-prod PHI |
-| **RTM** — Requirements Traceability Matrix | URS → FRS → Tests | ⬜ Fase 1 |
+| **RTM** — Requirements Traceability Matrix | URS → FRS → Tests | 🟡 Borrador v0.1 ([RTM.md](./RTM.md)) |
 | **VSR** — Validation Summary Report | Aprobación final | ⬜ |
 
 ---
@@ -76,7 +76,7 @@
 
 ## 5. IQ checklist (pre-prod PHI)
 
-- [ ] `PHI_ENCRYPTION_KEY` configurada en Vercel production
+- [x] `PHI_ENCRYPTION_KEY` configurada en Vercel production (2026-07-04)
 - [ ] Migraciones Fase 1 aplicadas en prod
 - [ ] BAAs/DPA firmados (ver tracker)
 - [ ] MFA habilitado para roles clínicos

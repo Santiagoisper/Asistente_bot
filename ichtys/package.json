@@ -24,6 +24,7 @@
     "reprocess:doc": "npx --yes tsx@4.19.2 scripts/reprocess-document-version.ts",
     "evals:direct": "npx --yes tsx@4.19.2 scripts/run-direct-rag-eval.ts",
     "e2e:product": "npx --yes tsx@4.19.2 scripts/e2e-product-loop.ts",
+    "verify:phi-prod": "npx --yes tsx@4.19.2 scripts/verify-prod-phi.ts",
     "orgs:consolidate": "npx --yes tsx@4.19.2 scripts/consolidate-single-org.ts",
     "evals:run": "pnpm --filter @ichtys/evals evals:run",
     "evals:quick": "pnpm --filter @ichtys/evals evals:quick",
