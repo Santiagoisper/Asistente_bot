@@ -21,6 +21,7 @@
     "db:check": "pnpm --filter @ichtys/db db:check",
     "db:studio": "pnpm --filter @ichtys/db db:studio",
     "demo:setup": "npx --yes tsx scripts/setup-demo-tenant.ts",
+    "reprocess:doc": "npx --yes tsx scripts/reprocess-document-version.ts",
     "evals:run": "pnpm --filter @ichtys/evals evals:run",
     "evals:quick": "pnpm --filter @ichtys/evals evals:quick",
     "evals:mock-metabolic": "pnpm --filter @ichtys/evals evals:mock-metabolic",

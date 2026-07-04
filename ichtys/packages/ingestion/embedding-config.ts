@@ -17,9 +17,10 @@ export const OPENAI_EMBEDDING_MODEL = 'text-embedding-3-small'
 export function resolveEmbeddingProvider(): EmbeddingProvider {
   const explicit = process.env.EMBEDDING_PROVIDER?.trim().toLowerCase()
   if (explicit === 'groq' || explicit === 'openai') return explicit
-  if (process.env.GROQ_API_KEY?.trim()) return 'groq'
+  // OpenAI first: Groq retiró nomic-embed-text-v1_5 (2026); muchos proyectos tienen ambas keys.
   if (process.env.OPENAI_API_KEY?.trim()) return 'openai'
-  return 'groq'
+  if (process.env.GROQ_API_KEY?.trim()) return 'groq'
+  return 'openai'
 }
 
 export function getEmbeddingModel(): string {
