@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import Link from 'next/link'
 import type { StudySpec, StudyEndpoint, StudyVisit } from '@ichtys/ingestion'
 import type { MedicalAnnotation } from '@ichtys/rag/medical-annotator'
 import type { AnnotatedCriterion } from '../../app/(app)/studies/[id]/spec/page'
+import type { SpecDiff, CriterionDiff, EndpointDiff, VisitDiff } from '../../lib/spec-diff'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -20,6 +21,8 @@ interface SpecReviewProps {
   spec: StudySpec
   annotatedInclusion: AnnotatedCriterion[]
   annotatedExclusion: AnnotatedCriterion[]
+  /** ID del spec aprobado que este draft reemplaza — indica posible enmienda. */
+  previousApprovedSpecId?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -827,10 +830,407 @@ function VisitsTable({
 }
 
 // ---------------------------------------------------------------------------
+// Diff UI components
+// ---------------------------------------------------------------------------
+
+const DIFF_COLOR: Record<string, string> = {
+  added:     'bg-emerald-50 border-l-4 border-alphi-sage',
+  removed:   'bg-red-50 border-l-4 border-alphi-rose',
+  modified:  'bg-amber-50 border-l-4 border-alphi-amber',
+  unchanged: '',
+}
+
+const DIFF_BADGE: Record<string, { label: string; cls: string }> = {
+  added:    { label: '+ Nuevo',    cls: 'bg-emerald-100 text-alphi-sage'  },
+  removed:  { label: '− Eliminado', cls: 'bg-red-100 text-alphi-rose'    },
+  modified: { label: '~ Modificado', cls: 'bg-amber-100 text-alphi-amber' },
+  unchanged: { label: '', cls: '' },
+}
+
+function DiffBadge({ type }: { type: string }) {
+  const { label, cls } = DIFF_BADGE[type] ?? { label: '', cls: '' }
+  if (!label) return null
+  return (
+    <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${cls}`}>
+      {label}
+    </span>
+  )
+}
+
+function CriteriaDiffSection({
+  label,
+  diffs,
+}: {
+  label: string
+  diffs: CriterionDiff[]
+}) {
+  const changed = diffs.filter((d) => d.diffType !== 'unchanged')
+  if (changed.length === 0) {
+    return (
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-alphi-navy">{label}</h3>
+        <p className="text-xs text-alphi-muted italic">Sin cambios</p>
+      </div>
+    )
+  }
+  return (
+    <div className="space-y-2">
+      <h3 className="text-sm font-semibold text-alphi-navy">{label}</h3>
+      <ol className="space-y-2">
+        {diffs.filter((d) => d.diffType !== 'unchanged').map((d) => (
+          <li key={d.key} className={`rounded-lg px-4 py-3 ${DIFF_COLOR[d.diffType]}`}>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="font-mono text-[11px] font-bold text-alphi-muted">{d.key}</span>
+              <DiffBadge type={d.diffType} />
+            </div>
+            {d.diffType === 'modified' && (
+              <div className="space-y-1">
+                <p className="text-xs line-through text-alphi-muted">{d.old?.text}</p>
+                <p className="text-sm text-alphi-navy">{d.new?.text}</p>
+              </div>
+            )}
+            {d.diffType === 'added' && (
+              <p className="text-sm text-alphi-navy">{d.new?.text}</p>
+            )}
+            {d.diffType === 'removed' && (
+              <p className="text-sm text-alphi-muted line-through">{d.old?.text}</p>
+            )}
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
+function EndpointsDiffSection({ diffs }: { diffs: EndpointDiff[] }) {
+  const changed = diffs.filter((d) => d.diffType !== 'unchanged')
+  if (changed.length === 0) {
+    return (
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-alphi-navy">Endpoints</h3>
+        <p className="text-xs text-alphi-muted italic">Sin cambios</p>
+      </div>
+    )
+  }
+  return (
+    <div className="space-y-2">
+      <h3 className="text-sm font-semibold text-alphi-navy">Endpoints</h3>
+      <div className="space-y-2">
+        {changed.map((d) => (
+          <div key={d.index} className={`rounded-lg px-4 py-3 ${DIFF_COLOR[d.diffType]}`}>
+            <DiffBadge type={d.diffType} />
+            {d.diffType === 'modified' && (
+              <div className="mt-1 space-y-1">
+                <p className="text-[10px] font-semibold text-alphi-muted uppercase tracking-wide">Objetivo</p>
+                {d.old?.objective !== d.new?.objective && (
+                  <>
+                    <p className="text-xs line-through text-alphi-muted">{d.old?.objective}</p>
+                    <p className="text-sm text-alphi-navy">{d.new?.objective}</p>
+                  </>
+                )}
+                {d.old?.objective === d.new?.objective && (
+                  <p className="text-sm text-alphi-navy">{d.new?.objective}</p>
+                )}
+                <p className="mt-2 text-[10px] font-semibold text-alphi-muted uppercase tracking-wide">Endpoint</p>
+                {d.old?.endpoint !== d.new?.endpoint && (
+                  <>
+                    <p className="text-xs line-through text-alphi-muted">{d.old?.endpoint}</p>
+                    <p className="text-sm text-alphi-navy">{d.new?.endpoint}</p>
+                  </>
+                )}
+                {d.old?.endpoint === d.new?.endpoint && (
+                  <p className="text-sm text-alphi-navy">{d.new?.endpoint}</p>
+                )}
+              </div>
+            )}
+            {d.diffType === 'added' && (
+              <div className="mt-1 space-y-0.5">
+                <p className="text-sm text-alphi-navy">{d.new?.objective}</p>
+                <p className="text-xs text-alphi-muted">{d.new?.endpoint}</p>
+              </div>
+            )}
+            {d.diffType === 'removed' && (
+              <div className="mt-1 space-y-0.5 line-through">
+                <p className="text-sm text-alphi-muted">{d.old?.objective}</p>
+                <p className="text-xs text-alphi-muted">{d.old?.endpoint}</p>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function VisitsDiffSection({ diffs }: { diffs: VisitDiff[] }) {
+  const changed = diffs.filter((d) => d.diffType !== 'unchanged')
+  if (changed.length === 0) {
+    return (
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-alphi-navy">Visitas / SoA</h3>
+        <p className="text-xs text-alphi-muted italic">Sin cambios</p>
+      </div>
+    )
+  }
+  return (
+    <div className="space-y-2">
+      <h3 className="text-sm font-semibold text-alphi-navy">Visitas / SoA</h3>
+      <div className="space-y-2">
+        {changed.map((d) => (
+          <div key={d.key} className={`rounded-lg px-4 py-3 ${DIFF_COLOR[d.diffType]}`}>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="font-semibold text-sm text-alphi-navy">{d.key}</span>
+              <DiffBadge type={d.diffType} />
+            </div>
+            {d.diffType === 'modified' && d.procedureDiffs.length > 0 && (
+              <div className="mt-2">
+                <p className="text-[10px] font-semibold text-alphi-muted uppercase tracking-wide mb-1">Procedimientos</p>
+                <div className="flex flex-wrap gap-1">
+                  {d.procedureDiffs.filter((p) => p.diffType !== 'unchanged').map((p, i) => (
+                    <span
+                      key={i}
+                      className={[
+                        'inline-block rounded px-1.5 py-0.5 text-[11px]',
+                        p.diffType === 'added'   ? 'bg-emerald-100 text-alphi-sage'  : '',
+                        p.diffType === 'removed' ? 'bg-red-100 text-alphi-rose line-through' : '',
+                      ].join(' ')}
+                    >
+                      {p.text}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+interface SpecVersionMeta {
+  id: string
+  version: number
+  status: string
+  createdAt: string
+}
+
+function SpecDiffPanel({
+  studyId,
+  currentSpecId,
+  currentVersion,
+}: {
+  studyId: string
+  currentSpecId: string
+  currentVersion: number
+}) {
+  const [versions, setVersions]   = useState<SpecVersionMeta[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [compareId, setCompareId] = useState<string>('')
+  const [diff, setDiff]           = useState<SpecDiff | null>(null)
+  const [diffLoading, setDiffLoading] = useState(false)
+  const [diffError, setDiffError]     = useState<string | null>(null)
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res  = await fetch(`/api/studies/${studyId}/specs`)
+        if (!res.ok) return
+        const data = await res.json() as { specs: SpecVersionMeta[] }
+        const others = data.specs.filter((s) => s.id !== currentSpecId)
+        setVersions(others)
+        if (others[0]) setCompareId(others[0].id)
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [studyId, currentSpecId])
+
+  async function runDiff() {
+    if (!compareId) return
+    setDiffLoading(true)
+    setDiffError(null)
+    setDiff(null)
+    try {
+      const res = await fetch(
+        `/api/studies/${studyId}/specs/diff?v1=${compareId}&v2=${currentSpecId}`,
+      )
+      if (!res.ok) {
+        const body = await res.json() as { error?: string }
+        setDiffError(body.error ?? 'Error al comparar versiones.')
+        return
+      }
+      const body = await res.json() as { diff: SpecDiff }
+      setDiff(body.diff)
+    } catch {
+      setDiffError('Error de red al comparar versiones.')
+    } finally {
+      setDiffLoading(false)
+    }
+  }
+
+  if (loading) {
+    return <p className="text-sm text-alphi-muted">Cargando versiones…</p>
+  }
+
+  if (versions.length === 0) {
+    return (
+      <div className="rounded-lg border border-alphi-border bg-alphi-slate px-4 py-6 text-center text-sm text-alphi-muted">
+        Esta es la única versión del spec — no hay versiones anteriores para comparar.
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Selector */}
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-sm text-alphi-muted">Comparar v{currentVersion} con:</span>
+        <select
+          value={compareId}
+          onChange={(e) => { setCompareId(e.target.value); setDiff(null) }}
+          className="rounded-md border border-alphi-border bg-white px-3 py-1.5 text-sm text-alphi-navy focus:border-alphi-teal focus:outline-none"
+        >
+          {versions.map((v) => (
+            <option key={v.id} value={v.id}>
+              v{v.version} — {v.status} —{' '}
+              {new Date(v.createdAt).toLocaleDateString('es-AR', {
+                day: '2-digit', month: 'short', year: 'numeric',
+              })}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={() => void runDiff()}
+          disabled={diffLoading || !compareId}
+          className="rounded-md bg-alphi-navy px-4 py-1.5 text-sm font-semibold text-white hover:bg-alphi-navydim disabled:opacity-50 transition-colors"
+        >
+          {diffLoading ? 'Comparando…' : 'Ver diff'}
+        </button>
+      </div>
+
+      {diffError && (
+        <p className="text-sm text-alphi-rose">{diffError}</p>
+      )}
+
+      {diff && (
+        <div className="space-y-5">
+          {/* Summary badges */}
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-alphi-border bg-alphi-slate px-4 py-3">
+            {diff.hasChanges ? (
+              <>
+                {diff.summary.added > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-alphi-sage">
+                    +{diff.summary.added} nuevo{diff.summary.added !== 1 ? 's' : ''}
+                  </span>
+                )}
+                {diff.summary.removed > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-alphi-rose">
+                    −{diff.summary.removed} eliminado{diff.summary.removed !== 1 ? 's' : ''}
+                  </span>
+                )}
+                {diff.summary.modified > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-alphi-amber">
+                    ~{diff.summary.modified} modificado{diff.summary.modified !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-sm text-alphi-muted">Sin diferencias — ambas versiones son idénticas.</span>
+            )}
+          </div>
+
+          {/* Sections */}
+          {diff.hasChanges && (
+            <div className="space-y-6">
+              <CriteriaDiffSection label="Criterios de inclusión" diffs={diff.inclusionCriteria} />
+              <CriteriaDiffSection label="Criterios de exclusión" diffs={diff.exclusionCriteria} />
+              <EndpointsDiffSection diffs={diff.endpoints} />
+              <VisitsDiffSection diffs={diff.visits} />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Amendment banner
+// ---------------------------------------------------------------------------
+
+/**
+ * Detecta en background si el draft tiene cambios respecto al approved previo
+ * y muestra un banner de enmienda con acceso rápido al diff.
+ */
+function AmendmentBanner({
+  studyId,
+  currentSpecId,
+  previousApprovedSpecId,
+  onViewDiff,
+}: {
+  studyId: string
+  currentSpecId: string
+  previousApprovedSpecId: string
+  onViewDiff: () => void
+}) {
+  const [loading, setLoading]   = useState(true)
+  const [summary, setSummary]   = useState<{ added: number; removed: number; modified: number } | null>(null)
+  const [hasChanges, setHasChanges] = useState(false)
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/studies/${studyId}/specs/diff?v1=${previousApprovedSpecId}&v2=${currentSpecId}`,
+        )
+        if (!res.ok) return
+        const body = await res.json() as { diff: { hasChanges: boolean; summary: { added: number; removed: number; modified: number } } }
+        setHasChanges(body.diff.hasChanges)
+        setSummary(body.diff.summary)
+      } catch {
+        // Non-critical — swallow
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [studyId, currentSpecId, previousApprovedSpecId])
+
+  if (loading) return null
+  if (!hasChanges) return null
+
+  const total = (summary?.added ?? 0) + (summary?.removed ?? 0) + (summary?.modified ?? 0)
+
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm">
+      <span className="font-mono text-base leading-none text-amber-600">⚠</span>
+      <div className="flex-1 min-w-0">
+        <span className="font-semibold text-amber-800">Posible enmienda detectada</span>
+        <span className="ml-1 text-amber-700">
+          — {total} diferencia{total !== 1 ? 's' : ''} respecto al protocolo aprobado anterior
+        </span>
+        {summary && (
+          <span className="ml-1.5 font-mono text-xs text-amber-600">
+            (+{summary.added} −{summary.removed} ~{summary.modified})
+          </span>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={onViewDiff}
+        className="shrink-0 rounded-md border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors"
+      >
+        Ver diff →
+      </button>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
-type Tab = 'eligibility' | 'endpoints' | 'visits'
+type Tab = 'eligibility' | 'endpoints' | 'visits' | 'diff'
 
 export default function SpecReview({
   specId,
@@ -842,6 +1242,7 @@ export default function SpecReview({
   spec,
   annotatedInclusion,
   annotatedExclusion,
+  previousApprovedSpecId,
 }: SpecReviewProps) {
   const [activeTab, setActiveTab]     = useState<Tab>('eligibility')
   const [approving, setApproving]     = useState(false)
@@ -988,6 +1389,7 @@ export default function SpecReview({
     { key: 'eligibility', label: 'Elegibilidad',  count: totalCriteria },
     { key: 'endpoints',   label: 'Endpoints',     count: localSpec.endpoints.length },
     { key: 'visits',      label: 'Visitas / SoA', count: localSpec.visits.length },
+    { key: 'diff',        label: 'Comparar versiones', count: 0 },
   ]
 
   return (
@@ -1003,6 +1405,16 @@ export default function SpecReview({
           </span>
         )}
       </div>
+
+      {/* ── Amendment banner — shown when this draft supersedes an approved spec ── */}
+      {isDraft && previousApprovedSpecId && (
+        <AmendmentBanner
+          studyId={studyId}
+          currentSpecId={specId}
+          previousApprovedSpecId={previousApprovedSpecId}
+          onViewDiff={() => setActiveTab('diff')}
+        />
+      )}
 
       {/* ── Protocol header ── */}
       <div className="flex items-start justify-between gap-4 rounded-xl border border-alphi-border bg-white px-5 py-4 shadow-alphi-card">
@@ -1041,26 +1453,50 @@ export default function SpecReview({
           </div>
         </div>
 
-        {/* Approve button — only shown in draft */}
-        {isDraft && (
-          <button
-            onClick={handleApprove}
-            disabled={approving}
-            className={[
-              'shrink-0 rounded-lg px-4 py-2 text-sm font-semibold transition-all duration-150',
-              'bg-alphi-navy text-white hover:bg-alphi-navydim shadow-alphi-card',
-              'disabled:opacity-50 disabled:cursor-not-allowed',
-            ].join(' ')}
-          >
-            {approving ? 'Aprobando…' : '✓ Aprobar spec'}
-          </button>
-        )}
-        {currentStatus === 'approved' && (
-          <span className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-alphi-sage/30 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-alphi-sage">
-            <span className="h-1.5 w-1.5 rounded-full bg-alphi-sage" />
-            Aprobado
-          </span>
-        )}
+        {/* Action buttons */}
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          {/* Export buttons — always visible */}
+          <div className="flex items-center gap-1.5">
+            <a
+              href={`/api/studies/${studyId}/spec/${specId}/export?format=docx`}
+              download
+              className="inline-flex items-center gap-1 rounded-md border border-alphi-border bg-white px-2.5 py-1.5 text-xs font-semibold text-alphi-navy hover:bg-alphi-slate transition-colors"
+              title="Descargar como Word (.docx)"
+            >
+              ↓ Word
+            </a>
+            <a
+              href={`/api/studies/${studyId}/spec/${specId}/export?format=pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded-md border border-alphi-border bg-white px-2.5 py-1.5 text-xs font-semibold text-alphi-navy hover:bg-alphi-slate transition-colors"
+              title="Ver versión para imprimir / guardar como PDF"
+            >
+              🖨 PDF
+            </a>
+          </div>
+
+          {/* Approve button — only shown in draft */}
+          {isDraft && (
+            <button
+              onClick={handleApprove}
+              disabled={approving}
+              className={[
+                'rounded-lg px-4 py-2 text-sm font-semibold transition-all duration-150',
+                'bg-alphi-navy text-white hover:bg-alphi-navydim shadow-alphi-card',
+                'disabled:opacity-50 disabled:cursor-not-allowed',
+              ].join(' ')}
+            >
+              {approving ? 'Aprobando…' : '✓ Aprobar spec'}
+            </button>
+          )}
+          {currentStatus === 'approved' && (
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-alphi-sage/30 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-alphi-sage">
+              <span className="h-1.5 w-1.5 rounded-full bg-alphi-sage" />
+              Aprobado
+            </span>
+          )}
+        </div>
       </div>
 
       {/* ── Tab bar ── */}
@@ -1147,6 +1583,14 @@ export default function SpecReview({
             visits={localSpec.visits}
             isDraft={isDraft}
             onSaveVisit={saveVisit}
+          />
+        )}
+
+        {activeTab === 'diff' && (
+          <SpecDiffPanel
+            studyId={studyId}
+            currentSpecId={specId}
+            currentVersion={version}
           />
         )}
       </div>

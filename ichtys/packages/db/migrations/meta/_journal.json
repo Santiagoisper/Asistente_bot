@@ -57,6 +57,13 @@
       "when": 1751616000000,
       "tag": "0007_screening_assessments",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1751702400000,
+      "tag": "0008_spec_amendment_tracking",
+      "breakpoints": true
     }
   ]
 }

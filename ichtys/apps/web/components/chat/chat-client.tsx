@@ -10,7 +10,7 @@ import { ConfidenceBadge } from './confidence-badge'
 import { AnswerContent } from './answer-content'
 import { EvidenceList } from './evidence-list'
 import { AlphiLogo } from '../ui/alphi-logo'
-import type { AnswerConfidence, ChatTurn, ConversationListItem, Evidence, MedicalAnnotation, MessageItem, TerminologySuggestion } from './types'
+import type { AnswerConfidence, ChatTurn, ConversationListItem, DocumentType, Evidence, MedicalAnnotation, MessageItem, TerminologySuggestion } from './types'
 
 type ChatClientProps = {
   studyId: string
@@ -74,9 +74,8 @@ export default function ChatClient({
   const [historyError, setHistoryError]           = useState<string | null>(null)
   const [sendError, setSendError]                 = useState<string | null>(null)
   const [highlightIdx, setHighlightIdx]           = useState<number | null>(null)
-  // Alcance de la búsqueda: 'all' busca en todos los documentos del estudio;
-  // 'protocol' limita el retrieval al protocolo (filtra documentType).
-  const [searchScope, setSearchScope]             = useState<'all' | 'protocol'>('all')
+  // Alcance de búsqueda: 'all' = todos los documentos; cualquier DocumentType = filtro por tipo.
+  const [searchScope, setSearchScope]             = useState<'all' | DocumentType>('all')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef    = useRef<HTMLTextAreaElement>(null)
 
@@ -184,7 +183,7 @@ export default function ChatClient({
           studyId,
           question: q,
           ...(selectedConvId ? { conversationId: selectedConvId } : {}),
-          ...(searchScope === 'protocol' ? { documentType: 'protocol' } : {}),
+          ...(searchScope !== 'all' ? { documentType: searchScope } : {}),
         }),
       })
 
@@ -404,29 +403,30 @@ export default function ChatClient({
         {/* Input area */}
         <div className="border-t border-alphi-border bg-white px-4 py-3">
           <form onSubmit={handleSubmit}>
-            <div className="mb-2 flex items-center gap-2">
-              <span className="text-[11px] font-medium text-alphi-muted">Buscar en:</span>
-              <div className="inline-flex rounded-lg border border-alphi-border p-0.5">
-                {([
-                  { value: 'all', label: 'Todos los documentos' },
-                  { value: 'protocol', label: 'Solo protocolo' },
-                ] as const).map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setSearchScope(opt.value)}
-                    aria-pressed={searchScope === opt.value}
-                    className={[
-                      'rounded-md px-2.5 py-1 text-[11px] font-medium transition-all duration-100',
-                      searchScope === opt.value
-                        ? 'bg-alphi-teal/10 text-alphi-teal'
-                        : 'text-alphi-muted hover:text-alphi-navy',
-                    ].join(' ')}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+            <div className="mb-2 flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] font-medium text-alphi-muted shrink-0">Buscar en:</span>
+              {([
+                { value: 'all',                   label: 'Todos' },
+                { value: 'protocol',              label: 'Protocolo' },
+                { value: 'investigator_brochure', label: 'IB' },
+                { value: 'lab_manual',            label: 'Lab Manual' },
+                { value: 'pharmacy_manual',       label: 'Farmacia' },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setSearchScope(opt.value)}
+                  aria-pressed={searchScope === opt.value}
+                  className={[
+                    'rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-all duration-100',
+                    searchScope === opt.value
+                      ? 'border-alphi-teal/60 bg-alphi-teal/10 text-alphi-teal'
+                      : 'border-alphi-border bg-white text-alphi-muted hover:border-alphi-teal/30 hover:text-alphi-navy',
+                  ].join(' ')}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
             <div className="relative">
               <textarea

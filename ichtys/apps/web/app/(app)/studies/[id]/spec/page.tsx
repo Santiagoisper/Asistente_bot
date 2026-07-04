@@ -85,16 +85,17 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
         </div>
       )}
       <SpecReview
-      specId={row.id}
-      studyId={studyId}
-      version={row.version}
-      status={row.status as 'draft' | 'approved' | 'superseded'}
-      extractionModel={row.extractionModel}
-      createdAt={row.createdAt.toISOString()}
-      spec={spec}
-      annotatedInclusion={annotatedInclusion}
-      annotatedExclusion={annotatedExclusion}
-    />
+        specId={row.id}
+        studyId={studyId}
+        version={row.version}
+        status={row.status as 'draft' | 'approved' | 'superseded'}
+        extractionModel={row.extractionModel}
+        createdAt={row.createdAt.toISOString()}
+        spec={spec}
+        annotatedInclusion={annotatedInclusion}
+        annotatedExclusion={annotatedExclusion}
+        previousApprovedSpecId={row.previousApprovedSpecId ?? null}
+      />
     </div>
   )
 }
