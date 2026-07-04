@@ -52,7 +52,7 @@ export function mergeExtractions(
   const systolic = llmFacts.systolic ?? heuristic.systolic
   const diastolic = llmFacts.diastolic ?? heuristic.diastolic
 
-  let fieldConfidence: ProfileFieldConfidence = {
+  const fieldConfidence: ProfileFieldConfidence = {
     ageYears: confidenceForScalar(heuristic.ageYears, llmFacts.ageYears),
     bloodPressure: confidenceForScalar(
       heuristic.systolic && heuristic.diastolic ? heuristic.systolic : undefined,
@@ -136,7 +136,7 @@ export function mergeProfileWithExtraction(
 ): PatientProfile {
   const { facts, fieldConfidence } = merged
 
-  let labs = [...current.labs]
+  const labs = [...current.labs]
   for (const lab of facts.labs) {
     const idx = labs.findIndex((l) => l.name.toLowerCase() === lab.name.toLowerCase())
     const entry = { ...lab, sourceEvolutionId: evolutionId }
