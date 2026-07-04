@@ -1,4 +1,5 @@
 import { handleApiError, validateStudyAccess } from '@ichtys/auth'
+import { getLatestStudySpec, isMeaningfulSpec, specRichness, studySpecSchema } from '@ichtys/ingestion'
 import {
   getProtocolDocumentVersionId,
   reextractStudySpec,
@@ -35,6 +36,25 @@ export async function POST(
     const documentVersionId = await getProtocolDocumentVersionId({ orgId, studyId })
     if (!documentVersionId) {
       return Response.json({ error: 'No hay protocolo cargado en este estudio.' }, { status: 404 })
+    }
+
+    // Evita spam de versiones si el spec ya es útil (p. ej. clicks repetidos en demo).
+    const existing = await getLatestStudySpec({ orgId, studyId })
+    if (existing) {
+      const parsed = studySpecSchema.safeParse(existing.spec)
+      if (parsed.success && isMeaningfulSpec(parsed.data)) {
+        const richness = specRichness(parsed.data)
+        const ageMs = Date.now() - existing.createdAt.getTime()
+        if (richness >= 10 && ageMs < 15 * 60 * 1000) {
+          return Response.json({
+            status: 'already_ready',
+            studyId,
+            version: existing.version,
+            richness,
+            message: `Spec v${existing.version} ya tiene ${richness} ítems (${parsed.data.inclusionCriteria.length} incl, ${parsed.data.exclusionCriteria.length} excl). Refrescando vista…`,
+          })
+        }
+      }
     }
 
     try {

@@ -1,12 +1,15 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 export function SpecReextractButton({ studyId }: { studyId: string }) {
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
   async function handleClick(): Promise<void> {
+    if (loading) return
     setLoading(true)
     setMessage(null)
     try {
@@ -17,6 +20,7 @@ export function SpecReextractButton({ studyId }: { studyId: string }) {
         message?: string
         error?: string
         richness?: number
+        status?: string
       }
       if (!res.ok) {
         setMessage(payload.error ?? 'No se pudo completar la re-extracción.')
@@ -24,8 +28,9 @@ export function SpecReextractButton({ studyId }: { studyId: string }) {
       }
       setMessage(
         payload.message ??
-          `Re-extracción completada (${payload.richness ?? '?'} ítems). Actualizá la página.`,
+          `Re-extracción completada (${payload.richness ?? '?'} ítems).`,
       )
+      router.refresh()
     } catch {
       setMessage('Error de red al iniciar la re-extracción.')
     } finally {

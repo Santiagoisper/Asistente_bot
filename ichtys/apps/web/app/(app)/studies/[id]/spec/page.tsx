@@ -1,5 +1,7 @@
 import { validateStudyAccess } from '@ichtys/auth'
 import { getLatestStudySpec, studySpecSchema, isMeaningfulSpec } from '@ichtys/ingestion'
+
+export const dynamic = 'force-dynamic'
 import { annotateAnswerSync } from '@ichtys/rag/medical-annotator'
 import SpecReview from '../../../../../components/spec/spec-review'
 import { SpecReextractButton } from '../../../../../components/spec/spec-reextract-button'

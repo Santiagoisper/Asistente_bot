@@ -14,7 +14,8 @@ import { chunkPages } from './chunker'
 import { EmbeddingIndexingError, indexDocumentVersionChunks } from './indexer'
 import { parsePdf, PdfParseError } from './parser'
 import { extractStudySpec, SPEC_EXTRACTION_LLM_PROVIDER } from './spec-extractor'
-import { getApprovedSpecExamples, saveStudySpec } from './spec-store'
+import { getApprovedSpecExamples, isMeaningfulSpec, saveStudySpec } from './spec-store'
+import { reextractStudySpec } from './reextract-spec'
 import { getOrgLlmApiKeys } from '@ichtys/db'
 
 /**
@@ -320,6 +321,24 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
           extractionModel,
         })
         console.log(`[spec-extractor] saved draft spec id=${id} version=${version}`)
+
+        if (!isMeaningfulSpec(spec)) {
+          console.warn(
+            `[spec-extractor] partial spec v${version} for documentVersionId=${parsedInput.documentVersionId}, auto re-extracting…`,
+          )
+          try {
+            const retry = await reextractStudySpec({
+              orgId: parsedInput.orgId,
+              studyId: parsedInput.studyId,
+              documentVersionId: parsedInput.documentVersionId,
+            })
+            console.log(
+              `[spec-extractor] auto re-extract ok v${retry.version} richness=${retry.richness}`,
+            )
+          } catch (retryErr) {
+            console.error('[spec-extractor] auto re-extract failed:', retryErr)
+          }
+        }
       } catch (err) {
         // El fallo del spec no falla la ingestion — el documento queda 'ready'
         // pero sin spec. El usuario puede reprocesar o el sistema lo detectará.

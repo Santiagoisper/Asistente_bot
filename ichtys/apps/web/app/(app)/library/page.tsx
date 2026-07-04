@@ -5,6 +5,8 @@ import { studySpecSchema, isMeaningfulSpec } from '@ichtys/ingestion'
 import { extractSpecTerminology, parseTerminologyAnnotations, readLegacySpecTerminology } from '../../../lib/rag/spec-terminology'
 import { LibraryClient, type LibraryRow } from '../../../components/library/library-client'
 
+export const dynamic = 'force-dynamic'
+
 export default async function LibraryPage() {
   const { orgId: clerkOrgId } = await auth()
   let rows: LibraryRow[] = []
