@@ -3,10 +3,9 @@ import { z } from 'zod'
 /**
  * study-spec.ts — contrato tipado del study spec extraído del protocolo.
  *
- * Diseñado sobre la estructura real de protocolos ICH M11 (validado contra
- * protocolos Lilly GZBP/GZBZ/GZBO/GZQD en español):
+ * Diseñado sobre protocolos reales ICH M11 y formatos EU/Boehringer/Sanofi:
  *   - Sección 3:   objetivos y criterios de valoración (endpoints)
- *   - Sección 5.1: criterios de inclusión (numerados)
+ *   - Sección 5.1: criterios de inclusión (numerados; romanos anidados (i)(a))
  *   - Sección 5.2: criterios de exclusión (numerados)
  *   - Sección 1.3: cronograma de actividades / SoA (visitas)
  *
@@ -29,7 +28,7 @@ const provenanceFields = {
 
 /** Criterio de elegibilidad numerado tal como aparece en el protocolo. */
 export const eligibilityCriterionSchema = z.object({
-  /** Número del criterio en el protocolo ("3", "10a"). Preserva el original. */
+  /** Número del criterio en el protocolo ("3", "10a", "(ii)", "(iii)(a)"). Preserva el original. */
   number: z.string().min(1),
   /** Texto completo del criterio, sin parafrasear. */
   text: z.string().min(1),

@@ -408,11 +408,17 @@ const identificationGroupSchema = z.object({
 
 const GROUP_INSTRUCTIONS = {
   eligibility: `Extract ALL inclusion criteria and ALL exclusion criteria from these protocol pages.
-- Keep the original numbering exactly as printed (e.g., "3", "10a", "IC-5", "E7", "•").
-- One item per criterion, full text verbatim — do not split or merge criteria.
-- Criteria may be formatted as numbered paragraphs, bullet lists, or sub-numbered lists — handle all.
-- If the section is divided by sub-headings (e.g., "Cardiovascular", "Laboratory"), extract all items regardless of sub-heading.
-- If a criterion has sub-parts (a, b, c), extract the parent criterion as one item with the full combined text.`,
+- One row per atomic criterion — never merge a parent with its sub-parts.
+- Keep numbering exactly as printed for top-level items (e.g., "3", "10a", "IC-5", "(i)", "(ii)", "E7").
+- Nested / hierarchical lists (common in Boehringer, Sanofi, CTIS EU formats):
+  • Roman numerals (i), (ii), (iii) or i., ii., iii. — each is its own criterion.
+  • Letter sub-parts a., b., c. or (a), (b) nested under a parent — each sub-part is its own criterion.
+  • For nested sub-parts, set number to the composite label: "(iii)(a)", "(iii)(b)", "5.1.1(a)", etc.
+  • Do NOT collapse "(iii)" plus its a/b/c children into a single row.
+- If the same number repeats for a different visit phase (e.g., "Selección" vs "Aleatorización"), keep the suffix exactly as printed, e.g. "(i) [Aleatorización]".
+- Sub-headings (e.g., "5.1.1 Criterios de inclusión", "Cardiovascular") do not replace numbering — extract every numbered item under them.
+- Full text verbatim per row — do not paraphrase or omit sub-clauses.
+- Criteria may appear as numbered paragraphs, bullet lists, or run-on blocks — split into atomic rows.`,
 
   endpoints: `Extract the study objectives and their associated endpoints (outcome measures).
 - Output objective/endpoint pairs classified as primary, secondary, or exploratory.

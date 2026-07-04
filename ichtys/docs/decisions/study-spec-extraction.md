@@ -20,7 +20,11 @@ insert en `study_specs.spec` (jsonb). Reglas del contrato:
 - El texto se preserva verbatim en el idioma original del protocolo.
   El extractor no traduce ni parafrasea.
 - La numeración original de los criterios se preserva como string
-  ("3", "10a") tal como aparece impresa.
+  ("3", "10a", "(ii)", "(iii)(a)") tal como aparece impresa.
+- **Criterios anidados (2026-07-04):** protocolos Boehringer/Sanofi/CTIS EU
+  usan romanos + letras (`(iii)` con sub-partes `a.`, `b.`, `c.`). Cada
+  sub-parte es una fila atómica con numeración compuesta — nunca colapsar
+  el padre con sus hijos en un solo ítem.
 
 ## Extracción en dos fases
 
