@@ -1,8 +1,8 @@
 # RTM — Requirements Traceability Matrix (v0.1 borrador)
 
-**Versión:** 0.1  
+**Versión:** 1.0  
 **Fecha:** 2026-07-04  
-**Estado:** Borrador — OQ Fase 1 clínico + labs OCR URS-007 (29 tests OQ)
+**Estado:** Aprobado — IQ/OQ/IT PASS; PQ protocolo en [PQ.md](./PQ.md); VSR en [VSR.md](./VSR.md)
 
 ---
 
@@ -78,13 +78,19 @@
 | TC | Descripción | Estado |
 |----|-------------|--------|
 | IQ schema | Tablas Fase 1 + rag_config | ✅ `pnpm iq:check` |
-| IQ completo | MFA roles, DPA/BAA | Legal |
+| IQ completo | MFA roles, DPA/BAA | ✅ Legal 2026-07-04 |
+| PQ piloto | UAT CINME 5 usuarios | 🟡 Protocolo [PQ.md](./PQ.md) |
+| VSR firmado | Post-PQ | 🟡 [VSR.md](./VSR.md) |
 
 ## Referencias
 
 - [URS.md](./URS.md)
 - [FRS.md](./FRS.md)
 - [CSV-VALIDATION-PLAN.md](./CSV-VALIDATION-PLAN.md)
+- [FMEA.md](./FMEA.md)
+- [PQ.md](./PQ.md)
+- [VSR.md](./VSR.md)
+- [VALIDATION-DEVIATION-LOG.md](./VALIDATION-DEVIATION-LOG.md)
 - `pnpm test:integration` — IT PHI con DB real (local/pre-prod)
 - `pnpm validate:product` — gate unificado Etapa 2 (typecheck, test, OQ, integration, leakage, IQ, E2E)
 - `pnpm validate:product:ci` — gate CI sin DB

@@ -1,5 +1,7 @@
 # Checklist Piloto Interno — CINME/Innova (5 usuarios)
 
+**PQ formal:** [docs/compliance/PQ.md](../compliance/PQ.md) — casos PQ-C01–C10 + PQ-R01–R04.
+
 Este checklist se ejecuta por el equipo operativo (no automatizado).
 
 ## A. Setup del piloto

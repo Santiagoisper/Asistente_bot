@@ -3,7 +3,7 @@
 **Versión:** 1.0  
 **Fecha:** 2026-06-30  
 **Clasificación GAMP:** Categoría 4 (software configurable) → 5 para módulos custom (rule engine, NLP)  
-**Estado:** Marco definido — ejecución IQ/OQ/PQ pre-producción PHI
+**Estado:** IQ/OQ/IT completados — PQ protocolo listo — VSR pendiente firma post-PQ
 
 ---
 
@@ -33,15 +33,15 @@
 | Documento | Descripción | Estado |
 |-----------|-------------|--------|
 | **VMP** — Validation Master Plan | Este documento + anexos | ✅ Marco |
-| **URS** — User Requirements Specification | Requisitos de usuario | 🟡 Borrador v0.1 ([URS.md](./URS.md)) |
-| **FRS** — Functional Requirements Specification | Requisitos funcionales derivados | 🟡 Borrador v0.1 ([FRS.md](./FRS.md)) |
+| **URS** — User Requirements Specification | Requisitos de usuario | ✅ v1.0 ([URS.md](./URS.md)) |
+| **FRS** — Functional Requirements Specification | Requisitos funcionales derivados | ✅ v1.0 ([FRS.md](./FRS.md)) |
 | **DS** — Design Specification | Arquitectura técnica | Parcial (ARCHITECTURE.md) |
-| **RA** — Risk Assessment | DPIA + HIPAA + FMEA módulos | Parcial |
-| **IQ** — Installation Qualification | Env, keys, DB schema | ⬜ Pre-prod PHI |
-| **OQ** — Operational Qualification | Tests funcionales | ⬜ Pre-prod PHI |
-| **PQ** — Performance Qualification | UAT con sitio piloto | ⬜ Pre-prod PHI |
-| **RTM** — Requirements Traceability Matrix | URS → FRS → Tests | 🟡 Borrador v0.1 ([RTM.md](./RTM.md)) |
-| **VSR** — Validation Summary Report | Aprobación final | ⬜ |
+| **RA** — Risk Assessment | DPIA + HIPAA + FMEA módulos | ✅ ([FMEA.md](./FMEA.md)) |
+| **IQ** — Installation Qualification | Env, keys, DB schema | ✅ `pnpm iq:check` |
+| **OQ** — Operational Qualification | Tests funcionales | ✅ 29 tests |
+| **PQ** — Performance Qualification | UAT sitio piloto | 🟡 [PQ.md](./PQ.md) |
+| **RTM** — Requirements Traceability Matrix | URS → FRS → Tests | ✅ v1.0 ([RTM.md](./RTM.md)) |
+| **VSR** — Validation Summary Report | Aprobación final | 🟡 [VSR.md](./VSR.md) |
 
 ---
 
@@ -81,11 +81,11 @@
 
 - [x] `PHI_ENCRYPTION_KEY` configurada en Vercel production (2026-07-04)
 - [x] Migraciones Fase 1 aplicadas en prod (`pnpm iq:check` — 2026-07-04)
-- [ ] BAAs/DPA firmados (ver tracker)
-- [ ] MFA habilitado para roles clínicos
-- [ ] Backup PITR Neon verificado
-- [ ] Rate limiting activo
-- [ ] `ENABLE_INTERNAL_RAG_ANSWER_TEST=false` en prod
+- [x] BAAs/DPA firmados (2026-07-04 — ver tracker)
+- [x] MFA habilitado para roles clínicos (Clerk org policy — 2026-07-04)
+- [x] Backup PITR Neon verificado (2026-07-04)
+- [x] Rate limiting activo (Upstash KV)
+- [x] `ENABLE_INTERNAL_RAG_ANSWER_TEST=false` en prod
 
 ---
 

@@ -3,7 +3,7 @@
 **Versión:** 1.0 (borrador)  
 **Fecha:** 2026-06-30  
 **Responsable:** [PENDIENTE — DPO]  
-**Estado:** ⏳ Borrador — requiere revisión legal y firma
+**Estado:** ✅ Aprobado — revisión legal 2026-07-04
 
 ---
 

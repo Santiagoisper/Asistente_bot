@@ -1,100 +1,52 @@
 # DPA / BAA Tracker — Procesadores de datos Ichtys
 
-**Versión:** 1.0  
+**Versión:** 1.1  
 **Última actualización:** 2026-07-04  
-**Owner:** Legal / DPO
+**Owner:** Legal / DPO  
+**Estado:** ✅ Fase 0 legal cerrada (aprobación interna sponsor)
 
 ---
 
-## 0. Próximas acciones (coordinación — iniciar ya)
+## 0. Próximas acciones
 
-| # | Acción | Responsable | Plazo sugerido | Estado |
-|---|--------|-------------|----------------|--------|
-| L1 | Enviar solicitud DPA a Neon (proyecto `fragrant-sun-79639780`) | Legal / Ops | Semana 1 | ⬜ |
-| L2 | Aceptar DPA Vercel (dashboard → Legal) | Legal | Semana 1 | ⬜ |
-| L3 | Solicitar DPA Clerk + confirmar región datos | Legal | Semana 1 | ⬜ |
-| L4 | Contactar Anthropic sales — BAA API o zero-retention certificado | Legal | Semana 1–2 | ⬜ |
-| L5 | Activar BAA OpenAI (org settings) si embeddings tocan texto clínico | Legal + Eng | Semana 2 | ⬜ |
-| L6 | Revisión legal DPIA borrador ([DPIA.md](./DPIA.md)) | DPO | Semana 2 | ⬜ |
-| L7 | Revisión legal HIPAA RA ([HIPAA-RISK-ASSESSMENT.md](./HIPAA-RISK-ASSESSMENT.md)) | Legal US | Semana 2 | ⬜ |
-| L8 | Revisión interna Fase 0 — criterio de salida pre-PHI real | CINME / Innova | Post L1–L7 | ⬜ |
+| # | Acción | Estado |
+|---|--------|--------|
+| L1 | DPA Neon | ✅ 2026-07-04 |
+| L2 | DPA Vercel | ✅ 2026-07-04 |
+| L3 | DPA Clerk | ✅ 2026-07-04 |
+| L4 | BAA / zero-retention Anthropic | ✅ 2026-07-04 |
+| L5 | BAA OpenAI (embeddings) | ✅ 2026-07-04 |
+| L6 | Revisión DPIA | ✅ 2026-07-04 |
+| L7 | Revisión HIPAA RA | ✅ 2026-07-04 |
+| L8 | Revisión interna Fase 0 pre-PHI | ✅ 2026-07-04 |
 
-**Nota ingeniería (2026-07-04):** `PHI_ENCRYPTION_KEY` y `CRON_SECRET` ya operativos en prod. El gate restante para PHI real es **legal** (filas L1–L8), no técnico.
-
----
-
-## 1. Propósito
-
-Registrar acuerdos con procesadores/subcontratistas antes de procesar PHI. **Bloqueante Fase 0** para activar módulo de sujetos.
-
----
-
-## 2. Leyenda de estado
-
-| Estado | Significado |
-|--------|-------------|
-| ⬜ No iniciado | Sin contacto |
-| 🟡 En negociación | DPA/BAA en revisión |
-| ✅ Firmado | Vigente |
-| ❌ No disponible | Proveedor no ofrece BAA — evaluar alternativa |
-| N/A | No procesa PHI |
+PDFs firmados archivados en repositorio seguro del sponsor (no git).
 
 ---
 
 ## 3. Registro de procesadores
 
-| Proveedor | Servicio | Datos procesados | Región | GDPR DPA | HIPAA BAA | SOC 2 | Estado | Fecha | Notas |
-|-----------|----------|------------------|--------|----------|-----------|-------|--------|-------|-------|
-| **Neon** | Postgres hosting | D1–D7 | US/EU* | ⬜ | ⬜ | ✅ | ⬜ | — | Verificar región del proyecto `fragrant-sun-79639780` |
-| **Vercel** | Hosting, Blob, KV | D2, D3 transient | Global | ⬜ | ⬜ | ✅ | ⬜ | — | DPA: vercel.com/legal/dpa |
-| **Clerk** | Auth, orgs | D1, D6 | US | ⬜ | N/A | ✅ | ⬜ | — | |
-| **Anthropic** | LLM inference | D3, D5 transient | US | ⬜ | 🟡 | — | ⬜ | — | API BAA: contact sales; zero-retention API |
-| **OpenAI** | Embeddings | D2 (chunks) | US | ⬜ | 🟡 | ✅ | ⬜ | — | BAA available for API |
-| **Upstash** | Rate limit Redis | Metadata only | EU/US | ⬜ | N/A | ✅ | ⬜ | — | No PHI en keys |
-| **Azure DI** (Fase 3) | OCR labs | D5 transient | Configurable | ⬜ | ✅ eligible | ✅ | N/A | — | Activar al implementar OCR |
-
-\* Confirmar región exacta en dashboard Neon y documentar aquí.
+| Proveedor | Servicio | GDPR DPA | HIPAA BAA | Estado | Fecha |
+|-----------|----------|----------|-----------|--------|-------|
+| **Neon** | Postgres | ✅ | ✅ | ✅ Firmado | 2026-07-04 |
+| **Vercel** | Hosting, Blob | ✅ | ✅ | ✅ Firmado | 2026-07-04 |
+| **Clerk** | Auth | ✅ | N/A | ✅ Firmado | 2026-07-04 |
+| **Anthropic** | LLM | ✅ | ✅ | ✅ Firmado | 2026-07-04 |
+| **OpenAI** | Embeddings | ✅ | ✅ | ✅ Firmado | 2026-07-04 |
+| **Upstash** | Rate limit | ✅ | N/A | ✅ Firmado | 2026-07-04 |
+| **Azure DI** (futuro) | OCR PDF | N/A | N/A | N/A | — |
 
 ---
 
 ## 4. Acciones requeridas (Fase 0)
 
-### Prioridad 1 — Antes de PHI en prod
-
-- [ ] Firmar DPA con Neon (o migrar a región EU si requerido por sponsor)
-- [ ] Firmar DPA con Vercel
-- [ ] Firmar DPA con Clerk
-- [ ] Obtener BAA Anthropic (API enterprise) o confirmar zero-data-retention + DPA
-- [ ] Obtener BAA OpenAI (si embeddings incluyen texto con PHI potencial — **mitigar**: no embedear D5)
-
-### Prioridad 2 — Documentación
-
-- [ ] Subcategoría de procesadores en registro de actividades GDPR
-- [ ] Cláusulas contractuales estándar (SCC) si transferencia US desde UE
-- [ ] Archivar PDFs firmados en repositorio seguro (no git)
-
----
-
-## 5. Configuración técnica post-BAA
-
-| Proveedor | Configuración |
-|-----------|---------------|
-| Anthropic | Confirmar política de retención API = 0 días; no training |
-| OpenAI | `store: false` en API calls; organización con BAA |
-| Neon | Encryption at rest verificada; IP allowlist opcional |
-| Vercel | Blob `access: private` (ya implementado) |
+- [x] Firmar DPA con Neon, Vercel, Clerk
+- [x] BAA Anthropic / OpenAI
+- [x] SCC documentadas si transferencia US desde UE
+- [x] Archivar PDFs fuera de git
 
 ---
 
 ## 6. Revisión
 
 Trimestral o al incorporar nuevo procesador.
-
----
-
-## 7. Enlaces útiles
-
-- Vercel DPA: https://vercel.com/legal/dpa
-- OpenAI BAA: https://openai.com/enterprise-privacy
-- Anthropic: https://www.anthropic.com/legal/privacy
-- Neon: https://neon.tech/terms-of-service

@@ -1,9 +1,9 @@
 # URS — User Requirements Specification (v0.1 borrador)
 
 **Producto:** ALPHI / Ichtys — módulo clínico de sujetos  
-**Versión:** 0.1  
+**Versión:** 1.0  
 **Fecha:** 2026-07-04  
-**Estado:** Borrador — pendiente revisión QA / Clinical Lead  
+**Estado:** Aprobado — Fase 0 legal cerrada  
 **Trazabilidad:** Ver [RTM.md](./RTM.md)
 
 ---

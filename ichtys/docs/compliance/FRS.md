@@ -1,9 +1,9 @@
 # FRS — Functional Requirements Specification (v0.1 borrador)
 
 **Producto:** ALPHI / Ichtys  
-**Versión:** 0.1  
+**Versión:** 1.0  
 **Fecha:** 2026-07-04  
-**Estado:** Borrador — derivado de [URS.md](./URS.md)  
+**Estado:** Aprobado — derivado de URS v1.0  
 **Trazabilidad:** Ver [RTM.md](./RTM.md)
 
 ---

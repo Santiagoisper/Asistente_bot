@@ -33,13 +33,13 @@ Estimación: Etapa 0 **cerrada** salvo ítems opcionales (E3, T3-LCS, E2).
 
 ## Etapa 1 — Compliance Fase 0: gates bloqueantes (PRE-PHI)
 
-**Ningún dato de paciente real entra a prod hasta cerrar esto.** (`docs/compliance/README.md`)
+**✅ CERRADA 2026-07-04** — DPA/BAA, DPIA, HIPAA RA, PHI key, revisión interna.
 
 | # | Bloqueante | Carril |
 |---|---|---|
-| 8 | DPA/BAA firmados con procesadores (Neon, Vercel, Anthropic, Clerk) | Legal |
-| 9 | DPIA (GDPR) — revisión legal (si UE) | Legal |
-| 10 | HIPAA Risk Assessment — revisión legal (si US) | Legal |
+| 8 | DPA/BAA firmados con procesadores (Neon, Vercel, Anthropic, Clerk) | Legal | ✅ |
+| 9 | DPIA (GDPR) — revisión legal (si UE) | Legal | ✅ |
+| 10 | HIPAA Risk Assessment — revisión legal (si US) | Legal | ✅ |
 | 15 | `PHI_ENCRYPTION_KEY` en prod (Vercel) | ✅ Hecho (2026-07-04) |
 | — | Revisión interna firmada = criterio de salida | Interno |
 
@@ -50,14 +50,12 @@ retención, backup/DR, cifrado field-level) ya está documentado/implementado.
 
 Corazón de 21 CFR Part 11 / EMA Annex 11 (`CSV-VALIDATION-PLAN.md`). Secuencia:
 
-1. **Docs Fase 1:** URS → FRS → RTM (matriz de trazabilidad). Hoy borrador.
-2. **Risk Assessment** por módulo (FMEA). Parcial.
-3. **IQ** — Installation Qualification: env, keys, schema DB en prod.
-4. **OQ** — Operational Qualification: tests funcionales de módulos críticos —
-   tenant isolation (SEC-001), audit (AUD-001), cifrado PHI (CRY-001),
-   clinical CRUD (CLN-001), rule engine/screening (SCR-001), OCR labs (OCR-001).
-5. **PQ** — Performance Qualification: UAT con **sitio piloto real**.
-6. **VSR** — Validation Summary Report firmado = producto validado.
+1. **Docs Fase 1:** URS → FRS → RTM — ✅ v1.0.
+2. **Risk Assessment** por módulo (FMEA). — ✅ [FMEA.md](./compliance/FMEA.md).
+3. **IQ** — ✅ `pnpm iq:check` 11/11.
+4. **OQ** — ✅ 29 tests CI + IT 4 tests.
+5. **PQ** — 🟡 Protocolo [PQ.md](./compliance/PQ.md); ejecución piloto pendiente.
+6. **VSR** — 🟡 Borrador [VSR.md](./compliance/VSR.md); firma post-PQ.
 
 Chat RAG y annotator SNOMED → "validación lite" (decision support, no decisión clínica;
 out of scope de validación formal v1). Claude aporta en OQ (tests) y trazabilidad.
