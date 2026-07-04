@@ -10,10 +10,10 @@
 
 | URS | FRS | Test / evidencia | Estado |
 |-----|-----|------------------|--------|
-| URS-001 | FRS-SEC-001, FRS-SEC-002 | OQ-001 (401 sin auth) | ⬜ OQ |
+| URS-001 | FRS-SEC-001, FRS-SEC-002 | OQ-001 (`route.oq.test.ts`) | ✅ OQ |
 | URS-002 | FRS-SEC-003, FRS-SEC-004 | `pnpm test:leakage`, SEC-001 | ✅ leakage tests |
 | URS-003 | FRS-CRY-001–003 | OQ-003, CRY-001, `verify-prod-phi.ts`, `e2e:product` PHI | ✅ parcial |
-| URS-004 | FRS-AUD-001, FRS-AUD-002 | OQ-007, AUD-001 | ⬜ OQ |
+| URS-004 | FRS-AUD-001, FRS-AUD-002 | OQ-007 (`route.oq.test.ts`) | ✅ OQ |
 | URS-005 | FRS-SCR-001–002 | OQ-004–006, `screening-engine.test.ts`, `e2e:product` | ✅ unit + e2e |
 | URS-006 | FRS-SCR-003 | Code review screening-engine (no LLM) | ✅ |
 | URS-007 | NLP-001 (futuro) | OCR flow manual | ⬜ |
@@ -25,12 +25,13 @@
 
 ## OQ pendientes (prioridad)
 
-| TC | Descripción | Bloqueado por |
-|----|-------------|---------------|
-| OQ-001 | Guardar evolución sin auth → 401 | — |
-| OQ-002 | Leer evolución cross-org → 404 | — |
-| OQ-007 | Audit log save evolution sin content | — |
-| IQ completo | Migraciones prod, MFA roles | Legal DPA/BAA |
+| TC | Descripción | Estado |
+|----|-------------|--------|
+| OQ-001 | Guardar evolución sin auth → 401 | ✅ `pnpm test:oq` |
+| OQ-002 | Leer evolución cross-org → 404 | ✅ `pnpm test:oq` |
+| OQ-007 | Audit log save evolution sin content | ✅ `pnpm test:oq` |
+| IQ schema | Tablas Fase 1 + rag_config | ✅ `pnpm iq:check` |
+| IQ completo | MFA roles, DPA/BAA | Legal |
 
 ## Referencias
 

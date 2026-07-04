@@ -77,7 +77,7 @@
 ## 5. IQ checklist (pre-prod PHI)
 
 - [x] `PHI_ENCRYPTION_KEY` configurada en Vercel production (2026-07-04)
-- [ ] Migraciones Fase 1 aplicadas en prod
+- [x] Migraciones Fase 1 aplicadas en prod (`pnpm iq:check` — 2026-07-04)
 - [ ] BAAs/DPA firmados (ver tracker)
 - [ ] MFA habilitado para roles clínicos
 - [ ] Backup PITR Neon verificado
