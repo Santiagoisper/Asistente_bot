@@ -20,8 +20,10 @@
     "db:migrate": "pnpm --filter @ichtys/db db:migrate",
     "db:check": "pnpm --filter @ichtys/db db:check",
     "db:studio": "pnpm --filter @ichtys/db db:studio",
+    "demo:setup": "npx --yes tsx scripts/setup-demo-tenant.ts",
     "evals:run": "pnpm --filter @ichtys/evals evals:run",
     "evals:quick": "pnpm --filter @ichtys/evals evals:quick",
+    "evals:mock-metabolic": "pnpm --filter @ichtys/evals evals:mock-metabolic",
     "clean": "turbo run clean && rm -rf node_modules"
   },
   "devDependencies": {

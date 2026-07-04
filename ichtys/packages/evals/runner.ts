@@ -324,6 +324,8 @@ export interface RunEvalsConfig {
   datasetPath: string
   outputDir: string
   quick?: boolean
+  /** Run only cases whose id is in this list (e.g. SM-001,SM-002). */
+  caseFilter?: string[]
   /**
    * Maximum number of cases to run concurrently.
    * Default=4 — completes 12 cases in ~3 LLM-latency slots (~21s), well within
@@ -338,9 +340,25 @@ const QUICK_LIMIT = 5
 // Runner
 // ---------------------------------------------------------------------------
 
+function parseCaseFilterArg(): string[] | undefined {
+  const idx = process.argv.indexOf('--filter')
+  if (idx === -1 || !process.argv[idx + 1]) return undefined
+  return process.argv[idx + 1]!
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean)
+}
+
 export async function runMockMetabolicEvals(config: RunEvalsConfig): Promise<EvalSuiteResult> {
   const allCases = loadDataset(config.datasetPath)
-  const cases = config.quick ? allCases.slice(0, QUICK_LIMIT) : allCases
+  let cases = config.quick ? allCases.slice(0, QUICK_LIMIT) : allCases
+  if (config.caseFilter?.length) {
+    const allowed = new Set(config.caseFilter)
+    cases = allCases.filter((c) => allowed.has(c.id))
+    if (cases.length === 0) {
+      throw new Error(`No cases matched filter: ${config.caseFilter.join(', ')}`)
+    }
+  }
   const runId = crypto.randomUUID()
   const timestamp = new Date().toISOString()
   const concurrency = config.concurrency ?? 4
@@ -486,6 +504,7 @@ if (isMain) {
   const authCookie = process.env['EVAL_AUTH_COOKIE'] ?? ''
   const outputDir = process.env['EVAL_OUTPUT_DIR'] ?? 'docs/evals/results'
   const quick = process.argv.includes('--quick')
+  const caseFilter = parseCaseFilterArg()
 
   if (!studyId) {
     // eslint-disable-next-line no-console
@@ -526,6 +545,7 @@ if (isMain) {
     datasetPath,
     outputDir,
     quick,
+    caseFilter,
     concurrency: 4,
   })
     .then((report) => {

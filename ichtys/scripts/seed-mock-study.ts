@@ -1,7 +1,8 @@
 /**
  * Seed script — crea org y study mock para smoke test 10A.
- * Uso: npx tsx scripts/seed-mock-study.ts
- * Solo para desarrollo local. No commitear con datos reales.
+ *
+ * @deprecated Prefer: pnpm demo:setup (scripts/setup-demo-tenant.ts) — incluye docs + chunks.
+ * Uso legacy: npx tsx scripts/seed-mock-study.ts
  */
 import { db, organizations, studies, eq } from '../packages/db/index'
 

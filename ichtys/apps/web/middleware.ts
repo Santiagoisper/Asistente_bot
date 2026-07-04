@@ -9,6 +9,10 @@ const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',
   '/sign-up(.*)',
   '/trust',
+  '/pricing',
+  '/terms',
+  '/privacy',
+  '/roi',
   // Cron jobs autentican con CRON_SECRET en el handler, no con Clerk.
   '/api/cron(.*)',
 ])
