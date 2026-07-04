@@ -10,8 +10,8 @@ Checklist del plan de pitch — marcar manualmente antes de la reunión con inve
 
 ## Demo tenant
 
-- [ ] `pnpm demo:setup` (requiere `DATABASE_URL` + `OPENAI_API_KEY`)
-- [ ] SM-001–006 responden con citas (manual o `pnpm evals:mock-metabolic -- --filter SM-001,...,SM-006`)
+- [x] `pnpm demo:setup` (requiere `DATABASE_URL` + `OPENAI_API_KEY`; usar `--force-reseed` si chunks duplicados)
+- [x] SM-001–006 responden con citas (`pnpm evals:direct -- --filter SM-001,...,SM-006` → 6/6 PASS)
 - [ ] Video Plan B grabado (ver `demo-recording/README.md`)
 
 ## Contenido honesto
@@ -28,5 +28,5 @@ Checklist del plan de pitch — marcar manualmente antes de la reunión con inve
 
 ## Deploy prod (opcional)
 
-- [ ] Push + Vercel deploy con rutas GTM
+- [x] Push + Vercel deploy con rutas GTM
 - [ ] `CRON_SECRET` configurado (scheduler SD)

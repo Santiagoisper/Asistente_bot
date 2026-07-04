@@ -2,7 +2,7 @@
 
 **Duración:** 5–7 minutos en vivo · **Plan B:** video grabado (SM-001–003 + SM-011 adversarial)
 
-**Setup:** `pnpm demo:setup` → `pnpm dev` → login org `org_3Emh0j274SoeBVmpICF4gnlWlVR` → estudio **MOCK-METABOLIC-T2D-v1** → chat.
+**Setup:** `pnpm demo:setup` → `pnpm dev` → login org **INNOVA TRIALS** (`org_3Fmf1xkFzmdDYWYIrfWEetueRAz`) → estudio **MOCK-METABOLIC-T2D-v1** → chat.
 
 > Todos los documentos son **mock ficticios**, sin PHI. El producto está en **MVP pre-validación**; framework de compliance alineado, validación CSV formal en progreso.
 

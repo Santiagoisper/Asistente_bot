@@ -7,7 +7,7 @@
  * Uso:
  *   DATABASE_URL=<neon> OPENAI_API_KEY=<key> pnpm demo:setup
  *
- * Opcional: DEMO_CLERK_ORG_ID (default org Ichtys Dev)
+ * Opcional: DEMO_CLERK_ORG_ID (default INNOVA TRIALS)
  */
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -30,6 +30,7 @@ import {
   demoBlobUrl,
 } from './lib/mock-demo-constants'
 import { seedMockChunks } from './lib/seed-mock-chunks-lib'
+import { seedMockStudySpecIfMissing } from './lib/seed-mock-spec-lib'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DOCS_DIR = join(__dirname, '../docs/evals/mock-metabolic-documents')
@@ -162,12 +163,18 @@ async function main() {
   console.log('\nUpserting documents + document_versions...')
   await upsertDocuments(orgId, studyId)
 
+  console.log('\nSeeding study spec (mock protocol)...')
+  const specCreated = await seedMockStudySpecIfMissing()
+  console.log(specCreated ? '  study spec v1 created + approved' : '  study spec already present')
+
   console.log('\nSeeding chunks + embeddings (OpenAI)...')
+  const forceReseed = process.argv.includes('--force-reseed')
   const totalChunks = await seedMockChunks({
     docsDir: DOCS_DIR,
     orgId,
     studyId,
     openAiApiKey: apiKey,
+    forceReseed,
   })
 
   console.log('\n=== Setup complete ===')

@@ -4,8 +4,8 @@
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { db, eq } from '../../packages/db/index'
-import { chunks } from '../../packages/db/schema/index'
+import { db, eq, inArray } from '../../packages/db/index'
+import { chunks, citations } from '../../packages/db/schema/index'
 import { DEMO_DOCUMENTS, DEMO_ORG_ID, DEMO_STUDY_ID } from './mock-demo-constants'
 
 export interface RawChunk {
@@ -94,16 +94,35 @@ export interface SeedMockChunksOptions {
   studyId?: string
   openAiApiKey: string
   verbose?: boolean
+  /** Borra chunks existentes (y citations que los referencian) antes de re-seed. */
+  forceReseed?: boolean
 }
 
 export async function seedMockChunks(options: SeedMockChunksOptions): Promise<number> {
   const orgId = options.orgId ?? DEMO_ORG_ID
   const studyId = options.studyId ?? DEMO_STUDY_ID
   const verbose = options.verbose ?? true
+  const forceReseed = options.forceReseed ?? false
 
-  await db.delete(chunks).where(eq(chunks.studyId, studyId))
-  if (verbose) {
-    console.log(`Deleted existing chunks for study ${studyId}`)
+  const existing = await db
+    .select({ id: chunks.id })
+    .from(chunks)
+    .where(eq(chunks.studyId, studyId))
+
+  if (existing.length > 0 && !forceReseed) {
+    if (verbose) {
+      console.log(`Chunks already exist for study ${studyId} (${existing.length}) — skipping seed`)
+    }
+    return existing.length
+  }
+
+  if (existing.length > 0) {
+    const chunkIds = existing.map((row) => row.id)
+    await db.delete(citations).where(inArray(citations.chunkId, chunkIds))
+    await db.delete(chunks).where(eq(chunks.studyId, studyId))
+    if (verbose) {
+      console.log(`Deleted ${existing.length} existing chunks (and related citations) for study ${studyId}`)
+    }
   }
 
   let totalChunks = 0

@@ -3,10 +3,10 @@
  * Deben coincidir entre seed scripts, eval runner y upload-mock-docs.mjs.
  */
 export const DEMO_CLERK_ORG_ID =
-  process.env['DEMO_CLERK_ORG_ID'] ?? 'org_3Emh0j274SoeBVmpICF4gnlWlVR'
+  process.env['DEMO_CLERK_ORG_ID'] ?? 'org_3Fmf1xkFzmdDYWYIrfWEetueRAz'
 
-export const DEMO_ORG_ID = '2d67f024-ff70-42fa-b73a-4a0500229855'
-export const DEMO_ORG_NAME = 'Ichtys Dev Org'
+export const DEMO_ORG_ID = '1f3cde8b-be2a-4adf-9bbc-a2cf54163920'
+export const DEMO_ORG_NAME = 'INNOVA TRIALS'
 
 export const DEMO_STUDY_ID = '508fa9c9-dbb9-49aa-abd5-7f7fe968bbc6'
 export const DEMO_STUDY_NAME = 'MOCK-METABOLIC-T2D-v1'

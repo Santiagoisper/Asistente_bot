@@ -65,7 +65,9 @@ function assessHbA1cCriterion(
   }
 
   const withinMin = range.min === undefined || value >= range.min
-  const withinMax = range.max === undefined || value < range.max
+  const withinMax =
+    range.max === undefined ||
+    (/<=\s*\d|≤\s*\d/i.test(criterion.text) ? value <= range.max : value < range.max)
   const passesRange = withinMin && withinMax
 
   if (kind === 'inclusion') {
@@ -132,6 +134,27 @@ function assessMedicationCriterion(
   return null
 }
 
+function assessConditionCriterion(
+  criterion: EligibilityCriterionInput,
+  kind: 'inclusion' | 'exclusion',
+  profile: PatientProfile,
+): CriterionAssessment | null {
+  if (kind !== 'exclusion') return null
+  if (!/pancreatitis/i.test(criterion.text)) return null
+
+  const hasHistory = profile.conditions.some((c) => /pancreatitis/i.test(c))
+  return {
+    criterionNumber: criterion.number,
+    criterionText: criterion.text,
+    kind,
+    status: hasHistory ? 'fail' : 'pass',
+    reason: hasHistory
+      ? 'Antecedente de pancreatitis documentado en el perfil.'
+      : 'Sin antecedente de pancreatitis en el perfil.',
+    sourcePages: criterion.sourcePages,
+  }
+}
+
 function assessGeneric(
   criterion: EligibilityCriterionInput,
   kind: 'inclusion' | 'exclusion',
@@ -168,6 +191,7 @@ export function assessScreening(
     results.push(
       assessHbA1cCriterion(criterion, 'exclusion', profile) ??
         assessMedicationCriterion(criterion, 'exclusion', profile) ??
+        assessConditionCriterion(criterion, 'exclusion', profile) ??
         assessGeneric(criterion, 'exclusion'),
     )
   }

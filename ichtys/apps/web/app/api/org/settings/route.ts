@@ -53,6 +53,8 @@ async function resolveOrgContext() {
 
 const patchSchema = z.object({
   llmProvider: z.enum(['anthropic', 'openai', 'google', 'groq', 'glm', 'auto']).optional(),
+  similarityThreshold: z.number().min(0.05).max(0.95).optional(),
+  topK: z.number().int().min(1).max(20).optional(),
   llmApiKeys: z
     .object({
       anthropic: z.string().min(8).nullable().optional(),
@@ -113,10 +115,17 @@ export async function PATCH(req: Request): Promise<Response> {
 
     const body = patchSchema.parse(await req.json())
 
-    if (body.llmProvider !== undefined) {
-      await updateOrgRagConfig(orgId, {
-        llmProvider: body.llmProvider as OrgLlmProvider,
-      })
+    const ragPatch: Partial<{
+      llmProvider: OrgLlmProvider
+      similarityThreshold: number
+      topK: number
+    }> = {}
+    if (body.llmProvider !== undefined) ragPatch.llmProvider = body.llmProvider as OrgLlmProvider
+    if (body.similarityThreshold !== undefined) ragPatch.similarityThreshold = body.similarityThreshold
+    if (body.topK !== undefined) ragPatch.topK = body.topK
+
+    if (Object.keys(ragPatch).length > 0) {
+      await updateOrgRagConfig(orgId, ragPatch)
     }
 
     if (body.llmApiKeys) {

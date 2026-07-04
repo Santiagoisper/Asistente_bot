@@ -25,6 +25,27 @@ describe('assessScreening', () => {
     expect(results[0]?.sourcePages).toEqual([42, 43])
   })
 
+  it('excluye sujeto con antecedente de pancreatitis', () => {
+    const results = assessScreening(
+      {
+        version: 1,
+        labs: [{ name: 'HbA1c', value: 8.0, unit: '%' }],
+        medications: [],
+        conditions: ['Pancreatitis aguda previa'],
+      },
+      {
+        inclusionCriteria: [],
+        exclusionCriteria: [
+          {
+            number: '1',
+            text: 'History of any pancreatitis (acute or chronic) at any time prior to enrollment.',
+          },
+        ],
+      },
+    )
+    expect(results[0]?.status).toBe('fail')
+  })
+
   it('marca unknown si falta HbA1c en perfil', () => {
     const results = assessScreening(
       { version: 1, labs: [], medications: [], conditions: [] },

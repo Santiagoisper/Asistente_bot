@@ -29,6 +29,8 @@ type OpenAiUsage = {
 
 type SettingsPayload = {
   llmProvider: LlmProvider
+  similarityThreshold: number
+  topK: number
   providers: Record<string, boolean>
   envDefaultProvider: LlmProvider
   autoChain: string[]
@@ -67,12 +69,16 @@ const HEALTH_LABELS: Record<ProviderHealth['status'], string> = {
   not_configured: '— Sin configurar',
 }
 
+const RAG_DEFAULTS = { similarityThreshold: 0.15, topK: 12 }
+
 export function OrgLlmSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [settings, setSettings] = useState<SettingsPayload | null>(null)
   const [selected, setSelected] = useState<LlmProvider>('auto')
+  const [similarityThreshold, setSimilarityThreshold] = useState<number>(RAG_DEFAULTS.similarityThreshold)
+  const [topK, setTopK] = useState<number>(RAG_DEFAULTS.topK)
   const [keyInputs, setKeyInputs] = useState<Partial<Record<LlmKeyProvider, string>>>({})
   const [clearKeys, setClearKeys] = useState<Partial<Record<LlmKeyProvider, boolean>>>({})
   const [health, setHealth] = useState<ProviderHealth[] | null>(null)
@@ -86,6 +92,8 @@ export function OrgLlmSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
     const data = (await res.json()) as SettingsPayload
     setSettings(data)
     setSelected(data.llmProvider)
+    setSimilarityThreshold(data.similarityThreshold ?? RAG_DEFAULTS.similarityThreshold)
+    setTopK(data.topK ?? RAG_DEFAULTS.topK)
     setOpenAiUsage(data.openAiUsage)
   }
 
@@ -121,6 +129,8 @@ export function OrgLlmSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           llmProvider: selected,
+          similarityThreshold,
+          topK,
           ...(Object.keys(llmApiKeys).length > 0 ? { llmApiKeys } : {}),
         }),
       })
@@ -216,6 +226,62 @@ export function OrgLlmSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
             Cadena auto: {settings.autoChain.join(' → ')}
           </p>
         )}
+      </div>
+
+      <div className="rounded-lg border border-alphi-border bg-white p-4">
+        <h2 className="text-sm font-semibold text-alphi-navy">Retrieval RAG</h2>
+        <p className="mt-1 text-xs text-alphi-muted">
+          Ajustá cuántos fragmentos del protocolo se buscan y qué tan estricta es la similitud.
+          Valores más altos en umbral = menos citas pero más precisas.
+        </p>
+
+        <div className="mt-4 space-y-5">
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor="rag-threshold" className="text-sm font-medium text-alphi-navy">
+                Umbral de similitud
+              </label>
+              <span className="text-xs font-mono text-alphi-muted">{similarityThreshold.toFixed(2)}</span>
+            </div>
+            <input
+              id="rag-threshold"
+              type="range"
+              min={0.05}
+              max={0.95}
+              step={0.05}
+              value={similarityThreshold}
+              disabled={!canEdit}
+              onChange={(e) => setSimilarityThreshold(Number(e.target.value))}
+              className="mt-2 w-full accent-alphi-teal"
+            />
+            <p className="mt-1 text-[11px] text-alphi-muted">
+              Rango 0.05–0.95 · default {RAG_DEFAULTS.similarityThreshold}
+            </p>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor="rag-topk" className="text-sm font-medium text-alphi-navy">
+                Fragmentos máximos (top K)
+              </label>
+              <span className="text-xs font-mono text-alphi-muted">{topK}</span>
+            </div>
+            <input
+              id="rag-topk"
+              type="range"
+              min={1}
+              max={20}
+              step={1}
+              value={topK}
+              disabled={!canEdit}
+              onChange={(e) => setTopK(Number(e.target.value))}
+              className="mt-2 w-full accent-alphi-teal"
+            />
+            <p className="mt-1 text-[11px] text-alphi-muted">
+              Rango 1–20 · default {RAG_DEFAULTS.topK}
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="rounded-lg border border-alphi-border bg-white p-4">
