@@ -79,7 +79,7 @@ export function getModelId(provider: LlmProviderId, purpose: LlmPurpose): string
       if (purpose === 'title' || purpose === 'clinical-extract') {
         return process.env.TITLE_MODEL ?? 'claude-haiku-4-5'
       }
-      if (purpose === 'spec') return process.env.SPEC_EXTRACTION_MODEL ?? 'claude-sonnet-4-5'
+      if (purpose === 'spec') return process.env.SPEC_EXTRACTION_MODEL ?? 'claude-sonnet-4-6'
       return process.env.ANSWER_MODEL ?? 'claude-sonnet-4-5'
     case 'openai':
       if (purpose === 'title' || purpose === 'clinical-extract') {

@@ -79,6 +79,9 @@ export function getExtractionModelId(): string {
   return process.env.SPEC_EXTRACTION_MODEL ?? 'claude-sonnet-4-6'
 }
 
+/** Spec extraction siempre usa Claude — independiente del proveedor de chat de la org. */
+export const SPEC_EXTRACTION_LLM_PROVIDER = 'anthropic' as const
+
 export interface ExtractStudySpecOptions {
   llmProviderPreference?: LlmProviderPreference
   llmApiKeys?: OrgLlmApiKeys | null

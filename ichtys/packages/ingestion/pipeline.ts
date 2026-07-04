@@ -13,9 +13,8 @@ import {
 import { chunkPages } from './chunker'
 import { EmbeddingIndexingError, indexDocumentVersionChunks } from './indexer'
 import { parsePdf, PdfParseError } from './parser'
-import { extractStudySpec } from './spec-extractor'
+import { extractStudySpec, SPEC_EXTRACTION_LLM_PROVIDER } from './spec-extractor'
 import { getApprovedSpecExamples, saveStudySpec } from './spec-store'
-import { getOrgRagConfig } from '@ichtys/db'
 import { getOrgLlmApiKeys } from '@ichtys/db'
 
 /**
@@ -298,12 +297,11 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
           return []
         })
 
-        const orgRag = await getOrgRagConfig(parsedInput.orgId).catch(() => null)
         const orgLlmKeys = await getOrgLlmApiKeys(parsedInput.orgId).catch(() => ({}))
 
         const { spec, warnings, extractionModel, detectedLanguage } =
           await extractStudySpec(parsedDocument.pages, fewShotExamples, {
-            llmProviderPreference: orgRag?.llmProvider ?? 'auto',
+            llmProviderPreference: SPEC_EXTRACTION_LLM_PROVIDER,
             llmApiKeys: orgLlmKeys,
           })
 

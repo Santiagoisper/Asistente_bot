@@ -41,6 +41,14 @@ Fallo de localización o de extracción de un grupo ⇒ grupo vacío + warning
 con la causa. El spec nace `draft` y la revisión humana es obligatoria
 (ALPHI), así que un parcial es útil; un throw no.
 
+## Proveedor LLM (2026-07-04)
+
+La extracción de spec **siempre usa Anthropic (Claude Sonnet)**, independiente
+del `llmProvider` configurado en `/settings` para el chat RAG. Motivo: incidente
+GZQD — org con `openai` produjo specs parciales con gpt-4o-mini (0–1 criterios);
+re-extract con Claude → 11 incl / 61 excl. Constante: `SPEC_EXTRACTION_LLM_PROVIDER`.
+Modelo: `SPEC_EXTRACTION_MODEL` (default `claude-sonnet-4-6`).
+
 ## Lecciones de la validación con protocolos reales
 
 Validado contra 4 protocolos Lilly reales en español (GZBP, GZBZ, GZBO,
