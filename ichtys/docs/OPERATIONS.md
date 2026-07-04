@@ -22,12 +22,25 @@ Runbook operativo para despliegue, validación y respuesta rápida en el piloto 
 
 ## 2) Deploy de producción
 
-1. Confirmar CI verde en `main`.
-2. Confirmar eval gate y smoke 10A en staging.
+**Cierre de fase (obligatorio):** auditoría → commit → push `main` → deploy prod.
+
+```bash
+cd ichtys
+pnpm validate:product      # gate completo (typecheck, test, OQ, IT, leakage, IQ, e2e)
+pnpm iq:check              # schema + env Neon
+pnpm verify:phi-prod       # smoke PHI en prod (create/delete sujeto)
+cd ichtys ; vercel --prod --yes
+```
+
+Criterio de salida: **0 fallos** en validate + IQ + verify PHI; deployment Vercel `READY` en alias prod.
+
+1. Confirmar CI verde en `main` (push dispara CI; deploy manual o automático según proyecto).
+2. Ejecutar la batería anterior (local, contra `.env.local` con credenciales prod).
 3. Promover:
    - `cd ichtys`
    - `vercel --prod --yes`
-4. Verificar acceso y flujos críticos en producción.
+4. Post-deploy: re-ejecutar `pnpm verify:phi-prod` y smoke mínimo (login, `/studies`, sujeto + labs OCR si aplica).
+5. Verificar acceso y flujos críticos en producción (`https://asistente-bot-five.vercel.app`).
 
 ## 3) Rollback rápido
 
