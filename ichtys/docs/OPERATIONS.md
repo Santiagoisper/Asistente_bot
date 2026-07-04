@@ -50,7 +50,19 @@ Cuando un documento queda en `error` o con chunks inconsistentes:
 
 ## 5) Eval gate manual (obligatorio pre-piloto)
 
-Prerequisitos:
+### Gate automatizado (recomendado)
+
+Antes de promover a producción o cerrar una fase CSV:
+
+```bash
+cd ichtys
+pnpm validate:product        # completo — requiere apps/web/.env.local + Neon
+pnpm validate:product:ci     # CI — typecheck, test, OQ, leakage (sin DB)
+```
+
+Criterio de salida: **0 fallos** en el resumen final.
+
+Prerequisitos manuales (eval HTTP):
 - `EVAL_STUDY_ID`
 - `EVAL_AUTH_COOKIE` (cookie Clerk fresca)
 - servidor con `ENABLE_INTERNAL_RAG_ANSWER_TEST=true`

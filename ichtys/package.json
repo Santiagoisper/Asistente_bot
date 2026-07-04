@@ -27,6 +27,8 @@
     "e2e:product": "npx --yes tsx@4.19.2 scripts/e2e-product-loop.ts",
     "verify:phi-prod": "npx --yes tsx@4.19.2 scripts/verify-prod-phi.ts",
     "iq:check": "npx --yes tsx@4.19.2 scripts/iq-check-prod-env.ts",
+    "validate:product": "npx --yes tsx@4.19.2 scripts/validate-product.ts",
+    "validate:product:ci": "npx --yes tsx@4.19.2 scripts/validate-product.ts --ci",
     "orgs:consolidate": "npx --yes tsx@4.19.2 scripts/consolidate-single-org.ts",
     "evals:run": "pnpm --filter @ichtys/evals evals:run",
     "evals:quick": "pnpm --filter @ichtys/evals evals:quick",

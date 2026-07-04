@@ -61,5 +61,7 @@
 - [URS.md](./URS.md)
 - [FRS.md](./FRS.md)
 - [CSV-VALIDATION-PLAN.md](./CSV-VALIDATION-PLAN.md)
+- `pnpm validate:product` — gate unificado Etapa 2 (typecheck, test, OQ, leakage, IQ, E2E)
+- `pnpm validate:product:ci` — gate CI sin DB
 - `pnpm e2e:product` — loop producto mock
 - `scripts/verify-prod-phi.ts` — smoke PHI prod
