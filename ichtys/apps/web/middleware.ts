@@ -5,7 +5,13 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
  * Todo es privado salvo las rutas públicas de auth. La protección server-side
  * por org/study ocurre además en cada API route vía validateStudyAccess().
  */
-const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)', '/trust'])
+const isPublicRoute = createRouteMatcher([
+  '/sign-in(.*)',
+  '/sign-up(.*)',
+  '/trust',
+  // Cron jobs autentican con CRON_SECRET en el handler, no con Clerk.
+  '/api/cron(.*)',
+])
 
 export default clerkMiddleware(async (auth, req) => {
   if (!isPublicRoute(req)) {
