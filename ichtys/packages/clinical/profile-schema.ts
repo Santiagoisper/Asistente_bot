@@ -7,6 +7,14 @@ export const labObservationSchema = z.object({
   sourceEvolutionId: z.string().uuid().optional(),
 })
 
+export const pendingLabReviewSchema = z.object({
+  requiresHumanReview: z.literal(true),
+  extractedAt: z.string(),
+  labs: z.array(labObservationSchema),
+  redactedSourcePreview: z.string().max(500).optional(),
+})
+export type PendingLabReview = z.infer<typeof pendingLabReviewSchema>
+
 export const medicationSchema = z.object({
   name: z.string().min(1),
   dose: z.string().optional(),
@@ -44,6 +52,8 @@ export const patientProfileSchema = z.object({
   conditions: z.array(z.string()).default([]),
   /** Confianza por campo extraído (Fase 2.5). */
   fieldConfidence: profileFieldConfidenceSchema.optional(),
+  /** Labs OCR pendientes de confirmación humana (URS-007). */
+  pendingLabReview: pendingLabReviewSchema.optional(),
   lastUpdatedAt: z.string().optional(),
   lastEvolutionId: z.string().uuid().optional(),
 })

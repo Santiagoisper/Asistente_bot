@@ -81,5 +81,8 @@ export const auditAction = [
   'evolution.view',
   'profile.view',
   'screening.view',
+  'lab.extract',
+  'lab.confirm',
+  'lab.reject',
 ] as const
 export type AuditAction = (typeof auditAction)[number]

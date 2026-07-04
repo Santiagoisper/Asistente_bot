@@ -2,7 +2,7 @@
 
 **Versión:** 0.1  
 **Fecha:** 2026-07-04  
-**Estado:** Borrador — OQ Fase 1 clínico cerrado (23 tests)
+**Estado:** Borrador — OQ Fase 1 clínico + labs OCR URS-007 (29 tests OQ)
 
 ---
 
@@ -16,7 +16,7 @@
 | URS-004 | FRS-AUD-001, FRS-AUD-002 | OQ-007, OQ-S05–S06, OQ-P04, OQ-SCR05 (`*/route.oq.test.ts`) | ✅ OQ |
 | URS-005 | FRS-SCR-001–002 | OQ-004–006, OQ-SCR03–SCR04, `screening-engine.test.ts`, `e2e:product` | ✅ OQ + e2e |
 | URS-006 | FRS-SCR-003 | OQ-SCR06, code review screening-engine (no LLM) | ✅ OQ |
-| URS-007 | NLP-001 (futuro) | OCR flow manual | ⬜ |
+| URS-007 | NLP-001 (futuro) | OQ-L01–L05, `lab-ocr-parser.test.ts`, labs extract/confirm API | ✅ OQ |
 | URS-008 | FRS-CLN-001 | Schema review `subjects` | ✅ |
 | URS-009 | FRS-SCR-004 | Spec mock + screening assessments | ✅ e2e |
 | URS-010 | — | DATA-RETENTION-POLICY.md | ✅ doc |
@@ -58,7 +58,20 @@
 | IT-003 | evaluateAndPersistScreening snapshot | `tests/integration/phi-clinical.integration.test.ts` | ✅ |
 | IT-004 | Aislamiento org en loadPatientProfile | `tests/integration/phi-clinical.integration.test.ts` | ✅ |
 
-**Requiere:** `DATABASE_URL` + `PHI_ENCRYPTION_KEY` — skip automático sin env.
+## OQ — labs OCR (URS-007)
+
+| TC | Descripción | Archivo | Estado |
+|----|-------------|---------|--------|
+| OQ-L01 | POST labs/extract sin auth → 401 | `labs/__tests__/route.oq.test.ts` | ✅ |
+| OQ-L02 | POST labs/extract cross-org → 404 | `labs/__tests__/route.oq.test.ts` | ✅ |
+| OQ-L03 | Extract → pendingLabReview, labs[] vacío | `labs/__tests__/route.oq.test.ts` | ✅ |
+| OQ-L04 | Audit lab.extract/confirm sin texto OCR | `labs/__tests__/route.oq.test.ts` | ✅ |
+| OQ-L05 | Audit lab.reject sin metadata PHI | `labs/__tests__/route.oq.test.ts` | ✅ |
+| OQ-L06 | parseLabOcrText siempre requiresHumanReview | `lab-ocr-parser.test.ts` | ✅ |
+
+**Total OQ:** 29 tests — `pnpm test:oq`
+
+**IT requiere:** `DATABASE_URL` + `PHI_ENCRYPTION_KEY` — skip automático sin env.
 
 ## OQ / IQ pendientes
 

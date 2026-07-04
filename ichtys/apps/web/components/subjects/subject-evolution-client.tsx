@@ -26,6 +26,12 @@ interface PatientProfileView {
     conditions?: Record<string, FieldConfidenceLevel>
   }
   lastUpdatedAt?: string
+  pendingLabReview?: {
+    requiresHumanReview: true
+    extractedAt: string
+    labs: Array<{ name: string; value: number; unit?: string }>
+    redactedSourcePreview?: string
+  }
 }
 
 interface ScreeningAssessment {
@@ -111,6 +117,8 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [piiWarnings, setPiiWarnings] = useState<string[]>([])
+  const [labOcrText, setLabOcrText] = useState('')
+  const [labBusy, setLabBusy] = useState(false)
 
   const loadScreening = useCallback(async () => {
     try {
@@ -192,13 +200,73 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
     }
   }
 
+  async function handleLabExtract(e: React.FormEvent) {
+    e.preventDefault()
+    if (!labOcrText.trim()) return
+    setLabBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/labs/extract`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: labOcrText.trim() }),
+      })
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string }
+        throw new Error(data.error ?? 'extract_failed')
+      }
+      setLabOcrText('')
+      await loadScreening()
+    } catch {
+      setError('No se pudieron extraer labs del texto. Verificá el formato.')
+    } finally {
+      setLabBusy(false)
+    }
+  }
+
+  async function handleLabConfirm() {
+    setLabBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/labs/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      if (!res.ok) throw new Error('confirm_failed')
+      await loadScreening()
+    } catch {
+      setError('No se pudo confirmar la revisión de labs.')
+    } finally {
+      setLabBusy(false)
+    }
+  }
+
+  async function handleLabReject() {
+    setLabBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/labs/reject`, {
+        method: 'POST',
+      })
+      if (!res.ok) throw new Error('reject_failed')
+      await loadScreening()
+    } catch {
+      setError('No se pudo descartar la revisión de labs.')
+    } finally {
+      setLabBusy(false)
+    }
+  }
+
+  const pendingLabs = profile?.pendingLabReview
   const hasProfileData =
     profile &&
     (profile.demographics?.ageYears ||
       profile.vitals?.bloodPressureLabel ||
       profile.labs.length > 0 ||
       profile.medications.length > 0 ||
-      profile.conditions.length > 0)
+      profile.conditions.length > 0 ||
+      pendingLabs?.requiresHumanReview)
 
   const fc = profile?.fieldConfidence
 
@@ -213,7 +281,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
             ← Volver a sujetos
           </Link>
           <h2 className="mt-2 font-mono text-xl font-bold text-alphi-navy">{subjectCode}</h2>
-          <p className="text-sm text-alphi-muted">Evolución clínica — Fase 2.5 (NLP + screening persistido)</p>
+          <p className="text-sm text-alphi-muted">Evolución clínica — screening + labs OCR con revisión humana</p>
         </div>
       </div>
 
@@ -251,6 +319,65 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
           {saving ? 'Guardando…' : 'Guardar evolución'}
         </button>
       </form>
+
+      <form
+        onSubmit={handleLabExtract}
+        className="space-y-3 rounded-lg border border-alphi-border bg-white p-4"
+      >
+        <h3 className="text-sm font-bold uppercase tracking-wide text-alphi-muted">
+          Labs OCR (requiere confirmación)
+        </h3>
+        <p className="text-xs text-alphi-muted">
+          Pegá texto de un informe de laboratorio. Los analitos detectados quedan pendientes hasta que
+          confirmes — no se aplican al perfil automáticamente.
+        </p>
+        <textarea
+          value={labOcrText}
+          onChange={(e) => setLabOcrText(e.target.value)}
+          rows={5}
+          placeholder={'Paciente: …\nHbA1c: 8,2 %\nGlucosa en ayunas: 142 mg/dL'}
+          className="w-full rounded-lg border border-alphi-border px-3 py-2 text-sm leading-relaxed"
+        />
+        <button
+          type="submit"
+          disabled={labBusy || !labOcrText.trim() || Boolean(pendingLabs?.requiresHumanReview)}
+          className="alphi-btn-secondary text-sm"
+        >
+          {labBusy ? 'Extrayendo…' : 'Extraer labs (pendiente revisión)'}
+        </button>
+      </form>
+
+      {pendingLabs?.requiresHumanReview && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-900">Revisión humana requerida (URS-007)</p>
+          <ul className="mt-2 space-y-1 text-sm text-amber-950">
+            {pendingLabs.labs.map((lab) => (
+              <li key={lab.name}>
+                {lab.name}: {lab.value}
+                {lab.unit ? ` ${lab.unit}` : ''}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void handleLabConfirm()}
+              disabled={labBusy}
+              className="alphi-btn-primary text-sm"
+            >
+              Confirmar y aplicar al perfil
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleLabReject()}
+              disabled={labBusy}
+              className="rounded-lg border border-amber-400 px-3 py-1.5 text-sm font-semibold text-amber-900 hover:bg-amber-100"
+            >
+              Descartar
+            </button>
+          </div>
+        </div>
+      )}
 
       {piiWarnings.length > 0 && (
         <div className="rounded-lg border border-alphi-amber/30 bg-alphi-amber/10 px-4 py-3">

@@ -62,3 +62,13 @@
 |----|-----|---------------------|----------------|
 | FRS-RAG-001 | URS-012 | PATCH org settings threshold 0.05–0.95 | `updateOrgRagConfig` |
 | FRS-RAG-002 | URS-012 | PATCH org settings topK 1–20 | `/settings` UI sliders |
+
+## 8. Labs OCR (OCR)
+
+| ID | URS | Requisito funcional | Implementación |
+|----|-----|---------------------|----------------|
+| FRS-OCR-001 | URS-007 | Parser determinista texto lab + redacción PII encabezado | `@ichtys/clinical/lab-ocr-parser.ts` |
+| FRS-OCR-002 | URS-007 | Extract guarda `pendingLabReview.requiresHumanReview` | `POST .../labs/extract` |
+| FRS-OCR-003 | URS-007 | Confirm mergea a `profile.labs` | `POST .../labs/confirm` |
+| FRS-OCR-004 | URS-007 | Reject descarta pending sin persistir | `POST .../labs/reject` |
+| FRS-OCR-005 | URS-007 | Audit sin texto OCR en metadata | `lab.extract` / `lab.confirm` |

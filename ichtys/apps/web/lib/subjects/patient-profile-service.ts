@@ -92,6 +92,26 @@ export async function loadPatientProfile(params: {
   return parsePatientProfile(decryptProfileJson(row.profileEncrypted))
 }
 
+export async function persistPatientProfile(params: {
+  orgId: string
+  studyId: string
+  subjectId: string
+  profile: PatientProfile
+}): Promise<void> {
+  const profileEncrypted = encryptProfileJson(params.profile as Record<string, unknown>)
+
+  await db
+    .update(patientProfiles)
+    .set({ profileEncrypted, updatedAt: new Date() })
+    .where(
+      and(
+        eq(patientProfiles.organizationId, params.orgId),
+        eq(patientProfiles.studyId, params.studyId),
+        eq(patientProfiles.subjectId, params.subjectId),
+      ),
+    )
+}
+
 export async function refreshPatientProfileFromEvolution(params: {
   orgId: string
   studyId: string
