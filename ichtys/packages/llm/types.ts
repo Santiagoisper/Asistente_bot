@@ -7,7 +7,7 @@ export type LlmProviderId = 'anthropic' | 'openai' | 'google' | 'groq' | 'glm'
  */
 export type LlmProviderPreference = LlmProviderId | 'auto'
 
-export type LlmPurpose = 'answer' | 'spec' | 'title'
+export type LlmPurpose = 'answer' | 'spec' | 'title' | 'clinical-extract'
 
 /** Orden en modo automático: titulares primero, backups después. */
 export const AUTO_PROVIDER_CHAIN: readonly LlmProviderId[] = [

@@ -10,12 +10,21 @@ interface EvolutionItem {
   createdAt: string
 }
 
+type FieldConfidenceLevel = 'high' | 'medium' | 'low'
+
 interface PatientProfileView {
   demographics?: { ageYears?: number }
   vitals?: { bloodPressureLabel?: string; systolic?: number; diastolic?: number }
   labs: Array<{ name: string; value: number; unit?: string }>
   medications: Array<{ name: string; dose?: string; frequency?: string }>
   conditions: string[]
+  fieldConfidence?: {
+    ageYears?: FieldConfidenceLevel
+    bloodPressure?: FieldConfidenceLevel
+    labs?: Record<string, FieldConfidenceLevel>
+    medications?: Record<string, FieldConfidenceLevel>
+    conditions?: Record<string, FieldConfidenceLevel>
+  }
   lastUpdatedAt?: string
 }
 
@@ -25,6 +34,7 @@ interface ScreeningAssessment {
   kind: 'inclusion' | 'exclusion'
   status: 'pass' | 'fail' | 'unknown'
   reason: string
+  sourcePages?: number[]
 }
 
 interface SubjectEvolutionClientProps {
@@ -38,11 +48,62 @@ const STATUS_STYLES: Record<ScreeningAssessment['status'], string> = {
   unknown: 'bg-alphi-slate/40 text-alphi-muted border-alphi-border',
 }
 
+const CONFIDENCE_STYLES: Record<FieldConfidenceLevel, string> = {
+  high: 'bg-emerald-100 text-emerald-800',
+  medium: 'bg-amber-100 text-amber-900',
+  low: 'bg-alphi-slate/60 text-alphi-muted',
+}
+
+const CONFIDENCE_LABELS: Record<FieldConfidenceLevel, string> = {
+  high: 'Alta',
+  medium: 'Media',
+  low: 'Baja',
+}
+
+function ConfidenceBadge({ level }: { level?: FieldConfidenceLevel }) {
+  if (!level) return null
+  return (
+    <span
+      className={`ml-2 inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold ${CONFIDENCE_STYLES[level]}`}
+      title={`Confianza de extracción: ${CONFIDENCE_LABELS[level]}`}
+    >
+      {CONFIDENCE_LABELS[level]}
+    </span>
+  )
+}
+
+function ProtocolPageLinks({
+  documentId,
+  pages,
+}: {
+  documentId: string | null
+  pages?: number[]
+}) {
+  if (!documentId || !pages?.length) return null
+  const unique = [...new Set(pages)].sort((a, b) => a - b).slice(0, 3)
+  return (
+    <span className="mt-1 block text-[10px]">
+      {unique.map((page) => (
+        <a
+          key={page}
+          href={`/api/documents/${encodeURIComponent(documentId)}/page/${page}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mr-2 font-semibold text-alphi-teal hover:underline"
+        >
+          Ver p.{page} en protocolo
+        </a>
+      ))}
+    </span>
+  )
+}
+
 export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEvolutionClientProps) {
   const [subjectCode, setSubjectCode] = useState<string>('…')
   const [evolutions, setEvolutions] = useState<EvolutionItem[]>([])
   const [profile, setProfile] = useState<PatientProfileView | null>(null)
   const [assessments, setAssessments] = useState<ScreeningAssessment[]>([])
+  const [protocolDocumentId, setProtocolDocumentId] = useState<string | null>(null)
   const [specAvailable, setSpecAvailable] = useState(false)
   const [content, setContent] = useState('')
   const [visitLabel, setVisitLabel] = useState('')
@@ -59,10 +120,12 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         profile: PatientProfileView
         assessments: ScreeningAssessment[]
         specAvailable: boolean
+        protocolDocumentId?: string | null
       }
       setProfile(data.profile)
       setAssessments(data.assessments)
       setSpecAvailable(data.specAvailable)
+      setProtocolDocumentId(data.protocolDocumentId ?? null)
     } catch {
       // screening es complementario — no bloquea la página
     }
@@ -137,6 +200,8 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       profile.medications.length > 0 ||
       profile.conditions.length > 0)
 
+  const fc = profile?.fieldConfidence
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
@@ -148,7 +213,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
             ← Volver a sujetos
           </Link>
           <h2 className="mt-2 font-mono text-xl font-bold text-alphi-navy">{subjectCode}</h2>
-          <p className="text-sm text-alphi-muted">Evolución clínica — Fase 2 (extracción + screening)</p>
+          <p className="text-sm text-alphi-muted">Evolución clínica — Fase 2.5 (NLP + screening persistido)</p>
         </div>
       </div>
 
@@ -215,13 +280,19 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
             <dl className="space-y-2 text-sm text-alphi-navy">
               {profile?.demographics?.ageYears && (
                 <div>
-                  <dt className="text-xs text-alphi-muted">Edad</dt>
+                  <dt className="text-xs text-alphi-muted">
+                    Edad
+                    <ConfidenceBadge level={fc?.ageYears} />
+                  </dt>
                   <dd>{profile.demographics.ageYears} años</dd>
                 </div>
               )}
               {profile?.vitals?.bloodPressureLabel && (
                 <div>
-                  <dt className="text-xs text-alphi-muted">Presión arterial</dt>
+                  <dt className="text-xs text-alphi-muted">
+                    Presión arterial
+                    <ConfidenceBadge level={fc?.bloodPressure} />
+                  </dt>
                   <dd>{profile.vitals.bloodPressureLabel} mmHg</dd>
                 </div>
               )}
@@ -233,6 +304,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                       <div key={lab.name}>
                         {lab.name}: {lab.value}
                         {lab.unit ? ` ${lab.unit}` : ''}
+                        <ConfidenceBadge level={fc?.labs?.[lab.name.toLowerCase()]} />
                       </div>
                     ))}
                   </dd>
@@ -247,6 +319,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                         {m.name}
                         {m.dose ? ` ${m.dose}` : ''}
                         {m.frequency ? ` — ${m.frequency}` : ''}
+                        <ConfidenceBadge level={fc?.medications?.[m.name.toLowerCase()]} />
                       </div>
                     ))}
                   </dd>
@@ -255,11 +328,21 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
               {profile && profile.conditions.length > 0 && (
                 <div>
                   <dt className="text-xs text-alphi-muted">Condiciones / notas</dt>
-                  <dd>{profile.conditions.join(', ')}</dd>
+                  <dd>
+                    {profile.conditions.map((c) => (
+                      <span key={c} className="mr-2 inline-block">
+                        {c}
+                        <ConfidenceBadge level={fc?.conditions?.[c.toLowerCase()]} />
+                      </span>
+                    ))}
+                  </dd>
                 </div>
               )}
             </dl>
           )}
+          <p className="mt-3 text-[10px] text-alphi-muted">
+            Alta = heurística + LLM coinciden · Media = solo LLM · Baja = solo heurística
+          </p>
         </section>
 
         <section className="rounded-lg border border-alphi-border bg-white p-4">
@@ -283,6 +366,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                     {a.kind === 'inclusion' ? 'Inclusión' : 'Exclusión'} #{a.criterionNumber} — {a.status}
                   </p>
                   <p className="mt-1 opacity-80">{a.reason}</p>
+                  <ProtocolPageLinks documentId={protocolDocumentId} pages={a.sourcePages} />
                 </li>
               ))}
             </ul>

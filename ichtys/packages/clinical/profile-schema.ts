@@ -13,6 +13,18 @@ export const medicationSchema = z.object({
   frequency: z.string().optional(),
 })
 
+export const fieldConfidenceLevelSchema = z.enum(['high', 'medium', 'low'])
+export type FieldConfidenceLevel = z.infer<typeof fieldConfidenceLevelSchema>
+
+export const profileFieldConfidenceSchema = z.object({
+  ageYears: fieldConfidenceLevelSchema.optional(),
+  bloodPressure: fieldConfidenceLevelSchema.optional(),
+  labs: z.record(fieldConfidenceLevelSchema).optional(),
+  medications: z.record(fieldConfidenceLevelSchema).optional(),
+  conditions: z.record(fieldConfidenceLevelSchema).optional(),
+})
+export type ProfileFieldConfidence = z.infer<typeof profileFieldConfidenceSchema>
+
 export const patientProfileSchema = z.object({
   version: z.literal(1).default(1),
   demographics: z
@@ -30,6 +42,8 @@ export const patientProfileSchema = z.object({
   labs: z.array(labObservationSchema).default([]),
   medications: z.array(medicationSchema).default([]),
   conditions: z.array(z.string()).default([]),
+  /** Confianza por campo extraído (Fase 2.5). */
+  fieldConfidence: profileFieldConfidenceSchema.optional(),
   lastUpdatedAt: z.string().optional(),
   lastEvolutionId: z.string().uuid().optional(),
 })
@@ -47,6 +61,8 @@ export const criterionAssessmentSchema = z.object({
   kind: z.enum(['inclusion', 'exclusion']),
   status: criterionStatusSchema,
   reason: z.string(),
+  /** Páginas del protocolo fuente (1-based) desde el study spec. */
+  sourcePages: z.array(z.number().int().positive()).optional(),
 })
 
 export type CriterionAssessment = z.infer<typeof criterionAssessmentSchema>

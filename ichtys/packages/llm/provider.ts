@@ -76,17 +76,21 @@ export function getModel(
 export function getModelId(provider: LlmProviderId, purpose: LlmPurpose): string {
   switch (provider) {
     case 'anthropic':
-      if (purpose === 'title') return process.env.TITLE_MODEL ?? 'claude-haiku-4-5'
+      if (purpose === 'title' || purpose === 'clinical-extract') {
+        return process.env.TITLE_MODEL ?? 'claude-haiku-4-5'
+      }
       if (purpose === 'spec') return process.env.SPEC_EXTRACTION_MODEL ?? 'claude-sonnet-4-5'
       return process.env.ANSWER_MODEL ?? 'claude-sonnet-4-5'
     case 'openai':
-      if (purpose === 'title') return process.env.OPENAI_TITLE_MODEL ?? 'gpt-4o-mini'
+      if (purpose === 'title' || purpose === 'clinical-extract') {
+        return process.env.OPENAI_TITLE_MODEL ?? 'gpt-4o-mini'
+      }
       if (purpose === 'spec') {
         return process.env.SPEC_EXTRACTION_MODEL_OPENAI ?? process.env.OPENAI_ANSWER_MODEL ?? 'gpt-4o'
       }
       return process.env.OPENAI_ANSWER_MODEL ?? process.env.ANSWER_MODEL_OPENAI ?? 'gpt-4o'
     case 'google':
-      if (purpose === 'title') {
+      if (purpose === 'title' || purpose === 'clinical-extract') {
         return process.env.GOOGLE_TITLE_MODEL ?? process.env.GEMINI_TITLE_MODEL ?? 'gemini-2.0-flash'
       }
       if (purpose === 'spec') {
@@ -98,13 +102,17 @@ export function getModelId(provider: LlmProviderId, purpose: LlmPurpose): string
       }
       return process.env.GEMINI_ANSWER_MODEL ?? process.env.GOOGLE_ANSWER_MODEL ?? 'gemini-2.0-flash'
     case 'groq':
-      if (purpose === 'title') return process.env.GROQ_TITLE_MODEL ?? 'llama-3.1-8b-instant'
+      if (purpose === 'title' || purpose === 'clinical-extract') {
+        return process.env.GROQ_TITLE_MODEL ?? 'llama-3.1-8b-instant'
+      }
       if (purpose === 'spec') {
         return process.env.SPEC_EXTRACTION_MODEL_GROQ ?? process.env.GROQ_ANSWER_MODEL ?? 'llama-3.3-70b-versatile'
       }
       return process.env.GROQ_ANSWER_MODEL ?? 'llama-3.3-70b-versatile'
     case 'glm':
-      if (purpose === 'title') return process.env.GLM_TITLE_MODEL ?? process.env.GLM_MODEL ?? 'z-ai/glm-5.2'
+      if (purpose === 'title' || purpose === 'clinical-extract') {
+        return process.env.GLM_TITLE_MODEL ?? process.env.GLM_MODEL ?? 'z-ai/glm-5.2'
+      }
       if (purpose === 'spec') {
         return process.env.SPEC_EXTRACTION_MODEL_GLM ?? process.env.GLM_MODEL ?? 'z-ai/glm-5.2'
       }

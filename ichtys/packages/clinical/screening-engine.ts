@@ -3,6 +3,7 @@ import type { CriterionAssessment, PatientProfile } from './profile-schema'
 export interface EligibilityCriterionInput {
   number: string
   text: string
+  sourcePages?: number[]
 }
 
 export interface ScreeningInput {
@@ -48,6 +49,7 @@ function assessHbA1cCriterion(
       kind,
       status: 'unknown',
       reason: 'HbA1c no documentado en el perfil del sujeto.',
+      sourcePages: criterion.sourcePages,
     }
   }
 
@@ -58,6 +60,7 @@ function assessHbA1cCriterion(
       kind,
       status: 'unknown',
       reason: `HbA1c ${value}% registrado; no se pudo parsear el rango del criterio automáticamente.`,
+      sourcePages: criterion.sourcePages,
     }
   }
 
@@ -74,6 +77,7 @@ function assessHbA1cCriterion(
       reason: passesRange
         ? `HbA1c ${value}% dentro del rango esperado.`
         : `HbA1c ${value}% fuera del rango del criterio.`,
+      sourcePages: criterion.sourcePages,
     }
   }
 
@@ -85,6 +89,7 @@ function assessHbA1cCriterion(
     reason: passesRange
       ? `HbA1c ${value}% activaría este criterio de exclusión.`
       : `HbA1c ${value}% no activa este criterio de exclusión.`,
+    sourcePages: criterion.sourcePages,
   }
 }
 
@@ -106,6 +111,7 @@ function assessMedicationCriterion(
         reason: hasMetformin
           ? 'Metformina detectada en el perfil; verificar dosis/estabilidad manualmente.'
           : 'Metformina no detectada en el perfil.',
+        sourcePages: criterion.sourcePages,
       }
     }
   }
@@ -119,6 +125,7 @@ function assessMedicationCriterion(
       reason: hasMetformin
         ? 'Metformina presente — revisar contra exclusión.'
         : 'Metformina no detectada.',
+      sourcePages: criterion.sourcePages,
     }
   }
 
@@ -135,6 +142,7 @@ function assessGeneric(
     kind,
     status: 'unknown',
     reason: 'Requiere revisión manual — regla automática no disponible.',
+    sourcePages: criterion.sourcePages,
   }
 }
 

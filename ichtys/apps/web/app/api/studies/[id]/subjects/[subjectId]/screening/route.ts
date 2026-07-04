@@ -1,14 +1,14 @@
-import { assessScreening, screeningSummary } from '@ichtys/clinical'
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
 import { studySpecSchema } from '@ichtys/ingestion/study-spec'
 import { getLatestStudySpec } from '@ichtys/ingestion/spec-store'
 import { writeAuditLog } from '../../../../../../../lib/chat/persistence'
 import { loadPatientProfile } from '../../../../../../../lib/subjects/patient-profile-service'
+import { evaluateAndPersistScreening } from '../../../../../../../lib/subjects/screening-service'
 import { PhiConfigError } from '../../../../../../../lib/subjects/phi-fields'
 
 export const runtime = 'nodejs'
 
-/** GET — screening determinista vs spec del protocolo (Fase 2). */
+/** GET — screening determinista vs spec del protocolo (Fase 2.5). */
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string; subjectId: string }> },
@@ -32,6 +32,7 @@ export async function GET(
         assessments: [],
         summary: { pass: 0, fail: 0, unknown: 0 },
         specAvailable: false,
+        protocolDocumentId: null,
         message: 'No hay study spec extraído para este estudio.',
       })
     }
@@ -44,22 +45,20 @@ export async function GET(
         assessments: [],
         summary: { pass: 0, fail: 0, unknown: 0 },
         specAvailable: false,
+        protocolDocumentId: null,
         message: 'El study spec no es válido.',
       })
     }
 
-    const assessments = assessScreening(profile, {
-      inclusionCriteria: parsedSpec.data.inclusionCriteria.map((c) => ({
-        number: c.number,
-        text: c.text,
-      })),
-      exclusionCriteria: parsedSpec.data.exclusionCriteria.map((c) => ({
-        number: c.number,
-        text: c.text,
-      })),
+    const evaluation = await evaluateAndPersistScreening({
+      orgId,
+      studyId: study.id,
+      subjectId: subject.id,
+      profile,
+      spec: parsedSpec.data,
+      specVersion: specRow.version,
+      documentVersionId: specRow.documentVersionId,
     })
-
-    const summary = screeningSummary(assessments)
 
     await writeAuditLog({
       action: 'screening.view',
@@ -68,17 +67,23 @@ export async function GET(
       userId,
       resourceType: 'subject',
       resourceId: subject.id,
-      metadata: { pass: summary.pass, fail: summary.fail, unknown: summary.unknown },
+      metadata: {
+        pass: evaluation.summary.pass,
+        fail: evaluation.summary.fail,
+        unknown: evaluation.summary.unknown,
+        snapshotId: evaluation.persistedSnapshotId,
+      },
     })
 
     return Response.json({
       subjectCode: subject.subjectCode,
       profile,
-      assessments,
-      summary,
+      assessments: evaluation.assessments,
+      summary: evaluation.summary,
       specAvailable: true,
-      specVersion: specRow.version,
+      specVersion: evaluation.specVersion,
       specStatus: specRow.status,
+      protocolDocumentId: evaluation.protocolDocumentId,
     })
   } catch (err) {
     if (err instanceof PhiConfigError) {

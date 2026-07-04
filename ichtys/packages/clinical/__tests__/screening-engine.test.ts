@@ -16,11 +16,13 @@ describe('assessScreening', () => {
         {
           number: '1',
           text: 'HbA1c ≥ 7,0% y < 10,0% en screening.',
+          sourcePages: [42, 43],
         },
       ],
       exclusionCriteria: [],
     })
     expect(results[0]?.status).toBe('pass')
+    expect(results[0]?.sourcePages).toEqual([42, 43])
   })
 
   it('marca unknown si falta HbA1c en perfil', () => {
