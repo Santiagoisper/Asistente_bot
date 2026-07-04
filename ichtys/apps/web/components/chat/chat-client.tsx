@@ -74,10 +74,14 @@ export default function ChatClient({
   const [historyError, setHistoryError]           = useState<string | null>(null)
   const [sendError, setSendError]                 = useState<string | null>(null)
   const [highlightIdx, setHighlightIdx]           = useState<number | null>(null)
+  const [isWarmingUp, setIsWarmingUp]             = useState(true)
+  const [isAlphiReady, setIsAlphiReady]           = useState(false)
   // Alcance de búsqueda: 'all' = todos los documentos; cualquier DocumentType = filtro por tipo.
   const [searchScope, setSearchScope]             = useState<'all' | DocumentType>('all')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef    = useRef<HTMLTextAreaElement>(null)
+  /** Evita recargar mensajes del servidor mientras el stream de la 1ª pregunta está activo. */
+  const skipHistoryLoadRef = useRef<string | null>(null)
 
   // Load sidebar conversation list
   useEffect(() => {
@@ -104,10 +108,34 @@ export default function ChatClient({
     return () => { cancelled = true }
   }, [studyId, initialConversationId])
 
+  // Warmup serverless (auth + DB) sin gastar LLM — evita que la 1ª pregunta real falle.
+  useEffect(() => {
+    let cancelled = false
+    async function warm() {
+      setIsWarmingUp(true)
+      try {
+        await fetch(`/api/chat/warmup?studyId=${encodeURIComponent(studyId)}`, {
+          cache: 'no-store',
+        })
+      } catch {
+        // non-critical
+      } finally {
+        if (!cancelled) {
+          setIsWarmingUp(false)
+          setIsAlphiReady(true)
+        }
+      }
+    }
+    void warm()
+    return () => { cancelled = true }
+  }, [studyId])
+
   // Load messages when conversation changes
   useEffect(() => {
     let cancelled = false
     if (!selectedConvId) { setTurns([]); return }
+    // No pisar el stream optimista de la primera pregunta (race con frame `start`).
+    if (streamingTurnId || skipHistoryLoadRef.current === selectedConvId) return
     async function load() {
       setIsLoadingMessages(true)
       try {
@@ -122,7 +150,7 @@ export default function ChatClient({
     }
     void load()
     return () => { cancelled = true }
-  }, [selectedConvId])
+  }, [selectedConvId, streamingTurnId])
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -137,7 +165,10 @@ export default function ChatClient({
     requestAnimationFrame(() => textareaRef.current?.focus())
   }, [initialQuestion])
 
-  const canSend = useMemo(() => question.trim().length > 0 && !isSending, [question, isSending])
+  const canSend = useMemo(
+    () => question.trim().length > 0 && !isSending && !isWarmingUp,
+    [question, isSending, isWarmingUp],
+  )
 
   const handleSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -213,6 +244,7 @@ export default function ChatClient({
           if (isStartFrame(frame)) {
             // Replace pending user turn with real messageId
             resolvedConvId = frame.conversationId
+            skipHistoryLoadRef.current = frame.conversationId
             setSelectedConvId(frame.conversationId)
             setTurns((prev) =>
               prev.map((t) => (t.messageId === pendingUserId ? { ...t, messageId: frame.userMessageId } : t))
@@ -292,6 +324,7 @@ export default function ChatClient({
     } finally {
       setIsSending(false)
       setStreamingTurnId(null)
+      skipHistoryLoadRef.current = null
       setTimeout(() => textareaRef.current?.focus(), 50)
       void resolvedConvId // prevent unused-var lint warning
     }
@@ -318,7 +351,11 @@ export default function ChatClient({
           <button
             type="button"
             className="alphi-btn-ghost px-2 py-1 text-xs"
-            onClick={() => { setSelectedConvId(null); setTurns([]) }}
+            onClick={() => {
+              skipHistoryLoadRef.current = null
+              setSelectedConvId(null)
+              setTurns([])
+            }}
           >
             + Nueva
           </button>
@@ -363,7 +400,12 @@ export default function ChatClient({
           )}
 
           {turns.length === 0 && !isLoadingMessages && !isSending && (
-            <EmptyState studyName={studyName} protocolNumber={protocolNumber} />
+            <EmptyState
+              studyName={studyName}
+              protocolNumber={protocolNumber}
+              isWarmingUp={isWarmingUp}
+              isAlphiReady={isAlphiReady}
+            />
           )}
 
           {turns.map((turn) => (
@@ -433,7 +475,11 @@ export default function ChatClient({
                 ref={textareaRef}
                 rows={2}
                 className="alphi-input min-h-[64px] max-h-40 resize-none pr-24"
-                placeholder="Pregunta sobre criterios, visitas, muestras, medicacion, safety... (Enter para enviar · Shift+Enter nueva línea)"
+                placeholder={
+                  isWarmingUp
+                    ? 'ALPHI se está preparando…'
+                    : 'Pregunta sobre criterios, visitas, muestras, medicacion, safety... (Enter para enviar · Shift+Enter nueva línea)'
+                }
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -753,16 +799,39 @@ function TerminologyResultCard({
   )
 }
 
-function EmptyState({ studyName, protocolNumber }: { studyName: string; protocolNumber: string | null }) {
+function EmptyState({
+  studyName,
+  protocolNumber,
+  isWarmingUp,
+  isAlphiReady,
+}: {
+  studyName: string
+  protocolNumber: string | null
+  isWarmingUp: boolean
+  isAlphiReady: boolean
+}) {
   return (
     <div className="flex h-full flex-col items-center justify-center py-12 text-center">
       <AlphiLogo variant="icon" height={48} />
-      <h2 className="mt-4 text-lg font-bold text-alphi-navy">Listo para consultar</h2>
-      <p className="mt-1 max-w-sm text-sm text-alphi-muted">
-        Haz una pregunta sobre <strong>{studyName}</strong>
-        {protocolNumber ? ` (${protocolNumber})` : ''}.
-        Cada respuesta viene con cita exacta del documento fuente.
-      </p>
+      {isWarmingUp ? (
+        <>
+          <h2 className="mt-4 text-lg font-bold text-alphi-navy">Hola, soy ALPHI</h2>
+          <p className="mt-2 flex items-center justify-center gap-2 text-sm text-alphi-muted">
+            <TypingDots />
+            <span>Preparando el entorno del estudio…</span>
+          </p>
+        </>
+      ) : (
+        <>
+          <h2 className="mt-4 text-lg font-bold text-alphi-navy">Hola, soy ALPHI</h2>
+          <p className="mt-1 max-w-sm text-sm text-alphi-muted">
+            {isAlphiReady ? 'Listo para consultar. ' : ''}
+            Preguntá sobre <strong>{studyName}</strong>
+            {protocolNumber ? ` (${protocolNumber})` : ''}.
+            Cada respuesta viene con cita exacta del documento fuente.
+          </p>
+        </>
+      )}
       <div className="mt-6 grid max-w-md grid-cols-1 gap-2 sm:grid-cols-2">
         {[
           'Criterios de inclusion y exclusion',

@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type DocumentVersionStatus = 'pending' | 'processing' | 'ready' | 'error'
@@ -75,12 +76,15 @@ interface DocumentsStatusListProps {
 }
 
 export function DocumentsStatusList({ items: initialItems, studyId }: DocumentsStatusListProps) {
+  const router = useRouter()
   const [items, setItems] = useState<DocumentStatusItem[]>(initialItems)
   const [busyVersionId, setBusyVersionId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [now, setNow] = useState<number>(() => Date.now())
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const itemsRef = useRef(items)
+  itemsRef.current = items
   // versionId → timestamp (reloj del cliente) en que lo vimos procesando por
   // primera vez. Resiliente a reprocesos: se resetea al volver a 'processing'.
   const startTimesRef = useRef<Map<string, number>>(new Map())
@@ -130,11 +134,16 @@ export function DocumentsStatusList({ items: initialItems, studyId }: DocumentsS
       const res = await fetch(`/api/studies/${studyId}/documents`, { cache: 'no-store' })
       if (!res.ok) return
       const fresh = (await res.json()) as DocumentStatusItem[]
+      const wasPolling = needsPolling(itemsRef.current)
       setItems(fresh)
+      // Refrescar server components (spec, layout) cuando termina la ingesta.
+      if (wasPolling && !needsPolling(fresh)) {
+        router.refresh()
+      }
     } catch {
       // silencioso — el polling reintenta en el próximo ciclo
     }
-  }, [studyId])
+  }, [studyId, router])
 
   // Iniciar/detener polling según el estado actual de los items.
   useEffect(() => {

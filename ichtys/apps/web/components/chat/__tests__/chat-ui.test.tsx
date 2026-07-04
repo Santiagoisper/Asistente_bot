@@ -33,7 +33,7 @@ describe('minimal chat UI render', () => {
       <ChatClient studyId={STUDY_ID} studyName="Study Alpha" protocolNumber="ALPHA-01" />,
     )
 
-    expect(html).toContain('Study Alpha')
+    expect(html).toContain('Hola, soy ALPHI')
     expect(html).toContain(`Study ID: ${STUDY_ID}`)
     expect(html).toContain('Protocolo ALPHA-01')
     expect(html).toContain('Cargando historial...')
