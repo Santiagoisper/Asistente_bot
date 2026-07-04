@@ -41,6 +41,7 @@ const STEPS: Step[] = [
   { id: 'typecheck', label: 'Typecheck', command: 'pnpm typecheck' },
   { id: 'test', label: 'Unit / integration tests', command: 'pnpm test' },
   { id: 'test:oq', label: 'OQ tests (módulo clínico)', command: 'pnpm test:oq' },
+  { id: 'test:integration', label: 'Integration tests PHI (DB)', command: 'pnpm test:integration', dbRequired: true },
   { id: 'test:leakage', label: 'Tenant leakage tests', command: 'pnpm test:leakage' },
   { id: 'iq:check', label: 'IQ — env + schema', command: 'pnpm iq:check', dbRequired: true },
   { id: 'e2e:product', label: 'E2E product loop', command: 'pnpm e2e:product', dbRequired: true },

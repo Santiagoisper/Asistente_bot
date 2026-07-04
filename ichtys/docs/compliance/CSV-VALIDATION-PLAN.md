@@ -69,7 +69,8 @@
 | Unit | Vitest | crypto, rule engine, NLP parser |
 | Integration | Vitest + test DB | API routes PHI |
 | Leakage | `pnpm test:leakage` | Cross-tenant/study |
-| Gate unificado | `pnpm validate:product` | typecheck + test + OQ + leakage + IQ + E2E |
+| Integration | `pnpm test:integration` | API/servicios PHI + Neon (local/pre-prod) |
+| Gate unificado | `pnpm validate:product` | typecheck + test + OQ + integration + leakage + IQ + E2E |
 | Gate CI | `pnpm validate:product:ci` | Sin pasos que requieren DB |
 | E2E | Manual + Playwright (futuro) | Flujo screening completo |
 | UAT | Sitio piloto CINME | PQ |

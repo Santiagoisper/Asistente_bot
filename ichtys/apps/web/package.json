@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "test:oq": "vitest run --dir app/api/studies --passWithNoTests",
+    "test:integration": "vitest run --dir tests/integration --passWithNoTests",
     "test:leakage": "vitest run --dir tests/leakage --passWithNoTests"
   },
   "dependencies": {

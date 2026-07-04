@@ -49,6 +49,17 @@
 
 **Total:** 23 tests — `pnpm test:oq` (CI incluido)
 
+## IT — integración DB real (Fase 3)
+
+| TC | Descripción | Archivo | Estado |
+|----|-------------|---------|--------|
+| IT-001 | Profile cifrado at-rest (sin plaintext) | `tests/integration/phi-clinical.integration.test.ts` | ✅ |
+| IT-002 | loadPatientProfile round-trip | `tests/integration/phi-clinical.integration.test.ts` | ✅ |
+| IT-003 | evaluateAndPersistScreening snapshot | `tests/integration/phi-clinical.integration.test.ts` | ✅ |
+| IT-004 | Aislamiento org en loadPatientProfile | `tests/integration/phi-clinical.integration.test.ts` | ✅ |
+
+**Requiere:** `DATABASE_URL` + `PHI_ENCRYPTION_KEY` — skip automático sin env.
+
 ## OQ / IQ pendientes
 
 | TC | Descripción | Estado |
@@ -61,7 +72,8 @@
 - [URS.md](./URS.md)
 - [FRS.md](./FRS.md)
 - [CSV-VALIDATION-PLAN.md](./CSV-VALIDATION-PLAN.md)
-- `pnpm validate:product` — gate unificado Etapa 2 (typecheck, test, OQ, leakage, IQ, E2E)
+- `pnpm test:integration` — IT PHI con DB real (local/pre-prod)
+- `pnpm validate:product` — gate unificado Etapa 2 (typecheck, test, OQ, integration, leakage, IQ, E2E)
 - `pnpm validate:product:ci` — gate CI sin DB
 - `pnpm e2e:product` — loop producto mock
 - `scripts/verify-prod-phi.ts` — smoke PHI prod

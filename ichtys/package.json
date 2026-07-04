@@ -17,6 +17,7 @@
     "test:e2e": "node scripts/e2e-general.mjs",
     "test:leakage": "turbo run test:leakage",
     "test:oq": "pnpm --filter @ichtys/web test:oq",
+    "test:integration": "pnpm --filter @ichtys/web test:integration",
     "db:generate": "pnpm --filter @ichtys/db db:generate",
     "db:migrate": "pnpm --filter @ichtys/db db:migrate",
     "db:check": "pnpm --filter @ichtys/db db:check",
