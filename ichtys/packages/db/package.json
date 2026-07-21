@@ -18,16 +18,16 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
-    "test:leakage": "vitest run --dir tests/leakage --passWithNoTests"
+    "test:leakage": "vitest run --dir tests/leakage"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
-    "drizzle-orm": "^0.38.2",
+    "drizzle-orm": "^0.45.2",
     "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/ws": "^8.5.13",
-    "drizzle-kit": "^0.30.1",
+    "drizzle-kit": "^0.31.10",
     "vitest": "^2.1.8"
   }
 }

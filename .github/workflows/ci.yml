@@ -28,3 +28,5 @@ jobs:
       - run: pnpm test
       - run: pnpm test:oq
       - run: pnpm test:leakage
+      # Gate de supply chain: falla si aparece una CVE high/critical en deps de prod.
+      - run: pnpm audit --prod --audit-level high

@@ -5,3 +5,12 @@ ichtys/.cursor/
 ichtys/logs/
 .DS_Store
 .vercel
+
+# Artefactos generados y temporales (nunca commitear)
+output/
+tmp/
+*.log
+*.tsbuildinfo
+# "nul" aparece por redirects `> nul` equivocados en Git Bash (Windows)
+nul
+_tmp_*

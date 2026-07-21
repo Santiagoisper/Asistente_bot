@@ -19,6 +19,18 @@ export const runtime = 'nodejs'
 const MAX_SERVER_UPLOAD_BYTES = 50 * 1024 * 1024
 const MAX_PDF_BYTES = MAX_SERVER_UPLOAD_BYTES
 
+/**
+ * file.type es declarado por el cliente y falsificable. La firma binaria
+ * "%PDF-" al inicio del archivo es la evidencia real de que es un PDF.
+ */
+const PDF_MAGIC_BYTES = '%PDF-'
+
+async function hasPdfMagicBytes(file: File): Promise<boolean> {
+  const head = new Uint8Array(await file.slice(0, PDF_MAGIC_BYTES.length).arrayBuffer())
+  if (head.length < PDF_MAGIC_BYTES.length) return false
+  return new TextDecoder('ascii').decode(head) === PDF_MAGIC_BYTES
+}
+
 const documentType = z.enum([
   'protocol',
   'investigator_brochure',
@@ -95,6 +107,10 @@ export async function POST(req: Request): Promise<Response> {
 
     if (file.size > MAX_PDF_BYTES) {
       return new Response('Payload Too Large', { status: 413 })
+    }
+
+    if (!(await hasPdfMagicBytes(file))) {
+      return new Response('Unsupported Media Type', { status: 415 })
     }
 
     const { userId, orgId, study } = await validateStudyAccess(meta.data.studyId)

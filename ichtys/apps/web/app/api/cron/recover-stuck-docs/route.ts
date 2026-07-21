@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { checkAndRecoverStuckDocs } from '@ichtys/ingestion'
 
@@ -16,9 +17,17 @@ export const dynamic = 'force-dynamic'
  *   - Vercel Cron lo inyecta automáticamente si CRON_SECRET está en el proyecto.
  *   - GitHub Actions lo manda explícito con el mismo secret.
  */
+/** Comparación constant-time: no filtra por timing cuántos caracteres coinciden. */
+function secretMatches(received: string, expected: string): boolean {
+  const receivedBuffer = Buffer.from(received)
+  const expectedBuffer = Buffer.from(expected)
+  if (receivedBuffer.length !== expectedBuffer.length) return false
+  return timingSafeEqual(receivedBuffer, expectedBuffer)
+}
+
 export async function GET(req: Request) {
-  const auth = req.headers.get('authorization')
-  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  const auth = req.headers.get('authorization') ?? ''
+  if (!process.env.CRON_SECRET || !secretMatches(auth, `Bearer ${process.env.CRON_SECRET}`)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

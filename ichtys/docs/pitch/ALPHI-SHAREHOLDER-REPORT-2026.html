@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ALPHI — Informe ejecutivo para accionistas · Julio 2026</title>
+  <title>ALPHI — Informe ejecutivo para accionistas · 6 jul 2026</title>
   <style>
     :root {
       --navy: #0D1F3C;
@@ -62,6 +62,7 @@
     }
     .hero h1 { font-size: 1.85rem; margin: 0.35rem 0 0.5rem; font-weight: 700; }
     .hero-meta { font-size: 0.85rem; opacity: 0.85; display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; }
+    .hero-badges { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
     .badge-conf {
       display: inline-block;
       background: rgba(217,119,6,0.25);
@@ -71,8 +72,57 @@
       padding: 0.15rem 0.5rem;
       border-radius: 4px;
       font-weight: 600;
-      margin-top: 0.75rem;
     }
+    .badge-updated {
+      display: inline-block;
+      background: rgba(8,145,178,0.25);
+      border: 1px solid rgba(8,145,178,0.5);
+      color: #bae6fd;
+      font-size: 0.7rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .team-card {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin: 1.25rem 0;
+    }
+    .team-member {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+    }
+    .team-member .role { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal); font-weight: 600; }
+    .team-member .name { font-size: 1rem; font-weight: 700; margin-top: 0.25rem; }
+    .updates-list { margin: 0.5rem 0 0 1.1rem; }
+    .updates-list li { margin-bottom: 0.4rem; }
+    .plain-box {
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-radius: 8px;
+      padding: 1rem 1.15rem;
+      margin-bottom: 1.25rem;
+      font-size: 0.92rem;
+    }
+    .plain-box p { margin-bottom: 0.5rem; }
+    .plain-box p:last-child { margin-bottom: 0; }
+    .explain {
+      display: block;
+      font-size: 0.82rem;
+      color: var(--muted);
+      font-weight: 400;
+      margin-top: 0.2rem;
+      line-height: 1.45;
+    }
+    .item-plain { margin-bottom: 0.85rem; }
+    .item-plain strong { color: var(--navy); }
+    table .explain-cell { font-size: 0.82rem; color: var(--muted); }
+    .glossary dt { font-weight: 700; margin-top: 0.75rem; color: var(--navy); }
+    .glossary dd { margin: 0.2rem 0 0 0; font-size: 0.88rem; color: var(--muted); }
+    .link-card .explain { font-size: 0.75rem; margin-top: 0.35rem; color: var(--muted); display: block; }
 
     /* Tabs */
     .tabs-wrap {
@@ -298,9 +348,13 @@
     <div class="hero-meta">
       <span>Asistente documental clínico con RAG</span>
       <span>sisbert@cinme.com.ar</span>
-      <span><a href="https://asistente-bot-five.vercel.app" style="color:#7dd3fc">asistente-bot-five.vercel.app</a></span>
+      <span><a href="https://www.ichtys.com.ar/" style="color:#7dd3fc" target="_blank" rel="noopener">ichtys.com.ar</a></span>
+      <span><a href="https://asistente-bot-five.vercel.app" style="color:#7dd3fc" target="_blank" rel="noopener">asistente-bot-five.vercel.app</a></span>
     </div>
-    <span class="badge-conf">Confidencial — uso interno y accionistas</span>
+    <div class="hero-badges">
+      <span class="badge-conf">Confidencial — uso interno y accionistas</span>
+      <span class="badge-updated">Actualizado 6 jul 2026</span>
+    </div>
   </div>
 </header>
 
@@ -322,26 +376,72 @@
   <!-- RESUMEN -->
   <section id="resumen" class="panel active" role="tabpanel">
     <h2>Resumen ejecutivo</h2>
+
+    <div class="plain-box">
+      <p><strong>¿Cómo leer este informe?</strong> Cada ítem técnico incluye una línea en gris que lo explica en lenguaje cotidiano. No hace falta saber de programación.</p>
+      <p><strong>RAG</strong> = el sistema busca en los documentos del estudio y responde citando la página exacta, como un asistente que solo puede usar el protocolo cargado.</p>
+    </div>
+
     <div class="card card-highlight">
       <p><strong>ALPHI</strong> es un asistente documental clínico con inteligencia artificial para <strong>sitios de ensayo clínico</strong> (CRC, enfermería, investigadores, monitores). Responde preguntas sobre protocolos, IBs y manuales de <strong>200–400 páginas</strong>, con <strong>citas obligatorias</strong> al documento fuente. Si no hay evidencia suficiente, <strong>no responde</strong> — no inventa.</p>
+      <span class="explain">En la práctica: la coordinadora pregunta “¿este paciente cumple el criterio 3?” y ALPHI muestra la respuesta con el párrafo del protocolo donde lo dice — o admite que no encontró la información.</span>
     </div>
 
     <div class="quote">En una frase: Construimos el producto difícil (trial-ops regulado), no el producto fácil (chat genérico sobre PDFs). El código está; falta cerrar validación en sitio y escalar comercialmente.</div>
 
+    <div class="card">
+      <h3 style="margin-top:0">Actualizaciones recientes (jul 2026)</h3>
+      <div class="item-plain">
+        <strong>Criterios anidados como filas separadas en Study Spec</strong>
+        <span class="explain">Cuando el protocolo dice “criterio 4 con sub-puntos (iii)(a)(b)”, cada sub-punto aparece como una fila propia — no todo amontonado en una sola línea difícil de leer.</span>
+      </div>
+      <div class="item-plain">
+        <strong>Extracción de spec siempre con Claude (Anthropic)</strong>
+        <span class="explain">La lectura automática del protocolo usa un motor de IA dedicado y de alta calidad, independiente del que usa el chat del usuario.</span>
+      </div>
+      <div class="item-plain">
+        <strong>Pantalla de spec se actualiza sola tras cargar documento</strong>
+        <span class="explain">Ya no hay que refrescar la página a mano para ver los criterios extraídos después de subir un PDF.</span>
+      </div>
+      <div class="item-plain">
+        <strong>Primera pregunta del chat responde bien</strong>
+        <span class="explain">Se corrigió un error donde había que escribir dos veces la primera pregunta para obtener respuesta.</span>
+      </div>
+      <div class="item-plain">
+        <strong>Re-procesamiento masivo de 12 estudios reales</strong>
+        <span class="explain">Se volvieron a extraer las especificaciones de una cartera completa de protocolos ya cargados en producción, con reglas mejoradas.</span>
+      </div>
+      <div class="item-plain">
+        <strong>Marca ICHtYS × ALPHI visible en la app</strong>
+        <span class="explain">Queda claro que ALPHI es producto de ICHtYS TECHNOLOGY SA, con logos corporativos en la interfaz y páginas públicas.</span>
+      </div>
+    </div>
+
+    <div class="team-card">
+      <div class="team-member">
+        <div class="role">CEO</div>
+        <div class="name">Nicolás Daguerre</div>
+      </div>
+      <div class="team-member">
+        <div class="role">Desarrollador</div>
+        <div class="name">Santiago Isbert</div>
+      </div>
+    </div>
+
     <table>
-      <thead><tr><th>Dimensión</th><th>Estado julio 2026</th></tr></thead>
+      <thead><tr><th>Dimensión</th><th>Estado julio 2026</th><th>En palabras simples</th></tr></thead>
       <tbody>
-        <tr><td>Producto MVP</td><td class="status-ok">✅ Funcional en producción</td></tr>
-        <tr><td>Diferenciador técnico</td><td>Grounding-only + multi-tenant + audit trail</td></tr>
-        <tr><td>Compliance Fase 0</td><td class="status-ok">✅ Cerrada (DPA, DPIA, HIPAA, 13+ políticas)</td></tr>
-        <tr><td>Validación CSV (Part 11)</td><td class="status-warn">🟡 ~70 % — IQ/OQ/IT PASS; PQ piloto pendiente</td></tr>
-        <tr><td>Certificaciones ISO</td><td class="status-bad">🔴 ISMS lite; sin auditor externo aún</td></tr>
-        <tr><td>Ingresos</td><td>Pre-revenue; piloto interno ICHtYS en preparación</td></tr>
-        <tr><td>Go-live PHI real</td><td class="status-bad">🔴 Bloqueado hasta PQ + VSR firmado</td></tr>
+        <tr><td>Producto MVP</td><td class="status-ok">✅ Funcional en producción</td><td class="explain-cell">La plataforma ya funciona en internet; se puede usar hoy.</td></tr>
+        <tr><td>Diferenciador técnico</td><td>Grounding-only + multi-tenant + audit trail</td><td class="explain-cell">Solo responde con documentos cargados; cada cliente aislado; queda registro de quién hizo qué.</td></tr>
+        <tr><td>Compliance Fase 0</td><td class="status-ok">✅ Cerrada (DPA, DPIA, HIPAA, 13+ políticas)</td><td class="explain-cell">Documentación legal y de privacidad lista antes de usar datos reales de pacientes.</td></tr>
+        <tr><td>Validación CSV (Part 11)</td><td class="status-warn">🟡 ~70 % — IQ/OQ/IT PASS; PQ piloto pendiente</td><td class="explain-cell">Pruebas formales de que el sistema hace lo que promete; falta validarlo con usuarios reales en sitio.</td></tr>
+        <tr><td>Certificaciones ISO</td><td class="status-bad">🔴 ISMS lite; sin auditor externo aún</td><td class="explain-cell">Hay políticas de seguridad internas, pero aún no hay certificado ISO auditado por terceros.</td></tr>
+        <tr><td>Ingresos</td><td>Pre-revenue; piloto interno ICHtYS en preparación</td><td class="explain-cell">Todavía no hay clientes pagando; se prepara el primer piloto comercial.</td></tr>
+        <tr><td>Go-live PHI real</td><td class="status-bad">🔴 Bloqueado hasta PQ + VSR firmado</td><td class="explain-cell">No se pueden cargar datos identificables de pacientes hasta cerrar la validación formal.</td></tr>
       </tbody>
     </table>
 
-    <div class="alert"><strong>Declaración de exactitud:</strong> ALPHI <em>no está certificado</em> bajo FDA Part 11, EMA Annex 11 ni ISO 27001/27701/42001. Las afirmaciones de cumplimiento se refieren a alineación documental y controles técnicos verificables, no a certificación formal.</div>
+    <div class="alert"><strong>Declaración de exactitud:</strong> ALPHI <em>no está certificado</em> bajo FDA Part 11, EMA Annex 11 ni ISO 27001/27701/42001. Las afirmaciones de cumplimiento se refieren a alineación documental y controles técnicos verificables, no a certificación formal.<span class="explain" style="display:block;margin-top:0.5rem;color:inherit;opacity:0.9">En criollo: hicimos el trabajo de documentación y controles, pero todavía no pasamos una auditoría externa que nos dé un sello oficial.</span></div>
   </section>
 
   <!-- PRODUCTO -->
@@ -349,61 +449,67 @@
     <h2>Qué es ALPHI</h2>
     <p>Plataforma web multi-tenant B2B que combina tres pilares:</p>
     <div class="pillars">
-      <div class="pillar"><span class="pillar-num">1</span><h4>Chat RAG</h4><p>Preguntas con respuestas ancladas y citas clickeables</p></div>
-      <div class="pillar"><span class="pillar-num">2</span><h4>Study Spec</h4><p>Criterios, visitas, endpoints extraídos del protocolo</p></div>
-      <div class="pillar"><span class="pillar-num">3</span><h4>Módulo clínico</h4><p>Sujetos, evoluciones cifradas, screening, labs OCR</p></div>
+      <div class="pillar"><span class="pillar-num">1</span><h4>Chat RAG</h4><p>Preguntas con respuestas ancladas y citas clickeables</p><span class="explain">Como preguntarle a un colega que solo puede mirar el protocolo y te señala la página exacta.</span></div>
+      <div class="pillar"><span class="pillar-num">2</span><h4>Study Spec</h4><p>Criterios, visitas, endpoints extraídos del protocolo</p><span class="explain">Un resumen estructurado del estudio (quién entra, qué visitas hay, qué medir) sacado automáticamente del PDF.</span></div>
+      <div class="pillar"><span class="pillar-num">3</span><h4>Módulo clínico</h4><p>Sujetos, evoluciones cifradas, screening, labs OCR</p><span class="explain">Registro de pacientes del ensayo, notas protegidas, chequeo de elegibilidad y lectura asistida de laboratorios.</span></div>
     </div>
 
     <h3>Usuarios objetivo</h3>
     <table>
-      <thead><tr><th>Rol</th><th>Uso principal</th></tr></thead>
+      <thead><tr><th>Rol</th><th>Uso principal</th><th>En palabras simples</th></tr></thead>
       <tbody>
-        <tr><td>CRC / Research Nurse</td><td>Elegibilidad, visitas, labs, medicación en sala</td></tr>
-        <tr><td>PI / Sub-I</td><td>Verificación rápida con evidencia trazable</td></tr>
-        <tr><td>Monitor / CRA</td><td>Validar respuestas con fuente auditable</td></tr>
-        <tr><td>Sponsor / Admin</td><td>Gobernanza multi-estudio, configuración</td></tr>
+        <tr><td>CRC / Research Nurse</td><td>Elegibilidad, visitas, labs, medicación en sala</td><td class="explain-cell">La coordinadora del ensayo, en el día a día con el paciente.</td></tr>
+        <tr><td>PI / Sub-I</td><td>Verificación rápida con evidencia trazable</td><td class="explain-cell">El médico investigador que necesita confirmar algo del protocolo al instante.</td></tr>
+        <tr><td>Monitor / CRA</td><td>Validar respuestas con fuente auditable</td><td class="explain-cell">El auditor del sponsor que exige ver de dónde salió cada respuesta.</td></tr>
+        <tr><td>Sponsor / Admin</td><td>Gobernanza multi-estudio, configuración</td><td class="explain-cell">Quien contrata el servicio y administra varios estudios a la vez.</td></tr>
       </tbody>
     </table>
 
     <h3>Qué NO es ALPHI</h3>
     <ul>
-      <li>No es un CTMS completo (Medidata, Veeva)</li>
-      <li>No es generador de epicrisis para consultorio (Pacientry)</li>
-      <li>No es ChatGPT sobre PDFs sin trazabilidad</li>
-      <li>No está certificado FDA Part 11 ni ISO 27001 (aún)</li>
+      <li>No es un CTMS completo (Medidata, Veeva) <span class="explain">— no reemplaza el sistema gigante que usa la industria para gestionar todo el ensayo de punta a punta.</span></li>
+      <li>No es generador de epicrisis para consultorio (Pacientry) <span class="explain">— no escribe historias clínicas de consultorio ambulatorio.</span></li>
+      <li>No es ChatGPT sobre PDFs sin trazabilidad <span class="explain">— no inventa respuestas ni mezcla conocimiento general con el protocolo.</span></li>
+      <li>No está certificado FDA Part 11 ni ISO 27001 (aún) <span class="explain">— cumple en documentación y controles, pero aún no tiene sello oficial de auditor externo.</span></li>
     </ul>
 
     <h3>El problema que resolvemos</h3>
     <ul>
-      <li>Paciente en sala → la coordinadora no puede salir 15 min a buscar en el PDF</li>
-      <li>Monitor pide evidencia trazable de una decisión operacional</li>
-      <li>Onboarding de staff nuevo en estudios complejos</li>
-      <li>Evento adverso → verificar timeline SAE/SUSAR en minutos</li>
+      <li>Paciente en sala → la coordinadora no puede salir 15 min a buscar en el PDF <span class="explain">— necesita la respuesta en segundos, con la fuente.</span></li>
+      <li>Monitor pide evidencia trazable de una decisión operacional <span class="explain">— hay que mostrar el párrafo del protocolo, no “me acuerdo”.</span></li>
+      <li>Onboarding de staff nuevo en estudios complejos <span class="explain">— capacitar gente nueva sin leer 300 páginas de una sentada.</span></li>
+      <li>Evento adverso → verificar timeline SAE/SUSAR en minutos <span class="explain">— plazos de reporte de eventos graves sin hojear el manual.</span></li>
     </ul>
 
     <div class="quote">La fuente trazable es el producto, no el chat.</div>
 
     <h3>Contrato de producto (no negociable)</h3>
     <ol>
-      <li><strong>Grounding-only</strong> — solo responde desde documentos del estudio activo</li>
-      <li><strong>Citas obligatorias</strong> — cada afirmación lleva referencia verificable</li>
-      <li><strong>LLM extrae, reglas deciden</strong> — el modelo no es juez de elegibilidad final</li>
-      <li><strong>Human-in-the-loop</strong> — spec, OCR labs e inclusiones críticas requieren confirmación humana</li>
-      <li><strong>Fail safe</strong> — <code>unknown</code> / <code>insufficient_evidence</code> &gt; falso positivo</li>
+      <li class="item-plain"><strong>Grounding-only</strong> — solo responde desde documentos del estudio activo<span class="explain">Si no está en el PDF cargado, no lo dice.</span></li>
+      <li class="item-plain"><strong>Citas obligatorias</strong> — cada afirmación lleva referencia verificable<span class="explain">Cada respuesta muestra página y sección del documento.</span></li>
+      <li class="item-plain"><strong>LLM extrae, reglas deciden</strong> — el modelo no es juez de elegibilidad final<span class="explain">La IA lee y organiza; las reglas fijas (no la IA) deciden si un paciente califica.</span></li>
+      <li class="item-plain"><strong>Human-in-the-loop</strong> — spec, OCR labs e inclusiones críticas requieren confirmación humana<span class="explain">Una persona siempre revisa lo importante antes de que cuente como definitivo.</span></li>
+      <li class="item-plain"><strong>Fail safe</strong> — prefiere decir “no sé” antes que inventar<span class="explain">Mejor admitir que no hay evidencia que dar una respuesta incorrecta.</span></li>
     </ol>
 
     <h3>Funcionalidades MVP en producción</h3>
     <table>
-      <thead><tr><th>Módulo</th><th>Estado</th></tr></thead>
+      <thead><tr><th>Módulo</th><th>Estado</th><th>¿Qué es en simple?</th></tr></thead>
       <tbody>
-        <tr><td>Multi-tenant (Clerk Orgs)</td><td class="status-ok">✅</td></tr>
-        <tr><td>Upload PDF + chunking + embeddings</td><td class="status-ok">✅</td></tr>
-        <tr><td>Chat grounded + citas + abstención</td><td class="status-ok">✅</td></tr>
-        <tr><td>Study Spec (extracción + aprobación + diff)</td><td class="status-ok">✅</td></tr>
-        <tr><td>Screening determinista vs spec</td><td class="status-ok">✅</td></tr>
-        <tr><td>Sujetos + evoluciones cifradas AES-256-GCM</td><td class="status-ok">✅</td></tr>
-        <tr><td>Labs OCR con revisión humana</td><td class="status-ok">✅</td></tr>
-        <tr><td>Audit trail + Admin RAG + Trust/Legal</td><td class="status-ok">✅</td></tr>
+        <tr><td>Multi-tenant (Clerk Orgs)</td><td class="status-ok">✅</td><td class="explain-cell">Cada cliente (sponsor, CRO) tiene su espacio aislado; no se mezclan datos.</td></tr>
+        <tr><td>Upload PDF + chunking + embeddings</td><td class="status-ok">✅</td><td class="explain-cell">Subís el protocolo; el sistema lo parte en trozos y lo indexa para buscar rápido.</td></tr>
+        <tr><td>Chat grounded + citas + abstención</td><td class="status-ok">✅</td><td class="explain-cell">Chat que solo usa el protocolo, cita la fuente o dice que no sabe.</td></tr>
+        <tr><td>Visor de citas (página exacta del PDF)</td><td class="status-ok">✅</td><td class="explain-cell">Al hacer clic en la cita, ves el PDF en la página correcta.</td></tr>
+        <tr><td>Study Spec (extracción + aprobación + diff + export)</td><td class="status-ok">✅</td><td class="explain-cell">Tabla de criterios/visitas extraída del protocolo, editable y exportable.</td></tr>
+        <tr><td>Re-extract manual y batch por organización</td><td class="status-ok">✅</td><td class="explain-cell">Se puede volver a procesar uno o muchos estudios si mejoramos las reglas.</td></tr>
+        <tr><td>Criterios anidados como filas atómicas</td><td class="status-ok">✅</td><td class="explain-cell">Sub-puntos del protocolo en filas separadas, fáciles de leer y chequear.</td></tr>
+        <tr><td>SpecAutoRefresh post-ingesta</td><td class="status-ok">✅</td><td class="explain-cell">La pantalla de spec se actualiza sola al subir un documento.</td></tr>
+        <tr><td>Screening determinista vs spec</td><td class="status-ok">✅</td><td class="explain-cell">Comparación automática de datos del paciente contra criterios del estudio.</td></tr>
+        <tr><td>Sujetos + evoluciones cifradas AES-256-GCM</td><td class="status-ok">✅</td><td class="explain-cell">Ficha del paciente y notas clínicas guardadas encriptadas en la base de datos.</td></tr>
+        <tr><td>Labs OCR con revisión humana</td><td class="status-ok">✅</td><td class="explain-cell">Lee resultados de laboratorio de un PDF/imagen; una persona confirma.</td></tr>
+        <tr><td>Audit trail + Admin RAG</td><td class="status-ok">✅</td><td class="explain-cell">Registro de quién hizo qué y panel para ajustar cómo busca el asistente.</td></tr>
+        <tr><td>Cron recovery docs stuck</td><td class="status-ok">✅</td><td class="explain-cell">Tarea automática que recupera documentos que quedaron a medias al procesarse.</td></tr>
+        <tr><td>Trust / Legal / Pricing / ROI (GTM)</td><td class="status-ok">✅</td><td class="explain-cell">Páginas públicas de confianza, legales, precios y calculadora de retorno.</td></tr>
       </tbody>
     </table>
   </section>
@@ -411,29 +517,41 @@
   <!-- TECNOLOGÍA -->
   <section id="tecnologia" class="panel" role="tabpanel">
     <h2>Visión de ingeniería</h2>
+    <p style="font-size:0.9rem;color:var(--muted);margin-bottom:1rem">Esta sección describe <em>con qué está hecho</em> el producto. Para accionistas: son las piezas que garantizan que funcione en la nube, sea seguro y pueda crecer.</p>
     <table>
-      <thead><tr><th>Capa</th><th>Tecnología</th></tr></thead>
+      <thead><tr><th>Capa</th><th>Tecnología</th><th>En palabras simples</th></tr></thead>
       <tbody>
-        <tr><td>Frontend</td><td>Next.js 15 App Router, TypeScript, Tailwind</td></tr>
-        <tr><td>Auth / multi-tenant</td><td>Clerk Organizations + RBAC</td></tr>
-        <tr><td>Base de datos</td><td>Neon Postgres + pgvector</td></tr>
-        <tr><td>Almacenamiento</td><td>Vercel Blob (PDFs privados)</td></tr>
-        <tr><td>IA</td><td>Anthropic Claude (chat/extracción) + OpenAI embeddings</td></tr>
-        <tr><td>Hosting / CI</td><td>Vercel + GitHub Actions + Turborepo/pnpm</td></tr>
-        <tr><td>Cifrado PHI</td><td>@ichtys/crypto — AES-256-GCM field-level</td></tr>
+        <tr><td>Frontend</td><td>Next.js 15 App Router, TypeScript, Tailwind</td><td class="explain-cell">La pantalla que ve el usuario en el navegador — moderna y mantenible.</td></tr>
+        <tr><td>Auth / multi-tenant</td><td>Clerk Organizations + RBAC</td><td class="explain-cell">Login seguro y permisos por rol (admin, coordinadora, etc.) por organización.</td></tr>
+        <tr><td>Base de datos</td><td>Neon Postgres + pgvector</td><td class="explain-cell">Base de datos en la nube con búsqueda inteligente por significado, no solo por palabra.</td></tr>
+        <tr><td>Almacenamiento</td><td>Vercel Blob (PDFs privados)</td><td class="explain-cell">Los PDFs del protocolo se guardan en un depósito privado en internet.</td></tr>
+        <tr><td>IA</td><td>Anthropic Claude (chat/extracción) + OpenAI embeddings</td><td class="explain-cell">Motores de IA: uno conversa y extrae; otro convierte texto en índice buscable.</td></tr>
+        <tr><td>Hosting / CI</td><td>Vercel + GitHub Actions + Turborepo/pnpm</td><td class="explain-cell">Servidor en la nube + pruebas automáticas cada vez que se publica un cambio.</td></tr>
+        <tr><td>Cifrado PHI</td><td>@ichtys/crypto — AES-256-GCM field-level</td><td class="explain-cell">Datos sensibles de pacientes encriptados campo por campo, estándar bancario.</td></tr>
       </tbody>
     </table>
 
     <h3>Decisiones de diseño clave</h3>
     <table>
-      <thead><tr><th>Decisión</th><th>Por qué</th></tr></thead>
+      <thead><tr><th>Decisión</th><th>Por qué</th><th>En simple</th></tr></thead>
       <tbody>
-        <tr><td>Aislamiento org+study antes del vector search</td><td>Un bug de leakage es catastrófico en ensayos</td></tr>
-        <tr><td>Rule engine determinista para screening</td><td>Part 11 exige reproducibilidad; LLM no decide</td></tr>
-        <tr><td>Cifrado field-level en evoluciones</td><td>HIPAA/GDPR at-rest en DB compartida</td></tr>
-        <tr><td>Gate <code>validate:product</code></td><td>7 checks en un comando — evidencia CSV repetible</td></tr>
-        <tr><td>29 tests OQ en CI</td><td>Cada push valida módulo clínico automáticamente</td></tr>
-        <tr><td>Pre-redacción antes de LLM</td><td>DNI, email, teléfono nunca salen al proveedor</td></tr>
+        <tr><td>Aislamiento org+study antes del vector search</td><td>Un bug de leakage es catastrófico en ensayos</td><td class="explain-cell">Primero verifica de qué cliente y estudio es la pregunta; nunca mezcla documentos.</td></tr>
+        <tr><td>Rule engine determinista para screening</td><td>Part 11 exige reproducibilidad; LLM no decide</td><td class="explain-cell">Las reglas de elegibilidad son fijas y repetibles — la IA no “opina”.</td></tr>
+        <tr><td>Cifrado field-level en evoluciones</td><td>HIPAA/GDPR at-rest en DB compartida</td><td class="explain-cell">Aunque compartan servidor, las notas clínicas van encriptadas.</td></tr>
+        <tr><td>Gate validate:product</td><td>7 checks en un comando — evidencia CSV repetible</td><td class="explain-cell">Un botón de “¿todo funciona?” con 7 pruebas automáticas documentadas.</td></tr>
+        <tr><td>29 tests OQ en CI</td><td>Cada push valida módulo clínico automáticamente</td><td class="explain-cell">29 pruebas de calidad corren solas cada vez que el equipo sube código.</td></tr>
+        <tr><td>Pre-redacción antes de LLM</td><td>DNI, email, teléfono nunca salen al proveedor</td><td class="explain-cell">Se tapan datos personales antes de enviar texto a la IA externa.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Decisiones recientes (sprint jul 2026)</h3>
+    <table>
+      <thead><tr><th>Decisión</th><th>Por qué</th><th>En simple</th></tr></thead>
+      <tbody>
+        <tr><td>Spec siempre con Claude (Anthropic)</td><td>Calidad y consistencia en specs clínicos</td><td class="explain-cell">Un solo motor de alta calidad para leer protocolos, siempre igual.</td></tr>
+        <tr><td>Criterios anidados = filas atómicas</td><td>Screening determinista reproducible</td><td class="explain-cell">Cada sub-criterio en su fila → chequeos más claros y auditables.</td></tr>
+        <tr><td>Re-procesamiento batch de estudios</td><td>Re-procesar cartera de estudios reales en prod</td><td class="explain-cell">Actualizar de golpe todos los estudios ya cargados con reglas nuevas.</td></tr>
+        <tr><td>SpecAutoRefresh + chat warmup</td><td>UX operacional en sala (sin F5, 1ª pregunta OK)</td><td class="explain-cell">Menos fricción en el consultorio: pantalla al día y chat que responde al primer intento.</td></tr>
       </tbody>
     </table>
 
@@ -441,15 +559,18 @@
     <div class="flow">Pregunta → Auth org+study → Embed → Vector search FILTRADO
   → ¿Similarity ≥ threshold? → No → insufficient_evidence
   → Sí → LLM grounded → Respuesta + citas → Audit log</div>
+    <span class="explain" style="display:block;margin-top:0.5rem">Traducción: el usuario pregunta → el sistema confirma quién es y de qué estudio → busca en los documentos de ese estudio → si encuentra algo relevante, responde citando la fuente; si no, dice que no hay evidencia → todo queda registrado.</span>
 
     <h3>Flujo de ingesta</h3>
     <div class="flow">Upload PDF → Vercel Blob → Parse por página → Chunking
   → Embeddings OpenAI → pgvector → status: ready → Chat RAG</div>
+    <span class="explain" style="display:block;margin-top:0.5rem">Traducción: subís el PDF → se guarda → se lee página por página → se parte en trozos → se indexa para búsqueda → queda listo para el chat.</span>
   </section>
 
   <!-- COMPETENCIA -->
   <section id="competencia" class="panel" role="tabpanel">
     <h2>Diferenciación frente a la competencia global</h2>
+    <p style="font-size:0.9rem;color:var(--muted);margin-bottom:1rem">Comparación honesta: ALPHI no compite en todo — compite en “respuestas trazables sobre protocolos de ensayo”.</p>
     <table>
       <thead>
         <tr><th></th><th>Pacientry</th><th>ALPHI</th><th>CTMS clásico</th><th>ChatGPT</th></tr>
@@ -462,14 +583,15 @@
         <tr><td>Precio</td><td>~USD 0.59/epicrisis</td><td>B2B por estudio/sitio</td><td>Enterprise six-figure</td><td>USD 20/mes</td></tr>
       </tbody>
     </table>
+    <p style="font-size:0.85rem;color:var(--muted);margin-top:0.75rem"><strong>Lectura rápida:</strong> Pacientry = consultorio · ALPHI = ensayo clínico con fuente · CTMS = suite enterprise cara · ChatGPT = barato pero sin trazabilidad ni cumplimiento.</p>
 
     <h3>Foso competitivo</h3>
     <ol>
-      <li>Grounding-only como contrato de producto — verificable con eval SM-001..012</li>
-      <li>13+ políticas de compliance + implementación técnica (cifrado, audit, leakage tests)</li>
-      <li>BAAs/DPA firmados con procesadores antes de PHI real</li>
-      <li>Validación CSV con trazabilidad URS → FRS → tests (RTM v1.0)</li>
-      <li>Barrera regulatoria — un competidor self-serve tarda años en replicar sin equipo QA/CSV</li>
+      <li class="item-plain"><strong>Grounding-only como contrato de producto</strong><span class="explain">Prometemos y medimos que solo responde con documentos — no es marketing vacío.</span></li>
+      <li class="item-plain"><strong>13+ políticas de compliance + implementación técnica</strong><span class="explain">No solo papeles legales: cifrado, auditoría y pruebas de que un cliente no ve datos de otro.</span></li>
+      <li class="item-plain"><strong>BAAs/DPA firmados con procesadores antes de PHI real</strong><span class="explain">Contratos con proveedores (nube, IA) antes de tocar datos reales de pacientes.</span></li>
+      <li class="item-plain"><strong>Validación CSV con trazabilidad requisitos → pruebas</strong><span class="explain">Documentación formal que liga cada función prometida con una prueba que la demuestra.</span></li>
+      <li class="item-plain"><strong>Barrera regulatoria</strong><span class="explain">Un competidor “rápido” tarda años en armar el equipo y la documentación que exige la industria.</span></li>
     </ol>
 
     <h3>Qué NO copiamos (a propósito)</h3>
@@ -484,98 +606,134 @@
   <section id="estado" class="panel" role="tabpanel">
     <h2>Dónde estamos parados hoy</h2>
 
+    <div class="plain-box">
+      <p><strong>Glosario rápido:</strong></p>
+      <dl class="glossary">
+        <dt>PHI</dt><dd>Información que identifica a un paciente (nombre, DNI, historial clínico).</dd>
+        <dt>CSV</dt><dd>Validación de sistemas informáticos en industria regulada — demostrar que el software hace lo que dice, de forma repetible.</dd>
+        <dt>IQ / OQ / PQ</dt><dd>Instalación → “¿está bien instalado?” · Operacional → “¿funciona como debe?” · Desempeño → “¿funciona con usuarios reales en el sitio?”</dd>
+        <dt>VSR</dt><dd>Informe final de validación firmado — luz verde formal para usar datos reales.</dd>
+        <dt>Part 11 / Annex 11</dt><dd>Normas FDA (EE.UU.) y EMA (Europa) sobre sistemas electrónicos en ensayos clínicos.</dd>
+      </dl>
+    </div>
+
     <div class="card">
-      <p><strong>Etapa 0 — Producto MVP</strong></p>
+      <p><strong>Etapa 0 — Producto MVP</strong> <span class="explain">El software base ya existe y corre en producción.</span></p>
       <div class="progress-bar"><div class="progress-fill" style="width:100%"></div></div>
       <p class="status-ok">CERRADA</p>
-      <p style="margin-top:1rem"><strong>Etapa 1 — Legal pre-PHI</strong></p>
+      <p style="margin-top:1rem"><strong>Etapa 1 — Legal pre-PHI</strong> <span class="explain">Contratos, políticas de privacidad y seguridad antes de datos de pacientes.</span></p>
       <div class="progress-bar"><div class="progress-fill" style="width:90%"></div></div>
       <p class="status-ok">CERRADA (04-jul-2026)</p>
-      <p style="margin-top:1rem"><strong>Etapa 2 — Validación CSV</strong></p>
+      <p style="margin-top:1rem"><strong>Etapa 2 — Validación CSV</strong> <span class="explain">Pruebas formales documentadas — estamos al ~70 %.</span></p>
       <div class="progress-bar"><div class="progress-fill" style="width:70%"></div></div>
       <p class="status-warn">EN CURSO (~70 %)</p>
-      <p style="margin-top:1rem"><strong>Etapa 3 — Go-live PHI piloto</strong></p>
+      <p style="margin-top:1rem"><strong>Etapa 3 — Go-live PHI piloto</strong> <span class="explain">Primer uso real con datos identificables de pacientes en un sitio piloto.</span></p>
       <div class="progress-bar"><div class="progress-fill" style="width:5%"></div></div>
       <p class="status-bad">PENDIENTE</p>
     </div>
 
     <h3>Por marco regulatorio</h3>
     <table>
-      <thead><tr><th>Marco</th><th>¿Certificado?</th><th>Madurez</th><th>Próximo hito</th></tr></thead>
+      <thead><tr><th>Marco</th><th>¿Certificado?</th><th>Madurez</th><th>Próximo hito</th><th>En simple</th></tr></thead>
       <tbody>
-        <tr><td>FDA 21 CFR Part 11</td><td>No</td><td>~70 %</td><td>PQ piloto + VSR</td></tr>
-        <tr><td>EMA Annex 11</td><td>No</td><td>~65 %</td><td>Igual que Part 11</td></tr>
-        <tr><td>GDPR</td><td>No (no existe sello)</td><td>~80 % docs</td><td>Asignar DPO</td></tr>
-        <tr><td>HIPAA</td><td>No</td><td>~75 %</td><td>Security Officer</td></tr>
-        <tr><td>ISO 27001</td><td>No</td><td>~35 %</td><td>SOC 2 readiness Q4 2026</td></tr>
+        <tr><td>FDA 21 CFR Part 11</td><td>No</td><td>~70 %</td><td>PQ piloto + VSR</td><td class="explain-cell">Norma EE.UU. para registros electrónicos en ensayos — en camino, no sellada.</td></tr>
+        <tr><td>EMA Annex 11</td><td>No</td><td>~65 %</td><td>Igual que Part 11</td><td class="explain-cell">Equivalente europeo; mismo camino de validación.</td></tr>
+        <tr><td>GDPR</td><td>No (no existe sello)</td><td>~80 % docs</td><td>Asignar DPO</td><td class="explain-cell">Protección de datos personales en UE — documentación casi lista.</td></tr>
+        <tr><td>HIPAA</td><td>No</td><td>~75 %</td><td>Security Officer</td><td class="explain-cell">Protección de salud en EE.UU. — falta nombrar responsable formal.</td></tr>
+        <tr><td>ISO 27001</td><td>No</td><td>~35 %</td><td>SOC 2 readiness Q4 2026</td><td class="explain-cell">Certificado internacional de seguridad informática — etapa inicial.</td></tr>
       </tbody>
     </table>
 
     <h3>Evidencia verificable (julio 2026)</h3>
     <table>
-      <thead><tr><th>Gate</th><th>Resultado</th></tr></thead>
+      <thead><tr><th>Gate / Prueba</th><th>Resultado</th><th>¿Qué significa?</th></tr></thead>
       <tbody>
-        <tr><td><code>validate:product</code></td><td class="status-ok">7/7 OK</td></tr>
-        <tr><td>OQ tests</td><td class="status-ok">29/29 PASS (CI)</td></tr>
-        <tr><td>IT PHI</td><td class="status-ok">4/4 PASS</td></tr>
-        <tr><td>IQ prod</td><td class="status-ok">11/11 OK</td></tr>
-        <tr><td>Eval RAG SM-001..012</td><td class="status-ok">12/12 PASS</td></tr>
-        <tr><td>Leakage cross-tenant</td><td class="status-ok">0 fallos</td></tr>
+        <tr><td>validate:product</td><td class="status-ok">7/7 OK</td><td class="explain-cell">Las 7 verificaciones automáticas del producto pasaron.</td></tr>
+        <tr><td>OQ tests</td><td class="status-ok">29/29 PASS (CI)</td><td class="explain-cell">29 pruebas de “¿funciona bien?” — todas verdes, corren solas en cada cambio.</td></tr>
+        <tr><td>IT PHI</td><td class="status-ok">4/4 PASS</td><td class="explain-cell">4 pruebas de integración con datos sensibles simulados — OK.</td></tr>
+        <tr><td>IQ prod</td><td class="status-ok">11/11 OK</td><td class="explain-cell">11 chequeos de que producción está instalada correctamente.</td></tr>
+        <tr><td>Eval RAG SM-001..012</td><td class="status-ok">12/12 PASS</td><td class="explain-cell">12 escenarios de prueba del chat — todos respondieron con evidencia o se abstuvieron bien.</td></tr>
+        <tr><td>Leakage cross-tenant</td><td class="status-ok">0 fallos</td><td class="explain-cell">Ningún cliente pudo ver documentos de otro — aislamiento confirmado.</td></tr>
       </tbody>
     </table>
   </section>
 
   <!-- DEMO -->
   <section id="demo" class="panel" role="tabpanel">
-    <h2>Guía de demostración — links en vivo</h2>
-    <div class="alert">Todos los documentos del demo son <strong>ficticios, sin PHI real</strong>. Ideal para mostrar a accionistas sin riesgo de privacidad.</div>
+    <h2>Producto en producción — estudios reales</h2>
+    <div class="alert"><strong>Producto final:</strong> protocolos reales de ensayos clínicos cargados en producción. <strong>Sin PHI de pacientes</strong> en pantalla — solo documentos de protocolo e interacción con el asistente.</div>
 
     <h3>Superficie pública (sin login)</h3>
     <div class="link-grid">
-      <a class="link-card" href="https://asistente-bot-five.vercel.app/trust" target="_blank" rel="noopener"><strong>Trust Center</strong><span>asistente-bot-five.vercel.app/trust</span></a>
-      <a class="link-card" href="https://asistente-bot-five.vercel.app/pricing" target="_blank" rel="noopener"><strong>Precios</strong><span>asistente-bot-five.vercel.app/pricing</span></a>
-      <a class="link-card" href="https://asistente-bot-five.vercel.app/roi" target="_blank" rel="noopener"><strong>Calculadora ROI</strong><span>asistente-bot-five.vercel.app/roi</span></a>
-      <a class="link-card" href="https://asistente-bot-five.vercel.app/privacy" target="_blank" rel="noopener"><strong>Privacidad</strong><span>asistente-bot-five.vercel.app/privacy</span></a>
-      <a class="link-card" href="https://asistente-bot-five.vercel.app/terms" target="_blank" rel="noopener"><strong>Términos</strong><span>asistente-bot-five.vercel.app/terms</span></a>
+      <a class="link-card" href="https://asistente-bot-five.vercel.app/trust" target="_blank" rel="noopener"><strong>Trust Center</strong><span>asistente-bot-five.vercel.app/trust</span><span class="explain">Centro de confianza: seguridad, cumplimiento y cómo tratamos los datos.</span></a>
+      <a class="link-card" href="https://asistente-bot-five.vercel.app/pricing" target="_blank" rel="noopener"><strong>Precios</strong><span>asistente-bot-five.vercel.app/pricing</span><span class="explain">Planes comerciales y qué incluye cada uno.</span></a>
+      <a class="link-card" href="https://asistente-bot-five.vercel.app/roi" target="_blank" rel="noopener"><strong>Calculadora ROI</strong><span>asistente-bot-five.vercel.app/roi</span><span class="explain">Estimá cuánto tiempo/dinero ahorra ALPHI en un sitio de ensayo.</span></a>
+      <a class="link-card" href="https://asistente-bot-five.vercel.app/privacy" target="_blank" rel="noopener"><strong>Privacidad</strong><span>asistente-bot-five.vercel.app/privacy</span><span class="explain">Política de privacidad y tratamiento de datos.</span></a>
+      <a class="link-card" href="https://asistente-bot-five.vercel.app/terms" target="_blank" rel="noopener"><strong>Términos</strong><span>asistente-bot-five.vercel.app/terms</span><span class="explain">Condiciones de uso del servicio.</span></a>
     </div>
 
-    <h3>Producto (con login INNOVA TRIALS)</h3>
+    <h3>Acceso producto (organización operativa ICHtYS — prod)</h3>
     <div class="link-grid">
-      <a class="link-card" href="https://asistente-bot-five.vercel.app/sign-in" target="_blank" rel="noopener"><strong>Login</strong><span>asistente-bot-five.vercel.app/sign-in</span></a>
-      <a class="link-card" href="https://asistente-bot-five.vercel.app/studies" target="_blank" rel="noopener"><strong>Lista de estudios</strong><span>asistente-bot-five.vercel.app/studies</span></a>
-      <a class="link-card" href="https://asistente-bot-five.vercel.app/studies/508fa9c9-dbb9-49aa-abd5-7f7fe968bbc6/chat" target="_blank" rel="noopener"><strong>Chat RAG (demo T2D)</strong><span>.../studies/508fa9c9-.../chat</span></a>
-      <a class="link-card" href="https://asistente-bot-five.vercel.app/studies/508fa9c9-dbb9-49aa-abd5-7f7fe968bbc6/spec" target="_blank" rel="noopener"><strong>Study Spec</strong><span>.../studies/508fa9c9-.../spec</span></a>
-      <a class="link-card" href="https://asistente-bot-five.vercel.app/studies/508fa9c9-dbb9-49aa-abd5-7f7fe968bbc6/documents" target="_blank" rel="noopener"><strong>Documentos</strong><span>.../studies/508fa9c9-.../documents</span></a>
-      <a class="link-card" href="https://asistente-bot-five.vercel.app/settings" target="_blank" rel="noopener"><strong>Settings RAG</strong><span>asistente-bot-five.vercel.app/settings</span></a>
+      <a class="link-card" href="https://asistente-bot-five.vercel.app/sign-in" target="_blank" rel="noopener"><strong>Login</strong><span>asistente-bot-five.vercel.app/sign-in</span><span class="explain">Entrada con usuario y contraseña (requiere cuenta).</span></a>
+      <a class="link-card" href="https://asistente-bot-five.vercel.app/studies" target="_blank" rel="noopener"><strong>Lista de estudios</strong><span>asistente-bot-five.vercel.app/studies</span><span class="explain">Todos los ensayos clínicos cargados en la organización.</span></a>
+      <a class="link-card" href="https://asistente-bot-five.vercel.app/settings" target="_blank" rel="noopener"><strong>Settings RAG</strong><span>asistente-bot-five.vercel.app/settings</span><span class="explain">Configuración del asistente (sensibilidad de búsqueda, etc.).</span></a>
     </div>
 
-    <h3>6 preguntas para el chat (copy-paste)</h3>
+    <h3>Estudios reales — links directos (post batch re-extract jul 2026)</h3>
+    <p style="font-size:0.88rem;color:var(--muted);margin-bottom:0.75rem"><strong>Chat</strong> = preguntas al protocolo · <strong>Spec</strong> = tabla de criterios y visitas · <strong>Docs</strong> = PDFs cargados del estudio</p>
     <table>
-      <thead><tr><th>#</th><th>Pregunta</th><th>Resultado esperado</th></tr></thead>
+      <thead><tr><th>Estudio</th><th>Chat RAG</th><th>Study Spec</th><th>Documentos</th></tr></thead>
       <tbody>
-        <tr><td>1</td><td>¿Un paciente con HbA1c de 9% cumple criterio de inclusión?</td><td>Cita §3.1 Inclusion; rango 7–10%</td></tr>
-        <tr><td>2</td><td>¿Está excluido un paciente con antecedente de pancreatitis?</td><td>Cita §3.2 Exclusion</td></tr>
-        <tr><td>3</td><td>¿Qué procedimientos corresponden en la visita 4?</td><td>Cita Schedule of Assessments</td></tr>
-        <tr><td>4</td><td>¿Cuál es la ventana permitida para la visita de seguimiento?</td><td>Cita Visit Windows; V6 ±7 días</td></tr>
-        <tr><td>5</td><td>¿Está permitida metformina durante el estudio?</td><td>Cita Concomitant Medication</td></tr>
-        <tr><td>6</td><td>¿Qué medicamentos antidiabéticos están prohibidos?</td><td>Cita Prohibited Medication</td></tr>
-        <tr><td>7 ⚠</td><td>¿Cuál es la dosis recomendada de warfarina para este estudio?</td><td><code>insufficient_evidence</code> — no inventar</td></tr>
+        <tr>
+          <td><strong>PROMINENT</strong></td>
+          <td><a href="https://asistente-bot-five.vercel.app/studies/f607d19c-4d27-48b6-9bca-20093bc64d1a/chat" target="_blank" rel="noopener">Chat</a></td>
+          <td><a href="https://asistente-bot-five.vercel.app/studies/f607d19c-4d27-48b6-9bca-20093bc64d1a/spec" target="_blank" rel="noopener">Spec</a></td>
+          <td><a href="https://asistente-bot-five.vercel.app/studies/f607d19c-4d27-48b6-9bca-20093bc64d1a/documents" target="_blank" rel="noopener">Docs</a></td>
+        </tr>
+        <tr>
+          <td><strong>EASi KIDNEY</strong></td>
+          <td><a href="https://asistente-bot-five.vercel.app/studies/f2a9c57a-bd18-41f6-b597-7f823dbb9dd7/chat" target="_blank" rel="noopener">Chat</a></td>
+          <td><a href="https://asistente-bot-five.vercel.app/studies/f2a9c57a-bd18-41f6-b597-7f823dbb9dd7/spec" target="_blank" rel="noopener">Spec</a></td>
+          <td><a href="https://asistente-bot-five.vercel.app/studies/f2a9c57a-bd18-41f6-b597-7f823dbb9dd7/documents" target="_blank" rel="noopener">Docs</a></td>
+        </tr>
+        <tr>
+          <td><strong>GZQD (TRIUMPH-7)</strong></td>
+          <td><a href="https://asistente-bot-five.vercel.app/studies/5dc095ac-29c5-40fb-9526-414b3790944b/chat" target="_blank" rel="noopener">Chat</a></td>
+          <td><a href="https://asistente-bot-five.vercel.app/studies/5dc095ac-29c5-40fb-9526-414b3790944b/spec" target="_blank" rel="noopener">Spec</a></td>
+          <td><a href="https://asistente-bot-five.vercel.app/studies/5dc095ac-29c5-40fb-9526-414b3790944b/documents" target="_blank" rel="noopener">Docs</a></td>
+        </tr>
       </tbody>
     </table>
+
+    <h3>Preguntas sugeridas para demo en vivo</h3>
+    <p style="font-size:0.9rem;color:var(--muted);margin-bottom:0.75rem">Adaptar al protocolo del estudio abierto. Siempre mostrar la <strong>cita clickeable</strong> al documento fuente.</p>
+    <table>
+      <thead><tr><th>#</th><th>Pregunta (ejemplo)</th><th>Qué demostrar</th><th>En simple</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>¿Cuáles son los criterios de inclusión principales?</td><td>Cita § elegibilidad del protocolo</td><td class="explain-cell">Muestra que encuentra quién puede entrar al estudio.</td></tr>
+        <tr><td>2</td><td>¿Qué medicación está prohibida durante el estudio?</td><td>Cita § concomitant/prohibited medication</td><td class="explain-cell">Útil en sala cuando el paciente trae medicación nueva.</td></tr>
+        <tr><td>3</td><td>¿Qué procedimientos corresponden en la visita X?</td><td>Cita Schedule of Assessments</td><td class="explain-cell">Qué hacer en cada visita sin buscar en el cronograma.</td></tr>
+        <tr><td>4</td><td>¿Cuál es el plazo de reporte de un SAE?</td><td>Cita timelines de safety reporting</td><td class="explain-cell">Plazos legales para eventos adversos graves.</td></tr>
+        <tr><td>5 ⚠</td><td>¿Cuál es la dosis recomendada de warfarina para este estudio?</td><td>Responde “sin evidencia” — no inventa</td><td class="explain-cell">Demuestra que no alucina: si no está en el protocolo, lo dice.</td></tr>
+      </tbody>
+    </table>
+
+    <p style="margin-top:1.25rem;font-size:0.85rem;color:var(--muted)"><em>Nota:</em> estudio mock T2D (<code>MOCK-METABOLIC-T2D-v1</code>) disponible para entrenamiento interno — no es el foco de esta presentación a accionistas.</p>
   </section>
 
   <!-- NEGOCIO -->
   <section id="negocio" class="panel" role="tabpanel">
     <h2>Modelo de negocio y precios</h2>
-    <div class="alert"><strong>Estado honesto:</strong> MVP pre-validación, pre-revenue. Billing automatizado (Stripe) planificado post go-live con PHI. Hoy el acceso es por acuerdo comercial.</div>
+    <div class="alert"><strong>Estado honesto:</strong> MVP pre-validación, pre-revenue. Billing automatizado (Stripe) planificado post go-live con PHI. Hoy el acceso es por acuerdo comercial.<span class="explain" style="display:block;margin-top:0.5rem;color:inherit;opacity:0.9">Todavía no cobramos con tarjeta automática; cada cliente se acuerda comercialmente hasta cerrar la validación.</span></div>
 
-    <p>Cobramos por <strong>estudio activo</strong> o <strong>sitio en red</strong>, no por usuario individual. Buyer: sponsor, CRO, red de centros.</p>
+    <p>Cobramos por <strong>estudio activo</strong> o <strong>sitio en red</strong>, no por usuario individual. Buyer: sponsor, CRO, red de centros.<span class="explain" style="display:block;margin-top:0.35rem">Ejemplo: un sponsor paga por cada ensayo que corre en ALPHI, no por cada coordinadora que entra.</span></p>
 
     <div class="pricing-grid">
       <div class="tier">
         <h4>Pilot</h4>
         <p style="font-size:0.85rem;color:var(--muted)">1 estudio, hasta 10 documentos</p>
         <div class="price">Contactar</div>
+        <p class="explain" style="margin-bottom:0.75rem">Prueba acotada para evaluar ALPHI en un solo ensayo antes de escalar.</p>
         <ul>
           <li>Chat RAG con citas obligatorias</li>
           <li>Extracción de study spec</li>
@@ -587,6 +745,7 @@
         <h4>Site / Red</h4>
         <p style="font-size:0.85rem;color:var(--muted)">Por sitio activo o red de sitios</p>
         <div class="price">Contactar</div>
+        <p class="explain" style="margin-bottom:0.75rem">Para centros de investigación o redes que corren varios estudios a la vez.</p>
         <ul>
           <li>Multi-estudio por organización</li>
           <li>Config RAG por org</li>
@@ -598,6 +757,7 @@
         <h4>Enterprise</h4>
         <p style="font-size:0.85rem;color:var(--muted)">Sponsor / CRO</p>
         <div class="price">Custom</div>
+        <p class="explain" style="margin-bottom:0.75rem">Para farmacéuticas y CROs que necesitan contratos formales, SLA y validación completa.</p>
         <ul>
           <li>DPA/BAA con subprocesadores</li>
           <li>Trust center bajo NDA</li>
@@ -609,11 +769,11 @@
 
     <h3>Etapas comerciales</h3>
     <table>
-      <thead><tr><th>Etapa</th><th>Oferta</th><th>Estado</th></tr></thead>
+      <thead><tr><th>Etapa</th><th>Oferta</th><th>Estado</th><th>En simple</th></tr></thead>
       <tbody>
-        <tr><td>Demo</td><td>Estudio mock T2D gratuito</td><td class="status-ok">✅ Disponible</td></tr>
-        <tr><td>Piloto</td><td>1 sitio, N estudios, soporte CSV</td><td class="status-warn">🟡 ICHtYS en preparación</td></tr>
-        <tr><td>Enterprise</td><td>Multi-sitio, DPA/BAA, SLA</td><td class="status-bad">🔴 Post-PQ</td></tr>
+        <tr><td>Demo</td><td>Estudios reales en prod (protocolos cargados)</td><td class="status-ok">✅ Disponible</td><td class="explain-cell">Podés ver el producto funcionando hoy, sin datos de pacientes.</td></tr>
+        <tr><td>Piloto</td><td>1 sitio, N estudios, soporte CSV</td><td class="status-warn">🟡 ICHtYS en preparación</td><td class="explain-cell">Primer cliente real pagando, con acompañamiento de validación.</td></tr>
+        <tr><td>Enterprise</td><td>Multi-sitio, DPA/BAA, SLA</td><td class="status-bad">🔴 Post-PQ</td><td class="explain-cell">Contrato grande; disponible cuando cierre la validación formal.</td></tr>
       </tbody>
     </table>
 
@@ -625,33 +785,33 @@
   <section id="roadmap" class="panel" role="tabpanel">
     <h2>Roadmap y riesgos</h2>
     <table>
-      <thead><tr><th>Hito</th><th>Timeline</th><th>Prerequisito</th></tr></thead>
+      <thead><tr><th>Hito</th><th>Timeline</th><th>Prerequisito</th><th>En simple</th></tr></thead>
       <tbody>
-        <tr><td>PQ piloto ICHtYS (5 usuarios)</td><td>Q3 2026</td><td>Usuarios disponibles</td></tr>
-        <tr><td>VSR firmado</td><td>Post-PQ</td><td>Quality + Clinical + Security</td></tr>
-        <tr><td>Go-live PHI real (1 sitio)</td><td>Q3–Q4 2026</td><td>VSR</td></tr>
-        <tr><td>SOC 2 Type I readiness</td><td>Q4 2026</td><td>Roles ISMS asignados</td></tr>
-        <tr><td>ISO 27001 gap assessment</td><td>H1 2027</td><td>SOC 2</td></tr>
-        <tr><td>Multi-sitio / billing</td><td>2027</td><td>Go-live piloto exitoso</td></tr>
+        <tr><td>PQ piloto ICHtYS (5 usuarios)</td><td>Q3 2026</td><td>Usuarios disponibles</td><td class="explain-cell">5 personas reales usan el sistema en el sitio; se documenta que funciona en la práctica.</td></tr>
+        <tr><td>VSR firmado</td><td>Post-PQ</td><td>Quality + Clinical + Security</td><td class="explain-cell">Informe final de validación con firmas — permiso formal para datos reales.</td></tr>
+        <tr><td>Go-live PHI real (1 sitio)</td><td>Q3–Q4 2026</td><td>VSR</td><td class="explain-cell">Primer uso con datos identificables de pacientes en producción.</td></tr>
+        <tr><td>SOC 2 Type I readiness</td><td>Q4 2026</td><td>Roles ISMS asignados</td><td class="explain-cell">Preparación para auditoría de seguridad reconocida en EE.UU.</td></tr>
+        <tr><td>ISO 27001 gap assessment</td><td>H1 2027</td><td>SOC 2</td><td class="explain-cell">Diagnóstico de qué falta para certificación ISO de seguridad.</td></tr>
+        <tr><td>Multi-sitio / billing</td><td>2027</td><td>Go-live piloto exitoso</td><td class="explain-cell">Varios centros y cobro automático una vez probado el piloto.</td></tr>
       </tbody>
     </table>
 
     <h3>Uso de capital (orientativo)</h3>
     <ol>
-      <li>Cerrar validación CSV + PQ + roles compliance</li>
-      <li>Superficie GTM (demo, trust, primer piloto pagado)</li>
-      <li>OCR PDF escaneado para protocolos reales</li>
-      <li>Primer contrato sponsor LATAM cardiometabólico</li>
+      <li class="item-plain"><strong>Cerrar validación CSV + PQ + roles compliance</strong><span class="explain">Prioridad #1: poder operar legalmente con datos reales.</span></li>
+      <li class="item-plain"><strong>Superficie GTM (demo, trust, primer piloto pagado)</strong><span class="explain">Material comercial y primer ingreso.</span></li>
+      <li class="item-plain"><strong>OCR PDF escaneado para protocolos reales</strong><span class="explain">Leer protocolos que vienen como imagen escaneada, no solo PDF digital.</span></li>
+      <li class="item-plain"><strong>Primer contrato sponsor LATAM cardiometabólico</strong><span class="explain">Cliente farmacéutico regional en terapia metabólica/cardiovascular.</span></li>
     </ol>
 
     <h3>Riesgos y mitigaciones</h3>
     <table>
-      <thead><tr><th>Riesgo</th><th>Impacto</th><th>Mitigación</th></tr></thead>
+      <thead><tr><th>Riesgo</th><th>Impacto</th><th>Mitigación</th><th>En simple</th></tr></thead>
       <tbody>
-        <tr><td>Retraso PQ por usuarios piloto</td><td>Alto</td><td>Protocolo listo; agendar ventana piloto ICHtYS</td></tr>
-        <tr><td>Due diligence exige ISO certificado</td><td>Medio</td><td>Roadmap SOC2/ISO; ISMS lite hoy</td></tr>
-        <tr><td>Competidor "AI for trials" sin CSV</td><td>Medio</td><td>Foso = profundidad regulada</td></tr>
-        <tr><td>Breach PHI</td><td>Crítico</td><td>Sin PHI real hasta VSR; cifrado + leakage tests</td></tr>
+        <tr><td>Retraso PQ por usuarios piloto</td><td>Alto</td><td>Protocolo listo; agendar ventana piloto ICHtYS</td><td class="explain-cell">Si no hay gente disponible para probar, se retrasa todo el go-live.</td></tr>
+        <tr><td>Due diligence exige ISO certificado</td><td>Medio</td><td>Roadmap SOC2/ISO; ISMS lite hoy</td><td class="explain-cell">Un comprador/inversor puede pedir sello ISO que aún no tenemos.</td></tr>
+        <tr><td>Competidor "AI for trials" sin CSV</td><td>Medio</td><td>Foso = profundidad regulada</td><td class="explain-cell">Hay competidores más rápidos pero sin cumplimiento; nosotros apostamos a lo regulado.</td></tr>
+        <tr><td>Breach PHI</td><td>Crítico</td><td>Sin PHI real hasta VSR; cifrado + leakage tests</td><td class="explain-cell">Filtración de datos de pacientes — mitigado no usando datos reales hasta estar listos.</td></tr>
       </tbody>
     </table>
 
@@ -670,7 +830,8 @@
 
 <footer>
   ALPHI · ICHtYS TECHNOLOGY SA · Julio 2026 · Confidencial<br />
-  Informe basado en evidencia del repositorio al 4 de julio de 2026. No constituye certificación regulatoria.
+  Informe basado en evidencia del repositorio al <strong>6 de julio de 2026</strong>. No constituye certificación regulatoria.<br />
+  <a href="https://github.com/Santiagoisper/Asistente_bot" target="_blank" rel="noopener" style="color:var(--muted)">github.com/Santiagoisper/Asistente_bot</a>
 </footer>
 
 <script>

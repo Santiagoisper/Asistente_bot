@@ -16,12 +16,12 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
-    "test:leakage": "vitest run --dir tests/leakage --passWithNoTests"
+    "test:leakage": "vitest run --dir tests/leakage"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.9.6",
     "@ichtys/db": "workspace:*",
-    "drizzle-orm": "^0.38.2"
+    "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {
     "vitest": "^2.1.8"

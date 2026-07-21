@@ -136,9 +136,7 @@ export async function embedRetrievalQuery(
  */
 export async function retrieveRelevantChunks(params: RetrieveParams): Promise<RetrievedChunk[]> {
   const parsed = parseParams(params)
-  console.log('[retriever] embedding query...')
   const queryEmbedding = await embedRetrievalQuery(parsed.queryText, parsed.openAiApiKey)
-  console.log('[retriever] embedding done, running vector search...')
   const vector = vectorLiteral(queryEmbedding)
   const distance = sql<number>`${chunks.embedding} <=> ${vector}::vector`
   const similarityScore = sql<number>`1 - (${distance})`

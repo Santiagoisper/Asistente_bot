@@ -28,7 +28,7 @@
     "@ichtys/llm": "workspace:*",
     "@vercel/blob": "^2.4.0",
     "ai": "^4.0.30",
-    "drizzle-orm": "^0.38.2",
+    "drizzle-orm": "^0.45.2",
     "openai": "^4.77.0",
     "pdf-parse": "^1.1.1",
     "pdfjs-dist": "^6.0.227",

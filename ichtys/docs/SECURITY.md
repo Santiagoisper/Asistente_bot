@@ -45,6 +45,7 @@ organization (Clerk Org) -> studies -> documents -> chunks
 | Capa | Control |
 |---|---|
 | Edge | `middleware.ts` (Clerk) protege todo salvo rutas publicas de auth |
+| HTTP | Security headers globales en `next.config.ts` (HSTS, nosniff, X-Frame-Options DENY, CSP frame-ancestors, Referrer-Policy, Permissions-Policy) |
 | API route | `validateStudyAccess()` + validacion Zod del body |
 | Query | filtro `organization_id` + `study_id` obligatorio en toda lectura |
 | Storage | Vercel Blob privado; acceso binario por endpoint autenticado |
@@ -75,6 +76,15 @@ la ultima linea y la mas importante.
 - **Auth guards**: toda API route rechaza requests sin sesion/org activa.
 
 `pnpm test:leakage` debe pasar para mergear. Ver `docs/EVALS.md`.
+
+La suite vive en `tests/leakage/` de cada package (sin `--passWithNoTests`: si
+la carpeta queda vacia, el gate FALLA en vez de pasar en silencio):
+
+- `packages/rag/tests/leakage/` — aislamiento cross-tenant/cross-study del retriever.
+- `packages/auth/tests/leakage/` — boundary de `validateStudyAccess` (401/404 genericos).
+- `packages/db/tests/leakage/` — invariantes de schema: `organization_id`/`study_id` NOT NULL.
+- `apps/web/tests/leakage/` — cobertura de auth guard en TODAS las rutas `app/api/**` +
+  tripwire del allowlist publico de `middleware.ts`.
 
 ---
 
@@ -138,11 +148,18 @@ Storage and registry rules:
 - `document.upload` audit logs are mandatory. If the audit insert fails, the
   upload request fails with a generic 500.
 
-This phase keeps the existing server route handler upload pattern and enforces a
-conservative 4 MiB application limit. It intentionally does not claim robust
-50MB support. Supporting 50MB+ PDFs safely should move to a direct/client Blob
-upload or presigned flow, with document registration after server-side
-validation of the completed private blob.
+Validation layers on upload (in order, before auth to keep them cheap):
+
+1. Zod schema on FormData fields; `organization_id` in body/query → 400.
+2. `file.type === 'application/pdf'` (client-declared MIME) → 415 otherwise.
+3. **Magic bytes**: the first bytes must be `%PDF-` — the MIME type is
+   client-controlled and spoofable; the binary signature is verified
+   server-side → 415 otherwise.
+4. Application size limit `MAX_SERVER_UPLOAD_BYTES` (50 MB) → 413 otherwise.
+   Note: the platform request-body limit (Vercel serverless, ~4.5 MB) applies
+   before this route sees the bytes. Robust 50MB+ support requires a
+   direct/client Blob upload or presigned flow, with document registration
+   after server-side validation of the completed private blob.
 
 ---
 

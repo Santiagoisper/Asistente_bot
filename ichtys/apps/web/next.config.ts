@@ -4,8 +4,31 @@ import { fileURLToPath } from 'node:url'
 
 const monorepoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
+/**
+ * Security headers globales (SECURITY.md — capa Edge).
+ * CSP completa con nonces queda pendiente de validación en staging con Clerk;
+ * frame-ancestors 'none' ya bloquea clickjacking sin riesgo de romper la app.
+ */
+const securityHeaders = [
+  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'X-Frame-Options', value: 'DENY' },
+  { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
+  { key: 'X-DNS-Prefetch-Control', value: 'off' },
+]
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: securityHeaders,
+      },
+    ]
+  },
   // Solo en local: evita que Next tome ~/package-lock.json como workspace root.
   // En Vercel rompe el file tracing y falla con "next-server/server.runtime.prod.js".
   ...(process.env.VERCEL ? {} : { outputFileTracingRoot: monorepoRoot }),

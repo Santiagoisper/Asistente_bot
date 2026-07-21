@@ -476,7 +476,17 @@ function createUploadForm(fixture: TenantFixture, file: File): FormData {
 }
 
 function createPdfFile(name = 'document.pdf', bytes = 1024): File {
-  return new File([new Uint8Array(bytes)], name, { type: 'application/pdf' })
+  // Firma binaria real de PDF: el route handler valida "%PDF-" además del MIME.
+  const content = new Uint8Array(bytes)
+  content.set(new TextEncoder().encode('%PDF-1.7'))
+  return new File([content], name, { type: 'application/pdf' })
+}
+
+function createSpoofedPdfFile(): File {
+  // MIME declarado application/pdf pero SIN la firma %PDF- (contenido arbitrario).
+  return new File([new TextEncoder().encode('MZ\x90fake-binary')], 'document.pdf', {
+    type: 'application/pdf',
+  })
 }
 
 function createTextFile(): File {
@@ -1147,6 +1157,17 @@ describe('document upload registry', () => {
   it('upload rejects a non-PDF file', async () => {
     const fixture = createTenantFixture()
     const form = createUploadForm(fixture, createTextFile())
+
+    const response = await documentUploadPost(createUploadRequest(form))
+
+    expect(response.status).toBe(415)
+    expect(mocks.auth).not.toHaveBeenCalled()
+    expect(mocks.put).not.toHaveBeenCalled()
+  })
+
+  it('upload rejects a file with PDF MIME type but no %PDF- signature', async () => {
+    const fixture = createTenantFixture()
+    const form = createUploadForm(fixture, createSpoofedPdfFile())
 
     const response = await documentUploadPost(createUploadRequest(form))
 
