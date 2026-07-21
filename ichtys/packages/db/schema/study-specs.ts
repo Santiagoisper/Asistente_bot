@@ -36,6 +36,13 @@ export const studySpecs = pgTable(
       .references(() => documentVersions.id),
     version: integer('version').notNull(),
     status: text('status', { enum: studySpecStatus }).notNull().default('draft'),
+    /**
+     * ID del spec aprobado previo que esta versión reemplaza (si existe).
+     * Null para el primer spec de un estudio o si no había approved cuando
+     * se extrajo. Permite detectar enmiendas automáticamente: si este campo
+     * está presente, el spec es probablemente una enmienda del protocolo.
+     */
+    previousApprovedSpecId: uuid('previous_approved_spec_id'),
     /** StudySpec serializado — validado con Zod antes de cada insert. */
     spec: jsonb('spec').notNull(),
     /**

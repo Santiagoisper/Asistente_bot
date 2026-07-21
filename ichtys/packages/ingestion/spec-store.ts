@@ -45,14 +45,23 @@ export interface SavedStudySpec {
 export async function saveStudySpec(params: SaveStudySpecParams): Promise<SavedStudySpec> {
   const spec = studySpecSchema.parse(params.spec)
 
-  const latest = await db
-    .select({ version: studySpecs.version })
+  // Fetch recent versions: need latest version number + any approved spec.
+  // Limit to 20 — realistic max for clinical trial protocol versions; ordered
+  // desc so row[0] is the latest version and first 'approved' found is most recent.
+  const existing = await db
+    .select({ version: studySpecs.version, status: studySpecs.status, id: studySpecs.id })
     .from(studySpecs)
     .where(and(eq(studySpecs.organizationId, params.orgId), eq(studySpecs.studyId, params.studyId)))
     .orderBy(desc(studySpecs.version))
-    .limit(1)
+    .limit(20)
 
-  const version = (latest[0]?.version ?? 0) + 1
+  const version = (existing[0]?.version ?? 0) + 1
+
+  // If there's a currently approved spec, record it as the "previous" version.
+  // This is the core of the amendment detection flywheel: any new draft that has
+  // a previousApprovedSpecId is a candidate amendment of the protocol.
+  const previousApprovedSpec = existing.find((r) => r.status === 'approved')
+  const previousApprovedSpecId = previousApprovedSpec?.id ?? null
 
   const [row] = await db
     .insert(studySpecs)
@@ -62,6 +71,7 @@ export async function saveStudySpec(params: SaveStudySpecParams): Promise<SavedS
       documentVersionId: params.documentVersionId,
       version,
       status: 'draft',
+      previousApprovedSpecId,
       spec,
       extractionModel: params.extractionModel,
     })
