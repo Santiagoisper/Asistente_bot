@@ -44,6 +44,10 @@ const nextConfig: NextConfig = {
     '@ichtys/ui',
   ],
   serverExternalPackages: ['@neondatabase/serverless', 'ws', 'pdf-parse', 'pdfjs-dist'],
+  // Turbopack (default builder desde Next 16) no tiene equivalente al externals
+  // hack de webpack de abajo; turbopack:{} reconoce explícitamente que el webpack
+  // config es intencional y solo aplica bajo webpack, sin bloquear el build.
+  turbopack: {},
   webpack: (config, { isServer }) => {
     if (isServer) {
       // pdfjs-dist rompe cuando webpack lo bundlea desde un transpilePackage:

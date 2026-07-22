@@ -38,15 +38,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               hidePersonal
               appearance={{
                 variables: {
-                  colorBackground:       '#FFFFFF',
-                  colorText:             '#0D1F3C',
-                  colorTextSecondary:    '#64748B',
-                  colorPrimary:          '#0891B2',
-                  colorNeutral:          '#0D1F3C',
-                  colorInputBackground:  '#F8FAFC',
-                  colorInputText:        '#0D1F3C',
-                  borderRadius:          '0.75rem',
-                  fontFamily:            'inherit',
+                  colorBackground:      '#FFFFFF',
+                  colorForeground:      '#0D1F3C',
+                  colorMutedForeground: '#64748B',
+                  colorPrimary:         '#0891B2',
+                  colorNeutral:         '#0D1F3C',
+                  colorInput:           '#F8FAFC',
+                  colorInputForeground: '#0D1F3C',
+                  borderRadius:         '0.75rem',
+                  fontFamily:           'inherit',
                 },
                 elements: {
                   // ── Trigger (inside dark nav header) ────────────────────
