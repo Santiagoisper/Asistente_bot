@@ -46,12 +46,12 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
-    "@typescript-eslint/eslint-plugin": "^8.18.0",
-    "@typescript-eslint/parser": "^8.18.0",
+    "@typescript-eslint/eslint-plugin": "^8.65.0",
+    "@typescript-eslint/parser": "^8.65.0",
     "eslint": "^8.57.0",
     "next": "^16.2.11",
-    "prettier": "^3.4.2",
-    "turbo": "^2.3.3",
+    "prettier": "^3.9.6",
+    "turbo": "^2.10.5",
     "typescript": "^5.7.2"
   }
 }
