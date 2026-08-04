@@ -6,6 +6,7 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
  * por org/study ocurre además en cada API route vía validateStudyAccess().
  */
 const isPublicRoute = createRouteMatcher([
+  '/',
   '/sign-in(.*)',
   '/sign-up(.*)',
   '/trust',
