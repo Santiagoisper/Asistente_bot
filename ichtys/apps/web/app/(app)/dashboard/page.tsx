@@ -70,7 +70,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <div className="flex items-start gap-3 rounded-xl border border-alphi-teal/20 bg-alphi-teal/5 px-4 py-3">
+      <div className="flex items-start gap-3 rounded-xl border border-alphi-teal/25 bg-alphi-violet-soft px-4 py-3">
         <p className="text-sm leading-relaxed text-alphi-navy/80">
           <strong className="font-semibold text-alphi-navy">Recordatorio GCP:</strong>{' '}
           ALPHI responde exclusivamente desde documentos cargados. Ante cualquier duda clinica
@@ -114,7 +114,7 @@ export default async function DashboardPage() {
                     <span className={[
                       'alphi-pill text-[11px]',
                       study.status === 'active'
-                        ? 'border-alphi-sage/30 bg-alphi-sage/10 text-alphi-sage'
+                        ? 'border-alphi-sage/30 bg-alphi-green-soft text-alphi-sage'
                         : 'border-alphi-border bg-alphi-slate text-alphi-muted',
                     ].join(' ')}>
                       {study.status === 'active' ? 'Activo' : study.status}

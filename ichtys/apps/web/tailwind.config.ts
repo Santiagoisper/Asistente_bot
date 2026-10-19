@@ -20,24 +20,32 @@ const config: Config = {
           'sans-serif',
         ],
       },
+      // Fuente única de verdad: tokens de app/globals.css (:root).
+      // `teal` conserva el nombre histórico por compatibilidad con las clases
+      // existentes, pero porta el acento violeta de la paleta consolidada.
       colors: {
         alphi: {
-          navy:    '#0D1F3C',
-          navydim: '#162847',
-          teal:    '#0891B2',
-          teallit: '#E0F2FE',
-          sage:    '#059669',
-          amber:   '#D97706',
-          rose:    '#DC2626',
-          slate:   '#F8FAFC',
-          border:  '#E2E8F0',
-          muted:   '#64748B',
+          navy:        '#192337',
+          navydim:     '#222C42',
+          teal:        '#6855B6',
+          teallit:     '#F1EDFA',
+          sage:        '#059669',
+          amber:       '#D97706',
+          rose:        '#DC2626',
+          slate:       '#F7F8FC',
+          border:      '#E5E8F0',
+          muted:       '#667085',
+          'violet-soft': '#F1EDFA',
+          'green-soft':  '#E9F7F0',
+          'blue-soft':   '#EAF3FC',
+          'amber-soft':  '#FFF4E2',
+          'rose-soft':   '#FCEEF1',
         },
       },
       boxShadow: {
-        'alphi-card':  '0 1px 3px 0 rgba(13,31,60,0.08), 0 1px 2px -1px rgba(13,31,60,0.06)',
-        'alphi-panel': '0 4px 6px -1px rgba(13,31,60,0.10), 0 2px 4px -2px rgba(13,31,60,0.06)',
-        'alphi-modal': '0 20px 25px -5px rgba(13,31,60,0.15), 0 8px 10px -6px rgba(13,31,60,0.10)',
+        'alphi-card':  '0 1px 3px 0 rgba(25,35,55,0.08), 0 1px 2px -1px rgba(25,35,55,0.06)',
+        'alphi-panel': '0 4px 6px -1px rgba(25,35,55,0.10), 0 2px 4px -2px rgba(25,35,55,0.06)',
+        'alphi-modal': '0 20px 25px -5px rgba(25,35,55,0.15), 0 8px 10px -6px rgba(25,35,55,0.10)',
       },
       keyframes: {
         pulseDot: {

@@ -26,6 +26,36 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               Librería
             </Link>
             <Link
+              href="/jornada"
+              className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              Jornada
+            </Link>
+            <Link
+              href="/protocolo"
+              className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              Protocolo
+            </Link>
+            <Link
+              href="/visita"
+              className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              Visita
+            </Link>
+            <Link
+              href="/consulta"
+              className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              Consulta
+            </Link>
+            <Link
+              href="/calidad"
+              className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              Calidad
+            </Link>
+            <Link
               href="/settings"
               className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-white/75 transition-colors hover:bg-white/10 hover:text-white"
             >
@@ -39,12 +69,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               appearance={{
                 variables: {
                   colorBackground:      '#FFFFFF',
-                  colorForeground:      '#0D1F3C',
-                  colorMutedForeground: '#64748B',
-                  colorPrimary:         '#0891B2',
-                  colorNeutral:         '#0D1F3C',
-                  colorInput:           '#F8FAFC',
-                  colorInputForeground: '#0D1F3C',
+                  colorForeground:      '#192337',
+                  colorMutedForeground: '#667085',
+                  colorPrimary:         '#6855B6',
+                  colorNeutral:         '#192337',
+                  colorInput:           '#F7F8FC',
+                  colorInputForeground: '#192337',
                   borderRadius:         '0.75rem',
                   fontFamily:           'inherit',
                 },
@@ -63,33 +93,33 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
                   // ── Popup card ───────────────────────────────────────────
                   organizationSwitcherPopoverCard:
-                    'bg-white border border-[#E2E8F0] shadow-xl rounded-xl overflow-hidden',
+                    'bg-white border border-[#E5E8F0] shadow-xl rounded-xl overflow-hidden',
                   organizationSwitcherPopoverMain:
                     'bg-white',
 
                   // ── Org preview rows inside popup ────────────────────────
                   organizationSwitcherPreviewButton:
-                    'hover:bg-[#F8FAFC] rounded-lg',
+                    'hover:bg-[#F7F8FC] rounded-lg',
                   organizationPreview__organizationSwitcherTrigger:
-                    'text-[#0D1F3C]',
+                    'text-[#192337]',
 
                   // ── Action buttons (Create org / Manage) ─────────────────
                   organizationSwitcherPopoverActions:
-                    'border-t border-[#E2E8F0] bg-[#F8FAFC]',
+                    'border-t border-[#E5E8F0] bg-[#F7F8FC]',
                   organizationSwitcherPopoverActionButton:
-                    'text-[#0D1F3C] hover:bg-[#E2E8F0] rounded-lg font-medium text-sm',
+                    'text-[#192337] hover:bg-[#E5E8F0] rounded-lg font-medium text-sm',
                   organizationSwitcherPopoverActionButtonText:
-                    'text-[#0D1F3C]',
+                    'text-[#192337]',
                   organizationSwitcherPopoverActionButtonIcon:
-                    'text-[#64748B]',
+                    'text-[#667085]',
 
                   // ── Footer ────────────────────────────────────────────────
                   organizationSwitcherPopoverFooter:
-                    'border-t border-[#E2E8F0] bg-[#F8FAFC]',
+                    'border-t border-[#E5E8F0] bg-[#F7F8FC]',
 
                   // ── Notification badge ────────────────────────────────────
                   notificationBadge:
-                    'bg-[#0891B2] text-white',
+                    'bg-[#6855B6] text-white',
                 },
               }}
             />

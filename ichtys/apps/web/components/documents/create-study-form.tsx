@@ -51,7 +51,7 @@ export function CreateStudyForm() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        className="alphi-btn-primary"
       >
         + Nuevo estudio
       </button>
@@ -59,11 +59,11 @@ export function CreateStudyForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
-      <h2 className="text-sm font-semibold text-gray-800">Nuevo estudio</h2>
+    <form onSubmit={handleSubmit} className="alphi-card space-y-3 p-4">
+      <h2 className="text-sm font-semibold text-alphi-navy">Nuevo estudio</h2>
 
       <div className="space-y-1">
-        <label htmlFor="study-name" className="text-xs font-medium text-gray-600">
+        <label htmlFor="study-name" className="alphi-label">
           Nombre *
         </label>
         <input
@@ -73,12 +73,12 @@ export function CreateStudyForm() {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Ej: Estudio de tirzepatida fase 3"
-          className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="alphi-input w-full"
         />
       </div>
 
       <div className="space-y-1">
-        <label htmlFor="protocol-number" className="text-xs font-medium text-gray-600">
+        <label htmlFor="protocol-number" className="alphi-label">
           Número de protocolo (opcional)
         </label>
         <input
@@ -87,24 +87,24 @@ export function CreateStudyForm() {
           value={protocolNumber}
           onChange={(e) => setProtocolNumber(e.target.value)}
           placeholder="Ej: J1I-MC-GZBP"
-          className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="alphi-input w-full"
         />
       </div>
 
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-xs font-medium text-alphi-rose">{error}</p>}
 
       <div className="flex gap-2">
         <button
           type="submit"
           disabled={loading || !name.trim()}
-          className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40"
+          className="alphi-btn-primary disabled:opacity-50"
         >
           {loading ? 'Creando...' : 'Crear y subir documentos'}
         </button>
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="rounded-md border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+          className="alphi-btn-secondary"
         >
           Cancelar
         </button>

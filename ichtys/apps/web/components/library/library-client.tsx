@@ -47,9 +47,9 @@ function specStatusLabel(status: LibraryRow['specStatus'], partial?: boolean): s
 function specStatusClass(status: LibraryRow['specStatus']): string {
   switch (status) {
     case 'approved':
-      return 'border-alphi-sage/30 bg-alphi-sage/10 text-alphi-sage'
+      return 'border-alphi-sage/30 bg-alphi-green-soft text-alphi-sage'
     case 'draft':
-      return 'border-alphi-amber/30 bg-alphi-amber/10 text-alphi-amber'
+      return 'border-alphi-amber/30 bg-alphi-amber-soft text-alphi-amber'
     case 'superseded':
       return 'border-alphi-border bg-alphi-slate text-alphi-muted'
     case null:
@@ -119,7 +119,7 @@ export function LibraryClient({ rows }: { rows: LibraryRow[] }) {
               className={[
                 'rounded-full border px-3 py-1 text-xs font-medium transition-all',
                 filter === f.id
-                  ? 'border-alphi-teal/60 bg-alphi-teal/10 text-alphi-teal'
+                  ? 'border-alphi-teal/60 bg-alphi-violet-soft text-alphi-teal'
                   : 'border-alphi-border bg-white text-alphi-muted hover:border-alphi-teal/40 hover:text-alphi-navy',
               ].join(' ')}
             >
@@ -178,8 +178,8 @@ export function LibraryClient({ rows }: { rows: LibraryRow[] }) {
                           className={[
                             'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium',
                             isSnomed
-                              ? 'border-alphi-teal/30 bg-alphi-teal/10 text-alphi-teal'
-                              : 'border-alphi-sage/30 bg-alphi-sage/10 text-alphi-sage',
+                              ? 'border-alphi-teal/30 bg-alphi-violet-soft text-alphi-teal'
+                              : 'border-alphi-sage/30 bg-alphi-green-soft text-alphi-sage',
                           ].join(' ')}
                         >
                           <span className="font-bold uppercase">{isSnomed ? 'SCT' : 'LOINC'}</span>

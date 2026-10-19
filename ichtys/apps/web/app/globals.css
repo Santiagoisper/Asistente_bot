@@ -5,14 +5,19 @@
 /* ─── ALPHI Design Tokens ──────────────────────────────────────────────── */
 @layer base {
   :root {
-    --alphi-navy:    #0D1F3C;
-    --alphi-teal:    #0891B2;
+    --alphi-navy:    #192337;
+    --alphi-teal:    #6855B6;
     --alphi-sage:    #059669;
     --alphi-amber:   #D97706;
     --alphi-rose:    #DC2626;
-    --alphi-slate:   #F8FAFC;
-    --alphi-border:  #E2E8F0;
-    --alphi-muted:   #64748B;
+    --alphi-slate:   #F7F8FC;
+    --alphi-border:  #E5E8F0;
+    --alphi-muted:   #667085;
+    --alphi-violet-soft: #F1EDFA;
+    --alphi-green-soft:  #E9F7F0;
+    --alphi-blue-soft:   #EAF3FC;
+    --alphi-amber-soft:  #FFF4E2;
+    --alphi-rose-soft:   #FCEEF1;
   }
 
   html {
@@ -131,8 +136,8 @@
 .cl-popoverBox,
 .cl-card {
   background-color: #FFFFFF !important;
-  border: 1px solid #E2E8F0 !important;
-  box-shadow: 0 10px 30px -10px rgba(13, 31, 60, 0.25) !important;
+  border: 1px solid #E5E8F0 !important;
+  box-shadow: 0 10px 30px -10px rgba(25, 35, 55, 0.25) !important;
   border-radius: 0.75rem !important;
 }
 
@@ -140,7 +145,7 @@
 .cl-organizationSwitcherPopoverCard *,
 .cl-userButtonPopoverCard *,
 .cl-popoverBox * {
-  color: #0D1F3C !important;
+  color: #192337 !important;
 }
 
 /* Identificadores secundarios / texto atenuado */
@@ -148,14 +153,14 @@
 .cl-userPreviewSecondaryIdentifier,
 .cl-organizationSwitcherPopoverActionButton__icon,
 .cl-userButtonPopoverActionButton__icon {
-  color: #64748B !important;
+  color: #667085 !important;
 }
 
 /* Hover de filas y botones de acción */
 .cl-organizationSwitcherPreviewButton:hover,
 .cl-organizationSwitcherPopoverActionButton:hover,
 .cl-userButtonPopoverActionButton:hover {
-  background-color: #F8FAFC !important;
+  background-color: #F7F8FC !important;
 }
 
 /* Áreas de acciones y footer */
@@ -163,12 +168,12 @@
 .cl-organizationSwitcherPopoverFooter,
 .cl-userButtonPopoverActions,
 .cl-userButtonPopoverFooter {
-  background-color: #F8FAFC !important;
-  border-top: 1px solid #E2E8F0 !important;
+  background-color: #F7F8FC !important;
+  border-top: 1px solid #E5E8F0 !important;
 }
 
 /* Acento primario (íconos/links de acción) */
 .cl-organizationSwitcherPopoverActionButton__primary,
 .cl-internal-icon[data-color="primary"] {
-  color: #0891B2 !important;
+  color: #6855B6 !important;
 }

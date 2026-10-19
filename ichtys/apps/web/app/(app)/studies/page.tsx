@@ -71,7 +71,7 @@ export default async function StudiesPage() {
                 <span className={[
                   'alphi-pill shrink-0',
                   study.status === 'active'
-                    ? 'border-alphi-sage/30 bg-alphi-sage/10 text-alphi-sage'
+                    ? 'border-alphi-sage/30 bg-alphi-green-soft text-alphi-sage'
                     : 'border-alphi-border bg-alphi-slate text-alphi-muted',
                 ].join(' ')}>
                   {study.status === 'active' ? 'Activo' : study.status}
