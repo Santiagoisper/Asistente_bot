@@ -34,6 +34,9 @@ export function maskApiKey(key: string): string {
 function envKey(provider: OrgLlmKeyProvider): string | undefined {
   if (provider === 'glm') {
     return (
+      (process.env.VERCEL_ENV === 'preview'
+        ? process.env.GLM_API_KEY_PREVIEW?.trim()
+        : undefined) ||
       process.env.GLM_API_KEY?.trim() ||
       process.env.ZAI_API_KEY?.trim() ||
       undefined

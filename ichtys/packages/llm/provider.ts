@@ -132,6 +132,7 @@ export function getModelId(
 function isLegacyOpenRouterConnection(orgKeys?: OrgLlmApiKeys | null): boolean {
   if (orgKeys?.glm?.trim()) return false
   if (orgKeys?.openrouter?.trim()) return true
+  if (process.env.VERCEL_ENV === 'preview' && process.env.GLM_API_KEY_PREVIEW?.trim()) return false
   if (process.env.GLM_API_KEY?.trim() || process.env.ZAI_API_KEY?.trim()) return false
   return Boolean(process.env.OPENROUTER_API_KEY?.trim())
 }
