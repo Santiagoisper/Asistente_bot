@@ -76,11 +76,11 @@ export const MAX_SECTION_PAGES = 30
 export const MAX_OUTPUT_TOKENS = 16_000
 
 export function getExtractionModelId(): string {
-  return process.env.SPEC_EXTRACTION_MODEL ?? 'claude-sonnet-4-6'
+  return process.env.SPEC_EXTRACTION_MODEL_GLM ?? process.env.GLM_MODEL ?? 'glm-5.3'
 }
 
-/** Spec extraction siempre usa Claude — independiente del proveedor de chat de la org. */
-export const SPEC_EXTRACTION_LLM_PROVIDER = 'anthropic' as const
+/** Toda extracción de protocolo/SoA usa GLM, igual que el chat. */
+export const SPEC_EXTRACTION_LLM_PROVIDER = 'glm' as const
 
 export interface ExtractStudySpecOptions {
   llmProviderPreference?: LlmProviderPreference

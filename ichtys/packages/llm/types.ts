@@ -1,19 +1,12 @@
 export type LlmProviderId = 'anthropic' | 'openai' | 'google' | 'groq' | 'glm'
 
 /**
- * `auto` = GLM → Claude → OpenAI → Gemini → Groq.
- * Salta proveedores sin API key; si uno falla por cuota/key inválida, prueba el siguiente.
+ * Las preferencias anteriores se aceptan por compatibilidad, pero la app usa GLM para generación.
  * Embeddings siguen en OpenAI independientemente.
  */
 export type LlmProviderPreference = LlmProviderId | 'auto'
 
 export type LlmPurpose = 'answer' | 'spec' | 'title' | 'clinical-extract'
 
-/** Orden en modo automático: GLM primero, luego proveedores de respaldo. */
-export const AUTO_PROVIDER_CHAIN: readonly LlmProviderId[] = [
-  'glm',
-  'anthropic',
-  'openai',
-  'google',
-  'groq',
-]
+/** Proveedor generativo único de ALPHI. */
+export const AUTO_PROVIDER_CHAIN: readonly LlmProviderId[] = ['glm']

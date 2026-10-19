@@ -33,6 +33,7 @@ async function hasPdfMagicBytes(file: File): Promise<boolean> {
 
 const documentType = z.enum([
   'protocol',
+  'soa',
   'investigator_brochure',
   'lab_manual',
   'pharmacy_manual',

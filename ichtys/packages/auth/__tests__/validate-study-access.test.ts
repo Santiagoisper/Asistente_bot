@@ -158,7 +158,7 @@ vi.mock('drizzle-orm', () => ({
 
 vi.mock('@ichtys/db', () => ({
   // Enums needed at module-load time by rag/retriever.ts and rag/answer-engine.ts
-  documentType: ['protocol', 'investigator_brochure', 'lab_manual', 'pharmacy_manual', 'other'],
+  documentType: ['protocol', 'soa', 'investigator_brochure', 'lab_manual', 'pharmacy_manual', 'other'],
   answerConfidence: ['high', 'medium', 'low', 'insufficient_evidence'],
   EMBEDDING_DIMENSIONS: 1536,
   // Drizzle operators re-exported from @ichtys/db (used by lib/chat/persistence.ts)

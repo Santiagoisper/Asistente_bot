@@ -5,16 +5,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // ---------------------------------------------------------------------------
 
 const mocks = vi.hoisted(() => {
-  const mockModel = Symbol('mock-anthropic-model')
-  const anthropicProviderFn = vi.fn().mockReturnValue(mockModel)
-  const createAnthropicFn = vi.fn().mockReturnValue(anthropicProviderFn)
+  const mockModel = Symbol('mock-glm-model')
+  const glmProviderFn = vi.fn().mockReturnValue(mockModel)
+  const createGlmFn = vi.fn().mockReturnValue(glmProviderFn)
   const generateObjectFn = vi.fn()
   const streamTextFn = vi.fn()
 
   return {
     mockModel,
-    anthropicProviderFn,
-    createAnthropic: createAnthropicFn,
+    glmProviderFn,
+    createGlm: createGlmFn,
     generateObject: generateObjectFn,
     streamText: streamTextFn,
   }
@@ -23,12 +23,12 @@ const mocks = vi.hoisted(() => {
 vi.mock('@ichtys/llm', () => ({
   runWithLlmFallback: vi.fn(async (_opts: unknown, run: (model: unknown) => Promise<unknown>) => ({
     result: await run(mocks.mockModel),
-    provider: 'anthropic',
-    modelId: 'claude-sonnet-4-6',
+    provider: 'glm',
+    modelId: 'glm-5.3',
   })),
   createLanguageModel: vi.fn().mockReturnValue(mocks.mockModel),
   getDefaultProviderPreference: vi.fn().mockReturnValue('auto'),
-  resolveProviderChain: vi.fn().mockReturnValue(['anthropic']),
+  resolveProviderChain: vi.fn().mockReturnValue(['glm']),
   isProviderConfigured: vi.fn().mockReturnValue(true),
   isProviderFallbackError: vi.fn().mockReturnValue(false),
 }))
@@ -39,7 +39,7 @@ vi.mock('ai', () => ({ generateObject: mocks.generateObject, streamText: mocks.s
 vi.mock('@ichtys/db', () => ({
   answerConfidence: ['high', 'medium', 'low', 'insufficient_evidence'] as const,
   EMBEDDING_DIMENSIONS: 1536,
-  documentType: ['protocol', 'investigator_brochure', 'lab_manual', 'pharmacy_manual', 'other'],
+  documentType: ['protocol', 'soa', 'investigator_brochure', 'lab_manual', 'pharmacy_manual', 'other'],
   chunks: {},
   db: { select: vi.fn() },
 }))

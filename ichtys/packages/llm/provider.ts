@@ -10,13 +10,6 @@ import { AUTO_PROVIDER_CHAIN, type LlmProviderId, type LlmProviderPreference, ty
 export type { OrgLlmApiKeys }
 
 export function getDefaultProviderPreference(): LlmProviderPreference {
-  const env = process.env.LLM_PROVIDER?.toLowerCase().trim()
-  if (env === 'anthropic' || env === 'claude') return 'anthropic'
-  if (env === 'openai' || env === 'gpt') return 'openai'
-  if (env === 'google' || env === 'gemini') return 'google'
-  if (env === 'groq') return 'groq'
-  if (env === 'glm' || env === 'openrouter') return 'glm'
-  if (env === 'auto') return 'auto'
   return 'glm'
 }
 
@@ -47,10 +40,8 @@ export function isGlmConfigured(orgKeys?: OrgLlmApiKeys | null): boolean {
   return isProviderConfigured('glm', orgKeys)
 }
 
-export function resolveProviderChain(preference?: LlmProviderPreference): LlmProviderId[] {
-  const resolved = preference ?? getDefaultProviderPreference()
-  if (resolved === 'auto') return [...AUTO_PROVIDER_CHAIN]
-  return [resolved]
+export function resolveProviderChain(_preference?: LlmProviderPreference): LlmProviderId[] {
+  return [...AUTO_PROVIDER_CHAIN]
 }
 
 export function resolvePrimaryProvider(
@@ -77,7 +68,7 @@ export function getModel(
 export function getModelId(
   provider: LlmProviderId,
   purpose: LlmPurpose,
-  orgKeys?: OrgLlmApiKeys | null,
+  _orgKeys?: OrgLlmApiKeys | null,
 ): string {
   switch (provider) {
     case 'anthropic':
@@ -116,8 +107,7 @@ export function getModelId(
       return process.env.GROQ_ANSWER_MODEL ?? 'llama-3.3-70b-versatile'
     case 'glm':
     {
-      const legacyOpenRouter = isLegacyOpenRouterConnection(orgKeys)
-      const defaultModel = legacyOpenRouter ? 'z-ai/glm-5.2' : 'glm-5.3'
+      const defaultModel = 'glm-5.3'
       if (purpose === 'title' || purpose === 'clinical-extract') {
         return process.env.GLM_TITLE_MODEL ?? process.env.GLM_MODEL ?? defaultModel
       }
@@ -129,16 +119,7 @@ export function getModelId(
   }
 }
 
-function isLegacyOpenRouterConnection(orgKeys?: OrgLlmApiKeys | null): boolean {
-  if (orgKeys?.glm?.trim()) return false
-  if (orgKeys?.openrouter?.trim()) return true
-  if (process.env.VERCEL_ENV === 'preview' && process.env.GLM_API_KEY_PREVIEW?.trim()) return false
-  if (process.env.GLM_API_KEY?.trim() || process.env.ZAI_API_KEY?.trim()) return false
-  return Boolean(process.env.OPENROUTER_API_KEY?.trim())
-}
-
-export function getGlmBaseUrl(orgKeys?: OrgLlmApiKeys | null): string {
-  if (isLegacyOpenRouterConnection(orgKeys)) return 'https://openrouter.ai/api/v1'
+export function getGlmBaseUrl(_orgKeys?: OrgLlmApiKeys | null): string {
   return process.env.GLM_BASE_URL?.trim() || 'https://api.z.ai/api/paas/v4'
 }
 

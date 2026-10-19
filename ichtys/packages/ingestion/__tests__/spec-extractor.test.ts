@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // ---------------------------------------------------------------------------
 
 const mocks = vi.hoisted(() => {
-  const mockModel = Symbol('mock-anthropic-model')
+  const mockModel = Symbol('mock-glm-model')
   return {
     mockModel,
     anthropicProviderFn: vi.fn().mockReturnValue(mockModel),
@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => {
 vi.mock('@ichtys/llm', () => ({
   runWithLlmFallback: vi.fn(async (_opts: unknown, run: (model: unknown) => Promise<unknown>) => {
     const result = await run(mocks.mockModel)
-    return { result, provider: 'anthropic', modelId: 'claude-sonnet-4-6' }
+    return { result, provider: 'glm', modelId: 'glm-5.3' }
   }),
 }))
 vi.mock('ai', () => ({ generateObject: mocks.generateObject }))
@@ -28,7 +28,9 @@ vi.mock('ai', () => ({ generateObject: mocks.generateObject }))
 import {
   buildSectionContext,
   extractStudySpec,
+  getExtractionModelId,
   samplePageTextForMap,
+  SPEC_EXTRACTION_LLM_PROVIDER,
   SPEC_EXTRACTION_SYSTEM_PROMPT,
 } from '../spec-extractor'
 import { studySpecSchema } from '../study-spec'
@@ -125,6 +127,26 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 // buildSectionContext
 // ---------------------------------------------------------------------------
+
+describe('GLM extraction configuration', () => {
+  it('uses GLM and its model for protocol and SoA extraction', () => {
+    expect(SPEC_EXTRACTION_LLM_PROVIDER).toBe('glm')
+    const previous = {
+      SPEC_EXTRACTION_MODEL_GLM: process.env.SPEC_EXTRACTION_MODEL_GLM,
+      GLM_MODEL: process.env.GLM_MODEL,
+    }
+    try {
+      delete process.env.SPEC_EXTRACTION_MODEL_GLM
+      delete process.env.GLM_MODEL
+      expect(getExtractionModelId()).toBe('glm-5.3')
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key]
+        else process.env[key] = value
+      }
+    }
+  })
+})
 
 describe('buildSectionContext', () => {
   it('marks every page with [PAGE N] so the LLM can report provenance', () => {

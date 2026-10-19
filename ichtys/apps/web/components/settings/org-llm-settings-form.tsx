@@ -40,26 +40,11 @@ type SettingsPayload = {
 }
 
 const PROVIDER_OPTIONS: { value: LlmProvider; label: string; description: string }[] = [
-  {
-    value: 'auto',
-    label: 'Automático (recomendado)',
-    description:
-      'GLM → Claude → OpenAI → Gemini → Groq. Si uno falla, prueba el siguiente.',
-  },
-  { value: 'anthropic', label: 'Claude (Anthropic)', description: 'Solo Claude Sonnet 4.5.' },
-  { value: 'openai', label: 'OpenAI (GPT)', description: 'Solo GPT-4o.' },
-  { value: 'google', label: 'Gemini (Google)', description: 'Solo Gemini 2.0 Flash.' },
-  { value: 'groq', label: 'Groq (gratis)', description: 'Solo Llama 3.3.' },
-  { value: 'glm', label: 'GLM 5.3 (Z.AI)', description: 'Solo GLM vía la API directa de Z.AI.' },
+  { value: 'glm', label: 'GLM 5.3 (Z.AI)', description: 'Toda la generación usa GLM vía la API directa de Z.AI.' },
 ]
 
 const KEY_FIELDS: { id: LlmKeyProvider; label: string; env: string }[] = [
-  { id: 'anthropic', label: 'Claude (Anthropic)', env: 'ANTHROPIC_API_KEY' },
-  { id: 'openai', label: 'OpenAI', env: 'OPENAI_API_KEY' },
-  { id: 'google', label: 'Gemini (Google)', env: 'GOOGLE_GENERATIVE_AI_API_KEY' },
-  { id: 'groq', label: 'Groq', env: 'GROQ_API_KEY' },
   { id: 'glm', label: 'GLM (Z.AI)', env: 'GLM_API_KEY' },
-  { id: 'openrouter', label: 'OpenRouter (clave anterior de GLM)', env: 'OPENROUTER_API_KEY' },
 ]
 
 const HEALTH_LABELS: Record<ProviderHealth['status'], string> = {
@@ -77,7 +62,7 @@ export function OrgLlmSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [settings, setSettings] = useState<SettingsPayload | null>(null)
-  const [selected, setSelected] = useState<LlmProvider>('auto')
+  const [selected, setSelected] = useState<LlmProvider>('glm')
   const [similarityThreshold, setSimilarityThreshold] = useState<number>(RAG_DEFAULTS.similarityThreshold)
   const [topK, setTopK] = useState<number>(RAG_DEFAULTS.topK)
   const [keyInputs, setKeyInputs] = useState<Partial<Record<LlmKeyProvider, string>>>({})
@@ -288,8 +273,8 @@ export function OrgLlmSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
       <div className="rounded-lg border border-alphi-border bg-white p-4">
         <h2 className="text-sm font-semibold text-alphi-navy">API keys de tu organización</h2>
         <p className="mt-1 text-xs text-alphi-muted">
-          Las keys que guardés acá aplican solo a tu org y tienen prioridad sobre las del servidor.
-          Dejá el campo vacío para no cambiar una key existente. Marcá &quot;Quitar&quot; para volver a
+          GLM es el proveedor generativo de ALPHI. La key de tu organización tiene prioridad sobre
+          la key de plataforma. Dejá el campo vacío para mantenerla; marcá &quot;Quitar&quot; para usar
           la key de plataforma.
         </p>
 
@@ -345,8 +330,7 @@ export function OrgLlmSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
       <div className="rounded-lg border border-alphi-border bg-white p-4">
         <h2 className="text-sm font-semibold text-alphi-navy">Estado y uso</h2>
         <p className="mt-1 text-xs text-alphi-muted">
-          Ningún proveedor expone el saldo restante de forma confiable vía API. Mostramos gasto
-          aproximado de OpenAI (mes actual) y el resultado de la última prueba de conexión.
+          Mostramos la prueba de conexión de GLM y el gasto aproximado de OpenAI para embeddings.
         </p>
 
         {openAiUsage && (
@@ -387,7 +371,7 @@ export function OrgLlmSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
           disabled={testing || !canEdit}
           onClick={() => void handleTestProviders()}
         >
-          {testing ? 'Probando…' : 'Probar conexión de proveedores'}
+          {testing ? 'Probando…' : 'Probar conexión GLM'}
         </button>
       </div>
 

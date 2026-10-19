@@ -14,8 +14,7 @@ export interface OrgRagConfig {
   /** Max chunks to retrieve. Default: 20. Hard cap: 20. */
   topK?: number
   /**
-   * Proveedor LLM para chat y extracción de specs.
-   * `auto` = Claude → OpenAI → Groq → GLM (salta sin API key).
+   * Preferencia heredada de LLM. La generación de ALPHI ahora usa GLM exclusivamente.
    */
   llmProvider?: 'anthropic' | 'openai' | 'google' | 'groq' | 'glm' | 'auto'
 }

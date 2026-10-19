@@ -11,10 +11,10 @@ export const maxDuration = 300
 function formatReextractError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err)
   if (/invalid x-api-key|authentication|401|403/i.test(msg)) {
-    return 'La clave ANTHROPIC_API_KEY en Vercel parece inválida o faltante. Revisá Environment Variables → Production.'
+    return 'La clave GLM_API_KEY en Vercel parece inválida o faltante. Revisá Environment Variables → Production.'
   }
   if (/usage limits|rate limit|429/i.test(msg)) {
-    return `Cuota del proveedor LLM agotada. Configurá GLM_API_KEY (Z.AI), GROQ_API_KEY en .env.local, o esperá a que renueve Anthropic.`
+    return 'GLM agotó la cuota o el límite de solicitudes. Revisá el plan y los límites de GLM_API_KEY en Z.AI.'
   }
   return msg
 }
@@ -35,7 +35,7 @@ export async function POST(
 
     const documentVersionId = await getProtocolDocumentVersionId({ orgId, studyId })
     if (!documentVersionId) {
-      return Response.json({ error: 'No hay protocolo cargado en este estudio.' }, { status: 404 })
+      return Response.json({ error: 'No hay protocolo ni SoA cargado en este estudio.' }, { status: 404 })
     }
 
     // Evita spam de versiones si el spec ya es útil (p. ej. clicks repetidos en demo).

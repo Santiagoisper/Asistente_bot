@@ -157,7 +157,7 @@ vi.mock('@ichtys/db', () => ({
   getOrgLlmApiKeys: vi.fn(async () => ({})),
 }))
 
-import { runIngestion, type RunIngestionInput } from '../pipeline'
+import { runIngestion, shouldExtractStudySpec, type RunIngestionInput } from '../pipeline'
 
 interface PipelineFixture {
   input: RunIngestionInput
@@ -219,6 +219,12 @@ function operationValues<T>(operation: DbOperation): T | null {
 }
 
 describe('runIngestion', () => {
+  it('extracts structured study data from protocol and standalone SoA documents', () => {
+    expect(shouldExtractStudySpec('protocol')).toBe(true)
+    expect(shouldExtractStudySpec('soa')).toBe(true)
+    expect(shouldExtractStudySpec('other')).toBe(false)
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.operations.length = 0

@@ -1,6 +1,6 @@
 import { validateStudyAccess } from '@ichtys/auth'
 import { getLatestStudySpec, studySpecSchema, isMeaningfulSpec } from '@ichtys/ingestion'
-import { and, db, documents, documentVersions, eq } from '@ichtys/db'
+import { and, db, documents, documentVersions, eq, inArray } from '@ichtys/db'
 
 export const dynamic = 'force-dynamic'
 import { annotateAnswerSync } from '@ichtys/rag/medical-annotator'
@@ -46,7 +46,7 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
         and(
           eq(documents.studyId, studyId),
           eq(documents.organizationId, orgId),
-          eq(documents.documentType, 'protocol'),
+          inArray(documents.documentType, ['protocol', 'soa']),
         ),
       ),
   ])

@@ -27,19 +27,8 @@ export interface ResolvedOrgRagConfig {
   llmProvider: OrgLlmProvider
 }
 
-function normalizeLlmProvider(value: unknown): OrgLlmProvider {
-  if (
-    value === 'anthropic' ||
-    value === 'openai' ||
-    value === 'google' ||
-    value === 'groq' ||
-    value === 'glm' ||
-    value === 'auto'
-  ) {
-    return value
-  }
-  // Migración suave desde config antigua
-  if (value === 'gemini') return 'google'
+function normalizeLlmProvider(_value: unknown): OrgLlmProvider {
+  // Las preferencias antiguas se normalizan para que toda generación use GLM.
   return 'glm'
 }
 

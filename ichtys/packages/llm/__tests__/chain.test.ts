@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { AUTO_PROVIDER_CHAIN } from '../types'
-import { isOpenAiConfigured } from '../provider'
+import { getDefaultProviderPreference, isOpenAiConfigured, resolveProviderChain } from '../provider'
 
 describe('LLM provider chain', () => {
-  it('AUTO_PROVIDER_CHAIN has 5 providers in expected order', () => {
-    expect(AUTO_PROVIDER_CHAIN).toEqual(['glm', 'anthropic', 'openai', 'google', 'groq'])
+  it('all generation uses GLM only', () => {
+    expect(AUTO_PROVIDER_CHAIN).toEqual(['glm'])
+    expect(getDefaultProviderPreference()).toBe('glm')
+    expect(resolveProviderChain('auto')).toEqual(['glm'])
+    expect(resolveProviderChain('anthropic')).toEqual(['glm'])
   })
 
   it('isProviderConfigured respects org keys over env', () => {

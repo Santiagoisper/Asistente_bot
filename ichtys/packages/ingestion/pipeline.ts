@@ -59,6 +59,10 @@ export type IngestionErrorCode =
   | 'pdf_contains_no_extractable_text'
   | 'ingestion_internal_error'
 
+export function shouldExtractStudySpec(documentType: Document['documentType']): boolean {
+  return documentType === 'protocol' || documentType === 'soa'
+}
+
 class IngestionPipelineError extends Error {
   constructor(
     readonly code: IngestionErrorCode,
@@ -285,10 +289,10 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
 
     const indexingResult = await indexDocumentVersionChunks(parsedInput)
 
-    // Extraer study spec si el documento es un protocolo.
+    // Extraer study spec si el documento es un protocolo o un SoA independiente.
     // AWAITED: fire-and-forget no funciona en Lambda (el runtime se congela
     // cuando se envía la respuesta HTTP, matando los calls a Claude pendientes).
-    if (document.documentType === 'protocol') {
+    if (shouldExtractStudySpec(document.documentType)) {
       try {
         const fewShotExamples = await getApprovedSpecExamples({
           orgId: parsedInput.orgId,

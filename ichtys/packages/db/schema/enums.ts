@@ -12,6 +12,7 @@ export type StudyStatus = (typeof studyStatus)[number]
 
 export const documentType = [
   'protocol',
+  'soa',
   'investigator_brochure',
   'lab_manual',
   'pharmacy_manual',

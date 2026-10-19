@@ -2,10 +2,8 @@ import type { LanguageModel } from 'ai'
 import type { OrgLlmApiKeys } from './keys'
 import {
   createLanguageModel,
-  getDefaultProviderPreference,
   getModelId,
   isProviderConfigured,
-  resolveProviderChain,
 } from './provider'
 import type { LlmProviderId, LlmProviderPreference, LlmPurpose } from './types'
 
@@ -47,47 +45,19 @@ export interface LlmRunResult<T> {
 }
 
 /**
- * Ejecuta una llamada LLM. En modo `auto` recorre:
- * GLM → Claude → OpenAI → Gemini → Groq hasta que uno responda.
+ * Ejecuta una llamada generativa con GLM. Se conservan las opciones de proveedor
+ * antiguas en la firma para compatibilidad, pero la aplicación ya no cambia de LLM.
  */
 export async function runWithLlmFallback<T>(
   options: RunWithLlmFallbackOptions,
   run: (model: LanguageModel, provider: LlmProviderId) => Promise<T>,
 ): Promise<LlmRunResult<T>> {
-  const preference = options.providerPreference ?? getDefaultProviderPreference()
-  const providers = resolveProviderChain(preference)
-
-  let lastError: unknown
-
-  for (let i = 0; i < providers.length; i++) {
-    const provider = providers[i]!
-
-    if (!isProviderConfigured(provider, options.orgApiKeys)) {
-      if (preference === provider) {
-        throw new Error(`Proveedor ${provider} no configurado (falta API key en el servidor).`)
-      }
-      continue
-    }
-
-    try {
-      const model = createLanguageModel(provider, options.purpose, options.orgApiKeys)
-      const result = await run(model, provider)
-      return { result, provider, modelId: getModelId(provider, options.purpose, options.orgApiKeys) }
-    } catch (err) {
-      lastError = err
-      const isLast = i === providers.length - 1
-      const canFallback = preference === 'auto' && !isLast && isProviderFallbackError(err)
-      if (canFallback) {
-        console.warn(`[llm] ${provider} failed — trying next provider (${(err as Error).message?.slice(0, 120)})`)
-        continue
-      }
-      throw err
-    }
+  const provider = 'glm' as const
+  if (!isProviderConfigured(provider, options.orgApiKeys)) {
+    throw new Error('GLM no está configurado (falta GLM_API_KEY o la clave GLM de la organización).')
   }
 
-  throw lastError instanceof Error
-    ? lastError
-    : new Error(
-        'No hay proveedor LLM disponible. Configurá GLM_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY o GROQ_API_KEY.',
-      )
+  const model = createLanguageModel(provider, options.purpose, options.orgApiKeys)
+  const result = await run(model, provider)
+  return { result, provider, modelId: getModelId(provider, options.purpose, options.orgApiKeys) }
 }

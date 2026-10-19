@@ -27,7 +27,7 @@ const DOC_TYPE_VALUES = [
   'investigator_brochure',
   'other',
   'other',
-  'other',
+  'soa',
   'other',
 ] as const
 

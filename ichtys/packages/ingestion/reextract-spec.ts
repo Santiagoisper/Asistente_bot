@@ -1,5 +1,5 @@
-import { and, asc, eq } from 'drizzle-orm'
-import { db, documents, pages } from '@ichtys/db'
+import { and, asc, desc, eq, inArray } from 'drizzle-orm'
+import { db, documents, documentVersions, pages } from '@ichtys/db'
 import { getOrgLlmApiKeys } from '@ichtys/db'
 import type { ParsedPage } from './parser'
 import { extractStudySpec, SPEC_EXTRACTION_LLM_PROVIDER } from './spec-extractor'
@@ -85,24 +85,24 @@ export async function reextractStudySpec(params: {
   }
 }
 
-/** Resuelve el document_version del protocolo principal del estudio. */
+/** Resuelve la versión más reciente de protocolo o SoA del estudio. */
 export async function getProtocolDocumentVersionId(params: {
   orgId: string
   studyId: string
 }): Promise<string | null> {
-  const doc = await db.query.documents.findFirst({
-    where: and(
-      eq(documents.organizationId, params.orgId),
-      eq(documents.studyId, params.studyId),
-      eq(documents.documentType, 'protocol'),
-    ),
-    with: {
-      versions: {
-        orderBy: (v, { desc }) => [desc(v.createdAt)],
-        limit: 1,
-      },
-    },
-  })
+  const [latestVersion] = await db
+    .select({ id: documentVersions.id })
+    .from(documents)
+    .innerJoin(documentVersions, eq(documentVersions.documentId, documents.id))
+    .where(
+      and(
+        eq(documents.organizationId, params.orgId),
+        eq(documents.studyId, params.studyId),
+        inArray(documents.documentType, ['protocol', 'soa']),
+      ),
+    )
+    .orderBy(desc(documentVersions.createdAt))
+    .limit(1)
 
-  return doc?.versions[0]?.id ?? null
+  return latestVersion?.id ?? null
 }

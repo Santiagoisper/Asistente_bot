@@ -16,7 +16,7 @@ import {
 import {
   AUTO_PROVIDER_CHAIN,
   BILLING_URLS,
-  checkAllProviderHealth,
+  checkProviderHealth,
   fetchOpenAiUsageSummary,
   getDefaultProviderPreference,
   isAnthropicConfigured,
@@ -173,7 +173,7 @@ async function dbInsertAudit(orgId: string, userId: string, providers: string[])
 }
 
 /**
- * POST /api/org/settings/test-providers — prueba conectividad de cada proveedor.
+ * POST /api/org/settings/test-providers — prueba el proveedor generativo GLM.
  */
 export async function POST(): Promise<Response> {
   try {
@@ -183,7 +183,7 @@ export async function POST(): Promise<Response> {
     }
 
     const orgKeys = await getOrgLlmApiKeys(orgId)
-    const health = await checkAllProviderHealth(orgKeys)
+    const health = [await checkProviderHealth('glm', orgKeys)]
     const openAiKey = resolveLlmApiKey('openai', orgKeys)
     const openAiUsage = openAiKey ? await fetchOpenAiUsageSummary(openAiKey) : null
 

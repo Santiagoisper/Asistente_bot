@@ -35,13 +35,11 @@ export function resolveKeyForProvider(
       return process.env.GROQ_API_KEY?.trim() || undefined
     case 'glm':
       return (
-        orgKeys?.openrouter?.trim() ||
         (process.env.VERCEL_ENV === 'preview'
           ? process.env.GLM_API_KEY_PREVIEW?.trim()
           : undefined) ||
         process.env.GLM_API_KEY?.trim() ||
         process.env.ZAI_API_KEY?.trim() ||
-        process.env.OPENROUTER_API_KEY?.trim() ||
         undefined
       )
   }
