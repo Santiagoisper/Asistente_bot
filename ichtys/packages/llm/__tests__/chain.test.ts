@@ -4,7 +4,7 @@ import { isOpenAiConfigured } from '../provider'
 
 describe('LLM provider chain', () => {
   it('AUTO_PROVIDER_CHAIN has 5 providers in expected order', () => {
-    expect(AUTO_PROVIDER_CHAIN).toEqual(['anthropic', 'openai', 'google', 'groq', 'glm'])
+    expect(AUTO_PROVIDER_CHAIN).toEqual(['glm', 'anthropic', 'openai', 'google', 'groq'])
   })
 
   it('isProviderConfigured respects org keys over env', () => {

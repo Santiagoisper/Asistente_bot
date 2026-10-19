@@ -1,6 +1,6 @@
 import type { LlmProviderId } from './types'
 
-export type OrgLlmKeyProvider = 'anthropic' | 'openai' | 'google' | 'groq' | 'openrouter'
+export type OrgLlmKeyProvider = 'anthropic' | 'openai' | 'google' | 'groq' | 'glm' | 'openrouter'
 
 export type OrgLlmApiKeys = Partial<Record<OrgLlmKeyProvider, string>>
 
@@ -9,7 +9,7 @@ const PROVIDER_TO_KEY: Record<LlmProviderId, OrgLlmKeyProvider> = {
   openai: 'openai',
   google: 'google',
   groq: 'groq',
-  glm: 'openrouter',
+  glm: 'glm',
 }
 
 export function resolveKeyForProvider(
@@ -34,7 +34,13 @@ export function resolveKeyForProvider(
     case 'groq':
       return process.env.GROQ_API_KEY?.trim() || undefined
     case 'glm':
-      return process.env.OPENROUTER_API_KEY?.trim() || undefined
+      return (
+        orgKeys?.openrouter?.trim() ||
+        process.env.GLM_API_KEY?.trim() ||
+        process.env.ZAI_API_KEY?.trim() ||
+        process.env.OPENROUTER_API_KEY?.trim() ||
+        undefined
+      )
   }
 }
 

@@ -86,7 +86,7 @@ Los equipos de sitio pierden tiempo crítico buscando en documentos extensos dur
 - Chat RAG grounded con citas obligatorias, streaming, historial por estudio, visor de citas.
 - **Extracción de specs** (criterios de elegibilidad) con numeración anidada preservada (`"(iii)(a)"`), aprobación, diff entre versiones, export, re-extracción batch.
 - **Módulo clínico (Fase 0–2.5):** sujetos pseudonimizados, evoluciones, perfiles, labs con extracción asistida + confirmación humana, screening asistido con badges de confianza — PHI cifrado at-rest (AES-256-GCM) y pre-redacción de PHI antes del LLM.
-- Multi-LLM por organización: `LLM_PROVIDER=auto` (Claude → OpenAI → Gemini → Groq → GLM), keys por org cifradas en DB, UI en `/settings` con sliders de RAG (threshold/topK).
+- Multi-LLM por organización: GLM vía Z.AI es el proveedor predeterminado; `auto` empieza por GLM y luego usa Claude → OpenAI → Gemini → Groq como respaldo. Keys por org cifradas en DB, UI en `/settings` con sliders de RAG (threshold/topK).
 - Bulk import de protocolos con cola persistida (`ingestion_jobs`) y recuperación de documentos trabados (cron horario con `CRON_SECRET`).
 - Páginas GTM públicas: `/pricing`, `/trust`, `/terms`, `/privacy`, `/roi`.
 - Audit log append-only en toda acción sensible (incluyendo accesos denegados).

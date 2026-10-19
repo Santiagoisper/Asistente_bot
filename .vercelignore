@@ -1,0 +1,26 @@
+# Vercel project root is ichtys/. Keep Company OS and ALPHI reports out of the upload.
+.agents/
+.claude/
+.codex/
+.cursor/
+.github/
+docs/
+AGENTS.md
+ALPHI-SHAREHOLDER-REPORT-2026.pdf
+ALPHI_E2E_Audit_Report_2026.docx
+ALPHI_RECOVERY_2026_07_04.md
+Dockerfile
+SD_DESIGN.md
+compose.yaml
+
+# Never upload local credentials or generated dependencies/build output.
+ichtys/.env
+ichtys/.env.local
+ichtys/.env.*.local
+ichtys/**/.env
+ichtys/**/.env.local
+ichtys/**/.env.*.local
+ichtys/**/node_modules/
+ichtys/**/.next/
+ichtys/**/.turbo/
+ichtys/**/*.tsbuildinfo

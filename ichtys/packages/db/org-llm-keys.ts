@@ -3,7 +3,7 @@ import { db } from './client'
 import { decryptJson, encryptJson } from './org-llm-crypto'
 import { organizations } from './schema/organizations'
 
-export type OrgLlmKeyProvider = 'anthropic' | 'openai' | 'google' | 'groq' | 'openrouter'
+export type OrgLlmKeyProvider = 'anthropic' | 'openai' | 'google' | 'groq' | 'glm' | 'openrouter'
 
 export type OrgLlmApiKeys = Partial<Record<OrgLlmKeyProvider, string>>
 
@@ -21,6 +21,7 @@ const ENV_MAP: Record<OrgLlmKeyProvider, string> = {
   openai: 'OPENAI_API_KEY',
   google: 'GOOGLE_GENERATIVE_AI_API_KEY',
   groq: 'GROQ_API_KEY',
+  glm: 'GLM_API_KEY',
   openrouter: 'OPENROUTER_API_KEY',
 }
 
@@ -31,6 +32,13 @@ export function maskApiKey(key: string): string {
 }
 
 function envKey(provider: OrgLlmKeyProvider): string | undefined {
+  if (provider === 'glm') {
+    return (
+      process.env.GLM_API_KEY?.trim() ||
+      process.env.ZAI_API_KEY?.trim() ||
+      undefined
+    )
+  }
   if (provider === 'google') {
     return (
       process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ||
@@ -46,6 +54,9 @@ export function resolveLlmApiKey(
   provider: OrgLlmKeyProvider,
   orgKeys?: OrgLlmApiKeys | null,
 ): string | undefined {
+  if (provider === 'glm') {
+    return orgKeys?.glm?.trim() || envKey('glm')
+  }
   const orgKey = orgKeys?.[provider]?.trim()
   if (orgKey) return orgKey
   return envKey(provider)
@@ -55,13 +66,14 @@ export function getOrgLlmKeySource(
   provider: OrgLlmKeyProvider,
   orgKeys?: OrgLlmApiKeys | null,
 ): OrgLlmKeySource {
+  if (provider === 'glm' && orgKeys?.glm?.trim()) return 'org'
   if (orgKeys?.[provider]?.trim()) return 'org'
   if (envKey(provider)) return 'platform'
   return 'none'
 }
 
 export function buildOrgLlmKeyStatuses(orgKeys?: OrgLlmApiKeys | null): OrgLlmKeyStatus[] {
-  const providers: OrgLlmKeyProvider[] = ['anthropic', 'openai', 'google', 'groq', 'openrouter']
+  const providers: OrgLlmKeyProvider[] = ['anthropic', 'openai', 'google', 'groq', 'glm', 'openrouter']
   return providers.map((provider) => {
     const source = getOrgLlmKeySource(provider, orgKeys)
     const key = resolveLlmApiKey(provider, orgKeys)

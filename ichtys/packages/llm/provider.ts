@@ -16,7 +16,8 @@ export function getDefaultProviderPreference(): LlmProviderPreference {
   if (env === 'google' || env === 'gemini') return 'google'
   if (env === 'groq') return 'groq'
   if (env === 'glm' || env === 'openrouter') return 'glm'
-  return 'auto'
+  if (env === 'auto') return 'auto'
+  return 'glm'
 }
 
 export function isProviderConfigured(
@@ -73,7 +74,11 @@ export function getModel(
   return createLanguageModel(provider, purpose, orgKeys)
 }
 
-export function getModelId(provider: LlmProviderId, purpose: LlmPurpose): string {
+export function getModelId(
+  provider: LlmProviderId,
+  purpose: LlmPurpose,
+  orgKeys?: OrgLlmApiKeys | null,
+): string {
   switch (provider) {
     case 'anthropic':
       if (purpose === 'title' || purpose === 'clinical-extract') {
@@ -110,14 +115,30 @@ export function getModelId(provider: LlmProviderId, purpose: LlmPurpose): string
       }
       return process.env.GROQ_ANSWER_MODEL ?? 'llama-3.3-70b-versatile'
     case 'glm':
+    {
+      const legacyOpenRouter = isLegacyOpenRouterConnection(orgKeys)
+      const defaultModel = legacyOpenRouter ? 'z-ai/glm-5.2' : 'glm-5.3'
       if (purpose === 'title' || purpose === 'clinical-extract') {
-        return process.env.GLM_TITLE_MODEL ?? process.env.GLM_MODEL ?? 'z-ai/glm-5.2'
+        return process.env.GLM_TITLE_MODEL ?? process.env.GLM_MODEL ?? defaultModel
       }
       if (purpose === 'spec') {
-        return process.env.SPEC_EXTRACTION_MODEL_GLM ?? process.env.GLM_MODEL ?? 'z-ai/glm-5.2'
+        return process.env.SPEC_EXTRACTION_MODEL_GLM ?? process.env.GLM_MODEL ?? defaultModel
       }
-      return process.env.GLM_ANSWER_MODEL ?? process.env.GLM_MODEL ?? 'z-ai/glm-5.2'
+      return process.env.GLM_ANSWER_MODEL ?? process.env.GLM_MODEL ?? defaultModel
+    }
   }
+}
+
+function isLegacyOpenRouterConnection(orgKeys?: OrgLlmApiKeys | null): boolean {
+  if (orgKeys?.glm?.trim()) return false
+  if (orgKeys?.openrouter?.trim()) return true
+  if (process.env.GLM_API_KEY?.trim() || process.env.ZAI_API_KEY?.trim()) return false
+  return Boolean(process.env.OPENROUTER_API_KEY?.trim())
+}
+
+export function getGlmBaseUrl(orgKeys?: OrgLlmApiKeys | null): string {
+  if (isLegacyOpenRouterConnection(orgKeys)) return 'https://openrouter.ai/api/v1'
+  return process.env.GLM_BASE_URL?.trim() || 'https://api.z.ai/api/paas/v4'
 }
 
 export function createLanguageModel(
@@ -125,7 +146,7 @@ export function createLanguageModel(
   purpose: LlmPurpose,
   orgKeys?: OrgLlmApiKeys | null,
 ): LanguageModel {
-  const modelId = getModelId(provider, purpose)
+  const modelId = getModelId(provider, purpose, orgKeys)
   const apiKey = resolveKeyForProvider(provider, orgKeys)
 
   switch (provider) {
@@ -146,11 +167,11 @@ export function createLanguageModel(
       return groq(modelId)
     }
     case 'glm': {
-      const openrouter = createOpenAI({
+      const glm = createOpenAI({
         apiKey,
-        baseURL: 'https://openrouter.ai/api/v1',
+        baseURL: getGlmBaseUrl(orgKeys),
       })
-      return openrouter(modelId)
+      return glm(modelId)
     }
   }
 }
@@ -166,7 +187,7 @@ export function providerLabel(provider: LlmProviderId): string {
     case 'groq':
       return 'Groq'
     case 'glm':
-      return 'GLM (OpenRouter)'
+      return 'GLM (Z.AI)'
   }
 }
 
@@ -175,5 +196,5 @@ export const BILLING_URLS: Record<LlmProviderId, string> = {
   openai: 'https://platform.openai.com/settings/organization/billing',
   google: 'https://aistudio.google.com/apikey',
   groq: 'https://console.groq.com/settings/billing',
-  glm: 'https://openrouter.ai/settings/credits',
+  glm: 'https://z.ai/',
 }

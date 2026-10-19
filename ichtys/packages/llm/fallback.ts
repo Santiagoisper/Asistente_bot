@@ -48,7 +48,7 @@ export interface LlmRunResult<T> {
 
 /**
  * Ejecuta una llamada LLM. En modo `auto` recorre:
- * Claude → OpenAI → Gemini → Groq → GLM hasta que uno responda.
+ * GLM → Claude → OpenAI → Gemini → Groq hasta que uno responda.
  */
 export async function runWithLlmFallback<T>(
   options: RunWithLlmFallbackOptions,
@@ -72,7 +72,7 @@ export async function runWithLlmFallback<T>(
     try {
       const model = createLanguageModel(provider, options.purpose, options.orgApiKeys)
       const result = await run(model, provider)
-      return { result, provider, modelId: getModelId(provider, options.purpose) }
+      return { result, provider, modelId: getModelId(provider, options.purpose, options.orgApiKeys) }
     } catch (err) {
       lastError = err
       const isLast = i === providers.length - 1
@@ -88,6 +88,6 @@ export async function runWithLlmFallback<T>(
   throw lastError instanceof Error
     ? lastError
     : new Error(
-        'No hay proveedor LLM disponible. Configurá al menos una de: ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY.',
+        'No hay proveedor LLM disponible. Configurá GLM_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY o GROQ_API_KEY.',
       )
 }

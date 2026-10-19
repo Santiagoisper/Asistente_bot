@@ -61,6 +61,7 @@ const patchSchema = z.object({
       openai: z.string().min(8).nullable().optional(),
       google: z.string().min(8).nullable().optional(),
       groq: z.string().min(8).nullable().optional(),
+      glm: z.string().min(8).nullable().optional(),
       openrouter: z.string().min(8).nullable().optional(),
     })
     .optional(),

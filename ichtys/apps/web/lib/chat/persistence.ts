@@ -16,6 +16,7 @@ import { AccessError, logServerError } from '@ichtys/auth'
 import type { ConversationTurn, Evidence } from '@ichtys/rag'
 import type { MedicalAnnotation } from '@ichtys/rag/medical-annotator'
 import { runWithLlmFallback } from '@ichtys/llm'
+import type { OrgLlmApiKeys, LlmProviderPreference } from '@ichtys/llm'
 import { generateText } from 'ai'
 
 /**
@@ -250,22 +251,31 @@ export async function generateAndPersistConversationTitle(params: {
   conversationId: string
   question: string
   studyName: string | null
+  llmProviderPreference?: LlmProviderPreference
+  llmApiKeys?: OrgLlmApiKeys | null
 }): Promise<string | null> {
   const contextLine = params.studyName
     ? `Study: ${params.studyName}\nQuestion: ${params.question}`
     : `Question: ${params.question}`
 
-  const { result: text } = await runWithLlmFallback({ purpose: 'title' }, async (model) => {
-    const { text: titleText } = await generateText({
-      model,
-      system:
-        'You generate ultra-short conversation titles. Return ONLY the title: 6 words or fewer, no punctuation, no quotes, no explanation. Title should summarize what the user is asking about.',
-      prompt: contextLine,
-      maxTokens: 20,
-      temperature: 0.3,
-    })
-    return titleText
-  })
+  const { result: text } = await runWithLlmFallback(
+    {
+      purpose: 'title',
+      providerPreference: params.llmProviderPreference,
+      orgApiKeys: params.llmApiKeys,
+    },
+    async (model) => {
+      const { text: titleText } = await generateText({
+        model,
+        system:
+          'You generate ultra-short conversation titles. Return ONLY the title: 6 words or fewer, no punctuation, no quotes, no explanation. Title should summarize what the user is asking about.',
+        prompt: contextLine,
+        maxTokens: 20,
+        temperature: 0.3,
+      })
+      return titleText
+    },
+  )
 
   const title = text.trim().replace(/^["']|["']$/g, '').slice(0, 100)
   if (!title) return null

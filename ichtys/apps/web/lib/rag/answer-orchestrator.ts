@@ -1,7 +1,8 @@
 import { validateStudyAccess } from '@ichtys/auth'
 import { answerEngine, retrieveRelevantChunks } from '@ichtys/rag'
-import type { DocumentType } from '@ichtys/db'
+import { getOrgLlmApiKeys, getOrgRagConfig, type DocumentType } from '@ichtys/db'
 import type { AnswerResult, ConversationTurn } from '@ichtys/rag'
+import type { OrgLlmApiKeys, LlmProviderPreference } from '@ichtys/llm'
 import { expandShortQueryForRetrieval } from './query-expander'
 
 /**
@@ -37,6 +38,8 @@ export type GenerateAnswerForStudyInput = {
    * follow-ups que dependen 100% del historial pueden recuperar peor).
    */
   conversationHistory?: ConversationTurn[]
+  llmProviderPreference?: LlmProviderPreference
+  llmApiKeys?: OrgLlmApiKeys | null
 }
 
 export type GenerateAnswerForStudyResult = AnswerResult & {
@@ -93,6 +96,11 @@ export async function generateAnswerForStudy(
     protocolNumber,
   })
 
+  const [orgRagConfig, orgLlmApiKeys] = await Promise.all([
+    getOrgRagConfig(orgId).catch(() => null),
+    getOrgLlmApiKeys(orgId).catch(() => ({})),
+  ])
+
   // 2. Retrieval con filtro de tenant en la query SQL.
   let retrievedChunks: Awaited<ReturnType<typeof retrieveRelevantChunks>>
   try {
@@ -116,6 +124,8 @@ export async function generateAnswerForStudy(
       question: input.question,
       retrievedChunks,
       conversationHistory: input.conversationHistory,
+      llmProviderPreference: input.llmProviderPreference ?? orgRagConfig?.llmProvider,
+      llmApiKeys: input.llmApiKeys ?? orgLlmApiKeys,
     })
   } catch {
     throw new AnswerOrchestratorError('answer_generation_error', 'Answer generation failed')

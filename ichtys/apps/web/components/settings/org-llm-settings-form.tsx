@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 
 type LlmProvider = 'auto' | 'anthropic' | 'openai' | 'google' | 'groq' | 'glm'
 
-type LlmKeyProvider = 'anthropic' | 'openai' | 'google' | 'groq' | 'openrouter'
+type LlmKeyProvider = 'anthropic' | 'openai' | 'google' | 'groq' | 'glm' | 'openrouter'
 
 type LlmKeyStatus = {
   provider: LlmKeyProvider
@@ -44,13 +44,13 @@ const PROVIDER_OPTIONS: { value: LlmProvider; label: string; description: string
     value: 'auto',
     label: 'Automático (recomendado)',
     description:
-      'Claude → OpenAI → Gemini → Groq → GLM. Si uno falla, prueba el siguiente.',
+      'GLM → Claude → OpenAI → Gemini → Groq. Si uno falla, prueba el siguiente.',
   },
   { value: 'anthropic', label: 'Claude (Anthropic)', description: 'Solo Claude Sonnet 4.5.' },
   { value: 'openai', label: 'OpenAI (GPT)', description: 'Solo GPT-4o.' },
   { value: 'google', label: 'Gemini (Google)', description: 'Solo Gemini 2.0 Flash.' },
   { value: 'groq', label: 'Groq (gratis)', description: 'Solo Llama 3.3.' },
-  { value: 'glm', label: 'GLM 5.2 (OpenRouter)', description: 'Solo GLM vía OpenRouter.' },
+  { value: 'glm', label: 'GLM 5.3 (Z.AI)', description: 'Solo GLM vía la API directa de Z.AI.' },
 ]
 
 const KEY_FIELDS: { id: LlmKeyProvider; label: string; env: string }[] = [
@@ -58,7 +58,8 @@ const KEY_FIELDS: { id: LlmKeyProvider; label: string; env: string }[] = [
   { id: 'openai', label: 'OpenAI', env: 'OPENAI_API_KEY' },
   { id: 'google', label: 'Gemini (Google)', env: 'GOOGLE_GENERATIVE_AI_API_KEY' },
   { id: 'groq', label: 'Groq', env: 'GROQ_API_KEY' },
-  { id: 'openrouter', label: 'GLM (OpenRouter)', env: 'OPENROUTER_API_KEY' },
+  { id: 'glm', label: 'GLM (Z.AI)', env: 'GLM_API_KEY' },
+  { id: 'openrouter', label: 'OpenRouter (clave anterior de GLM)', env: 'OPENROUTER_API_KEY' },
 ]
 
 const HEALTH_LABELS: Record<ProviderHealth['status'], string> = {

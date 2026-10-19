@@ -1,6 +1,6 @@
 import type { OrgLlmApiKeys } from './keys'
 import type { LlmProviderId } from './types'
-import { createLanguageModel, getModelId } from './provider'
+import { getGlmBaseUrl, getModelId } from './provider'
 
 export type ProviderHealthStatus = 'ok' | 'quota_exceeded' | 'invalid_key' | 'error' | 'not_configured'
 
@@ -80,14 +80,24 @@ async function probeGroq(apiKey: string, modelId: string): Promise<void> {
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 160)}`)
 }
 
-async function probeGlm(apiKey: string, modelId: string): Promise<void> {
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+async function probeGlm(
+  apiKey: string,
+  modelId: string,
+  orgKeys?: OrgLlmApiKeys | null,
+): Promise<void> {
+  const baseUrl = getGlmBaseUrl(orgKeys)
+  const legacyOpenRouter = baseUrl === 'https://openrouter.ai/api/v1'
+  const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL ?? 'https://asistente-bot-five.vercel.app',
-      'X-Title': 'ALPHI',
+      ...(legacyOpenRouter
+        ? {
+            'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL ?? 'https://asistente-bot-five.vercel.app',
+            'X-Title': 'ALPHI',
+          }
+        : {}),
     },
     body: JSON.stringify({
       model: modelId,
@@ -102,15 +112,12 @@ export async function checkProviderHealth(
   provider: LlmProviderId,
   orgKeys?: OrgLlmApiKeys | null,
 ): Promise<ProviderHealthResult> {
-  const modelId = getModelId(provider, 'answer')
-  const model = createLanguageModel(provider, 'answer', orgKeys)
-  void model
-
   const { resolveKeyForProvider } = await import('./keys')
   const apiKey = resolveKeyForProvider(provider, orgKeys)
   if (!apiKey) {
     return { provider, status: 'not_configured', message: null, modelId: null }
   }
+  const modelId = getModelId(provider, 'answer', orgKeys)
 
   try {
     switch (provider) {
@@ -127,7 +134,7 @@ export async function checkProviderHealth(
         await probeGroq(apiKey, modelId)
         break
       case 'glm':
-        await probeGlm(apiKey, modelId)
+        await probeGlm(apiKey, modelId, orgKeys)
         break
     }
     return { provider, status: 'ok', message: null, modelId }

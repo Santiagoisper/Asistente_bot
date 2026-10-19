@@ -172,7 +172,13 @@ export async function POST(req: Request): Promise<Response> {
   //     If it fails, title stays null and we swallow the error.
   const isNewConversation = !inputConversationId
   const titlePromise: Promise<string | null> = isNewConversation
-    ? generateAndPersistConversationTitle({ conversationId, question, studyName }).catch(() => null)
+    ? generateAndPersistConversationTitle({
+        conversationId,
+        question,
+        studyName,
+        llmProviderPreference: orgRagConfig?.llmProvider,
+        llmApiKeys: orgLlmApiKeys,
+      }).catch(() => null)
     : Promise.resolve(null)
 
   // 11. Return SSE stream.

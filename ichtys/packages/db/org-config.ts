@@ -40,7 +40,7 @@ function normalizeLlmProvider(value: unknown): OrgLlmProvider {
   }
   // Migración suave desde config antigua
   if (value === 'gemini') return 'google'
-  return 'auto'
+  return 'glm'
 }
 
 export async function getOrgRagConfig(orgId: string): Promise<ResolvedOrgRagConfig> {

@@ -14,7 +14,7 @@ function formatReextractError(err: unknown): string {
     return 'La clave ANTHROPIC_API_KEY en Vercel parece inválida o faltante. Revisá Environment Variables → Production.'
   }
   if (/usage limits|rate limit|429/i.test(msg)) {
-    return `Cuota del proveedor LLM agotada. Configurá GROQ_API_KEY u OPENROUTER_API_KEY (GLM) en .env.local, o esperá a que renueve Anthropic (~1 jul UTC).`
+    return `Cuota del proveedor LLM agotada. Configurá GLM_API_KEY (Z.AI), GROQ_API_KEY en .env.local, o esperá a que renueve Anthropic.`
   }
   return msg
 }
