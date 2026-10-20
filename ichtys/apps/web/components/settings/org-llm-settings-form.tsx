@@ -273,9 +273,9 @@ export function OrgLlmSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
       <div className="rounded-lg border border-alphi-border bg-white p-4">
         <h2 className="text-sm font-semibold text-alphi-navy">API keys de tu organización</h2>
         <p className="mt-1 text-xs text-alphi-muted">
-          GLM es el proveedor generativo de ALPHI. La key de tu organización tiene prioridad sobre
-          la key de plataforma. Dejá el campo vacío para mantenerla; marcá &quot;Quitar&quot; para usar
-          la key de plataforma.
+          GLM es el proveedor generativo de ALPHI. Si existe GLM_API_KEY en la plataforma, esa key
+          se usa para todas las organizaciones; la key de tu organización queda como respaldo. Dejá
+          el campo vacío para mantenerla; marcá &quot;Quitar&quot; para borrarla.
         </p>
 
         <div className="mt-4 space-y-4">

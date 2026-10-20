@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { encryptJson, decryptJson } from '../org-llm-crypto'
 import {
   buildOrgLlmKeyStatuses,
+  getOrgLlmKeySource,
   maskApiKey,
   resolveLlmApiKey,
 } from '../org-llm-keys'
@@ -51,6 +52,32 @@ describe('org-llm-keys helpers', () => {
 
       process.env.VERCEL_ENV = 'production'
       expect(resolveLlmApiKey('glm')).toBeUndefined()
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key]
+        else process.env[key] = value
+      }
+    }
+  })
+
+  it('prefers the platform GLM key over an organization key when both exist', () => {
+    const previous = {
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      GLM_API_KEY_PREVIEW: process.env.GLM_API_KEY_PREVIEW,
+      GLM_API_KEY: process.env.GLM_API_KEY,
+      ZAI_API_KEY: process.env.ZAI_API_KEY,
+    }
+    try {
+      process.env.VERCEL_ENV = 'production'
+      process.env.GLM_API_KEY = 'glm-platform-key-12345678'
+      delete process.env.GLM_API_KEY_PREVIEW
+      delete process.env.ZAI_API_KEY
+
+      const orgKeys = { glm: 'glm-org-key-12345678' }
+      expect(resolveLlmApiKey('glm', orgKeys)).toBe('glm-platform-key-12345678')
+      expect(getOrgLlmKeySource('glm', orgKeys)).toBe('platform')
+      expect(buildOrgLlmKeyStatuses(orgKeys).find((item) => item.provider === 'glm')?.source)
+        .toBe('platform')
     } finally {
       for (const [key, value] of Object.entries(previous)) {
         if (value === undefined) delete process.env[key]

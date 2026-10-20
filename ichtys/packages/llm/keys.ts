@@ -17,6 +17,16 @@ export function resolveKeyForProvider(
   orgKeys?: OrgLlmApiKeys | null,
 ): string | undefined {
   const keyName = PROVIDER_TO_KEY[provider]
+  if (provider === 'glm') {
+    const platformKey =
+      (process.env.VERCEL_ENV === 'preview'
+        ? process.env.GLM_API_KEY_PREVIEW?.trim()
+        : undefined) ||
+      process.env.GLM_API_KEY?.trim() ||
+      process.env.ZAI_API_KEY?.trim()
+    return platformKey || orgKeys?.glm?.trim() || undefined
+  }
+
   const orgKey = orgKeys?.[keyName]?.trim()
   if (orgKey) return orgKey
 
@@ -33,15 +43,6 @@ export function resolveKeyForProvider(
       )
     case 'groq':
       return process.env.GROQ_API_KEY?.trim() || undefined
-    case 'glm':
-      return (
-        (process.env.VERCEL_ENV === 'preview'
-          ? process.env.GLM_API_KEY_PREVIEW?.trim()
-          : undefined) ||
-        process.env.GLM_API_KEY?.trim() ||
-        process.env.ZAI_API_KEY?.trim() ||
-        undefined
-      )
   }
 }
 
@@ -50,6 +51,16 @@ export function getKeySourceForProvider(
   orgKeys?: OrgLlmApiKeys | null,
 ): 'org' | 'platform' | 'none' {
   const keyName = PROVIDER_TO_KEY[provider]
+  if (provider === 'glm') {
+    if (
+      (process.env.VERCEL_ENV === 'preview' && process.env.GLM_API_KEY_PREVIEW?.trim()) ||
+      process.env.GLM_API_KEY?.trim() ||
+      process.env.ZAI_API_KEY?.trim()
+    ) {
+      return 'platform'
+    }
+    return orgKeys?.glm?.trim() ? 'org' : 'none'
+  }
   if (orgKeys?.[keyName]?.trim()) return 'org'
   if (resolveKeyForProvider(provider, null)) return 'platform'
   return 'none'

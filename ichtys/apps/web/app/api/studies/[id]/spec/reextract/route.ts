@@ -10,8 +10,11 @@ export const maxDuration = 300
 
 function formatReextractError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err)
+  if (/insufficient balance|no resource package|please recharge/i.test(msg)) {
+    return 'Z.AI rechazó GLM: la clave activa no tiene un paquete de API general disponible. ALPHI usa primero GLM_API_KEY de plataforma. Confirmá que pertenezca a la cuenta Z.AI con un paquete Usage Bundle o saldo prepago y que use el endpoint general https://api.z.ai/api/paas/v4. El GLM Coding Plan tiene un endpoint exclusivo para tareas de programación y no aplica a la extracción de protocolos.'
+  }
   if (/invalid x-api-key|authentication|401|403/i.test(msg)) {
-    return 'La clave GLM_API_KEY en Vercel parece inválida o faltante. Revisá Environment Variables → Production.'
+    return 'Z.AI rechazó la clave GLM activa. Revisá GLM_API_KEY en Vercel → Production y confirmá que pertenezca a la cuenta Z.AI correcta.'
   }
   if (/usage limits|rate limit|429/i.test(msg)) {
     return 'GLM agotó la cuota o el límite de solicitudes. Revisá el plan y los límites de GLM_API_KEY en Z.AI.'

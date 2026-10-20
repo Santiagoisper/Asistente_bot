@@ -53,12 +53,20 @@ function envKey(provider: OrgLlmKeyProvider): string | undefined {
   return name ? process.env[name]?.trim() || undefined : undefined
 }
 
+function hasPlatformGlmKey(): boolean {
+  return Boolean(
+    (process.env.VERCEL_ENV === 'preview' && process.env.GLM_API_KEY_PREVIEW?.trim()) ||
+      process.env.GLM_API_KEY?.trim() ||
+      process.env.ZAI_API_KEY?.trim(),
+  )
+}
+
 export function resolveLlmApiKey(
   provider: OrgLlmKeyProvider,
   orgKeys?: OrgLlmApiKeys | null,
 ): string | undefined {
   if (provider === 'glm') {
-    return orgKeys?.glm?.trim() || envKey('glm')
+    return envKey('glm') || orgKeys?.glm?.trim()
   }
   const orgKey = orgKeys?.[provider]?.trim()
   if (orgKey) return orgKey
@@ -69,7 +77,10 @@ export function getOrgLlmKeySource(
   provider: OrgLlmKeyProvider,
   orgKeys?: OrgLlmApiKeys | null,
 ): OrgLlmKeySource {
-  if (provider === 'glm' && orgKeys?.glm?.trim()) return 'org'
+  if (provider === 'glm') {
+    if (hasPlatformGlmKey()) return 'platform'
+    return orgKeys?.glm?.trim() ? 'org' : 'none'
+  }
   if (orgKeys?.[provider]?.trim()) return 'org'
   if (envKey(provider)) return 'platform'
   return 'none'

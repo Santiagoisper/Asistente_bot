@@ -29,6 +29,7 @@ import {
   buildSectionContext,
   extractStudySpec,
   getExtractionModelId,
+  isZaiNoResourcePackageError,
   samplePageTextForMap,
   SPEC_EXTRACTION_LLM_PROVIDER,
   SPEC_EXTRACTION_SYSTEM_PROMPT,
@@ -146,6 +147,13 @@ describe('GLM extraction configuration', () => {
       }
     }
   })
+
+  it('recognizes a Z.AI missing-resource-package rejection as a permanent error', () => {
+    expect(isZaiNoResourcePackageError(
+      new Error('Insufficient balance or no resource package. Please recharge.'),
+    )).toBe(true)
+    expect(isZaiNoResourcePackageError(new Error('temporary network timeout'))).toBe(false)
+  })
 })
 
 describe('buildSectionContext', () => {
@@ -161,6 +169,16 @@ describe('buildSectionContext', () => {
 // ---------------------------------------------------------------------------
 
 describe('extractStudySpec', () => {
+  it('stops after a Z.AI balance rejection instead of retrying extraction by section', async () => {
+    mocks.generateObject.mockRejectedValue(
+      new Error('Insufficient balance or no resource package. Please recharge.'),
+    )
+
+    await expect(extractStudySpec(makeProtocolPages())).rejects.toThrow(/no resource package/i)
+    expect(mocks.generateObject).toHaveBeenCalledTimes(1)
+    expect(mocks.generateObject.mock.calls[0]?.[0]).toMatchObject({ maxRetries: 0 })
+  })
+
   it('extracts all four groups and returns a Zod-valid StudySpec without warnings', async () => {
     mockExtractionByPrompt()
 

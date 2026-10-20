@@ -55,4 +55,29 @@ describe('resolveKeyForProvider', () => {
       }
     }
   })
+
+  it('prefers the platform GLM key over an organization key when both exist', async () => {
+    const { resolveKeyForProvider, getKeySourceForProvider } = await import('../keys')
+    const previous = {
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      GLM_API_KEY_PREVIEW: process.env.GLM_API_KEY_PREVIEW,
+      GLM_API_KEY: process.env.GLM_API_KEY,
+      ZAI_API_KEY: process.env.ZAI_API_KEY,
+    }
+    try {
+      process.env.VERCEL_ENV = 'production'
+      process.env.GLM_API_KEY = 'glm-platform-key-12345678'
+      delete process.env.GLM_API_KEY_PREVIEW
+      delete process.env.ZAI_API_KEY
+
+      const orgKeys = { glm: 'glm-org-key-12345678' }
+      expect(resolveKeyForProvider('glm', orgKeys)).toBe('glm-platform-key-12345678')
+      expect(getKeySourceForProvider('glm', orgKeys)).toBe('platform')
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key]
+        else process.env[key] = value
+      }
+    }
+  })
 })

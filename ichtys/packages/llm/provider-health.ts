@@ -13,7 +13,7 @@ export interface ProviderHealthResult {
 
 function classifyError(err: unknown): { status: ProviderHealthStatus; message: string } {
   const msg = err instanceof Error ? err.message : String(err)
-  if (/quota|usage limits|rate limit|resource_exhausted|insufficient_quota|billing/i.test(msg)) {
+  if (/quota|usage limits|rate limit|resource_exhausted|insufficient_quota|billing|insufficient balance|no resource package|please recharge/i.test(msg)) {
     return { status: 'quota_exceeded', message: msg.slice(0, 180) }
   }
   if (/invalid.*key|authentication|401|403|unauthorized|api key not valid/i.test(msg)) {

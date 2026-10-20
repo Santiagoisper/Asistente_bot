@@ -19,7 +19,7 @@ import {
  * FDA/IND, EMA, ICH M11, CIOMS, etc.).
  *
  * Estrategia:
- *  1. Localización SEMÁNTICA: Claude lee un mapa compacto del documento
+ *  1. Localización SEMÁNTICA: GLM lee un mapa compacto del documento
  *     (página + primeros ~120 chars) y devuelve los rangos de páginas de
  *     cada sección + idioma detectado. Sin regex frágiles.
  *  2. Extracción estructurada por grupo sobre SOLO las páginas localizadas.
@@ -82,6 +82,11 @@ export function getExtractionModelId(): string {
 /** Toda extracción de protocolo/SoA usa GLM, igual que el chat. */
 export const SPEC_EXTRACTION_LLM_PROVIDER = 'glm' as const
 
+export function isZaiNoResourcePackageError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err)
+  return /insufficient balance|no resource package|please recharge/i.test(message)
+}
+
 export interface ExtractStudySpecOptions {
   llmProviderPreference?: LlmProviderPreference
   llmApiKeys?: OrgLlmApiKeys | null
@@ -104,6 +109,9 @@ async function generateSpecObject<T>(params: {
         system: params.system,
         prompt: params.prompt,
         maxTokens: params.maxTokens,
+        // A missing Z.AI resource package is permanent; retrying spends time and
+        // repeats identical requests for each protocol section.
+        maxRetries: 0,
       })
       return response.object as T
     },
@@ -177,7 +185,7 @@ function buildCompactPageMap(pages: ParsedPage[]): string {
 }
 
 /**
- * Localiza las secciones clave usando Claude sobre un mapa compacto.
+ * Localiza las secciones clave usando GLM sobre un mapa compacto.
  * Funciona en cualquier idioma y formato de protocolo.
  */
 export async function locateSectionsSemantic(
@@ -500,6 +508,7 @@ export async function extractStudySpec(
       (fewShotExamples.length > 0 ? ` few-shot=${fewShotExamples.length}` : ''),
     )
   } catch (err) {
+    if (isZaiNoResourcePackageError(err)) throw err
     const cause = err instanceof Error ? err.message : String(err)
     warnings.push(`section-location: semantic locator failed — ${cause}`)
     // Fallback conservador: solo la identificación (primeras 5 páginas)
