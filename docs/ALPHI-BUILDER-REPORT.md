@@ -1,8 +1,8 @@
 # ALPHI 2.0 — Reporte del Builder (slot 03)
 
-> Fecha: 2026-10-19
-> Repo: `Asistente_bot` (monorepo `ichtys/`) · Rama: `feature/alphi-2.0-visual-redesign`
-> Commits: `2b0a3ed` (capa visual) · `c81c30e` (tests H2+H3) · E2E verificado sobre HEAD `1c70bdf` (ver §6)
+> Fecha: 2026-10-19 (§1–§7) · actualizado 2026-10-20 (§8)
+> Repo: `Asistente_bot` (monorepo `ichtys/`) · Rama: `feature/alphi-2.0-visual-redesign` → `fix/glm-zai-direct` (§8)
+> Commits: `2b0a3ed` (capa visual) · `c81c30e` (tests H2+H3) · E2E sobre HEAD `1c70bdf` (§6) · análisis profundo sobre HEAD `022ec00` (§8)
 > Reglas cumplidas: sin push, sin deploy, sin tocar `main`, datos sintéticos, evidencia real capturada de corridas.
 > (Reemplaza el borrador previo de este archivo tomado por Foreman; los números finales verificados están acá.)
 
@@ -104,6 +104,36 @@ La tabla de rutas del build demuestra que `/studies/import` (○ estática) y `/
 
 ## 7. Siguiente paso sugerido
 
-Review de `2b0a3ed` + `c81c30e` + `1c70bdf` por el Reviewer (slot 04). E2E del Builder: **PASS** con deuda documentada (§6) — pendiente de directiva el fix del timeout del chat y la decisión sobre H4. Los commits están locales en `feature/alphi-2.0-visual-redesign`; cualquier push requiere aprobación explícita de Santiago.
+Review de `2b0a3ed` + `c81c30e` + `1c70bdf` por el Reviewer (slot 04). E2E del Builder: **PASS** con deuda documentada (§6) — pendiente de directiva el fix del timeout del chat (H4 ya no reproduce en `022ec00`; ver §8.1). Los commits están locales en la rama (hoy `fix/glm-zai-direct`); cualquier push requiere aprobación explícita de Santiago.
+
+## 8. ANÁLISIS PROFUNDO — sobre HEAD `022ec00` de `fix/glm-zai-direct` (2026-10-20)
+
+Directiva: "ANÁLISIS PROFUNDO: BUILDER — revisar código, componentes, tests, build." La rama avanzó de `feature/alphi-2.0-visual-redesign` a `fix/glm-zai-direct` (trabajo GLM/Z.AI directo de otros slots); este análisis cubre ese estado, con foco en la integración GLM.
+
+> **Nota de actualización**: al cerrar este reporte, otro slot commiteó el trabajo que estaba sucio como `1ea766e` ("E2E analysis: fix org-llm-keys, spec-extractor, provider-health, chain tests"). Verifiqué ese commit contra los archivos centrales de los hallazgos (a)/(b)/(e) — `keys.ts`, `org-llm-keys.ts`, `provider-health.ts` — y son idénticos línea a línea al árbol sobre el que corrí la verificación. Los hallazgos y números de §8.1 aplican por tanto al HEAD actual `1ea766e`.
+
+### 8.1 Verificación (evidencia real, 2026-10-20)
+
+| Corrida | Comando | Resultado |
+|---|---|---|
+| Typecheck (10 paquetes) | `corepack pnpm -r typecheck` | **PASS** — 10/10 |
+| Tests sin `DATABASE_URL` | `corepack pnpm -r test` | **FAIL en colección** — `apps/web/lib/rag/__tests__/answer-orchestrator.test.ts`: `DATABASE_URL is not set` (`packages/db/client.ts:27`); la corrida `-r` aborta en apps/web (ver §8.2-i) |
+| Tests con `DATABASE_URL` sintética | `DATABASE_URL="postgres://synthetic:synthetic@localhost:5432/synthetic" corepack pnpm -r test` | **556 passed / 4 skipped / 0 failed** — crypto 8 · llm 5 · clinical 16 · db 35 · ingestion 29 · auth 43 · rag 101 · evals 48 · web 271 |
+| Build (app web) | `DATABASE_URL="postgres://synthetic:…" corepack pnpm --filter @ichtys/web build` | **PASS** — compila, tabla de rutas completa |
+
+- **H4 (§6) ya no reproduce**: el fail de `tests/leakage/api-auth-coverage.test.ts` (ruta `/` pública) no aparece en este HEAD — 0 failed con URL sintética. §6 correspondía a `1c70bdf`.
+- Delta contra §6: +9 passed (547→556); llm 3→5, db 33→35, ingestion 25→29, web 270→271. Los logs `[spec-extractor] FAILED … No 'studySpecs' export is defined on the '@ichtys/db' mock` en ingestion son caminos negativos esperados (archivos en verde).
+
+### 8.2 Hallazgos (a–i)
+
+a) **Precedencia invertida para GLM — deliberada, con trade-off**: para GLM la key de plataforma gana sobre la de org (`packages/llm/keys.ts:20-27`), al revés que el resto. Reflejada en `packages/db/org-llm-keys.ts` y documentada en la UI. Trade-off multi-tenant: mientras exista `GLM_API_KEY` global, ninguna organización usa su clave GLM propia.
+b) **Lógica de keys duplicada en dos paquetes**: `packages/llm/keys.ts` y `packages/db/org-llm-keys.ts` reimplementan la misma precedencia (preview→GLM→ZAI→org). Hoy consistentes; riesgo de drift ante cambios futuros.
+c) **Cadena efectiva = solo GLM; fallback nominal**: `AUTO_PROVIDER_CHAIN = ['glm']`; `runWithLlmFallback` hardcodea 'glm' sin fallback real; loop de proveedores de `answerEngineStream` muerto; `isProviderQuotaError`/`isProviderFallbackError` sin cadena que los use.
+d) **Parámetros muertos**: `_preference` en `resolveProviderChain`, `_orgKeys` en `getModelId`/`getGlmBaseUrl`.
+e) **Probes de salud secuenciales y sin timeout**: `checkAllProviderHealth` itera 5 proveedores con await secuencial, sin AbortSignal; prueba 5 proveedores cuando solo GLM se usa.
+f) **Deuda §6.1 confirmada de punta a punta (chat/stream)**: la ruta no propaga `req.signal` y `answerEngineStream` llama `streamText` sin `abortSignal` ni timeout (`packages/rag/answer-engine.ts:592`); hasta 3 llamadas GLM por pregunta (stream + confianza + título), ninguna con timeout. Fix diseñado en §6; pendiente de directiva.
+g) **Patrones buenos**: strip de evidencias `spec:` antes de persistir, regla anti prompt-injection en SYSTEM_PROMPT, invariantes `insufficient_evidence`, sanitización de errores cliente/servidor, quota Z.AI → `quota_exceeded`.
+h) **Trabajo sucio de otro slot — regla aplicada**: durante el análisis había 9 archivos fuente (+122/−18), 2 docs y ~30 capturas e2e sin commitear; los dejé fuera de mis commits. Ese estado fue commiteado por su autor como `1ea766e` mientras escribía este reporte; al momento de commitear esto no queda trabajo sucio ajeno en la rama (solo este reporte).
+i) **Tests de apps/web exigen `DATABASE_URL` en colección**: `answer-orchestrator.test.ts` (de `8779d48`) pasó a romperse cuando `7137752` cambió su import de `import type { DocumentType }` a import de valor `{ getOrgLlmApiKeys, getOrgRagConfig }` de `@ichtys/db`, arrastrando `client.ts:27` a la colección. `pnpm -r test` aborta en cualquier entorno sin la variable. Fix sugerido (pendiente de directiva): mock de `@ichtys/db` en ese test o import diferido.
 
 — Builder, slot 03 · BOPE-OS
