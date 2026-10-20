@@ -1,7 +1,7 @@
-# Informe Testpilot — OPERACIÓN ALPHI 2.0 (FASE 0 + FASE 1 + pasada FASE 2 + pasada FASE 7 + pasada E2E)
+# Informe Testpilot — OPERACIÓN ALPHI 2.0 (FASE 0 + FASE 1 + pasada FASE 2 + pasada FASE 7 + pasada E2E + análisis profundo)
 
 - **Slot**: 05 — testpilot (GLM)
-- **Fecha**: 2026-10-19 (re-verificado 13:44 UTC — §0; pasada FASE 2 14:15–14:35 UTC — §7; pasada FASE 7 flujo upload→chat 16:20–16:35 UTC — §8; pasada E2E typecheck+build+tests+capturas 16:45–17:05 UTC — §9)
+- **Fecha**: 2026-10-19 (re-verificado 13:44 UTC — §0; pasada FASE 2 14:15–14:35 UTC — §7; pasada FASE 7 flujo upload→chat 16:20–16:35 UTC — §8; pasada E2E typecheck+build+tests+capturas 16:45–17:05 UTC — §9); 2026-10-20 (análisis profundo 05:30–06:05 UTC — §10)
 - **Repo**: Asistente_bot (ichtys/apps/web)
 - **Rama**: `feature/alphi-2.0-visual-redesign` (main intacto, sin commits ni push)
 - **Alcance**: verificación (build / test / typecheck / capturas visuales) + auditoría de FASE 0 y estado del design system de FASE 1
@@ -279,6 +279,71 @@ Misma técnica probada en §7, extendida a toda la app:
 - `dashboard` renderizó **○ estático** en la réplica (efecto del stub: sin dependencia dinámica) vs **ƒ dinámico** en el build real de §9.1 — diferencia esperada del método, no un cambio del código.
 - La réplica y el servidor :3021 fueron desmontados al terminar (puerto liberado); el repo real no contiene ningún artefacto de esta pasada salvo el informe y los PNGs.
 - H4 (falla preexistente en main) y H10 (§8.5) siguen en pie; nada nuevo bloqueante.
+
+---
+
+## 10. Análisis profundo (2026-10-20) — typecheck + build + tests + réplica + capturas
+
+**Contexto**: rama `fix/glm-zai-direct`. Las pasadas se ejecutaron 05:30–06:05 UTC contra el árbol de trabajo tal cual estaba (con el trabajo GLM del builder presente en disco). Al cierre, ese trabajo ya no está sucio: quedó commiteado en `1ea766e` y HEAD es `6ea6625`; el árbol quedó limpio (solo `node_modules/` sin rastrear y las capturas `deep-*` de esta pasada). No toqué ni stasheé nada del builder.
+
+### 10.1 Typecheck — 10/10 EXIT=0
+
+`tsc --noEmit` limpio en los 10 proyectos: apps/web y packages/{auth, clinical, crypto, db, evals, ingestion, llm, rag, ui}.
+
+### 10.2 Tests — 556 pasan / 0 fallan / 4 saltan
+
+| Suite | Archivos | Tests |
+|---|---|---|
+| apps/web | 23 ✓ + 1 saltado (24) | 271 ✓ + 4 saltados (275) |
+| packages/auth | 2 ✓ | 43 ✓ |
+| packages/clinical | 5 ✓ | 16 ✓ |
+| packages/crypto | 1 ✓ | 8 ✓ |
+| packages/db | 2 ✓ | 35 ✓ |
+| packages/evals | 2 ✓ | 48 ✓ |
+| packages/ingestion | 6 ✓ | 29 ✓ |
+| packages/rag | 5 ✓ | 101 ✓ |
+| packages/llm | 1 ✓ | 5 ✓ |
+| **Total** | **47 ✓ + 1 saltado (48)** | **556 ✓ / 0 ✗ / 4 saltados (560)** |
+
+- El archivo saltado es la suite de integración (`tests/integration/phi-clinical.integration.test.ts`, `skipIf` sin DB real) — esperado.
+- Requisito: `DATABASE_URL` sintética (`postgresql://synthetic:synthetic@localhost:5432/synthetic`); sin ella, `packages/db/client.ts:27` lanza al importar y arrastra suites enteras.
+- packages/llm incluye los tests nuevos del builder (GLM preview key solo en Vercel Preview; preferir la key de plataforma sobre la de organización) — 5/5 ✓, re-corridos al cierre contra el HEAD actual.
+- **vs pasada E2E del builder (abebea4: 547 ✓ / 1 ✗)**: ahora 556 ✓ / 0 ✗ — 9 pruebas más y el fallo desapareció.
+
+### 10.3 H4 RESUELTO
+
+El fallo preexistente H4 (`api-auth-coverage.test.ts:127`, documentado en §4 y §9) **ya no se reproduce**: la suite pasa completa. Sale de la lista de deuda. H10 (§8.5) no se re-verificó en esta pasada (fuera de alcance).
+
+### 10.4 Build real — EXIT=0 + advertencia nueva middleware→proxy
+
+- Compilado en 5.8 s; 29/29 páginas estáticas generadas (354 ms); manifiesto **12 ○ + 13 ƒ = 25 páginas** + Middleware.
+- **Advertencia nueva** (no estaba en §9.1): `⚠ The "middleware" file convention is deprecated. Please use "proxy" instead.` — Next 16 renombró la convención (el manifiesto ya lo lista como `ƒ Proxy (Middleware)`). No bloqueante. **Sugerencia al builder (03), baja prioridad**: renombrar `middleware.ts` → `proxy.ts` en una pasada futura.
+- Nota de conteo: §9.1 reportó "11 ○ + 12 ƒ" leyendo una tabla truncada del log; el manifiesto completo de esta pasada dice 12+13=25, igual que el inventario de 25 rutas de §9.3 — diferencia de método de conteo, no una regresión.
+
+### 10.5 Réplica sin credenciales — 24×200 + 1×307, 25 capturas `deep-*`
+
+Misma receta que §9.2 (rsync a `/tmp/deeppilot`, `node_modules` enlazado, middleware fuera, stubs de Clerk y `@ichtys/auth` con sesión nula), con dos correcciones que costaron varias iteraciones y quedan documentadas para la próxima réplica:
+
+1. El `tsconfig.json` de la réplica extiende `"../tsconfig.base.json"` (relativo, un nivel arriba) — con ruta absoluta, Turbopack falla con `server relative imports are not implemented`.
+2. La réplica declara `baseUrl "."` + `paths {"@/*": ["./*"]}` propios: los `paths` del hijo **reemplazan por completo** a los del base, y la app real nunca usa alias `@/` (solo `@ichtys/*`), así que sin esto los stubs `@/lib/*` no resolvían.
+
+Build de la réplica EXIT=0 (5.2 s). Servidor en :3022 y `curl` a las 25 rutas: **`/` → 307 → /sign-in** (idéntico a §9.3 — redirección sin sesión) y **las otras 24 → 200** (18–46 KB). Capturas 1440×900 fullPage en `docs/capturas/deep-*.png`:
+
+| Grupo | Capturas (bytes) |
+|---|---|
+| Raíz/auth | home 5854, sign-in 5854, sign-up 5854 — idénticas (post-redirect, igual que §9.3) |
+| Públicas (10) | pricing 158637, privacy 180236, terms 170249, trust 329205, roi 121957, calidad 59533, consulta 57536, jornada 63943, protocolo 59852, visita 66952 |
+| App shell (6) | dashboard 100881, library 54060, settings 49041, studies 53406, admin 36409, studies_import 67039 |
+| Estudio `[id]` (6) | chat 41302, documents 41303, history 41303, spec 41303, subjects 41303, subjects_s1 41302 — idénticas (H11: el layout corta antes de los children) |
+
+Sin errores de navegación; ninguna captura menor a 5 KB. La réplica y el servidor :3022 fueron desmontados (puerto liberado); los procesos de otros slots (3017/3018) no se tocaron.
+
+### 10.6 Notas honestas
+
+- Las capturas muestran ramas sin sesión (stubs con sesión nula); nada de sesión ni datos inventados en pantalla.
+- Logs citables en `/tmp`: `deep-build.log` (build real), `deep-build-replica.log`, `deep-web2.log`, `deep-pkg-{auth,clinical,crypto,db,evals,ingestion,rag,llm}.log`, `deep-server.log`, `tc-*.log`.
+- `/tmp/deeppilot` puede descartarse; el repo real solo recibe este informe y los PNGs `deep-*`.
+- Sin DB real, sin credenciales reales, sin deploy, sin push, main intacto.
 
 ---
 

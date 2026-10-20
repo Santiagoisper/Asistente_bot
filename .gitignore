@@ -1,4 +1,5 @@
 .pnpm-store/
+node_modules/
 invalid-skills-inventory.csv
 ichtys/.claude/
 ichtys/.cursor/
