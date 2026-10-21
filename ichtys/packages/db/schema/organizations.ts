@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, jsonb } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, timestamp, jsonb, bigint } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { sites } from './sites'
 import { studies } from './studies'
@@ -36,6 +36,14 @@ export const organizations = pgTable('organizations', {
   ragConfig: jsonb('rag_config').$type<OrgRagConfig>(),
   /** API keys LLM por org (AES-256-GCM, JSON cifrado). Solo org_admin. */
   llmApiKeysEncrypted: text('llm_api_keys_encrypted'),
+  /** Nombre comercial del plan contratado (informativo). Null = sin plan asignado. */
+  planName: text('plan_name'),
+  /**
+   * Cupo mensual de tokens de la plataforma (input+output) incluido en el plan.
+   * Null = sin cupo definido (no se limita). Solo cuenta consumo con clave de la plataforma;
+   * lo que se gasta con una clave propia de la organización no descuenta del cupo.
+   */
+  monthlyTokenQuota: bigint('monthly_token_quota', { mode: 'number' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })

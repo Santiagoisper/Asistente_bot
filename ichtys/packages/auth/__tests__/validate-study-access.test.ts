@@ -347,6 +347,8 @@ function createTenantFixture(): TenantFixture {
       clerkOrgId,
       ragConfig: null,
       llmApiKeysEncrypted: null,
+      planName: null,
+      monthlyTokenQuota: null,
       createdAt,
       updatedAt: createdAt,
     },

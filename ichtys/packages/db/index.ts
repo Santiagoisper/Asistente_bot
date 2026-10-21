@@ -6,6 +6,24 @@ export * from './schema'
 // Re-export de operadores Drizzle usados por capas server-only (apps/web)
 // que no deben depender directamente de drizzle-orm.
 export { and, desc, eq, inArray, ne, sql } from 'drizzle-orm'
+export {
+  recordUsage,
+  getUsagePeriod,
+  getUsageSummary,
+  getQuotaStatus,
+  evaluateQuota,
+  canUsePlatformKey,
+  setOrgPlan,
+  QUOTA_WARNING_RATIO,
+  type RecordUsageInput,
+  type UsagePeriod,
+  type UsageSummary,
+  type UsageBreakdownRow,
+  type QuotaEvaluation,
+  type QuotaState,
+  type QuotaStatus,
+  type SetOrgPlanInput,
+} from './usage'
 export { getOrgRagConfig, updateOrgRagConfig, type ResolvedOrgRagConfig, type OrgLlmProvider } from './org-config'
 export {
   getOrgLlmApiKeys,
