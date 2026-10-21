@@ -31,7 +31,8 @@ async function putPrivateBlobProduction(
     const buffer = await file.arrayBuffer()
 
     const blob = await put(blobKey, Buffer.from(buffer), {
-      access: 'public',
+      // SEC-01: los PDFs clinicos nunca deben ser accesibles por URL directa.
+      access: 'private',
       addRandomSuffix: false,
       allowOverwrite: false,
       contentType: 'application/pdf',

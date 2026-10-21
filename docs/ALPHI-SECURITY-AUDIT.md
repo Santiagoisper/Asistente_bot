@@ -163,3 +163,21 @@ Estos controles soportan la conclusión de que no se observó exposición cross-
 4. Mantener las validaciones tenant/user existentes y añadir pruebas de regresión para accesos cruzados, fallas de configuración de proveedor y ausencia de contenido sensible en logs.
 
 No corrí esas pruebas como parte de esta auditoría estática.
+
+## Addendum 2026-10-21 — SEC-01: remediación en código (rama `feature/alphi-2-clinical-workspace`)
+
+**Estado: remediado en código, NO verificado en despliegue. SEC-01 sigue abierto en producción.**
+
+Cambios (verificados con tests unitarios, `typecheck` y suites existentes en verde; datos sintéticos):
+
+- `apps/web/app/api/documents/upload/blob-storage.ts`: la subida usa `access: 'private'`.
+- Nuevo `packages/ingestion/blob-read.ts` (`openStoredBlob`): lectura server-side con `get(..., { access: 'private' })` autenticado. Lo usan la descarga (`.../download/blob-download.ts`) y la ingesta (`pipeline.ts`), sin duplicar lógica.
+- Fallback: si el objeto es legado (público) se lee con `fetch` plano y se registra un aviso en el log. Es transitorio hasta migrar los objetos existentes.
+- Tests de regresión: `packages/ingestion/__tests__/blob-read.test.ts` y `apps/web/app/api/documents/upload/__tests__/blob-storage.test.ts`.
+
+Pendiente (requiere decisión y acción de quien administra producción; no se hizo):
+
+1. Confirmar si el store de Vercel Blob de producción es público o privado. El modo de acceso depende del store: si es público, las subidas con `access: 'private'` fallarán (falla cerrada) hasta crear un store privado y rotar `BLOB_READ_WRITE_TOKEN`. Esto no fue verificado contra el SDK en un store real.
+2. Migrar o eliminar los objetos ya creados como públicos y actualizar `blob_url` en `document_versions`.
+3. Verificar en despliegue, con un PDF sintético, que la URL directa no responde sin credenciales y que descarga e ingesta funcionan por los endpoints.
+4. Tras (1)-(3), retirar el fallback legado de `blob-read.ts` y alinear `ichtys/docs/SECURITY.md` (secciones sobre Blob privado) con la evidencia obtenida.
