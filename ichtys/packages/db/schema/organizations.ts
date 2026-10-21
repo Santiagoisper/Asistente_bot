@@ -39,11 +39,11 @@ export const organizations = pgTable('organizations', {
   /** Nombre comercial del plan contratado (informativo). Null = sin plan asignado. */
   planName: text('plan_name'),
   /**
-   * Cupo mensual de tokens de la plataforma (input+output) incluido en el plan.
-   * Null = sin cupo definido (no se limita). Solo cuenta consumo con clave de la plataforma;
-   * lo que se gasta con una clave propia de la organización no descuenta del cupo.
+   * Presupuesto mensual de consumo de la plataforma incluido en el plan, en micro-USD
+   * (100 USD = 100_000_000). Null = sin cupo definido (no se limita). Solo cuenta consumo con
+   * clave de la plataforma; lo que se gasta con una clave propia de la organización no descuenta.
    */
-  monthlyTokenQuota: bigint('monthly_token_quota', { mode: 'number' }),
+  monthlyBudgetMicros: bigint('monthly_budget_micros', { mode: 'number' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })

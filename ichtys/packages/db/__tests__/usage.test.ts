@@ -55,9 +55,11 @@ import {
   recordUsage,
   setOrgPlan,
 } from '../usage'
+import { usdToMicros } from '../usage-pricing'
 
 const dialect = new PgDialect()
 const orgId = '11111111-1111-4111-8111-111111111111'
+const HUNDRED_USD = usdToMicros(100)
 
 function lastWhereQuery(): { sql: string; params: unknown[] } {
   const where = [...fake.calls].reverse().find((call) => call.method === 'where')
@@ -91,29 +93,44 @@ describe('getUsagePeriod', () => {
   })
 })
 
-describe('evaluateQuota', () => {
+describe('evaluateQuota (cupo de 100 USD)', () => {
   it('sin cupo definido no limita', () => {
-    expect(evaluateQuota(null, 5_000_000)).toMatchObject({ state: 'no_quota', quota: null, remaining: null })
+    expect(evaluateQuota(null, 5_000_000_000)).toMatchObject({ state: 'no_quota', budgetMicros: null })
     expect(evaluateQuota(0, 10)).toMatchObject({ state: 'no_quota' })
   })
 
   it('ok por debajo del umbral de aviso', () => {
-    expect(evaluateQuota(1_000, 799)).toMatchObject({ state: 'ok', remaining: 201, percentUsed: 80 })
+    expect(evaluateQuota(HUNDRED_USD, usdToMicros(79.99))).toMatchObject({ state: 'ok', percentUsed: 80 })
   })
 
   it('advierte desde el 80 %', () => {
     expect(QUOTA_WARNING_RATIO).toBe(0.8)
-    expect(evaluateQuota(1_000, 800)).toMatchObject({ state: 'warning' })
-    expect(evaluateQuota(1_000, 999)).toMatchObject({ state: 'warning', remaining: 1 })
+    expect(evaluateQuota(HUNDRED_USD, usdToMicros(80))).toMatchObject({ state: 'warning' })
+    expect(evaluateQuota(HUNDRED_USD, usdToMicros(99.99))).toMatchObject({ state: 'warning' })
   })
 
   it('agotado al llegar al cupo y nunca devuelve restante negativo ni porcentaje > 100', () => {
-    expect(evaluateQuota(1_000, 1_000)).toMatchObject({ state: 'exceeded', remaining: 0, percentUsed: 100 })
-    expect(evaluateQuota(1_000, 5_000)).toMatchObject({ state: 'exceeded', remaining: 0, percentUsed: 100 })
+    expect(evaluateQuota(HUNDRED_USD, HUNDRED_USD)).toMatchObject({
+      state: 'exceeded',
+      remainingMicros: 0,
+      percentUsed: 100,
+    })
+    expect(evaluateQuota(HUNDRED_USD, usdToMicros(250))).toMatchObject({
+      state: 'exceeded',
+      remainingMicros: 0,
+      percentUsed: 100,
+    })
+  })
+
+  it('calcula el restante', () => {
+    expect(evaluateQuota(HUNDRED_USD, usdToMicros(30))).toMatchObject({
+      remainingMicros: usdToMicros(70),
+      percentUsed: 30,
+    })
   })
 
   it('un consumo negativo se trata como cero', () => {
-    expect(evaluateQuota(1_000, -50)).toMatchObject({ state: 'ok', usedPlatformTokens: 0 })
+    expect(evaluateQuota(HUNDRED_USD, -50)).toMatchObject({ state: 'ok', usedMicros: 0 })
   })
 })
 
@@ -130,13 +147,14 @@ describe('recordUsage', () => {
   const base = {
     orgId,
     kind: 'chat_answer' as const,
-    provider: 'google',
-    model: 'gemini',
+    provider: 'glm',
+    model: 'glm-5.2',
     keySource: 'platform' as const,
   }
 
-  it('inserta solo conteos y metadatos, nunca contenido', async () => {
-    await recordUsage({ ...base, studyId: 's1', userId: 'u1', inputTokens: 120, outputTokens: 30 })
+  it('inserta conteos, costo estimado y metadatos, nunca contenido', async () => {
+    // glm-5.x: 1.40 USD/M entrada y 4.40 USD/M salida => 1M entrada + 1M salida = 5.80 USD
+    await recordUsage({ ...base, studyId: 's1', userId: 'u1', inputTokens: 1_000_000, outputTokens: 1_000_000 })
 
     const insert = fake.calls.find((call) => call.method === 'insert.values')
     expect(insert?.args[0]).toEqual({
@@ -144,10 +162,11 @@ describe('recordUsage', () => {
       studyId: 's1',
       userId: 'u1',
       kind: 'chat_answer',
-      provider: 'google',
-      model: 'gemini',
-      inputTokens: 120,
-      outputTokens: 30,
+      provider: 'glm',
+      model: 'glm-5.2',
+      inputTokens: 1_000_000,
+      outputTokens: 1_000_000,
+      costMicros: usdToMicros(5.8),
       keySource: 'platform',
     })
   })
@@ -188,9 +207,9 @@ describe('recordUsage', () => {
 describe('getUsageSummary', () => {
   it('agrega por tipo y origen de clave, filtrando siempre por organización y período', async () => {
     fake.results.push([
-      { kind: 'chat_answer', keySource: 'platform', inputTokens: '1000', outputTokens: '200', calls: '4' },
-      { kind: 'embedding_document', keySource: 'platform', inputTokens: '5000', outputTokens: '0', calls: '9' },
-      { kind: 'chat_answer', keySource: 'org', inputTokens: '300', outputTokens: '100', calls: '2' },
+      { kind: 'chat_answer', keySource: 'platform', inputTokens: '1000', outputTokens: '200', costMicros: '3000', calls: '4' },
+      { kind: 'embedding_document', keySource: 'platform', inputTokens: '5000', outputTokens: '0', costMicros: '750', calls: '9' },
+      { kind: 'chat_answer', keySource: 'org', inputTokens: '300', outputTokens: '100', costMicros: '900', calls: '2' },
     ])
 
     const summary = await getUsageSummary(orgId, getUsagePeriod(new Date('2026-10-21T00:00:00Z')))
@@ -198,12 +217,15 @@ describe('getUsageSummary', () => {
     expect(summary.platformTokens).toBe(6_200)
     expect(summary.orgKeyTokens).toBe(400)
     expect(summary.totalTokens).toBe(6_600)
-    expect(summary.rows).toHaveLength(3)
+    expect(summary.platformCostMicros).toBe(3_750)
+    expect(summary.orgKeyCostMicros).toBe(900)
+    expect(summary.totalCostMicros).toBe(4_650)
     expect(summary.rows[0]).toEqual({
       kind: 'chat_answer',
       keySource: 'platform',
       inputTokens: 1000,
       outputTokens: 200,
+      costMicros: 3000,
       calls: 4,
     })
 
@@ -215,22 +237,22 @@ describe('getUsageSummary', () => {
   it('sin consumo devuelve ceros', async () => {
     fake.results.push([])
     const summary = await getUsageSummary(orgId)
-    expect(summary).toMatchObject({ platformTokens: 0, orgKeyTokens: 0, totalTokens: 0, rows: [] })
+    expect(summary).toMatchObject({ platformTokens: 0, totalTokens: 0, totalCostMicros: 0, rows: [] })
   })
 })
 
 describe('getQuotaStatus', () => {
-  it('combina plan, cupo y consumo con clave de plataforma del mes', async () => {
-    fake.results.push([{ planName: 'Profesional', monthlyTokenQuota: 1_000_000 }])
-    fake.results.push([{ tokens: '850000' }])
+  it('combina plan, presupuesto y costo con clave de plataforma del mes', async () => {
+    fake.results.push([{ planName: 'Profesional', monthlyBudgetMicros: HUNDRED_USD }])
+    fake.results.push([{ costMicros: String(usdToMicros(85)) }])
 
     const status = await getQuotaStatus(orgId, new Date('2026-10-21T10:00:00Z'))
 
     expect(status).toMatchObject({
       planName: 'Profesional',
-      quota: 1_000_000,
-      usedPlatformTokens: 850_000,
-      remaining: 150_000,
+      budgetMicros: HUNDRED_USD,
+      usedMicros: usdToMicros(85),
+      remainingMicros: usdToMicros(15),
       state: 'warning',
     })
     expect(status.period.start.toISOString()).toBe('2026-10-01T00:00:00.000Z')
@@ -242,41 +264,41 @@ describe('getQuotaStatus', () => {
   })
 
   it('organización sin plan asignado: sin cupo', async () => {
-    fake.results.push([{ planName: null, monthlyTokenQuota: null }])
-    fake.results.push([{ tokens: '123' }])
+    fake.results.push([{ planName: null, monthlyBudgetMicros: null }])
+    fake.results.push([{ costMicros: '123' }])
 
     const status = await getQuotaStatus(orgId)
 
-    expect(status).toMatchObject({ planName: null, quota: null, state: 'no_quota', usedPlatformTokens: 123 })
+    expect(status).toMatchObject({ planName: null, budgetMicros: null, state: 'no_quota', usedMicros: 123 })
   })
 
   it('organización inexistente o sin eventos no rompe', async () => {
     fake.results.push([])
     fake.results.push([])
 
-    await expect(getQuotaStatus(orgId)).resolves.toMatchObject({ state: 'no_quota', usedPlatformTokens: 0 })
+    await expect(getQuotaStatus(orgId)).resolves.toMatchObject({ state: 'no_quota', usedMicros: 0 })
   })
 })
 
 describe('setOrgPlan', () => {
-  it('guarda plan y cupo normalizando el nombre', async () => {
+  it('guarda plan y presupuesto normalizando el nombre', async () => {
     fake.results.push(undefined)
-    await setOrgPlan({ orgId, planName: '  Profesional  ', monthlyTokenQuota: 2_000_000 })
+    await setOrgPlan({ orgId, planName: '  Profesional  ', monthlyBudgetMicros: HUNDRED_USD })
 
     const set = fake.calls.find((call) => call.method === 'set')
-    expect(set?.args[0]).toMatchObject({ planName: 'Profesional', monthlyTokenQuota: 2_000_000 })
+    expect(set?.args[0]).toMatchObject({ planName: 'Profesional', monthlyBudgetMicros: HUNDRED_USD })
   })
 
   it('permite quitar el cupo con null y vaciar el nombre', async () => {
     fake.results.push(undefined)
-    await setOrgPlan({ orgId, planName: '   ', monthlyTokenQuota: null })
+    await setOrgPlan({ orgId, planName: '   ', monthlyBudgetMicros: null })
 
     const set = fake.calls.find((call) => call.method === 'set')
-    expect(set?.args[0]).toMatchObject({ planName: null, monthlyTokenQuota: null })
+    expect(set?.args[0]).toMatchObject({ planName: null, monthlyBudgetMicros: null })
   })
 
-  it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])('rechaza un cupo inválido (%s)', async (quota) => {
-    await expect(setOrgPlan({ orgId, planName: 'x', monthlyTokenQuota: quota })).rejects.toThrow(
+  it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])('rechaza un presupuesto inválido (%s)', async (budget) => {
+    await expect(setOrgPlan({ orgId, planName: 'x', monthlyBudgetMicros: budget })).rejects.toThrow(
       /non-negative integer/,
     )
     expect(fake.calls.some((call) => call.method === 'set')).toBe(false)

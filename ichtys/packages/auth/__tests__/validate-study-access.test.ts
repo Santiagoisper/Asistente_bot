@@ -348,7 +348,7 @@ function createTenantFixture(): TenantFixture {
       ragConfig: null,
       llmApiKeysEncrypted: null,
       planName: null,
-      monthlyTokenQuota: null,
+      monthlyBudgetMicros: null,
       createdAt,
       updatedAt: createdAt,
     },

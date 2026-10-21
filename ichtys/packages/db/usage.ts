@@ -1,15 +1,18 @@
 import { and, eq, gte, lt, sql } from 'drizzle-orm'
 import { db } from './client'
 import { organizations, usageEvents, type UsageKeySource, type UsageKind } from './schema'
+import { estimateCostMicros } from './usage-pricing'
 
 /**
- * usage.ts — medición de consumo de tokens y cupo mensual por organización.
+ * usage.ts — medición de consumo y cupo mensual (en dólares estimados) por organización.
  *
  * Reglas:
- *  - Solo conteos. Nunca se guarda ni se loguea contenido (preguntas, documentos, respuestas).
+ *  - Solo conteos y costo estimado. Nunca se guarda ni se loguea contenido (preguntas,
+ *    documentos, respuestas).
  *  - recordUsage() NUNCA lanza: si la medición falla, el producto sigue funcionando.
  *  - Toda consulta filtra por organization_id (aislamiento multi-tenant).
  *  - El cupo del plan solo cuenta consumo con clave de la plataforma (key_source = 'platform').
+ *  - Importes en micro-USD (1 USD = 1_000_000). Ver usage-pricing.ts.
  */
 
 /** A partir de este porcentaje del cupo se avisa al cliente. */
@@ -35,8 +38,8 @@ function sanitizeTokens(value: number): number {
 }
 
 /**
- * Registra una llamada a un modelo. Nunca lanza ni propaga detalles: un fallo de medición no
- * debe degradar el chat ni la ingesta. No registra eventos sin tokens.
+ * Registra una llamada a un modelo con su costo estimado. Nunca lanza ni propaga detalles: un
+ * fallo de medición no debe degradar el chat ni la ingesta. No registra eventos sin tokens.
  */
 export async function recordUsage(input: RecordUsageInput): Promise<void> {
   const inputTokens = sanitizeTokens(input.inputTokens)
@@ -53,6 +56,7 @@ export async function recordUsage(input: RecordUsageInput): Promise<void> {
       model: input.model,
       inputTokens,
       outputTokens,
+      costMicros: estimateCostMicros(input.model, inputTokens, outputTokens),
       keySource: input.keySource,
     })
   } catch {
@@ -76,24 +80,27 @@ export function getUsagePeriod(now: Date = new Date()): UsagePeriod {
 export type QuotaState = 'no_quota' | 'ok' | 'warning' | 'exceeded'
 
 export interface QuotaEvaluation {
-  quota: number | null
-  usedPlatformTokens: number
-  remaining: number | null
+  /** Presupuesto mensual del plan en micro-USD; null = sin cupo definido. */
+  budgetMicros: number | null
+  /** Costo estimado consumido con clave de la plataforma en el período, micro-USD. */
+  usedMicros: number
+  remainingMicros: number | null
   percentUsed: number | null
   state: QuotaState
 }
 
-/** Función pura: estado del cupo dado el cupo del plan y lo consumido con clave de plataforma. */
-export function evaluateQuota(quota: number | null, usedPlatformTokens: number): QuotaEvaluation {
-  const used = Math.max(0, usedPlatformTokens)
-  if (quota === null || quota <= 0) {
-    return { quota: null, usedPlatformTokens: used, remaining: null, percentUsed: null, state: 'no_quota' }
+/** Función pura: estado del cupo dado el presupuesto del plan y lo consumido con clave de plataforma. */
+export function evaluateQuota(budgetMicros: number | null, usedMicros: number): QuotaEvaluation {
+  const used = Math.max(0, usedMicros)
+  if (budgetMicros === null || budgetMicros <= 0) {
+    return { budgetMicros: null, usedMicros: used, remainingMicros: null, percentUsed: null, state: 'no_quota' }
   }
 
-  const remaining = Math.max(0, quota - used)
-  const percentUsed = Math.min(100, Math.round((used / quota) * 100))
-  const state: QuotaState = used >= quota ? 'exceeded' : used >= quota * QUOTA_WARNING_RATIO ? 'warning' : 'ok'
-  return { quota, usedPlatformTokens: used, remaining, percentUsed, state }
+  const remainingMicros = Math.max(0, budgetMicros - used)
+  const percentUsed = Math.min(100, Math.round((used / budgetMicros) * 100))
+  const state: QuotaState =
+    used >= budgetMicros ? 'exceeded' : used >= budgetMicros * QUOTA_WARNING_RATIO ? 'warning' : 'ok'
+  return { budgetMicros, usedMicros: used, remainingMicros, percentUsed, state }
 }
 
 export interface UsageBreakdownRow {
@@ -101,6 +108,7 @@ export interface UsageBreakdownRow {
   keySource: UsageKeySource
   inputTokens: number
   outputTokens: number
+  costMicros: number
   calls: number
 }
 
@@ -110,6 +118,9 @@ export interface UsageSummary {
   platformTokens: number
   orgKeyTokens: number
   totalTokens: number
+  platformCostMicros: number
+  orgKeyCostMicros: number
+  totalCostMicros: number
 }
 
 export async function getUsageSummary(
@@ -122,6 +133,7 @@ export async function getUsageSummary(
       keySource: usageEvents.keySource,
       inputTokens: sql<string>`coalesce(sum(${usageEvents.inputTokens}), 0)`,
       outputTokens: sql<string>`coalesce(sum(${usageEvents.outputTokens}), 0)`,
+      costMicros: sql<string>`coalesce(sum(${usageEvents.costMicros}), 0)`,
       calls: sql<string>`count(*)`,
     })
     .from(usageEvents)
@@ -139,18 +151,35 @@ export async function getUsageSummary(
     keySource: row.keySource,
     inputTokens: Number(row.inputTokens),
     outputTokens: Number(row.outputTokens),
+    costMicros: Number(row.costMicros),
     calls: Number(row.calls),
   }))
 
   let platformTokens = 0
   let orgKeyTokens = 0
+  let platformCostMicros = 0
+  let orgKeyCostMicros = 0
   for (const row of breakdown) {
     const tokens = row.inputTokens + row.outputTokens
-    if (row.keySource === 'platform') platformTokens += tokens
-    else orgKeyTokens += tokens
+    if (row.keySource === 'platform') {
+      platformTokens += tokens
+      platformCostMicros += row.costMicros
+    } else {
+      orgKeyTokens += tokens
+      orgKeyCostMicros += row.costMicros
+    }
   }
 
-  return { period, rows: breakdown, platformTokens, orgKeyTokens, totalTokens: platformTokens + orgKeyTokens }
+  return {
+    period,
+    rows: breakdown,
+    platformTokens,
+    orgKeyTokens,
+    totalTokens: platformTokens + orgKeyTokens,
+    platformCostMicros,
+    orgKeyCostMicros,
+    totalCostMicros: platformCostMicros + orgKeyCostMicros,
+  }
 }
 
 export interface QuotaStatus extends QuotaEvaluation {
@@ -163,15 +192,13 @@ export async function getQuotaStatus(orgId: string, now: Date = new Date()): Pro
   const period = getUsagePeriod(now)
 
   const [org] = await db
-    .select({ planName: organizations.planName, monthlyTokenQuota: organizations.monthlyTokenQuota })
+    .select({ planName: organizations.planName, monthlyBudgetMicros: organizations.monthlyBudgetMicros })
     .from(organizations)
     .where(eq(organizations.id, orgId))
     .limit(1)
 
   const [usage] = await db
-    .select({
-      tokens: sql<string>`coalesce(sum(${usageEvents.inputTokens} + ${usageEvents.outputTokens}), 0)`,
-    })
+    .select({ costMicros: sql<string>`coalesce(sum(${usageEvents.costMicros}), 0)` })
     .from(usageEvents)
     .where(
       and(
@@ -182,7 +209,7 @@ export async function getQuotaStatus(orgId: string, now: Date = new Date()): Pro
       ),
     )
 
-  const evaluation = evaluateQuota(org?.monthlyTokenQuota ?? null, Number(usage?.tokens ?? 0))
+  const evaluation = evaluateQuota(org?.monthlyBudgetMicros ?? null, Number(usage?.costMicros ?? 0))
   return { ...evaluation, planName: org?.planName ?? null, period }
 }
 
@@ -197,19 +224,20 @@ export function canUsePlatformKey(status: Pick<QuotaEvaluation, 'state'>): boole
 export interface SetOrgPlanInput {
   orgId: string
   planName: string | null
-  monthlyTokenQuota: number | null
+  /** Presupuesto mensual en micro-USD (usar usdToMicros(100) para 100 USD); null = sin cupo. */
+  monthlyBudgetMicros: number | null
 }
 
 /** Asigna plan y cupo a una organización. Validación estricta: entero >= 0 o null. */
 export async function setOrgPlan(input: SetOrgPlanInput): Promise<void> {
-  const { monthlyTokenQuota } = input
-  if (monthlyTokenQuota !== null && (!Number.isSafeInteger(monthlyTokenQuota) || monthlyTokenQuota < 0)) {
-    throw new Error('monthlyTokenQuota must be a non-negative integer or null')
+  const { monthlyBudgetMicros } = input
+  if (monthlyBudgetMicros !== null && (!Number.isSafeInteger(monthlyBudgetMicros) || monthlyBudgetMicros < 0)) {
+    throw new Error('monthlyBudgetMicros must be a non-negative integer or null')
   }
   const planName = input.planName?.trim().slice(0, 80) || null
 
   await db
     .update(organizations)
-    .set({ planName, monthlyTokenQuota, updatedAt: new Date() })
+    .set({ planName, monthlyBudgetMicros, updatedAt: new Date() })
     .where(eq(organizations.id, input.orgId))
 }

@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, timestamp, index } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, integer, bigint, timestamp, index } from 'drizzle-orm/pg-core'
 import { usageKeySource, usageKind } from './enums'
 
 /**
@@ -8,8 +8,9 @@ import { usageKeySource, usageKind } from './enums'
  * (puede haber PHI). Como audit_logs, no tiene FKs duras para sobrevivir borrados y
  * conservar el historial de facturación.
  *
- * El cupo mensual de un plan se mide sumando input+output de los eventos con
- * key_source = 'platform' del mes calendario UTC en curso.
+ * El cupo mensual de un plan es un PRESUPUESTO en dólares estimados: se mide sumando
+ * cost_micros de los eventos con key_source = 'platform' del mes calendario UTC en curso.
+ * Los tokens se guardan igual para poder mostrarlos y recalcular si cambian los precios.
  */
 export const usageEvents = pgTable(
   'usage_events',
@@ -23,6 +24,8 @@ export const usageEvents = pgTable(
     model: text('model').notNull(),
     inputTokens: integer('input_tokens').notNull().default(0),
     outputTokens: integer('output_tokens').notNull().default(0),
+    /** Costo ESTIMADO en micro-USD (1e-6 USD) al momento del evento. Ver usage-pricing.ts. */
+    costMicros: bigint('cost_micros', { mode: 'number' }).notNull().default(0),
     keySource: text('key_source', { enum: usageKeySource }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

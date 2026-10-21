@@ -1,19 +1,27 @@
-# ALPHI — Consumo de tokens y cuota mensual (modelo híbrido)
+# ALPHI — Consumo y cuota mensual (modelo híbrido)
 
-Estado: **etapa 1 implementada en código (sin aplicar a producción)**. Etapas 2 y 3 pendientes.
+Estado: **etapa 1 implementada en código (migración sin aplicar a producción)**. Etapas 2 y 3 pendientes.
 
 ## Modelo de negocio (decisión: opción C, híbrido)
 
-- El cliente paga una **cuota mensual** que incluye un **cupo de tokens** del modelo de la plataforma.
+- El cliente paga una **cuota mensual** que incluye un **presupuesto de consumo de unos 100 USD**
+  del modelo de la plataforma (decisión del 2026-10-21; el valor se asigna por organización).
 - El cliente ve cuánto lleva consumido y cuánto le queda.
 - Si agota el cupo, puede **cargar su propia clave** de modelo (ya existe en Ajustes) y seguir usando
   ALPHI; ese consumo no descuenta del cupo.
 - Sin cupo definido (organización sin plan) no se limita nada.
 
+## Por qué el cupo es en dólares y no en tokens
+
+Un token de embedding cuesta una fracción de un token de respuesta del chat. Sumar tokens mezclaría
+cosas que valen muy distinto. Se guardan los tokens **y** el costo estimado de cada llamada; el cupo
+se mide en costo estimado.
+
 ## Qué se mide
 
 Una fila en `usage_events` por llamada a un modelo (LLM o embeddings): organización, estudio, usuario,
-tipo de operación, proveedor, modelo, tokens de entrada y salida, y **quién pagó** (`platform` u `org`).
+tipo de operación, proveedor, modelo, tokens de entrada y salida, **costo estimado (micro-USD)** y
+**quién pagó** (`platform` u `org`).
 
 **Nunca** se guarda contenido (preguntas, respuestas, texto de documentos): solo conteos. La tabla es
 append-only y sin claves foráneas, como `audit_logs`, para conservar el historial de facturación.
@@ -21,34 +29,65 @@ append-only y sin claves foráneas, como `audit_logs`, para conservar el histori
 Tipos (`usage_events.kind`): `chat_answer`, `chat_eval`, `chat_title`, `spec_extraction`,
 `clinical_extraction`, `embedding_document`, `embedding_query`.
 
-El cupo del mes (calendario UTC) = suma de input+output de los eventos con `key_source = 'platform'`.
+El cupo del mes (calendario UTC) = suma de `cost_micros` de los eventos con `key_source = 'platform'`.
+Importes en micro-USD: 1 USD = 1 000 000 (100 USD = `100000000`).
+
+## Precios (estimados, revisar)
+
+`packages/db/usage-pricing.ts` tiene una tabla de USD por millón de tokens. Es una **estimación**, no
+la factura del proveedor:
+
+| Modelo | Entrada | Salida | Nota |
+|---|---|---|---|
+| GLM-5.x (Z.ai) | 1,40 | 4,40 | Fuentes secundarias contradictorias (0,98 / 3,08 vs 1,40 / 4,40): se usa la mayor. **Confirmar en docs.z.ai** |
+| Gemini Embedding | 0,15 | — | Anuncio oficial de Google |
+| claude-sonnet / haiku | 3 / 1 | 15 / 5 | Conocimiento previo, no re-verificado |
+| gpt-4o / gpt-4o-mini | 2,50 / 0,15 | 10 / 0,60 | Conocimiento previo, no re-verificado |
+| text-embedding-3-small | 0,02 | — | Conocimiento previo, no re-verificado |
+| gemini-2.0-flash | 0,10 | 0,40 | Conocimiento previo, no re-verificado |
+| llama-3.3-70b / 3.1-8b (Groq) | 0,59 / 0,05 | 0,79 / 0,08 | Conocimiento previo, no re-verificado |
+| **Modelo desconocido** | 3 | 15 | Tarifa conservadora ALTA a propósito |
+
+Corregir un precio sin redeploy de código: variable de entorno `USAGE_PRICE_OVERRIDES_JSON`, p. ej.
+`{"glm-5": {"inputPerMTok": 0.98, "outputPerMTok": 3.08}}`. El costo se guarda al momento del evento:
+cambiar los precios no reescribe el historial.
 
 ## Etapas (un PR por capa, según `CLAUDE.md`)
 
 | Etapa | Contenido | Estado |
 |---|---|---|
-| 1 | Tabla `usage_events`, columnas `organizations.plan_name` / `monthly_token_quota`, migración `0009`, módulo `packages/db/usage.ts` (registrar, resumir, estado del cupo, asignar plan) y tests | Hecha, **migración sin aplicar** |
+| 1 | Tabla `usage_events`, columnas `organizations.plan_name` / `monthly_budget_micros`, migración `0009`, módulo `packages/db/usage.ts` + `usage-pricing.ts` y tests (70 en el paquete) | Hecha, **migración sin aplicar** |
 | 2 | Enganchar cada llamada a un modelo para registrar el consumo (chat ×3, título, spec, perfil clínico, embeddings de documentos y de consultas) | Pendiente |
 | 3 | Pantalla "Consumo" para el cliente (barra del cupo, desglose por tipo, aviso al 80 %) y tope cuando el cupo se agota (mensaje claro: cargar clave propia o ampliar plan) | Pendiente |
-| 4 | Cobro automático de la cuota (Stripe u otro) y precios por modelo | Pendiente; requiere decisiones comerciales |
+| 4 | Cobro automático de la cuota (Stripe u otro) | Pendiente; requiere decisiones comerciales |
 
-## Cómo aplicar la migración (acción manual, requiere autorización)
+## Cómo aplicar la migración (acción manual)
 
 La migración `0009_usage_metering.sql` solo **agrega** objetos nuevos y es idempotente
 (`IF NOT EXISTS`). No modifica ni borra datos. Las migraciones **no** se aplican en el deploy
-(ver `ichtys/docs/OPERATIONS.md` §9, incidente del 2026-06-28):
+(ver `ichtys/docs/OPERATIONS.md` §9, incidente del 2026-06-28). Las variables de conexión a la base de
+producción están marcadas como secretas en Vercel y **no pueden leerse desde la CLI**, así que se aplica
+pegando el SQL en el editor de Neon (o con `drizzle-kit migrate` desde un equipo con acceso):
 
-1. Verificar en una branch de Neon (no en producción directamente).
+1. Preferible: probar primero en una branch de Neon.
 2. Aplicar en producción **antes** de desplegar código que use las tablas nuevas.
 3. Confirmar: `SELECT column_name FROM information_schema.columns WHERE table_name = 'usage_events';`
 
-## Decisiones pendientes (no técnicas)
+Asignar el cupo de 100 USD a una organización (después de aplicar la migración):
 
-1. **Cupo por plan:** cuántos tokens incluye cada nivel. Los tokens no son iguales entre
-   proveedores; conviene definir el cupo en tokens de la plataforma y revisar los precios reales.
-2. **Qué pasa al agotar el cupo:** hoy el diseño propone bloquear solo el uso con clave de la
-   plataforma, con un mensaje claro. Alternativa: permitir un sobreconsumo facturado aparte.
-3. **Aviso al cliente:** al 80 % (valor por defecto, `QUOTA_WARNING_RATIO`).
+```sql
+UPDATE organizations
+SET plan_name = 'Profesional', monthly_budget_micros = 100000000
+WHERE id = '<uuid-de-la-organizacion>';
+```
+
+## Decisiones pendientes
+
+1. **Qué pasa al agotar el cupo:** el diseño propone bloquear solo el uso con clave de la plataforma,
+   con un mensaje claro. Alternativa: permitir sobreconsumo facturado aparte.
+2. **Aviso al cliente:** al 80 % (valor por defecto, `QUOTA_WARNING_RATIO`).
+3. **Margen:** el cupo mide costo estimado del proveedor; el precio de la cuota mensual al cliente
+   puede ser mayor. Esa relación es comercial y no está en el código.
 4. **Cobro:** manual (factura mensual) o automático.
 
 ## Privacidad
