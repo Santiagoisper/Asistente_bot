@@ -5,12 +5,12 @@ import { createOpenAI } from '@ai-sdk/openai'
 import type { LanguageModel } from 'ai'
 import { resolveKeyForProvider } from './keys'
 import type { OrgLlmApiKeys } from './keys'
-import { AUTO_PROVIDER_CHAIN, type LlmProviderId, type LlmProviderPreference, type LlmPurpose } from './types'
+import { AUTO_PROVIDER_CHAIN, KNOWN_PROVIDERS, type LlmProviderId, type LlmProviderPreference, type LlmPurpose } from './types'
 
 export type { OrgLlmApiKeys }
 
 export function getDefaultProviderPreference(): LlmProviderPreference {
-  return 'glm'
+  return 'auto'
 }
 
 export function isProviderConfigured(
@@ -40,8 +40,21 @@ export function isGlmConfigured(orgKeys?: OrgLlmApiKeys | null): boolean {
   return isProviderConfigured('glm', orgKeys)
 }
 
-export function resolveProviderChain(_preference?: LlmProviderPreference): LlmProviderId[] {
-  return [...AUTO_PROVIDER_CHAIN]
+/** Cadena por variable de entorno LLM_PROVIDER_CHAIN; ignora nombres desconocidos y repetidos. */
+function chainFromEnv(): LlmProviderId[] | null {
+  const raw = process.env.LLM_PROVIDER_CHAIN?.trim()
+  if (!raw) return null
+  const valid = raw
+    .split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter((item): item is LlmProviderId => (KNOWN_PROVIDERS as readonly string[]).includes(item))
+  const unique = [...new Set(valid)]
+  return unique.length > 0 ? unique : null
+}
+
+export function resolveProviderChain(preference?: LlmProviderPreference): LlmProviderId[] {
+  if (preference && preference !== 'auto') return [preference]
+  return chainFromEnv() ?? [...AUTO_PROVIDER_CHAIN]
 }
 
 export function resolvePrimaryProvider(
@@ -73,10 +86,12 @@ export function getModelId(
   switch (provider) {
     case 'anthropic':
       if (purpose === 'title' || purpose === 'clinical-extract') {
-        return process.env.TITLE_MODEL ?? 'claude-haiku-4-5'
+        return process.env.TITLE_MODEL ?? 'claude-haiku-5-5'
       }
-      if (purpose === 'spec') return process.env.SPEC_EXTRACTION_MODEL ?? 'claude-sonnet-4-6'
-      return process.env.ANSWER_MODEL ?? 'claude-sonnet-4-5'
+      // Extraer el protocolo es lo más sensible a errores y ocurre una vez por documento: modelo mayor.
+      if (purpose === 'spec') return process.env.SPEC_EXTRACTION_MODEL ?? 'claude-sonnet-5-5'
+      // Chat: Haiku, rápido y barato; se puede subir a Sonnet con ANSWER_MODEL sin redeploy de código.
+      return process.env.ANSWER_MODEL ?? 'claude-haiku-5-5'
     case 'openai':
       if (purpose === 'title' || purpose === 'clinical-extract') {
         return process.env.OPENAI_TITLE_MODEL ?? 'gpt-4o-mini'
@@ -87,16 +102,16 @@ export function getModelId(
       return process.env.OPENAI_ANSWER_MODEL ?? process.env.ANSWER_MODEL_OPENAI ?? 'gpt-4o'
     case 'google':
       if (purpose === 'title' || purpose === 'clinical-extract') {
-        return process.env.GOOGLE_TITLE_MODEL ?? process.env.GEMINI_TITLE_MODEL ?? 'gemini-2.0-flash'
+        return process.env.GOOGLE_TITLE_MODEL ?? process.env.GEMINI_TITLE_MODEL ?? 'gemini-flash-latest'
       }
       if (purpose === 'spec') {
         return (
           process.env.SPEC_EXTRACTION_MODEL_GEMINI ??
           process.env.GEMINI_ANSWER_MODEL ??
-          'gemini-2.0-flash'
+          'gemini-flash-latest'
         )
       }
-      return process.env.GEMINI_ANSWER_MODEL ?? process.env.GOOGLE_ANSWER_MODEL ?? 'gemini-2.0-flash'
+      return process.env.GEMINI_ANSWER_MODEL ?? process.env.GOOGLE_ANSWER_MODEL ?? 'gemini-flash-latest'
     case 'groq':
       if (purpose === 'title' || purpose === 'clinical-extract') {
         return process.env.GROQ_TITLE_MODEL ?? 'llama-3.1-8b-instant'

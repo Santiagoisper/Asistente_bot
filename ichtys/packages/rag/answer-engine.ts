@@ -99,6 +99,12 @@ export class AnswerEngineError extends Error {
 // Constantes
 // ---------------------------------------------------------------------------
 
+/** Tiempo máximo de un intento de respuesta con un proveedor (ms). Configurable con LLM_ATTEMPT_TIMEOUT_MS. */
+const LLM_ATTEMPT_TIMEOUT_MS = (() => {
+  const configured = Number.parseInt(process.env.LLM_ATTEMPT_TIMEOUT_MS ?? '', 10)
+  return Number.isFinite(configured) && configured >= 5_000 ? configured : 90_000
+})()
+
 export const EXCERPT_MAX_CHARS = 600
 
 /** Máximo de turnos previos que entran al prompt (los más recientes). */
@@ -593,6 +599,10 @@ export async function* answerEngineStream(
         model,
         system: STREAM_ANSWER_SYSTEM_PROMPT,
         prompt: userPrompt,
+        // Sin esto un proveedor sin saldo o caído deja el chat "pensando" hasta que Vercel corta a
+        // los 300 s. Con tiempo límite por intento se pasa al siguiente proveedor (o se informa).
+        abortSignal: AbortSignal.timeout(LLM_ATTEMPT_TIMEOUT_MS),
+        maxRetries: 1,
       })
 
       for await (const chunk of streamResult.textStream) {

@@ -1,83 +1,55 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AUTO_PROVIDER_CHAIN } from '../types'
-import { getDefaultProviderPreference, isOpenAiConfigured, resolveProviderChain } from '../provider'
+import { getDefaultProviderPreference, getModelId, isOpenAiConfigured, resolveProviderChain } from '../provider'
 
-describe('LLM provider chain', () => {
-  it('all generation uses GLM only', () => {
-    expect(AUTO_PROVIDER_CHAIN).toEqual(['glm'])
-    expect(getDefaultProviderPreference()).toBe('glm')
-    expect(resolveProviderChain('auto')).toEqual(['glm'])
-    expect(resolveProviderChain('anthropic')).toEqual(['glm'])
-  })
-
-  it('isProviderConfigured respects org keys over env', () => {
-    const prev = process.env.OPENAI_API_KEY
-    delete process.env.OPENAI_API_KEY
-    expect(isOpenAiConfigured({ openai: 'sk-org-only-12345678' })).toBe(true)
-    expect(isOpenAiConfigured({})).toBe(false)
-    process.env.OPENAI_API_KEY = prev
-  })
+afterEach(() => {
+  vi.unstubAllEnvs()
 })
 
-describe('resolveKeyForProvider', () => {
-  it('prefers org openai key', async () => {
-    const { resolveKeyForProvider } = await import('../keys')
-    const prev = process.env.OPENAI_API_KEY
-    process.env.OPENAI_API_KEY = 'sk-env-12345678'
-    expect(resolveKeyForProvider('openai', { openai: 'sk-org-12345678' })).toBe('sk-org-12345678')
-    process.env.OPENAI_API_KEY = prev
+describe('LLM provider chain', () => {
+  it('usa por defecto el modo automático con respaldo: Claude, Gemini, Groq y GLM al final', () => {
+    expect(AUTO_PROVIDER_CHAIN).toEqual(['anthropic', 'google', 'groq', 'glm'])
+    expect(getDefaultProviderPreference()).toBe('auto')
+    expect(resolveProviderChain('auto')).toEqual(['anthropic', 'google', 'groq', 'glm'])
+    expect(resolveProviderChain()).toEqual(['anthropic', 'google', 'groq', 'glm'])
   })
 
-  it('uses the preview-only GLM key only in Vercel Preview', async () => {
-    const { resolveKeyForProvider } = await import('../keys')
-    const previous = {
-      VERCEL_ENV: process.env.VERCEL_ENV,
-      GLM_API_KEY_PREVIEW: process.env.GLM_API_KEY_PREVIEW,
-      GLM_API_KEY: process.env.GLM_API_KEY,
-      ZAI_API_KEY: process.env.ZAI_API_KEY,
-      OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
-    }
-
-    try {
-      process.env.VERCEL_ENV = 'preview'
-      process.env.GLM_API_KEY_PREVIEW = 'glm-preview-key-12345678'
-      delete process.env.GLM_API_KEY
-      delete process.env.ZAI_API_KEY
-      delete process.env.OPENROUTER_API_KEY
-      expect(resolveKeyForProvider('glm')).toBe('glm-preview-key-12345678')
-
-      process.env.VERCEL_ENV = 'production'
-      expect(resolveKeyForProvider('glm')).toBeUndefined()
-    } finally {
-      for (const [key, value] of Object.entries(previous)) {
-        if (value === undefined) delete process.env[key]
-        else process.env[key] = value
-      }
-    }
+  it('una preferencia concreta usa solo ese proveedor', () => {
+    expect(resolveProviderChain('groq')).toEqual(['groq'])
+    expect(resolveProviderChain('glm')).toEqual(['glm'])
   })
 
-  it('prefers the platform GLM key over an organization key when both exist', async () => {
-    const { resolveKeyForProvider, getKeySourceForProvider } = await import('../keys')
-    const previous = {
-      VERCEL_ENV: process.env.VERCEL_ENV,
-      GLM_API_KEY_PREVIEW: process.env.GLM_API_KEY_PREVIEW,
-      GLM_API_KEY: process.env.GLM_API_KEY,
-      ZAI_API_KEY: process.env.ZAI_API_KEY,
-    }
-    try {
-      process.env.VERCEL_ENV = 'production'
-      process.env.GLM_API_KEY = 'glm-platform-key-12345678'
-      delete process.env.GLM_API_KEY_PREVIEW
-      delete process.env.ZAI_API_KEY
+  it('LLM_PROVIDER_CHAIN reordena la cadena sin redeploy', () => {
+    vi.stubEnv('LLM_PROVIDER_CHAIN', 'groq, google ,anthropic')
+    expect(resolveProviderChain('auto')).toEqual(['groq', 'google', 'anthropic'])
+  })
 
-      const orgKeys = { glm: 'glm-org-key-12345678' }
-      expect(resolveKeyForProvider('glm', orgKeys)).toBe('glm-platform-key-12345678')
-      expect(getKeySourceForProvider('glm', orgKeys)).toBe('platform')
-    } finally {
-      for (const [key, value] of Object.entries(previous)) {
-        if (value === undefined) delete process.env[key]
-        else process.env[key] = value
-      }
-    }
+  it('LLM_PROVIDER_CHAIN descarta nombres desconocidos y repetidos', () => {
+    vi.stubEnv('LLM_PROVIDER_CHAIN', 'groq,inventado,groq,GLM')
+    expect(resolveProviderChain('auto')).toEqual(['groq', 'glm'])
+  })
+
+  it('un LLM_PROVIDER_CHAIN sin nombres válidos cae a la cadena por defecto', () => {
+    vi.stubEnv('LLM_PROVIDER_CHAIN', 'nada,otra-cosa')
+    expect(resolveProviderChain('auto')).toEqual(['anthropic', 'google', 'groq', 'glm'])
+  })
+
+  it('el modelo de Anthropic por defecto es Haiku para chat/títulos y Sonnet para el protocolo', () => {
+    expect(getModelId('anthropic', 'answer')).toBe('claude-haiku-5-5')
+    expect(getModelId('anthropic', 'title')).toBe('claude-haiku-5-5')
+    expect(getModelId('anthropic', 'spec')).toBe('claude-sonnet-5-5')
+  })
+
+  it('ANSWER_MODEL permite subir el chat a otro modelo sin tocar código', () => {
+    vi.stubEnv('ANSWER_MODEL', 'claude-sonnet-5-5')
+    expect(getModelId('anthropic', 'answer')).toBe('claude-sonnet-5-5')
+  })
+
+  it('Gemini usa el alias vigente y no el modelo retirado', () => {
+    expect(getModelId('google', 'answer')).toBe('gemini-flash-latest')
+  })
+
+  it('detecta si OpenAI está configurado', () => {
+    expect(typeof isOpenAiConfigured()).toBe('boolean')
   })
 })

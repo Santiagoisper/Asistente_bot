@@ -28,8 +28,10 @@ export interface ResolvedOrgRagConfig {
 }
 
 function normalizeLlmProvider(_value: unknown): OrgLlmProvider {
-  // Las preferencias antiguas se normalizan para que toda generación use GLM.
-  return 'glm'
+  // Toda generación usa la cadena automática con respaldo (ver packages/llm). Se ignora el valor
+  // guardado: organizaciones que quedaron fijadas en 'glm' por la configuración anterior no deben
+  // seguir atadas a un único proveedor. El orden se ajusta con LLM_PROVIDER_CHAIN.
+  return 'auto'
 }
 
 export async function getOrgRagConfig(orgId: string): Promise<ResolvedOrgRagConfig> {
