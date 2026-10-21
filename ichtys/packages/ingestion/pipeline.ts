@@ -10,6 +10,7 @@ import {
   type Document,
   type DocumentVersion,
 } from '@ichtys/db'
+import { openStoredBlob } from './blob-read'
 import { chunkPages } from './chunker'
 import { EmbeddingIndexingError, indexDocumentVersionChunks } from './indexer'
 import { parsePdf, PdfParseError } from './parser'
@@ -154,12 +155,13 @@ async function downloadBlob(blobUrl: string): Promise<Uint8Array> {
     }
   }
 
-  const response = await fetch(blobUrl)
-  if (!response.ok || !response.body) {
-    throw new IngestionPipelineError('blob_download_failed', `Failed to fetch blob: ${response.status}`)
+  try {
+    const { stream } = await openStoredBlob(blobUrl)
+    return await readStream(stream)
+  } catch (err) {
+    console.warn('[ingestion] stored blob read failed:', err instanceof Error ? err.message : err)
+    throw new IngestionPipelineError('blob_download_failed', 'Failed to read stored blob')
   }
-
-  return readStream(response.body)
 }
 
 function sanitizeIngestionError(err: unknown): IngestionErrorCode {

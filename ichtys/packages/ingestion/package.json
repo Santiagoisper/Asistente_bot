@@ -15,7 +15,8 @@
     "./spec-extractor": "./spec-extractor.ts",
     "./spec-store": "./spec-store.ts",
     "./ingestion-jobs": "./ingestion-jobs.ts",
-    "./reextract-spec": "./reextract-spec.ts"
+    "./reextract-spec": "./reextract-spec.ts",
+    "./blob-read": "./blob-read.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
