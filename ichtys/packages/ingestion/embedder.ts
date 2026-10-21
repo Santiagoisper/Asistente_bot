@@ -153,6 +153,58 @@ function statusFromError(err: unknown): number | null {
   return typeof status === 'number' ? status : null
 }
 
+const MAX_RATE_LIMIT_RETRIES = 5
+// maxDuration de /api/ingestion/run es 300s: se deja margen para el resto del pipeline.
+const RATE_LIMIT_BUDGET_MS = 240_000
+const MAX_RETRY_WAIT_MS = 60_000
+
+function retryWaitMs(err: unknown, attempt: number): number {
+  const configured = Number.parseInt(process.env.EMBEDDING_RETRY_BASE_MS ?? '', 10)
+  const baseMs = Number.isFinite(configured) && configured >= 0 ? configured : 2000
+  const headers = typeof err === 'object' && err !== null && 'headers' in err
+    ? (err.headers as Record<string, string | undefined> | null | undefined)
+    : undefined
+  const retryAfterSeconds = Number.parseFloat(headers?.['retry-after'] ?? '')
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0) {
+    return Math.min(retryAfterSeconds * 1000, MAX_RETRY_WAIT_MS)
+  }
+  return Math.min(baseMs * 2 ** attempt, MAX_RETRY_WAIT_MS)
+}
+
+// Diagnóstico solo en logs del servidor. Nunca se loguea el mensaje del proveedor:
+// podría repetir texto del documento (potencial PHI). Solo estado HTTP, código y tipo.
+function logProviderFailure(err: unknown): void {
+  const field = (name: 'code' | 'type'): string => {
+    if (typeof err !== 'object' || err === null || !(name in err)) return 'n/a'
+    const value = (err as Record<string, unknown>)[name]
+    return typeof value === 'string' ? value.slice(0, 60) : 'n/a'
+  }
+  console.warn(
+    `[embedder] provider failure status=${statusFromError(err) ?? 'n/a'} code=${field('code')} type=${field('type')}`,
+  )
+}
+
+async function createWithBackoff(
+  client: EmbeddingClient,
+  input: Parameters<EmbeddingClient['createEmbeddings']>[0],
+  startedAt: number,
+): Promise<ProviderEmbeddingResponse> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await client.createEmbeddings(input)
+    } catch (err) {
+      logProviderFailure(err)
+      const waitMs = retryWaitMs(err, attempt)
+      const canRetry =
+        statusFromError(err) === 429 &&
+        attempt < MAX_RATE_LIMIT_RETRIES &&
+        Date.now() - startedAt + waitMs <= RATE_LIMIT_BUDGET_MS
+      if (!canRetry) throw err
+      await new Promise((resolve) => setTimeout(resolve, waitMs))
+    }
+  }
+}
+
 function sanitizeEmbeddingError(err: unknown): EmbeddingError {
   if (err instanceof EmbeddingError) return err
   if (statusFromError(err) === 429) {
@@ -218,14 +270,16 @@ export async function embedBatch(
   const batchSize = getBatchSize(options)
   const model = resolveModel(options)
   const results: EmbeddingResult[] = []
+  const startedAt = Date.now()
 
   try {
     for (let start = 0; start < texts.length; start += batchSize) {
       const batch = texts.slice(start, start + batchSize)
-      const response = await client.createEmbeddings({
-        model,
-        input: formatBatchInput(batch, options),
-      })
+      const response = await createWithBackoff(
+        client,
+        { model, input: formatBatchInput(batch, options) },
+        startedAt,
+      )
 
       const embeddings = orderedEmbeddings(response.data, batch.length)
       for (let i = 0; i < embeddings.length; i += 1) {
