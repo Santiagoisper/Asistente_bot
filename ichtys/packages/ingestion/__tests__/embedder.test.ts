@@ -92,7 +92,7 @@ describe('embedBatch', () => {
     await expect(embedBatch(['texto sintetico'], { client })).rejects.toMatchObject({
       code: 'embedding_rate_limited',
     })
-    expect(attempts).toBe(6)
+    expect(attempts).toBe(9)
   })
 
   it('does not log the provider message (could echo document text)', async () => {

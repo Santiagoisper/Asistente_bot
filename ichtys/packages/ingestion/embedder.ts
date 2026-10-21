@@ -153,14 +153,14 @@ function statusFromError(err: unknown): number | null {
   return typeof status === 'number' ? status : null
 }
 
-const MAX_RATE_LIMIT_RETRIES = 5
+const MAX_RATE_LIMIT_RETRIES = 8
 // maxDuration de /api/ingestion/run es 300s: se deja margen para el resto del pipeline.
 const RATE_LIMIT_BUDGET_MS = 240_000
 const MAX_RETRY_WAIT_MS = 60_000
 
 function retryWaitMs(err: unknown, attempt: number): number {
   const configured = Number.parseInt(process.env.EMBEDDING_RETRY_BASE_MS ?? '', 10)
-  const baseMs = Number.isFinite(configured) && configured >= 0 ? configured : 2000
+  const baseMs = Number.isFinite(configured) && configured >= 0 ? configured : 10_000
   const headers = typeof err === 'object' && err !== null && 'headers' in err
     ? (err.headers as Record<string, string | undefined> | null | undefined)
     : undefined
