@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { auth } from '@clerk/nextjs/server'
 import { OrgLlmSettingsForm } from '../../../components/settings/org-llm-settings-form'
 
@@ -30,6 +31,14 @@ export default async function SettingsPage() {
       ) : null}
 
       <OrgLlmSettingsForm canEdit={canEdit} />
+
+      {canEdit ? (
+        <p className="text-sm text-alphi-muted">
+          <Link href="/settings/usage" className="underline hover:text-alphi-navy">
+            Ver consumo y cupo del mes →
+          </Link>
+        </p>
+      ) : null}
     </section>
   )
 }
