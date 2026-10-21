@@ -41,6 +41,14 @@ export function getEmbeddingModel(): string {
   }
 }
 
+/**
+ * Identifica el espacio vectorial en uso. Embeddings de distinto proveedor o modelo
+ * NO son comparables entre sí: no se deben mezclar en un mismo documento.
+ */
+export function getEmbeddingFingerprint(): string {
+  return `${resolveEmbeddingProvider()}:${getEmbeddingModel()}:${getEmbeddingBaseUrl() ?? 'default'}`
+}
+
 export function getEmbeddingApiKey(): string | null {
   switch (resolveEmbeddingProvider()) {
     case 'groq':

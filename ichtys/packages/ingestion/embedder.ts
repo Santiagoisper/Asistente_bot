@@ -61,6 +61,11 @@ export interface EmbeddingClient {
 
 export interface EmbedBatchOptions {
   batchSize?: number
+  /**
+   * Inicio (Date.now()) del trabajo completo. El presupuesto de reintentos por 429 se mide
+   * desde acá, de modo que varias llamadas del mismo trabajo comparten un único plazo.
+   */
+  startedAt?: number
   client?: EmbeddingClient
   /** Key OpenAI de la org (Ajustes). Si se pasa, ignora Groq y usa text-embedding-3-small. */
   openAiApiKey?: string
@@ -141,6 +146,11 @@ function getBatchSize(options: EmbedBatchOptions): number {
   return Math.max(1, Math.min(configured, 128))
 }
 
+/** Tamaño de lote efectivo (env EMBEDDING_BATCH_SIZE o el default), para quien persiste por lote. */
+export function resolveEmbeddingBatchSize(): number {
+  return getBatchSize({})
+}
+
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4)
 }
@@ -154,8 +164,11 @@ function statusFromError(err: unknown): number | null {
 }
 
 const MAX_RATE_LIMIT_RETRIES = 8
-// maxDuration de /api/ingestion/run es 300s: se deja margen para el resto del pipeline.
+// maxDuration de /api/ingestion/run es 300s. El presupuesto se mide desde el INICIO del trabajo
+// (startedAt lo fija el pipeline), así que ya incluye descarga, lectura y base de datos.
 const RATE_LIMIT_BUDGET_MS = 240_000
+// Un intento puede tardar hasta timeout (20s) x (1 + maxRetries): se reserva ese margen.
+const REQUEST_TIME_MARGIN_MS = 40_000
 const MAX_RETRY_WAIT_MS = 60_000
 
 function retryWaitMs(err: unknown, attempt: number): number {
@@ -198,7 +211,7 @@ async function createWithBackoff(
       const canRetry =
         statusFromError(err) === 429 &&
         attempt < MAX_RATE_LIMIT_RETRIES &&
-        Date.now() - startedAt + waitMs <= RATE_LIMIT_BUDGET_MS
+        Date.now() - startedAt + waitMs + REQUEST_TIME_MARGIN_MS <= RATE_LIMIT_BUDGET_MS
       if (!canRetry) throw err
       await new Promise((resolve) => setTimeout(resolve, waitMs))
     }
@@ -239,9 +252,19 @@ function validateEmbeddingDimensions(embedding: readonly number[]): void {
   }
 }
 
+/**
+ * Una clave OpenAI explícita (la que la organización cargó en Ajustes) solo aplica si el
+ * proveedor de embeddings activo ES OpenAI. Si no, forzaría text-embedding-3-small para las
+ * consultas mientras los documentos se indexaron con otro modelo (p. ej. Gemini): las
+ * dimensiones coinciden (1536), no hay error y la búsqueda devuelve basura sin avisar.
+ */
+function effectiveOpenAiKey(options: EmbedBatchOptions): string | undefined {
+  return resolveEmbeddingProvider() === 'openai' ? options.openAiApiKey : undefined
+}
+
 function resolveModel(options: EmbedBatchOptions): string {
   if (options.client) return EMBEDDING_MODEL
-  if (options.openAiApiKey) return OPENAI_EMBEDDING_MODEL
+  if (effectiveOpenAiKey(options)) return OPENAI_EMBEDDING_MODEL
   return getEmbeddingModel()
 }
 
@@ -249,7 +272,7 @@ function formatBatchInput(
   batch: readonly string[],
   options: EmbedBatchOptions,
 ): string[] {
-  if (options.openAiApiKey || resolveEmbeddingProvider() !== 'groq') {
+  if (effectiveOpenAiKey(options) || resolveEmbeddingProvider() !== 'groq') {
     return [...batch]
   }
   const task = options.task ?? 'document'
@@ -266,11 +289,11 @@ export async function embedBatch(
 ): Promise<EmbeddingResult[]> {
   if (texts.length === 0) return []
 
-  const client = options.client ?? getDefaultClient(options.openAiApiKey)
+  const client = options.client ?? getDefaultClient(effectiveOpenAiKey(options))
   const batchSize = getBatchSize(options)
   const model = resolveModel(options)
   const results: EmbeddingResult[] = []
-  const startedAt = Date.now()
+  const startedAt = options.startedAt ?? Date.now()
 
   try {
     for (let start = 0; start < texts.length; start += batchSize) {

@@ -56,4 +56,18 @@ describe('embedBatch con proveedor Google', () => {
     )
     expect(result?.embedding).toHaveLength(1536)
   })
+
+  it('ignora la clave OpenAI de la organizacion: las consultas usan el mismo modelo que los documentos', async () => {
+    createMock.mockResolvedValue({
+      data: [{ embedding: Array.from({ length: 1536 }, () => 0.1), index: 0 }],
+    })
+
+    await embedBatch(['pregunta sintetica'], { openAiApiKey: 'clave-openai-de-la-org' })
+
+    // Nunca se construye un cliente con la clave de la org (el cliente por defecto va en caché).
+    expect(constructorMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ apiKey: 'clave-openai-de-la-org' }),
+    )
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ model: 'gemini-embedding-001' }))
+  })
 })

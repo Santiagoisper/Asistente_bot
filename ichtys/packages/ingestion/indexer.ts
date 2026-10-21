@@ -10,7 +10,8 @@ import {
   type Document,
   type DocumentVersion,
 } from '@ichtys/db'
-import { embedBatch, EmbeddingError, type EmbeddingErrorCode } from './embedder'
+import { embedBatch, EmbeddingError, resolveEmbeddingBatchSize, type EmbeddingErrorCode } from './embedder'
+import { getEmbeddingFingerprint } from './embedding-config'
 
 export const indexDocumentVersionInput = z.object({
   userId: z.string().min(1),
@@ -106,7 +107,12 @@ async function auditEmbeddingStarted(
     action: 'embeddings.started',
     resourceType: 'document_version',
     resourceId: input.documentVersionId,
-    metadata: { documentId: input.documentId, chunkCount },
+    // La huella permite retomar un reintento solo si el modelo no cambió (ver chunk-reuse.ts).
+    metadata: {
+      documentId: input.documentId,
+      chunkCount,
+      embeddingFingerprint: getEmbeddingFingerprint(),
+    },
   })
 }
 
@@ -128,6 +134,7 @@ async function auditEmbeddingCompleted(
 async function auditEmbeddingFailed(
   input: IndexDocumentVersionInput,
   errorMessage: EmbeddingIndexingErrorCode,
+  persistedBeforeFailure: number,
 ): Promise<void> {
   await db.insert(auditLogs).values({
     organizationId: input.orgId,
@@ -136,7 +143,7 @@ async function auditEmbeddingFailed(
     action: 'embeddings.failed',
     resourceType: 'document_version',
     resourceId: input.documentVersionId,
-    metadata: { documentId: input.documentId, errorMessage },
+    metadata: { documentId: input.documentId, errorMessage, persistedBeforeFailure },
   })
 }
 
@@ -149,42 +156,71 @@ function sanitizeIndexingError(err: unknown): EmbeddingIndexingError {
   return new EmbeddingIndexingError('embedding_internal_error', 'Embedding indexing failed')
 }
 
-async function persistEmbeddings(input: IndexDocumentVersionInput, chunkRows: readonly Chunk[]): Promise<number> {
+interface PersistProgress {
+  persisted: number
+}
+
+/**
+ * Calcula y guarda los embeddings POR LOTE. Si el proveedor falla a mitad de camino
+ * (cuota, red), lo ya guardado se conserva y un reintento solo procesa lo que falta.
+ */
+async function persistEmbeddings(
+  input: IndexDocumentVersionInput,
+  chunkRows: readonly Chunk[],
+  progress: PersistProgress,
+  startedAt: number,
+): Promise<number> {
   if (chunkRows.length === 0) return 0
 
-  const embeddings = await embedBatch(chunkRows.map((chunk) => chunk.content))
+  const batchSize = resolveEmbeddingBatchSize()
 
-  await db.transaction(async (tx) => {
-    for (let i = 0; i < chunkRows.length; i += 1) {
-      const chunk = chunkRows[i]
-      const embedding = embeddings[i]
-      if (!chunk || !embedding) {
-        throw new EmbeddingIndexingError(
-          'embedding_internal_error',
-          'Embedding result count did not match chunk count',
-        )
+  for (let start = 0; start < chunkRows.length; start += batchSize) {
+    const slice = chunkRows.slice(start, start + batchSize)
+    const embeddings = await embedBatch(
+      slice.map((chunk) => chunk.content),
+      { startedAt, batchSize },
+    )
+
+    await db.transaction(async (tx) => {
+      for (let i = 0; i < slice.length; i += 1) {
+        const chunk = slice[i]
+        const embedding = embeddings[i]
+        if (!chunk || !embedding) {
+          throw new EmbeddingIndexingError(
+            'embedding_internal_error',
+            'Embedding result count did not match chunk count',
+          )
+        }
+
+        await tx
+          .update(chunks)
+          .set({ embedding: embedding.embedding, tokenCount: embedding.tokenCount })
+          .where(
+            and(
+              eq(chunks.id, chunk.id),
+              eq(chunks.documentId, input.documentId),
+              eq(chunks.documentVersionId, input.documentVersionId),
+              eq(chunks.organizationId, input.orgId),
+              eq(chunks.studyId, input.studyId),
+            ),
+          )
       }
+    })
 
-      await tx
-        .update(chunks)
-        .set({ embedding: embedding.embedding, tokenCount: embedding.tokenCount })
-        .where(
-          and(
-            eq(chunks.id, chunk.id),
-            eq(chunks.documentId, input.documentId),
-            eq(chunks.documentVersionId, input.documentVersionId),
-            eq(chunks.organizationId, input.orgId),
-            eq(chunks.studyId, input.studyId),
-          ),
-        )
-    }
-  })
+    progress.persisted += slice.length
+  }
 
-  return embeddings.length
+  return progress.persisted
+}
+
+export interface IndexDocumentVersionOptions {
+  /** Inicio (Date.now()) del trabajo completo; el pipeline lo pasa para que el plazo de reintentos lo incluya. */
+  startedAt?: number
 }
 
 export async function indexDocumentVersionChunks(
   input: IndexDocumentVersionInput,
+  options: IndexDocumentVersionOptions = {},
 ): Promise<IndexDocumentVersionResult> {
   const parsedInput = indexDocumentVersionInput.parse(input)
   await loadAuthorizedDocumentVersion(parsedInput)
@@ -192,8 +228,9 @@ export async function indexDocumentVersionChunks(
   const chunkRows = await loadUnembeddedChunks(parsedInput)
   await auditEmbeddingStarted(parsedInput, chunkRows.length)
 
+  const progress: PersistProgress = { persisted: 0 }
   try {
-    const embeddedChunkCount = await persistEmbeddings(parsedInput, chunkRows)
+    const embeddedChunkCount = await persistEmbeddings(parsedInput, chunkRows, progress, options.startedAt ?? Date.now())
     await auditEmbeddingCompleted(parsedInput, embeddedChunkCount)
 
     return {
@@ -204,7 +241,7 @@ export async function indexDocumentVersionChunks(
     }
   } catch (err) {
     const sanitized = sanitizeIndexingError(err)
-    await auditEmbeddingFailed(parsedInput, sanitized.code)
+    await auditEmbeddingFailed(parsedInput, sanitized.code, progress.persisted)
     throw sanitized
   }
 }
