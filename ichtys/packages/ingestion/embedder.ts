@@ -51,7 +51,12 @@ interface ProviderEmbeddingResponse {
 }
 
 export interface EmbeddingClient {
-  createEmbeddings(input: { model: string; input: string[] }): Promise<ProviderEmbeddingResponse>
+  createEmbeddings(input: {
+    model: string
+    input: string[]
+    dimensions?: number
+    encoding_format?: 'float'
+  }): Promise<ProviderEmbeddingResponse>
 }
 
 export interface EmbedBatchOptions {
@@ -65,15 +70,19 @@ export interface EmbedBatchOptions {
 
 let defaultClient: EmbeddingClient | null = null
 
-function createOpenAiClient(apiKey: string, baseURL?: string): EmbeddingClient {
+function createOpenAiClient(apiKey: string, baseURL?: string, provider?: string): EmbeddingClient {
   const openai = new OpenAI({
     apiKey,
     baseURL,
     timeout: 20_000,
     maxRetries: 1,
   })
+  // Google: pedir 1536 dims (matryoshka) y 'float' explícito: el SDK usa base64 por defecto.
+  const extra = provider === 'google'
+    ? { dimensions: EMBEDDING_DIMENSIONS, encoding_format: 'float' as const }
+    : {}
   return {
-    createEmbeddings: (input) => openai.embeddings.create(input),
+    createEmbeddings: (input) => openai.embeddings.create({ ...input, ...extra }),
   }
 }
 
@@ -112,11 +121,15 @@ function getDefaultClient(explicitOpenAiKey?: string): EmbeddingClient {
     const apiKey = getEmbeddingApiKey()
     if (!apiKey) {
       const provider = resolveEmbeddingProvider()
-      const envVar = provider === 'groq' ? 'GROQ_API_KEY' : 'OPENAI_API_KEY'
+      const envVar = provider === 'groq'
+        ? 'GROQ_API_KEY'
+        : provider === 'google'
+          ? 'GOOGLE_GENERATIVE_AI_API_KEY'
+          : 'OPENAI_API_KEY'
       throw new EmbeddingError('embedding_config_missing', `${envVar} is not configured`)
     }
 
-    defaultClient = createOpenAiClient(apiKey, getEmbeddingBaseUrl())
+    defaultClient = createOpenAiClient(apiKey, getEmbeddingBaseUrl(), resolveEmbeddingProvider())
   }
 
   return defaultClient
