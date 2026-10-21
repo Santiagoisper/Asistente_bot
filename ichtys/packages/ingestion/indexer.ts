@@ -178,7 +178,7 @@ async function persistEmbeddings(
     const slice = chunkRows.slice(start, start + batchSize)
     const embeddings = await embedBatch(
       slice.map((chunk) => chunk.content),
-      { startedAt, batchSize },
+      { startedAt, batchSize, orgId: input.orgId, studyId: input.studyId, userId: input.userId },
     )
 
     await db.transaction(async (tx) => {

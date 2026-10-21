@@ -252,6 +252,9 @@ function startSpecExtraction(
       const extracted = await extractStudySpec(specPages, fewShotExamples, {
         llmProviderPreference: SPEC_EXTRACTION_LLM_PROVIDER,
         llmApiKeys: orgLlmKeys,
+        orgId: input.orgId,
+        studyId: input.studyId,
+        userId: input.userId,
       })
       return { extracted, ms: Date.now() - startedAt }
     } catch (err) {
@@ -295,6 +298,7 @@ async function persistSpecDraft(
           orgId: input.orgId,
           studyId: input.studyId,
           documentVersionId: input.documentVersionId,
+          userId: input.userId,
         })
         console.log(`[spec-extractor] auto re-extract ok v${retry.version} richness=${retry.richness}`)
       } catch (retryErr) {

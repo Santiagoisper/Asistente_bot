@@ -1,8 +1,30 @@
 import { validateStudyAccess } from '@ichtys/auth'
 import { answerEngine, retrieveRelevantChunks } from '@ichtys/rag'
-import type { DocumentType } from '@ichtys/db'
+import { recordUsage, type DocumentType } from '@ichtys/db'
 import type { AnswerResult, ConversationTurn } from '@ichtys/rag'
 import { expandShortQueryForRetrieval } from './query-expander'
+
+/** Registra el consumo de las llamadas del answer engine. Nunca lanza (recordUsage no lanza). */
+async function recordAnswerUsage(
+  result: Pick<AnswerResult, 'usageEvents'>,
+  orgId: string,
+  studyId: string,
+  userId: string | null,
+): Promise<void> {
+  for (const event of result.usageEvents ?? []) {
+    await recordUsage({
+      orgId,
+      studyId,
+      userId,
+      kind: event.kind,
+      provider: event.provider,
+      model: event.model,
+      inputTokens: event.inputTokens,
+      outputTokens: event.outputTokens,
+      keySource: event.keySource === 'none' ? 'platform' : event.keySource,
+    })
+  }
+}
 
 /**
  * answer-orchestrator.ts — server-side wrapper que conecta auth, retrieval y
@@ -76,11 +98,13 @@ export async function generateAnswerForStudy(
   // 1. Validar acceso y resolver orgId desde el token de Clerk.
   //    Cualquier fallo (auth, org, study) se envuelve como access_denied.
   let orgId: string
+  let userId: string | null = null
   let studyName: string | null = null
   let protocolNumber: string | null = null
   try {
     const ctx = await validateStudyAccess(input.studyId)
     orgId = ctx.orgId
+    userId = ctx.userId
     studyName = ctx.study.name
     protocolNumber = ctx.study.protocolNumber
   } catch {
@@ -102,6 +126,7 @@ export async function generateAnswerForStudy(
       studyId: input.studyId,
       topK: input.topK,
       documentType: input.documentType,
+      userId,
     })
   } catch {
     throw new AnswerOrchestratorError('retrieval_error', 'Retrieval failed')
@@ -120,6 +145,9 @@ export async function generateAnswerForStudy(
   } catch {
     throw new AnswerOrchestratorError('answer_generation_error', 'Answer generation failed')
   }
+
+  // 4. Medición de consumo (nunca lanza) — después de tener una respuesta válida.
+  await recordAnswerUsage(result, orgId, input.studyId, userId)
 
   return { ...result, retrievalCount }
 }

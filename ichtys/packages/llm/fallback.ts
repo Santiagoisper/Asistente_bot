@@ -1,5 +1,5 @@
 import type { LanguageModel } from 'ai'
-import type { OrgLlmApiKeys } from './keys'
+import { getKeySourceForProvider, type OrgLlmApiKeys } from './keys'
 import {
   createLanguageModel,
   getDefaultProviderPreference,
@@ -8,6 +8,14 @@ import {
   resolveProviderChain,
 } from './provider'
 import type { LlmProviderId, LlmProviderPreference, LlmPurpose } from './types'
+
+/** Tokens consumidos por una llamada real a un modelo (ver `packages/db/usage.ts`). */
+export interface LlmUsage {
+  inputTokens: number
+  outputTokens: number
+}
+
+const ZERO_USAGE: LlmUsage = { inputTokens: 0, outputTokens: 0 }
 
 function statusFromError(err: unknown): number | null {
   if (typeof err !== 'object' || err === null || !('status' in err)) return null
@@ -44,15 +52,24 @@ export interface LlmRunResult<T> {
   result: T
   provider: LlmProviderId
   modelId: string
+  /** Tokens de la llamada real (0/0 si el callback nunca reportó uso). */
+  usage: LlmUsage
+  /** Quién paga esta llamada: clave propia de la organización o de la plataforma. */
+  keySource: 'org' | 'platform' | 'none'
 }
 
 /**
  * Ejecuta una llamada LLM. En modo `auto` recorre:
  * Claude → OpenAI → Gemini → Groq → GLM hasta que uno responda.
+ *
+ * `run` recibe `reportUsage`: el callback debe invocarlo con los tokens reales
+ * (`result.usage` de `generateText`/`generateObject`/`streamText`) antes de
+ * devolver su resultado, para que el medidor de consumo (`@ichtys/db` usage.ts)
+ * pueda registrar la llamada. Si no se llama, se asume 0/0 (no se registra nada).
  */
 export async function runWithLlmFallback<T>(
   options: RunWithLlmFallbackOptions,
-  run: (model: LanguageModel, provider: LlmProviderId) => Promise<T>,
+  run: (model: LanguageModel, provider: LlmProviderId, reportUsage: (usage: LlmUsage) => void) => Promise<T>,
 ): Promise<LlmRunResult<T>> {
   const preference = options.providerPreference ?? getDefaultProviderPreference()
   const providers = resolveProviderChain(preference)
@@ -71,8 +88,17 @@ export async function runWithLlmFallback<T>(
 
     try {
       const model = createLanguageModel(provider, options.purpose, options.orgApiKeys)
-      const result = await run(model, provider)
-      return { result, provider, modelId: getModelId(provider, options.purpose) }
+      let usage: LlmUsage = ZERO_USAGE
+      const result = await run(model, provider, (reported) => {
+        usage = reported
+      })
+      return {
+        result,
+        provider,
+        modelId: getModelId(provider, options.purpose),
+        usage,
+        keySource: getKeySourceForProvider(provider, options.orgApiKeys),
+      }
     } catch (err) {
       lastError = err
       const isLast = i === providers.length - 1

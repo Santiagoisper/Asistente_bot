@@ -28,6 +28,7 @@ export async function reextractStudySpec(params: {
   orgId: string
   studyId: string
   documentVersionId: string
+  userId?: string | null
 }): Promise<{ specId: string; version: number; richness: number; warnings: string[] }> {
   const pageRows = await db.query.pages.findMany({
     where: and(
@@ -57,7 +58,13 @@ export async function reextractStudySpec(params: {
   const { spec, warnings, extractionModel } = await extractStudySpec(
     parsedPages,
     fewShotExamples,
-    { llmProviderPreference: SPEC_EXTRACTION_LLM_PROVIDER, llmApiKeys: orgLlmKeys },
+    {
+      llmProviderPreference: SPEC_EXTRACTION_LLM_PROVIDER,
+      llmApiKeys: orgLlmKeys,
+      orgId: params.orgId,
+      studyId: params.studyId,
+      userId: params.userId,
+    },
   )
 
   const validated = studySpecSchema.parse(spec)

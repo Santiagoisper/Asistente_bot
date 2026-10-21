@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => {
     validateStudyAccess: vi.fn(),
     retrieveRelevantChunks: vi.fn(),
     answerEngine: vi.fn(),
+    recordUsage: vi.fn(),
   }
 })
 
@@ -47,7 +48,9 @@ vi.mock('@ichtys/rag', () => ({
   AnswerEngineError: mocks.AnswerEngineError,
 }))
 
-// @ichtys/db solo provee tipos en este módulo — no se necesita mock de DB.
+vi.mock('@ichtys/db', () => ({
+  recordUsage: mocks.recordUsage,
+}))
 
 // ---------------------------------------------------------------------------
 // Import post-mock
@@ -162,6 +165,41 @@ describe('generateAnswerForStudy — happy path', () => {
     expect(result.confidence).toBe('insufficient_evidence')
     expect(result.evidences).toEqual([])
     expect(result.retrievalCount).toBe(0)
+  })
+
+  it('records usage for every usageEvent returned by answerEngine, with orgId/studyId/userId from the resolved context', async () => {
+    mocks.validateStudyAccess.mockResolvedValueOnce(makeStudyAccessContext())
+    mocks.retrieveRelevantChunks.mockResolvedValueOnce([makeRetrievedChunk()])
+    mocks.answerEngine.mockResolvedValueOnce(
+      makeAnswerResult({
+        usageEvents: [
+          { kind: 'chat_answer', provider: 'anthropic', model: 'claude-sonnet-4-6', inputTokens: 120, outputTokens: 40, keySource: 'platform' },
+        ],
+      }),
+    )
+
+    await generateAnswerForStudy(makeInput())
+
+    expect(mocks.recordUsage).toHaveBeenCalledWith({
+      orgId: ORG_ID,
+      studyId: STUDY_ID,
+      userId: USER_ID,
+      kind: 'chat_answer',
+      provider: 'anthropic',
+      model: 'claude-sonnet-4-6',
+      inputTokens: 120,
+      outputTokens: 40,
+      keySource: 'platform',
+    })
+  })
+
+  it('does not throw and skips recording when answerEngine omits usageEvents', async () => {
+    mocks.validateStudyAccess.mockResolvedValueOnce(makeStudyAccessContext())
+    mocks.retrieveRelevantChunks.mockResolvedValueOnce([])
+    mocks.answerEngine.mockResolvedValueOnce(makeAnswerResult())
+
+    await expect(generateAnswerForStudy(makeInput())).resolves.toBeDefined()
+    expect(mocks.recordUsage).not.toHaveBeenCalled()
   })
 
   it('includes retrievalCount equal to the number of chunks returned by retriever', async () => {

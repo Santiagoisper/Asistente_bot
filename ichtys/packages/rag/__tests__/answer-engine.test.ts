@@ -21,13 +21,22 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('@ichtys/llm', () => ({
-  runWithLlmFallback: vi.fn(async (_opts: unknown, run: (model: unknown) => Promise<unknown>) => ({
-    result: await run(mocks.mockModel),
-    provider: 'anthropic',
-    modelId: 'claude-sonnet-4-6',
-  })),
+  runWithLlmFallback: vi.fn(
+    async (
+      _opts: unknown,
+      run: (model: unknown, provider: string, reportUsage: (u: unknown) => void) => Promise<unknown>,
+    ) => ({
+      result: await run(mocks.mockModel, 'anthropic', () => {}),
+      provider: 'anthropic',
+      modelId: 'claude-sonnet-4-6',
+      usage: { inputTokens: 0, outputTokens: 0 },
+      keySource: 'platform',
+    }),
+  ),
   createLanguageModel: vi.fn().mockReturnValue(mocks.mockModel),
   getDefaultProviderPreference: vi.fn().mockReturnValue('auto'),
+  getModelId: vi.fn().mockReturnValue('claude-sonnet-4-6'),
+  getKeySourceForProvider: vi.fn().mockReturnValue('platform'),
   resolveProviderChain: vi.fn().mockReturnValue(['anthropic']),
   isProviderConfigured: vi.fn().mockReturnValue(true),
   isProviderFallbackError: vi.fn().mockReturnValue(false),
