@@ -1,6 +1,13 @@
 import { validateStudyAccess } from '@ichtys/auth'
-import { answerEngine, retrieveRelevantChunks } from '@ichtys/rag'
-import { recordUsage, type DocumentType } from '@ichtys/db'
+import { AnswerEngineError, answerEngine, retrieveRelevantChunks } from '@ichtys/rag'
+import {
+  canUsePlatformKey,
+  getOrgLlmApiKeys,
+  getOrgRagConfig,
+  getQuotaStatus,
+  recordUsage,
+  type DocumentType,
+} from '@ichtys/db'
 import type { AnswerResult, ConversationTurn } from '@ichtys/rag'
 import { expandShortQueryForRetrieval } from './query-expander'
 
@@ -70,7 +77,11 @@ export type GenerateAnswerForStudyResult = AnswerResult & {
 // Error
 // ---------------------------------------------------------------------------
 
-export type WrapperErrorCode = 'access_denied' | 'retrieval_error' | 'answer_generation_error'
+export type WrapperErrorCode =
+  | 'access_denied'
+  | 'retrieval_error'
+  | 'answer_generation_error'
+  | 'quota_exceeded'
 
 export class AnswerOrchestratorError extends Error {
   constructor(
@@ -134,6 +145,14 @@ export async function generateAnswerForStudy(
 
   const retrievalCount = retrievedChunks.length
 
+  // 2b. Config LLM de la org + estado del cupo (ninguno de los dos puede romper la respuesta).
+  const [orgLlmApiKeys, orgRagConfig, quotaStatus] = await Promise.all([
+    getOrgLlmApiKeys(orgId).catch(() => null),
+    getOrgRagConfig(orgId).catch(() => null),
+    getQuotaStatus(orgId).catch(() => null),
+  ])
+  const platformKeyBlocked = quotaStatus ? !canUsePlatformKey(quotaStatus) : false
+
   // 3. Answer engine puro — tenant isolation ya fue aplicada en retrieval.
   let result: AnswerResult
   try {
@@ -141,8 +160,14 @@ export async function generateAnswerForStudy(
       question: input.question,
       retrievedChunks,
       conversationHistory: input.conversationHistory,
+      llmApiKeys: orgLlmApiKeys,
+      llmProviderPreference: orgRagConfig?.llmProvider,
+      platformKeyBlocked,
     })
-  } catch {
+  } catch (err) {
+    if (err instanceof AnswerEngineError && err.code === 'quota_exceeded') {
+      throw new AnswerOrchestratorError('quota_exceeded', 'Monthly platform quota exceeded')
+    }
     throw new AnswerOrchestratorError('answer_generation_error', 'Answer generation failed')
   }
 

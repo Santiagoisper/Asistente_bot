@@ -1,6 +1,6 @@
 # ALPHI — Consumo y cuota mensual (modelo híbrido)
 
-Estado: **etapas 1 y 2 implementadas en código (migración sin aplicar a producción)**. Etapa 3 pendiente.
+Estado: **etapas 1, 2 y 3 implementadas en código (migración sin aplicar a producción)**. Etapa 4 (cobro) pendiente.
 
 ## Modelo de negocio (decisión: opción C, híbrido)
 
@@ -49,6 +49,30 @@ junto al resultado de la llamada. Cada caller con contexto de organización/estu
 
 Si el caller no pasa `orgId` (p. ej. un test unitario), no se registra nada — no es un error.
 
+## Pantalla de consumo y tope (etapa 3)
+
+- **Pantalla "Consumo"**: nueva ruta `/usage` (link en la barra de navegación, visible para cualquier
+  rol de la org — es transparencia de consumo, no administración). Lee `GET /api/org/usage`
+  (`apps/web/app/api/org/usage/route.ts`), que junta `getQuotaStatus` + `getUsageSummary` y convierte
+  todo a USD. Muestra la barra del cupo, el aviso a partir de `QUOTA_WARNING_RATIO` (80 % por defecto)
+  y el desglose por tipo con quién pagó cada llamada.
+- **Tope al agotar el cupo**: `runWithLlmFallback` (`packages/llm/fallback.ts`) recibe un flag
+  `platformKeyBlocked`; cuando está activo, ignora cualquier proveedor cuya única clave disponible sea
+  la de la plataforma — solo sigue funcionando si la organización cargó su propia clave. Si ningún
+  proveedor queda disponible, lanza `LlmQuotaExceededError`.
+  - `answer-orchestrator.ts` (ruta sin streaming) y `/api/chat/stream/route.ts` (streaming, la ruta
+    real) calculan `platformKeyBlocked = !canUsePlatformKey(quotaStatus)` antes de llamar al answer
+    engine y lo propagan también a la generación del título.
+  - El cliente recibe un mensaje claro y accionable (no un error genérico): en streaming, un frame SSE
+    `{type:'error', code:'quota_exceeded', message:'...'}`; en la ruta sin streaming, un `402` con
+    `{error:'quota_exceeded', message:'...'}`.
+  - **Alcance de esta etapa**: el tope aplica a chat (`chat_answer`, `chat_eval`, `chat_title`), que es
+    el consumo recurrente y de mayor volumen. `spec_extraction`, `clinical_extraction` y los dos tipos
+    de `embedding_*` siguen **midiéndose** (etapa 2) pero no están gateados todavía — son llamadas de
+    ingesta/background, de menor volumen, y bloquearlas sin aviso podría dejar un documento a medio
+    procesar. Si el negocio lo pide, extenderlas es agregar `platformKeyBlocked` a esos callers (el
+    mecanismo ya existe).
+
 ## Precios (estimados, revisar)
 
 `packages/db/usage-pricing.ts` tiene una tabla de USD por millón de tokens. Es una **estimación**, no
@@ -75,7 +99,7 @@ cambiar los precios no reescribe el historial.
 |---|---|---|
 | 1 | Tabla `usage_events`, columnas `organizations.plan_name` / `monthly_budget_micros`, migración `0009`, módulo `packages/db/usage.ts` + `usage-pricing.ts` y tests (70 en el paquete) | Hecha, **migración sin aplicar** |
 | 2 | Enganchar cada llamada a un modelo para registrar el consumo (chat ×3, título, spec, perfil clínico, embeddings de documentos y de consultas) | Hecha, **sin cupo visible para el cliente aún** (eso es la etapa 3) |
-| 3 | Pantalla "Consumo" para el cliente (barra del cupo, desglose por tipo, aviso al 80 %) y tope cuando el cupo se agota (mensaje claro: cargar clave propia o ampliar plan) | Pendiente |
+| 3 | Pantalla "Consumo" para el cliente (barra del cupo, desglose por tipo, aviso al 80 %) y tope cuando el cupo se agota (mensaje claro: cargar clave propia o ampliar plan) | Hecha |
 | 4 | Cobro automático de la cuota (Stripe u otro) | Pendiente; requiere decisiones comerciales |
 
 ## Cómo aplicar la migración (acción manual)
@@ -100,9 +124,10 @@ WHERE id = '<uuid-de-la-organizacion>';
 
 ## Decisiones pendientes
 
-1. **Qué pasa al agotar el cupo:** el diseño propone bloquear solo el uso con clave de la plataforma,
-   con un mensaje claro. Alternativa: permitir sobreconsumo facturado aparte.
-2. **Aviso al cliente:** al 80 % (valor por defecto, `QUOTA_WARNING_RATIO`).
+1. ~~**Qué pasa al agotar el cupo**~~ — implementado en etapa 3: se bloquea solo el uso con clave de
+   la plataforma para chat, con mensaje claro. Alternativa aún abierta: permitir sobreconsumo facturado
+   aparte en lugar de bloquear.
+2. **Aviso al cliente:** al 80 % (valor por defecto, `QUOTA_WARNING_RATIO`) — ya visible en `/usage`.
 3. **Margen:** el cupo mide costo estimado del proveedor; el precio de la cuota mensual al cliente
    puede ser mayor. Esa relación es comercial y no está en el código.
 4. **Cobro:** manual (factura mensual) o automático.

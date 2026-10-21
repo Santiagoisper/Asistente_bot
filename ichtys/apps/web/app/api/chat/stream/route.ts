@@ -1,7 +1,15 @@
 import { z } from 'zod'
 import { handleApiError, validateStudyAccess } from '@ichtys/auth'
 import { retrieveRelevantChunks, answerEngineStream } from '@ichtys/rag'
-import { getOrgLlmApiKeys, getOrgRagConfig, recordUsage, resolveLlmApiKey } from '@ichtys/db'
+import {
+  canUsePlatformKey,
+  getOrgLlmApiKeys,
+  getOrgRagConfig,
+  getQuotaStatus,
+  recordUsage,
+  resolveLlmApiKey,
+} from '@ichtys/db'
+import { AnswerEngineError } from '@ichtys/rag'
 import type { AnswerStreamEvent, LlmUsageEvent } from '@ichtys/rag'
 import {
   generateAndPersistConversationTitle,
@@ -162,17 +170,22 @@ export async function POST(req: Request): Promise<Response> {
     return new Response('Internal Server Error', { status: 500 })
   }
 
-  // 9b. Load org RAG config (threshold + topK) — falls back to system defaults.
-  const orgRagConfig = await getOrgRagConfig(orgId).catch(() => null)
-  const orgLlmApiKeys = await getOrgLlmApiKeys(orgId).catch(() => ({}))
+  // 9b. Load org RAG config (threshold + topK) y estado del cupo — ninguno de los dos
+  //     puede bloquear el chat si falla (ver.catch): sin datos, no se limita nada.
+  const [orgRagConfig, orgLlmApiKeys, quotaStatus] = await Promise.all([
+    getOrgRagConfig(orgId).catch(() => null),
+    getOrgLlmApiKeys(orgId).catch(() => ({})),
+    getQuotaStatus(orgId).catch(() => null),
+  ])
   const openAiApiKey = resolveLlmApiKey('openai', orgLlmApiKeys)
+  const platformKeyBlocked = quotaStatus ? !canUsePlatformKey(quotaStatus) : false
 
   // 10. Kick off auto-title for new conversations (fire-and-forget, non-blocking).
   //     Haiku + 6-word title ≈ 300-500 ms — will resolve before the LLM stream ends.
   //     If it fails, title stays null and we swallow the error.
   const isNewConversation = !inputConversationId
   const titlePromise: Promise<string | null> = isNewConversation
-    ? generateAndPersistConversationTitle({ conversationId, question, studyName, orgId, studyId, userId }).catch(() => null)
+    ? generateAndPersistConversationTitle({ conversationId, question, studyName, orgId, studyId, userId, platformKeyBlocked }).catch(() => null)
     : Promise.resolve(null)
 
   // 11. Return SSE stream.
@@ -235,6 +248,7 @@ export async function POST(req: Request): Promise<Response> {
           similarityThreshold: orgRagConfig?.similarityThreshold,
           llmProviderPreference: orgRagConfig?.llmProvider,
           llmApiKeys: orgLlmApiKeys,
+          platformKeyBlocked,
         })
 
         // Para preguntas de terminología bufferizamos sin emitir tokens: la
@@ -372,7 +386,16 @@ export async function POST(req: Request): Promise<Response> {
         }
       } catch (err) {
         console.error('[POST /api/chat/stream] error:', err)
-        enqueue({ type: 'error' })
+        if (err instanceof AnswerEngineError && err.code === 'quota_exceeded') {
+          enqueue({
+            type: 'error',
+            code: 'quota_exceeded',
+            message:
+              'Se agotó el cupo mensual incluido de esta organización. Cargá tu propia clave de modelo en Ajustes para seguir usando el chat, o ampliá el plan.',
+          })
+        } else {
+          enqueue({ type: 'error' })
+        }
       } finally {
         controller.close()
       }

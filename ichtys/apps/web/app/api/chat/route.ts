@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { handleApiError, validateStudyAccess } from '@ichtys/auth'
 import {
+  AnswerOrchestratorError,
   generateAnswerForStudy,
 } from '../../../lib/rag/answer-orchestrator'
 import {
@@ -205,6 +206,16 @@ export async function POST(req: Request): Promise<Response> {
       })
     } catch {
       // audit write failure non-fatal
+    }
+    if (ragErr instanceof AnswerOrchestratorError && ragErr.code === 'quota_exceeded') {
+      return Response.json(
+        {
+          error: 'quota_exceeded',
+          message:
+            'Se agotó el cupo mensual incluido de esta organización. Cargá tu propia clave de modelo en Ajustes para seguir usando el chat, o ampliá el plan.',
+        },
+        { status: 402 },
+      )
     }
     return new Response('Internal Server Error', { status: 500 })
   }

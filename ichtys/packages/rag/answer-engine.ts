@@ -8,6 +8,7 @@ import {
   getModelId,
   isProviderConfigured,
   isProviderFallbackError,
+  LlmQuotaExceededError,
   resolveProviderChain,
   runWithLlmFallback,
   type LlmProviderPreference,
@@ -92,6 +93,8 @@ export type AnswerEngineInput = {
   llmProviderPreference?: LlmProviderPreference
   /** API keys LLM propias de la org (prioridad sobre env del servidor). */
   llmApiKeys?: OrgLlmApiKeys | null
+  /** Cupo mensual agotado: ignora la clave de plataforma, solo sigue con clave propia de la org. */
+  platformKeyBlocked?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -102,6 +105,7 @@ export type AnswerEngineErrorCode =
   | 'llm_provider_error'
   | 'llm_rate_limited'
   | 'llm_invalid_response'
+  | 'quota_exceeded'
 
 export class AnswerEngineError extends Error {
   constructor(
@@ -193,6 +197,9 @@ function statusFromError(err: unknown): number | null {
 
 function sanitizeLLMError(err: unknown): AnswerEngineError {
   if (err instanceof AnswerEngineError) return err
+  if (err instanceof LlmQuotaExceededError) {
+    return new AnswerEngineError('quota_exceeded', 'Monthly platform quota exceeded')
+  }
   if (statusFromError(err) === 429) {
     return new AnswerEngineError('llm_rate_limited', 'Answer generation rate limited')
   }
@@ -434,6 +441,7 @@ export async function answerEngine(input: AnswerEngineInput): Promise<AnswerResu
         purpose: 'answer',
         providerPreference: input.llmProviderPreference,
         orgApiKeys: input.llmApiKeys,
+        platformKeyBlocked: input.platformKeyBlocked,
       },
       async (model, _provider, reportUsage) => {
         const result = await generateObject({
@@ -552,6 +560,7 @@ async function evaluateStreamedAnswerConfidence(
   fullAnswer: string,
   llmProviderPreference?: LlmProviderPreference,
   llmApiKeys?: OrgLlmApiKeys | null,
+  platformKeyBlocked?: boolean,
 ): Promise<{ confidence: Confidence; usageEvent: LlmUsageEvent | null }> {
   try {
     const { result, provider, modelId, usage, keySource } = await runWithLlmFallback(
@@ -559,6 +568,7 @@ async function evaluateStreamedAnswerConfidence(
         purpose: 'answer',
         providerPreference: llmProviderPreference,
         orgApiKeys: llmApiKeys,
+        platformKeyBlocked,
       },
       async (model, _provider, reportUsage) => {
         const evalResult = await generateObject({
@@ -595,7 +605,7 @@ async function evaluateStreamedAnswerConfidence(
 export async function* answerEngineStream(
   input: AnswerEngineInput,
 ): AsyncGenerator<AnswerStreamEvent> {
-  const { question, retrievedChunks, conversationHistory, similarityThreshold, llmProviderPreference, llmApiKeys } =
+  const { question, retrievedChunks, conversationHistory, similarityThreshold, llmProviderPreference, llmApiKeys, platformKeyBlocked } =
     input
 
   // 1. Filter by similarity threshold (per-org override or system default).
@@ -620,10 +630,17 @@ export async function* answerEngineStream(
   let streamed = false
   let lastStreamError: unknown
   let answerUsageEvent: LlmUsageEvent | null = null
+  let sawQuotaBlock = false
 
   for (let i = 0; i < providerOrder.length; i++) {
     const provider = providerOrder[i]!
-    if (!isProviderConfigured(provider, llmApiKeys)) continue
+    const configured = isProviderConfigured(provider, llmApiKeys)
+    const keySource = configured ? getKeySourceForProvider(provider, llmApiKeys) : 'none'
+    const quotaBlocksThis = Boolean(platformKeyBlocked) && keySource === 'platform'
+    if (!configured || quotaBlocksThis) {
+      if (quotaBlocksThis) sawQuotaBlock = true
+      continue
+    }
 
     const model = createLanguageModel(provider, 'answer', llmApiKeys)
     streamed = false
@@ -649,7 +666,7 @@ export async function* answerEngineStream(
           model: getModelId(provider, 'answer'),
           inputTokens: streamUsage?.promptTokens ?? 0,
           outputTokens: streamUsage?.completionTokens ?? 0,
-          keySource: getKeySourceForProvider(provider, llmApiKeys),
+          keySource,
         }
         break
       }
@@ -677,6 +694,7 @@ export async function* answerEngineStream(
 
   if (!fullAnswer.trim()) {
     if (lastStreamError) throw sanitizeLLMError(lastStreamError)
+    if (sawQuotaBlock) throw sanitizeLLMError(new LlmQuotaExceededError())
     const msg = getInsufficientEvidenceMessage(question)
     yield { type: 'done', confidence: 'insufficient_evidence', evidences: [], fullAnswer: msg, usageEvents: [] }
     return
@@ -689,6 +707,7 @@ export async function* answerEngineStream(
     fullAnswer,
     llmProviderPreference,
     llmApiKeys,
+    platformKeyBlocked,
   )
   const usageEvents = [answerUsageEvent, evalUsageEvent].filter((e): e is LlmUsageEvent => e !== null)
 

@@ -17,6 +17,18 @@ export interface LlmUsage {
 
 const ZERO_USAGE: LlmUsage = { inputTokens: 0, outputTokens: 0 }
 
+/**
+ * El cupo mensual de la organización está agotado y la llamada solo tenía disponible la
+ * clave de la plataforma (ninguna clave propia de la org cubre un proveedor configurado).
+ * El caller debe mostrar un mensaje claro: cargar clave propia o ampliar el plan.
+ */
+export class LlmQuotaExceededError extends Error {
+  constructor() {
+    super('Monthly platform quota exceeded for this organization.')
+    this.name = 'LlmQuotaExceededError'
+  }
+}
+
 function statusFromError(err: unknown): number | null {
   if (typeof err !== 'object' || err === null || !('status' in err)) return null
   const status = (err as { status: unknown }).status
@@ -46,6 +58,11 @@ export interface RunWithLlmFallbackOptions {
   purpose: LlmPurpose
   providerPreference?: LlmProviderPreference
   orgApiKeys?: OrgLlmApiKeys | null
+  /**
+   * Cupo mensual agotado: ignora la clave de la plataforma para cualquier proveedor —
+   * solo sigue funcionando si la organización tiene su propia clave. Ver `LlmQuotaExceededError`.
+   */
+  platformKeyBlocked?: boolean
 }
 
 export interface LlmRunResult<T> {
@@ -75,12 +92,18 @@ export async function runWithLlmFallback<T>(
   const providers = resolveProviderChain(preference)
 
   let lastError: unknown
+  let sawQuotaBlock = false
 
   for (let i = 0; i < providers.length; i++) {
     const provider = providers[i]!
+    const configured = isProviderConfigured(provider, options.orgApiKeys)
+    const keySource = configured ? getKeySourceForProvider(provider, options.orgApiKeys) : 'none'
+    const quotaBlocksThis = Boolean(options.platformKeyBlocked) && keySource === 'platform'
 
-    if (!isProviderConfigured(provider, options.orgApiKeys)) {
+    if (!configured || quotaBlocksThis) {
+      if (quotaBlocksThis) sawQuotaBlock = true
       if (preference === provider) {
+        if (quotaBlocksThis) throw new LlmQuotaExceededError()
         throw new Error(`Proveedor ${provider} no configurado (falta API key en el servidor).`)
       }
       continue
@@ -92,13 +115,7 @@ export async function runWithLlmFallback<T>(
       const result = await run(model, provider, (reported) => {
         usage = reported
       })
-      return {
-        result,
-        provider,
-        modelId: getModelId(provider, options.purpose),
-        usage,
-        keySource: getKeySourceForProvider(provider, options.orgApiKeys),
-      }
+      return { result, provider, modelId: getModelId(provider, options.purpose), usage, keySource }
     } catch (err) {
       lastError = err
       const isLast = i === providers.length - 1
@@ -110,6 +127,8 @@ export async function runWithLlmFallback<T>(
       throw err
     }
   }
+
+  if (sawQuotaBlock) throw new LlmQuotaExceededError()
 
   throw lastError instanceof Error
     ? lastError

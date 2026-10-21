@@ -34,6 +34,10 @@ const mocks = vi.hoisted(() => {
     retrieveRelevantChunks: vi.fn(),
     answerEngine: vi.fn(),
     recordUsage: vi.fn(),
+    getOrgLlmApiKeys: vi.fn().mockResolvedValue({}),
+    getOrgRagConfig: vi.fn().mockResolvedValue({}),
+    getQuotaStatus: vi.fn().mockResolvedValue({ state: 'no_quota' }),
+    canUsePlatformKey: vi.fn().mockReturnValue(true),
   }
 })
 
@@ -50,6 +54,10 @@ vi.mock('@ichtys/rag', () => ({
 
 vi.mock('@ichtys/db', () => ({
   recordUsage: mocks.recordUsage,
+  getOrgLlmApiKeys: mocks.getOrgLlmApiKeys,
+  getOrgRagConfig: mocks.getOrgRagConfig,
+  getQuotaStatus: mocks.getQuotaStatus,
+  canUsePlatformKey: mocks.canUsePlatformKey,
 }))
 
 // ---------------------------------------------------------------------------
@@ -312,6 +320,50 @@ describe('generateAnswerForStudy — error sanitization', () => {
     await expect(generateAnswerForStudy(makeInput())).rejects.toMatchObject({
       code: 'answer_generation_error',
     })
+  })
+
+  it('maps AnswerEngineError quota_exceeded to AnswerOrchestratorError quota_exceeded', async () => {
+    mocks.validateStudyAccess.mockResolvedValueOnce(makeStudyAccessContext())
+    mocks.retrieveRelevantChunks.mockResolvedValueOnce([makeRetrievedChunk()])
+    mocks.answerEngine.mockRejectedValueOnce(
+      new mocks.AnswerEngineError('quota_exceeded', 'Monthly platform quota exceeded'),
+    )
+
+    await expect(generateAnswerForStudy(makeInput())).rejects.toMatchObject({
+      code: 'quota_exceeded',
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Cupo agotado — platformKeyBlocked
+// ---------------------------------------------------------------------------
+
+describe('generateAnswerForStudy — quota gating', () => {
+  it('passes platformKeyBlocked=true to answerEngine when the quota is exceeded', async () => {
+    mocks.validateStudyAccess.mockResolvedValueOnce(makeStudyAccessContext())
+    mocks.retrieveRelevantChunks.mockResolvedValueOnce([makeRetrievedChunk()])
+    mocks.getQuotaStatus.mockResolvedValueOnce({ state: 'exceeded' })
+    mocks.canUsePlatformKey.mockReturnValueOnce(false)
+    mocks.answerEngine.mockResolvedValueOnce(makeAnswerResult())
+
+    await generateAnswerForStudy(makeInput())
+
+    expect(mocks.answerEngine).toHaveBeenCalledWith(
+      expect.objectContaining({ platformKeyBlocked: true }),
+    )
+  })
+
+  it('passes platformKeyBlocked=false when the quota is not exceeded', async () => {
+    mocks.validateStudyAccess.mockResolvedValueOnce(makeStudyAccessContext())
+    mocks.retrieveRelevantChunks.mockResolvedValueOnce([makeRetrievedChunk()])
+    mocks.answerEngine.mockResolvedValueOnce(makeAnswerResult())
+
+    await generateAnswerForStudy(makeInput())
+
+    expect(mocks.answerEngine).toHaveBeenCalledWith(
+      expect.objectContaining({ platformKeyBlocked: false }),
+    )
   })
 })
 
