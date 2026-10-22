@@ -156,7 +156,7 @@ Peter the Protocol Reader (Care Access / Reify Health). ALPHI apunta a superar e
 
 | Capa | Tecnología |
 |------|------------|
-| Frontend | Next.js 15 App Router, TypeScript, Tailwind |
+| Frontend | Next.js 16 App Router, TypeScript, Tailwind |
 | Auth / multi-tenant | Clerk Organizations + RBAC |
 | Base de datos | Neon Postgres serverless + pgvector |
 | Almacenamiento | Vercel Blob (PDFs privados) |
