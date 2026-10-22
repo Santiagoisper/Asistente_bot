@@ -104,7 +104,7 @@ Los equipos de sitio pierden tiempo crítico buscando en documentos extensos dur
 
 | Capa | Tecnología |
 |---|---|
-| Frontend | Next.js 15 App Router + TypeScript strict + Tailwind + Vercel AI SDK |
+| Frontend | Next.js 16 App Router + TypeScript strict + Tailwind + Vercel AI SDK |
 | Auth | Clerk Organizations (multi-tenant B2B) |
 | DB | Neon Postgres + pgvector, Drizzle ORM (ahora 0.45.2) |
 | Storage | Vercel Blob (privado; acceso solo vía endpoint autenticado) |

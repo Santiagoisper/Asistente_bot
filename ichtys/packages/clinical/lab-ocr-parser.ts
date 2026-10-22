@@ -1,18 +1,7 @@
 import { extractFactsFromEvolution } from './extract-facts'
+import { parseDecimal, upsertLab } from './lab-utils'
 import type { LabObservation } from './profile-schema'
 import { redactPhiForLlm } from './phi-redact'
-
-function parseDecimal(raw: string): number {
-  return Number.parseFloat(raw.replace(',', '.'))
-}
-
-function upsertLab(labs: LabObservation[], entry: LabObservation): LabObservation[] {
-  const idx = labs.findIndex((l) => l.name.toLowerCase() === entry.name.toLowerCase())
-  if (idx === -1) return [...labs, entry]
-  const next = [...labs]
-  next[idx] = entry
-  return next
-}
 
 /** Redacta encabezados típicos de PDF de laboratorio antes de parsear. */
 export function redactLabHeaderPii(text: string): { text: string; redactedCount: number } {

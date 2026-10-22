@@ -14,7 +14,7 @@
 
 ## Learned Workspace Facts
 
-- Producto comercial **ALPHI** (asistente documental clínico con RAG); monorepo en `ichtys/` (pnpm/turbo, Next.js 15, Clerk, Neon/pgvector, Vercel); el repo raíz es contenedor del código.
+- Producto comercial **ALPHI** (asistente documental clínico con RAG); monorepo en `ichtys/` (pnpm/turbo, Next.js 16, Clerk, Neon/pgvector, Vercel); el repo raíz es contenedor del código.
 - CI en `.github/workflows/` (`working-directory: ichtys`); remote `Santiagoisper/Asistente_bot`, rama `main`; deploy prod en `https://asistente-bot-five.vercel.app` (proyecto `asistente-bot`, config `ichtys/vercel.json`); push a `main` dispara build automático; cron `recover-stuck-docs` en `/api/cron/*` (auth `CRON_SECRET`, ruta excluida de Clerk en middleware) requiere el secret en Vercel y GitHub Secrets; Etapa 0 cerrada (T2 sliders RAG en `/settings`, SD cron, `PHI_ENCRYPTION_KEY` en prod Vercel); runbooks en `ichtys/docs/OPERATIONS.md`.
 - En PowerShell (Windows), evitar encadenar comandos con `&&`; usar `;` y comprobar `$LASTEXITCODE`.
 - Las migraciones Drizzle **NO se aplican automáticamente** en el deploy de Vercel; hay que correrlas manualmente contra Neon (`fragrant-sun-79639780`, proyecto `Asistente_bot`) antes de promover a producción (lección del incidente 2026-06-28: columna `rag_config` faltante rompió todas las queries a `organizations`).

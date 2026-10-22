@@ -17,9 +17,6 @@ export const createEvolutionSchema = z
   })
   .strict()
 
-export type CreateSubjectInput = z.infer<typeof createSubjectSchema>
-export type CreateEvolutionInput = z.infer<typeof createEvolutionSchema>
-
 const labObservationInputSchema = z.object({
   name: z.string().min(1),
   value: z.number(),
@@ -33,6 +30,3 @@ export const labOcrConfirmSchema = z
     labs: z.array(labObservationInputSchema).optional(),
   })
   .strict()
-
-export type LabOcrExtractInput = z.infer<typeof labOcrExtractSchema>
-export type LabOcrConfirmInput = z.infer<typeof labOcrConfirmSchema>

@@ -1,4 +1,5 @@
 import type { ExtractedFacts } from './extract-facts'
+import { upsertLab } from './lab-utils'
 import type { FieldConfidenceLevel, PatientProfile, ProfileFieldConfidence } from './profile-schema'
 
 function numbersClose(a: number, b: number, tolerance = 0.05): boolean {
@@ -136,12 +137,9 @@ export function mergeProfileWithExtraction(
 ): PatientProfile {
   const { facts, fieldConfidence } = merged
 
-  const labs = [...current.labs]
+  let labs = [...current.labs]
   for (const lab of facts.labs) {
-    const idx = labs.findIndex((l) => l.name.toLowerCase() === lab.name.toLowerCase())
-    const entry = { ...lab, sourceEvolutionId: evolutionId }
-    if (idx === -1) labs.push(entry)
-    else labs[idx] = entry
+    labs = upsertLab(labs, { ...lab, sourceEvolutionId: evolutionId })
   }
 
   const medNames = new Set(current.medications.map((m) => m.name.toLowerCase()))
