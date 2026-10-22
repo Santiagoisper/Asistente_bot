@@ -219,7 +219,9 @@ function createFixture(): PipelineFixture {
       documentId,
       organizationId: orgId,
       studyId,
-      blobUrl: crypto.randomUUID(),
+      // Objeto legado de un store PUBLICO: el pipeline lo lee con fetch plano
+      // (los objetos nuevos van al store privado y pasan por el SDK).
+      blobUrl: `https://store.public.blob.vercel-storage.com/${crypto.randomUUID()}.pdf`,
       blobKey: `clinical-documents/${crypto.randomUUID()}/document.pdf`,
       pageCount: null,
       fileSizeBytes: 100,
