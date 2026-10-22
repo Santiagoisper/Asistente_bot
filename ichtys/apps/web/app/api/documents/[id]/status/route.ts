@@ -1,6 +1,12 @@
 import { z } from 'zod'
 import { handleApiError, validateDocumentAccess } from '@ichtys/auth'
-import { db } from '@ichtys/db'
+import { and, count, db, eq, isNotNull } from '@ichtys/db'
+import { chunks, pages } from '@ichtys/db'
+import {
+  deriveIngestionStage,
+  describeIngestionErrorMessage,
+  INGESTION_STAGE_LABELS,
+} from '../../../../../lib/documents/ingestion-stage'
 
 export const runtime = 'nodejs'
 
@@ -35,18 +41,60 @@ export async function GET(_req: Request, { params }: RouteContext): Promise<Resp
       throw new Error('Authorized document has no document version')
     }
 
-    // Sanitize error messages — never return raw internal messages (may contain
-    // stack traces or sensitive details). Map to a safe user-facing string.
-    const safeErrorMessage =
-      latestVersion.status === 'error' ? 'Document processing failed' : null
+    // Etapa real derivada de lo que el pipeline ya persistió (ver
+    // lib/documents/ingestion-stage.ts): pages/chunks se insertan por etapa,
+    // así que contándolos se sabe en qué paso está HOY.
+    const [pagesRow, chunksTotalRow, chunksEmbeddedRow] = await Promise.all([
+      db
+        .select({ value: count() })
+        .from(pages)
+        .where(and(eq(pages.documentVersionId, latestVersion.id), eq(pages.organizationId, orgId))),
+      db
+        .select({ value: count() })
+        .from(chunks)
+        .where(
+          and(eq(chunks.documentVersionId, latestVersion.id), eq(chunks.organizationId, orgId)),
+        ),
+      db
+        .select({ value: count() })
+        .from(chunks)
+        .where(
+          and(
+            eq(chunks.documentVersionId, latestVersion.id),
+            eq(chunks.organizationId, orgId),
+            isNotNull(chunks.embedding),
+          ),
+        ),
+    ])
+
+    const stage = deriveIngestionStage({
+      versionStatus: latestVersion.status,
+      isProtocol: document.documentType === 'protocol',
+      pagesCount: pagesRow[0]?.value ?? 0,
+      chunksTotal: chunksTotalRow[0]?.value ?? 0,
+      chunksEmbedded: chunksEmbeddedRow[0]?.value ?? 0,
+    })
+
+    // Mensaje de error: el código interno se mapea a texto claro en español —
+    // nunca se devuelve crudo (podría filtrar detalles internos).
+    const errorMessage =
+      latestVersion.status === 'error'
+        ? describeIngestionErrorMessage(latestVersion.errorMessage)
+        : null
 
     return Response.json(
       {
         documentId: document.id,
+        documentType: document.documentType,
         latestDocumentVersionId: latestVersion.id,
         status: latestVersion.status,
+        stage,
+        stageLabel: INGESTION_STAGE_LABELS[stage],
         pageCount: latestVersion.pageCount,
-        errorMessage: safeErrorMessage,
+        pagesIndexed: pagesRow[0]?.value ?? 0,
+        chunksTotal: chunksTotalRow[0]?.value ?? 0,
+        chunksEmbedded: chunksEmbeddedRow[0]?.value ?? 0,
+        errorMessage,
         createdAt: latestVersion.createdAt,
       },
       { status: 200 },

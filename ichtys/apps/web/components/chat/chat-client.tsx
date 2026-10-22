@@ -23,6 +23,9 @@ type ChatClientProps = {
 
 const SAFE_ERROR_MESSAGE = 'No se pudo completar la operacion. Intenta nuevamente.'
 
+/** Error enviado por el servidor en un frame {type:"error"}: message sanitizado, en español. */
+class StreamFrameError extends Error {}
+
 class StreamQuotaExceededError extends Error {}
 
 const SUGGESTED = [
@@ -40,7 +43,7 @@ type StreamTokenFrame       = { type: 'token';       text: string }
 type StreamDoneFrame        = { type: 'done';        assistantMessageId: string; confidence: AnswerConfidence; evidences: Evidence[]; retrievalCount: number; conversationId: string; terminologySuggestions?: TerminologySuggestion[]; protocolMentionsFound?: boolean }
 type StreamAnnotationsFrame = { type: 'annotations'; annotations: MedicalAnnotation[] }
 type StreamTitleFrame       = { type: 'title';       conversationId: string; title: string }
-type StreamErrorFrame       = { type: 'error'; code?: 'quota_exceeded'; message?: string }
+type StreamErrorFrame       = { type: 'error'; code?: 'quota_exceeded' | 'llm_timeout' | 'llm_rate_limited' | 'internal_error'; message?: string }
 type StreamFrame = StreamStartFrame | StreamTokenFrame | StreamDoneFrame | StreamAnnotationsFrame | StreamTitleFrame | StreamStatusFrame | StreamErrorFrame
 
 function isStartFrame(f: StreamFrame):       f is StreamStartFrame       { return f.type === 'start' }
@@ -317,12 +320,18 @@ export default function ChatClient({
             if (frame.code === 'quota_exceeded') {
               throw new StreamQuotaExceededError(frame.message ?? SAFE_ERROR_MESSAGE)
             }
-            throw new Error('stream_error')
+            // El message del frame viene sanitizado y en español del servidor
+            // (timeout, rate limit, error interno) — se muestra tal cual.
+            throw new StreamFrameError(frame.message ?? SAFE_ERROR_MESSAGE)
           }
         }
       }
     } catch (err) {
-      setSendError(err instanceof StreamQuotaExceededError ? err.message : SAFE_ERROR_MESSAGE)
+      setSendError(
+        err instanceof StreamQuotaExceededError || err instanceof StreamFrameError
+          ? err.message
+          : SAFE_ERROR_MESSAGE,
+      )
       setTurns((prev) =>
         prev.filter((t) => t.messageId !== pendingUserId && t.messageId !== streamId)
       )

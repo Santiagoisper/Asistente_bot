@@ -15,6 +15,7 @@ export const documentType = [
   'investigator_brochure',
   'lab_manual',
   'pharmacy_manual',
+  'soa',
   'other',
 ] as const
 export type DocumentType = (typeof documentType)[number]

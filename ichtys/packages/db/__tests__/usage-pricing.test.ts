@@ -89,3 +89,28 @@ describe('conversión USD <-> micro-USD', () => {
     expect(microsToUsd(usdToMicros(0.15))).toBeCloseTo(0.15, 6)
   })
 })
+
+describe('precios Anthropic vigentes (claude-5-5, confirmados con skill claude-api 2026-10-22)', () => {
+  it('claude-opus-5-5: 4/20 USD por MTok', () => {
+    expect(resolveModelPrice('claude-opus-5-5').price).toEqual({ inputPerMTok: 4, outputPerMTok: 20 })
+  })
+
+  it('claude-sonnet-5-5: 2/10 USD por MTok', () => {
+    expect(resolveModelPrice('claude-sonnet-5-5').price).toEqual({ inputPerMTok: 2, outputPerMTok: 10 })
+  })
+
+  it('claude-haiku-5-5: 0.10/0.50 USD por MTok', () => {
+    expect(resolveModelPrice('claude-haiku-5-5').price).toEqual({ inputPerMTok: 0.1, outputPerMTok: 0.5 })
+  })
+
+  it('modelos históricos 4.x siguen tarificados correctamente (eventos ya registrados)', () => {
+    expect(resolveModelPrice('claude-sonnet-4-6').price).toEqual({ inputPerMTok: 3, outputPerMTok: 15 })
+    expect(resolveModelPrice('claude-haiku-4-5').price).toEqual({ inputPerMTok: 1, outputPerMTok: 5 })
+  })
+
+  it('los prefijos 5-5 ganan sobre los genéricos claude-sonnet/claude-haiku', () => {
+    expect(resolveModelPrice('claude-sonnet-5-5-20260101').price.inputPerMTok).toBe(2)
+    expect(resolveModelPrice('claude-haiku-5-5-20260101').price.inputPerMTok).toBe(0.1)
+    expect(resolveModelPrice('claude-sonnet-4-5').price.inputPerMTok).toBe(3) // genérico conservador
+  })
+})

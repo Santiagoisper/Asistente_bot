@@ -3,7 +3,6 @@ import { z } from 'zod'
 import { answerConfidence } from '@ichtys/db'
 import {
   createLanguageModel,
-  getDefaultProviderPreference,
   getKeySourceForProvider,
   getModelId,
   isProviderConfigured,
@@ -11,6 +10,7 @@ import {
   LlmQuotaExceededError,
   resolveProviderChain,
   runWithLlmFallback,
+  type LlmProviderId,
   type LlmProviderPreference,
   type OrgLlmApiKeys,
 } from '@ichtys/llm'
@@ -105,6 +105,7 @@ export type AnswerEngineErrorCode =
   | 'llm_provider_error'
   | 'llm_rate_limited'
   | 'llm_invalid_response'
+  | 'llm_timeout'
   | 'quota_exceeded'
 
 export class AnswerEngineError extends Error {
@@ -199,6 +200,15 @@ function sanitizeLLMError(err: unknown): AnswerEngineError {
   if (err instanceof AnswerEngineError) return err
   if (err instanceof LlmQuotaExceededError) {
     return new AnswerEngineError('quota_exceeded', 'Monthly platform quota exceeded')
+  }
+  // Timeouts propios (stream o llamada) y aborts del SDK: código propio para que
+  // el route muestre un mensaje claro, no el corte silencioso de 300 s de Vercel.
+  if (
+    err instanceof StreamTimeoutError ||
+    (err instanceof Error &&
+      ['AbortError', 'TimeoutError', 'LlmCallTimeoutError'].includes(err.name))
+  ) {
+    return new AnswerEngineError('llm_timeout', 'Answer generation timed out')
   }
   if (statusFromError(err) === 429) {
     return new AnswerEngineError('llm_rate_limited', 'Answer generation rate limited')
@@ -548,7 +558,7 @@ export * from './guardrails'
 
 export type AnswerStreamEvent =
   | { type: 'token'; text: string }
-  | { type: 'done'; confidence: Confidence; evidences: Evidence[]; fullAnswer: string; usageEvents?: LlmUsageEvent[] }
+  | { type: 'done'; confidence: Confidence; evidences: Evidence[]; fullAnswer: string; usageEvents?: LlmUsageEvent[]; timing?: LlmStreamTiming }
 
 /**
  * Evalúa confianza de una respuesta ya generada contra el mismo contexto.
@@ -593,6 +603,80 @@ async function evaluateStreamedAnswerConfidence(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Streaming: timeouts propios + telemetría
+// ---------------------------------------------------------------------------
+
+/** Latencia de la generación streamada, para los logs del route. */
+export interface LlmStreamTiming {
+  provider: LlmProviderId
+  modelId: string
+  firstTokenMs: number
+  totalMs: number
+}
+
+/** Venció el reloj del stream (primer token o inactividad entre tokens). */
+export class StreamTimeoutError extends Error {
+  constructor(readonly kind: 'first-token' | 'idle', readonly ms: number) {
+    super(`LLM stream timed out (${kind}) after ${ms}ms`)
+    this.name = 'StreamTimeoutError'
+  }
+}
+
+const DEFAULT_STREAM_FIRST_TOKEN_TIMEOUT_MS = 45_000
+const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 60_000
+
+function readStreamTimeoutMs(name: string, fallback: number): number {
+  const raw = Number(process.env[name])
+  return Number.isFinite(raw) && raw >= 10 ? raw : fallback
+}
+
+/**
+ * Consume el textStream con dos relojes: uno al primer token y otro de
+ * inactividad entre tokens. Al vencer cualquiera, aborta el controller (el
+ * fetch del SDK muere de verdad) y lanza StreamTimeoutError.
+ *
+ * Antes de esta defensa, un proveedor colgado sostenía el request hasta el
+ * corte de 300 s de Vercel — 43 timeouts en producción, y el mensaje del
+ * assistant nunca llegaba a persistirse (ver runIngestion del chat/stream).
+ */
+async function* streamTextWithTimeout(
+  createStream: (signal: AbortSignal) => AsyncIterable<string>,
+): AsyncGenerator<string> {
+  const firstTokenMs = readStreamTimeoutMs('LLM_STREAM_FIRST_TOKEN_TIMEOUT_MS', DEFAULT_STREAM_FIRST_TOKEN_TIMEOUT_MS)
+  const idleMs = readStreamTimeoutMs('LLM_STREAM_IDLE_TIMEOUT_MS', DEFAULT_STREAM_IDLE_TIMEOUT_MS)
+  const controller = new AbortController()
+  let rejectTimeout: ((err: StreamTimeoutError) => void) | undefined
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    rejectTimeout = reject
+  })
+  // race() se suscribe aparte: este catch evita la unhandled rejection cuando
+  // el timer vence después de que la race ya resolvió con el siguiente chunk.
+  timeoutPromise.catch(() => {})
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const armTimeout = (ms: number, kind: 'first-token' | 'idle'): void => {
+    clearTimeout(timer)
+    timer = setTimeout(() => {
+      controller.abort()
+      rejectTimeout?.(new StreamTimeoutError(kind, ms))
+    }, ms)
+  }
+
+  armTimeout(firstTokenMs, 'first-token')
+  const iterator = createStream(controller.signal)[Symbol.asyncIterator]()
+  try {
+    while (true) {
+      const result = await Promise.race([iterator.next(), timeoutPromise])
+      if (result.done) return
+      armTimeout(idleMs, 'idle')
+      yield result.value
+    }
+  } finally {
+    clearTimeout(timer)
+    controller.abort() // stream cerrado o cortado: no dejar el fetch vivo
+  }
+}
+
 /**
  * Streaming variant of answerEngine. Yields token events as the LLM generates
  * the answer, then a final done event with confidence + evidences.
@@ -623,14 +707,16 @@ export async function* answerEngineStream(
   const context = buildContext(aboveThreshold)
   const userPrompt = buildUserPrompt(question, context, conversationHistory)
   const providerOrder = resolveProviderChain(llmProviderPreference)
-  const preference = llmProviderPreference ?? getDefaultProviderPreference()
 
-  // 3. Stream answer text token-by-token; fallback en cadena auto.
+  // 3. Stream answer text token-by-token; fallback en la cadena efectiva
+  //    (resolveProviderChain garantiza respaldo Anthropic).
   let fullAnswer = ''
   let streamed = false
   let lastStreamError: unknown
   let answerUsageEvent: LlmUsageEvent | null = null
   let sawQuotaBlock = false
+  let timing: LlmStreamTiming | undefined
+  const streamStartedAt = Date.now()
 
   for (let i = 0; i < providerOrder.length; i++) {
     const provider = providerOrder[i]!
@@ -644,22 +730,33 @@ export async function* answerEngineStream(
 
     const model = createLanguageModel(provider, 'answer', llmApiKeys)
     streamed = false
+    let firstTokenMs: number | null = null
     try {
-      const streamResult = streamText({
-        model,
-        system: STREAM_ANSWER_SYSTEM_PROMPT,
-        prompt: userPrompt,
+      // Timeout propio al primer token + inactividad (streamTextWithTimeout):
+      // un proveedor colgado corta acá y cae al siguiente — nunca al timeout
+      // de 300 s de Vercel que mataba la función antes de persistir la respuesta.
+      let streamResultRef: ReturnType<typeof streamText> | null = null
+      const textStream = streamTextWithTimeout((signal) => {
+        streamResultRef = streamText({
+          model,
+          system: STREAM_ANSWER_SYSTEM_PROMPT,
+          prompt: userPrompt,
+          abortSignal: signal,
+        })
+        return streamResultRef.textStream
       })
 
-      for await (const chunk of streamResult.textStream) {
+      for await (const chunk of textStream) {
+        if (firstTokenMs === null) firstTokenMs = Date.now() - streamStartedAt
         fullAnswer += chunk
         streamed = true
         yield { type: 'token', text: chunk }
       }
 
-      fullAnswer = (await streamResult.text) || fullAnswer
       if (fullAnswer.trim()) {
-        const streamUsage = await Promise.resolve(streamResult.usage).catch(() => null)
+        // TS no ve la asignación del closure arriba: cast explícito del nullable.
+        const streamResult = streamResultRef as ReturnType<typeof streamText> | null
+        const streamUsage = await Promise.resolve(streamResult?.usage).catch(() => null)
         answerUsageEvent = {
           kind: 'chat_answer',
           provider,
@@ -668,11 +765,17 @@ export async function* answerEngineStream(
           outputTokens: streamUsage?.completionTokens ?? 0,
           keySource,
         }
+        timing = {
+          provider,
+          modelId: getModelId(provider, 'answer'),
+          firstTokenMs: firstTokenMs ?? 0,
+          totalMs: Date.now() - streamStartedAt,
+        }
         break
       }
 
       const isLast = i === providerOrder.length - 1
-      if (preference === 'auto' && !isLast) {
+      if (!isLast) {
         console.warn(`[answer-engine] ${provider} returned empty response — trying next provider`)
         fullAnswer = ''
         continue
@@ -681,8 +784,11 @@ export async function* answerEngineStream(
     } catch (err) {
       lastStreamError = err
       const isLast = i === providerOrder.length - 1
-      const canFallback = preference === 'auto' && !isLast && isProviderFallbackError(err)
-      if (canFallback && !streamed) {
+      // El timeout cuenta como error de proveedor: si queda alguien en la
+      // cadena, se prueba al siguiente (sin repetir tokens ya emitidos).
+      const fallbackAble = err instanceof StreamTimeoutError || isProviderFallbackError(err)
+      const canFallback = !isLast && fallbackAble && !streamed
+      if (canFallback) {
         console.warn(`[answer-engine] ${provider} failed — trying next provider (${(err as Error).message?.slice(0, 120)})`)
         fullAnswer = ''
         continue
@@ -729,5 +835,5 @@ export async function* answerEngineStream(
     return
   }
 
-  yield { type: 'done', confidence, evidences, fullAnswer, usageEvents }
+  yield { type: 'done', confidence, evidences, fullAnswer, usageEvents, timing }
 }
