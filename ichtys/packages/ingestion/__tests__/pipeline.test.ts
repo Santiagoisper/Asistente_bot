@@ -487,7 +487,7 @@ describe('runIngestion: reintentos y paralelismo', () => {
     expect(specMocks.saveStudySpec).not.toHaveBeenCalled()
   })
 
-  it('un fallo de la extraccion del spec no falla la ingesta', async () => {
+  it('marca error visible si falla la extraccion del spec', async () => {
     const fixture = arrange()
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
     specMocks.extractStudySpec.mockRejectedValue(new Error('llm caido'))
@@ -495,11 +495,12 @@ describe('runIngestion: reintentos y paralelismo', () => {
 
     const result = await runIngestion(fixture.input)
 
-    expect(result.status).toBe('ready')
+    expect(result.status).toBe('error')
+    expect(result.errorMessage).toBe('spec_extraction_failed')
     expect(specMocks.saveStudySpec).not.toHaveBeenCalled()
   })
 
-  it('si el spec no llega antes del tope del trabajo, lo omite y la ingesta igual termina', async () => {
+  it('marca error visible si el spec no llega antes del tope del trabajo', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
     try {
       const fixture = arrange()
@@ -515,7 +516,8 @@ describe('runIngestion: reintentos y paralelismo', () => {
       }
       const result = await running
 
-      expect(result.status).toBe('ready')
+      expect(result.status).toBe('error')
+      expect(result.errorMessage).toBe('spec_extraction_failed')
       expect(specMocks.saveStudySpec).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()

@@ -59,6 +59,7 @@ export type IngestionErrorCode =
   | 'embedding_rate_limited'
   | 'pdf_text_extraction_failed'
   | 'pdf_contains_no_extractable_text'
+  | 'spec_extraction_failed'
   | 'ingestion_internal_error'
 
 class IngestionPipelineError extends Error {
@@ -234,6 +235,7 @@ type ExtractedSpec = Awaited<ReturnType<typeof extractStudySpec>>
  */
 function startSpecExtraction(
   specPages: ParsedPages,
+  protocolPdf: Uint8Array,
   input: RunIngestionInput,
 ): Promise<{ extracted: ExtractedSpec | null; ms: number }> {
   const startedAt = Date.now()
@@ -255,6 +257,7 @@ function startSpecExtraction(
         orgId: input.orgId,
         studyId: input.studyId,
         userId: input.userId,
+        protocolPdf,
       })
       return { extracted, ms: Date.now() - startedAt }
     } catch (err) {
@@ -284,7 +287,7 @@ async function persistSpecDraft(
       orgId: input.orgId,
       studyId: input.studyId,
       documentVersionId: input.documentVersionId,
-      spec,
+      spec: { ...spec, extractionWarnings: warnings },
       extractionModel,
     })
     console.log(`[spec-extractor] saved draft spec id=${id} version=${version}`)
@@ -303,10 +306,16 @@ async function persistSpecDraft(
         console.log(`[spec-extractor] auto re-extract ok v${retry.version} richness=${retry.richness}`)
       } catch (retryErr) {
         console.error('[spec-extractor] auto re-extract failed:', retryErr)
+        throw new IngestionPipelineError('spec_extraction_failed', 'La extracción del spec no produjo contenido útil')
       }
+    } else if (!isMeaningfulSpec(spec)) {
+      throw new IngestionPipelineError('spec_extraction_failed', 'La extracción del spec no produjo contenido útil')
     }
   } catch (err) {
     console.error(`[spec-extractor] FAILED for documentVersionId=${input.documentVersionId}:`, err)
+    throw err instanceof IngestionPipelineError
+      ? err
+      : new IngestionPipelineError('spec_extraction_failed', 'No se pudo guardar el spec extraído')
   }
 }
 
@@ -407,7 +416,7 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
     // los embeddings terminaron bien (no queda un borrador de un documento fallido).
     const specExtraction =
       document.documentType === 'protocol'
-        ? startSpecExtraction(parsedDocument.pages, parsedInput)
+        ? startSpecExtraction(parsedDocument.pages, pdfData, parsedInput)
         : null
 
     const indexingResult = await indexDocumentVersionChunks(parsedInput, { startedAt })
@@ -430,6 +439,7 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
         console.warn(
           `[spec-extractor] skipped: not ready before the job deadline documentVersionId=${parsedInput.documentVersionId}`,
         )
+        throw new IngestionPipelineError('spec_extraction_failed', 'La extracción del spec excedió el tiempo disponible')
       } else {
         timings.specExtractMs = settled.ms
         lap('specWaitMs')
@@ -437,6 +447,8 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
           await persistSpecDraft(settled.extracted, parsedInput, {
             allowReextract: Date.now() < startedAt + JOB_REEXTRACT_DEADLINE_MS,
           })
+        } else {
+          throw new IngestionPipelineError('spec_extraction_failed', 'Falló la extracción del spec; revisar evidencia del worker')
         }
         lap('specSaveMs')
       }

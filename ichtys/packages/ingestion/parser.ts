@@ -1,4 +1,5 @@
 import pdfParse from 'pdf-parse'
+import { PDFDocument } from 'pdf-lib'
 
 /**
  * parser.ts - PDF text extraction, page by page.
@@ -94,4 +95,24 @@ export async function parsePdf(data: Buffer | Uint8Array): Promise<ParsedDocumen
 
     throw new PdfParseError('pdf_text_extraction_failed', 'Failed to extract text from PDF')
   }
+}
+
+/** Copies a 1-based range of pages into a small standalone PDF for visual LLM input. */
+export async function cropPdfPages(
+  data: Buffer | Uint8Array,
+  pageStart: number,
+  pageEnd: number,
+): Promise<Uint8Array> {
+  if (!Number.isInteger(pageStart) || !Number.isInteger(pageEnd) || pageStart < 1 || pageEnd < pageStart) {
+    throw new Error('Invalid PDF page range')
+  }
+
+  const source = await PDFDocument.load(data, { ignoreEncryption: false })
+  if (pageEnd > source.getPageCount()) throw new Error('PDF page range exceeds document')
+
+  const output = await PDFDocument.create()
+  const indices = Array.from({ length: pageEnd - pageStart + 1 }, (_, offset) => pageStart - 1 + offset)
+  const pages = await output.copyPages(source, indices)
+  for (const page of pages) output.addPage(page)
+  return output.save()
 }

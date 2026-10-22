@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { PDFDocument } from 'pdf-lib'
 
 // ---------------------------------------------------------------------------
 // Mocks hoisted
@@ -216,6 +217,61 @@ describe('extractStudySpec', () => {
     // El primer call (identification, en paralelo) falló — campos null.
     expect(result.warnings.length).toBeGreaterThan(0)
     expect(() => studySpecSchema.parse(result.spec)).not.toThrow()
+  })
+
+  it('sends a cropped PDF for the located SoA range and preserves source page numbers', async () => {
+    mockExtractionByPrompt()
+    const original = mocks.generateObject.getMockImplementation()!
+    const pdfPageCounts: number[] = []
+    mocks.generateObject.mockImplementation(async (args: {
+      prompt?: string
+      messages?: Array<{ content: Array<{ type: string; data?: Uint8Array; text?: string }> }>
+    }) => {
+      const content = args.messages?.[0]?.content
+      const file = content?.find((part) => part.type === 'file')
+      if (file?.data) pdfPageCounts.push((await PDFDocument.load(file.data)).getPageCount())
+      const prompt = args.prompt ?? content?.find((part) => part.type === 'text')?.text
+      return original({ prompt } as never)
+    })
+
+    const source = await PDFDocument.create()
+    for (let i = 0; i < 60; i += 1) source.addPage()
+    const result = await extractStudySpec(makeProtocolPages(), [], { protocolPdf: await source.save() })
+
+    expect(pdfPageCounts.sort((a, b) => a - b)).toEqual([3, 8])
+    expect(result.warnings).toEqual([])
+    const calls = mocks.generateObject.mock.calls as Array<[{ messages?: Array<{ content: Array<{ type: string; text?: string }> }> }]>
+    const visitCall = calls.find(([arg]) => arg.messages?.[0]?.content.some((part) => part.type === 'file'))?.[0]
+    expect(visitCall?.messages?.[0]?.content.find((part) => part.type === 'text')?.text).toContain('Use [PAGE N] below for sourcePages')
+  })
+
+  it('warns and lowers confidence for duplicate or out-of-order visits', async () => {
+    mockExtractionByPrompt()
+    const original = mocks.generateObject.getMockImplementation()!
+    mocks.generateObject.mockImplementation((args: { prompt: string }) => {
+      if (args.prompt.includes('schedule of activities')) {
+        return Promise.resolve({
+          object: {
+            visits: [
+              { name: 'Visita 4', label: 'Semana 12', day: 85, windowDays: 3, procedures: ['HbA1c'], sourcePages: [19], confidence: 'high' },
+              { name: 'Visita 4', label: 'Semana 2', day: 14, windowDays: -2, procedures: [], sourcePages: [19], confidence: 'high' },
+            ],
+          },
+        })
+      }
+      return original(args)
+    })
+
+    const result = await extractStudySpec(makeProtocolPages())
+
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining('duplicate visit name'),
+      expect.stringContaining('not ordered by day'),
+      expect.stringContaining('has no procedures'),
+      expect.stringContaining('has an invalid visit window'),
+    ]))
+    expect(result.spec.visits.map((visit) => visit.confidence)).toEqual(['low', 'low'])
+    expect(result.spec.visits[1]?.windowDays).toBeNull()
   })
 })
 

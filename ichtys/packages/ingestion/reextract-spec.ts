@@ -80,7 +80,7 @@ export async function reextractStudySpec(params: {
     orgId: params.orgId,
     studyId: params.studyId,
     documentVersionId: params.documentVersionId,
-    spec: validated,
+    spec: { ...validated, extractionWarnings: warnings },
     extractionModel,
   })
 

@@ -80,5 +80,7 @@ export const studySpecSchema = z.object({
   exclusionCriteria: z.array(eligibilityCriterionSchema),
   endpoints: z.array(studyEndpointSchema),
   visits: z.array(studyVisitSchema),
+  /** Advertencias de la extracción, guardadas junto al spec para conservar trazabilidad. */
+  extractionWarnings: z.array(z.string()).optional(),
 })
 export type StudySpec = z.infer<typeof studySpecSchema>
