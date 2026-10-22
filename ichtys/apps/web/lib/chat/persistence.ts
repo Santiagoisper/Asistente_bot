@@ -254,13 +254,14 @@ export async function generateAndPersistConversationTitle(params: {
   orgId: string
   studyId: string
   userId: string
+  platformKeyBlocked?: boolean
 }): Promise<string | null> {
   const contextLine = params.studyName
     ? `Study: ${params.studyName}\nQuestion: ${params.question}`
     : `Question: ${params.question}`
 
   const { result: text, provider, modelId, usage, keySource } = await runWithLlmFallback(
-    { purpose: 'title' },
+    { purpose: 'title', platformKeyBlocked: params.platformKeyBlocked },
     async (model, _provider, reportUsage) => {
       const { text: titleText, usage: titleUsage } = await generateText({
         model,

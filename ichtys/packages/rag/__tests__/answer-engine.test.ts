@@ -40,6 +40,7 @@ vi.mock('@ichtys/llm', () => ({
   resolveProviderChain: vi.fn().mockReturnValue(['anthropic']),
   isProviderConfigured: vi.fn().mockReturnValue(true),
   isProviderFallbackError: vi.fn().mockReturnValue(false),
+  LlmQuotaExceededError: class LlmQuotaExceededError extends Error {},
 }))
 vi.mock('ai', () => ({ generateObject: mocks.generateObject, streamText: mocks.streamText }))
 
@@ -67,6 +68,7 @@ vi.mock('@ichtys/ingestion/embedder', () => ({
 // Imports post-mock
 // ---------------------------------------------------------------------------
 
+import { getKeySourceForProvider, LlmQuotaExceededError, runWithLlmFallback } from '@ichtys/llm'
 import {
   answerEngine,
   answerEngineStream,
@@ -503,6 +505,39 @@ describe('answerEngine — LLM error sanitization', () => {
       expect(engineErr.message).not.toContain('sk-ant')
       expect(engineErr.message).not.toContain('secret-key-leaked')
     }
+  })
+
+  it('maps LlmQuotaExceededError to AnswerEngineError quota_exceeded', async () => {
+    const chunk = makeChunk({ similarityScore: 0.90 })
+    vi.mocked(runWithLlmFallback).mockRejectedValueOnce(new LlmQuotaExceededError())
+
+    await expect(answerEngine(makeInput([chunk]))).rejects.toMatchObject({
+      code: 'quota_exceeded',
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Cupo agotado — bloqueo de la clave de plataforma
+// ---------------------------------------------------------------------------
+
+describe('answerEngineStream — platformKeyBlocked', () => {
+  it('throws quota_exceeded instead of insufficient_evidence when the only configured provider is platform-sourced and blocked', async () => {
+    vi.mocked(getKeySourceForProvider).mockReturnValueOnce('platform')
+    const chunk = makeChunk({ similarityScore: 0.90 })
+
+    const events: unknown[] = []
+    await expect(async () => {
+      for await (const event of answerEngineStream({
+        question: 'What are the eligibility criteria?',
+        retrievedChunks: [chunk],
+        platformKeyBlocked: true,
+      })) {
+        events.push(event)
+      }
+    }).rejects.toMatchObject({ code: 'quota_exceeded' })
+
+    expect(mocks.streamText).not.toHaveBeenCalled()
   })
 })
 
