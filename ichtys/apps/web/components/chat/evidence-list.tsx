@@ -292,7 +292,7 @@ export function EvidenceList({
 
       {viewerUrl ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-alphi-navy/70 p-4 backdrop-blur-sm">
-          <div className="animate-slide-up flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-alphi-modal">
+          <div className="animate-slide-up flex h-[90dvh] max-h-[90dvh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-alphi-modal">
             <div className="flex items-center justify-between border-b border-alphi-border px-5 py-3">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-alphi-navy">

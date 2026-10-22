@@ -81,7 +81,7 @@ export function UsagePanel() {
   }
 
   if (error || !data) {
-    return <p className="text-sm text-red-600">{error ?? 'No se pudo cargar el consumo.'}</p>
+    return <p className="text-sm text-alphi-rose">{error ?? 'No se pudo cargar el consumo.'}</p>
   }
 
   const { quota, plan, period, breakdown, totals } = data

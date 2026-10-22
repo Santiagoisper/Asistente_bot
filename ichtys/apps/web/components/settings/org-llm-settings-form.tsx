@@ -183,7 +183,7 @@ export function OrgLlmSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
   }
 
   if (error && !settings) {
-    return <p className="text-sm text-red-600">{error}</p>
+    return <p className="text-sm text-alphi-rose">{error}</p>
   }
 
   return (
@@ -400,7 +400,7 @@ export function OrgLlmSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
       </button>
 
       {message && <p className="text-xs text-alphi-teal">{message}</p>}
-      {error && settings && <p className="text-xs text-red-600">{error}</p>}
+      {error && settings && <p className="text-xs text-alphi-rose">{error}</p>}
     </div>
   )
 }
