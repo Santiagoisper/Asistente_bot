@@ -193,9 +193,10 @@ export type StructuredAnswer = z.infer<typeof answerSchema>
 
 function statusFromError(err: unknown): number | null {
   if (typeof err !== 'object' || err === null) return null
-  if (!('status' in err)) return null
-  const s = (err as { status: unknown }).status
-  return typeof s === 'number' ? s : null
+  // ai@4 expone statusCode en APICallError; los SDK directos usan status.
+  const raw = (err as { status?: unknown; statusCode?: unknown })
+  const status = raw.statusCode ?? raw.status
+  return typeof status === 'number' ? status : null
 }
 
 /** Nombre visible del proveedor para mensajes al usuario. */

@@ -27,8 +27,11 @@ describe('checkAllProviderHealth — sin GLM', () => {
       modelId: null,
     }))
     const results = await checkAllProviderHealth(null)
+    // El contrato observable es el array de resultados: si glm volviera a la
+    // lista, results tendría 5 entradas. (La aserción sobre el spy se quitó:
+    // checkAllProviderHealth usa el binding interno del módulo, no el mock,
+    // así que pasaba vacuamente — nota de reviewer en #41.)
     expect(results.map((r) => r.provider).sort()).toEqual(['anthropic', 'google', 'groq', 'openai'])
     expect(results.some((r) => r.provider === 'glm')).toBe(false)
-    expect(mocks.checkProviderHealth).not.toHaveBeenCalledWith('glm', expect.anything())
   })
 })

@@ -51,8 +51,10 @@ function readLlmCallTimeoutMs(): number {
 }
 
 function statusFromError(err: unknown): number | null {
-  if (typeof err !== 'object' || err === null || !('status' in err)) return null
-  const status = (err as { status: unknown }).status
+  if (typeof err !== 'object' || err === null) return null
+  // ai@4 expone statusCode en APICallError; los SDK directos usan status.
+  const raw = (err as { status?: unknown; statusCode?: unknown })
+  const status = raw.statusCode ?? raw.status
   return typeof status === 'number' ? status : null
 }
 

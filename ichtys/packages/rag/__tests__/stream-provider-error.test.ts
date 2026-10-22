@@ -190,6 +190,20 @@ describe('answerEngineStream — falla del proveedor ≠ evidencia insuficiente 
     expect((error as AnswerEngineError).code).toBe('llm_rate_limited')
   })
 
+  it('429 del SDK real (statusCode, sin status ni mensaje 429) también clasifica llm_rate_limited (nota de reviewer #41)', async () => {
+    mocks.resolveProviderChain.mockReturnValue(['anthropic'])
+    mocks.isProviderQuotaError.mockReturnValue(true)
+    // APICallError de ai@4 expone statusCode; mensaje neutro para que solo el
+    // statusFromError (statusCode ?? status) pueda clasificar el 429.
+    const sdkError = Object.assign(new Error('API error'), { statusCode: 429 })
+    streamTextFailingWith(sdkError)
+
+    const { error } = await collectStream(makeInput({ llmProviderPreference: 'anthropic' }))
+
+    expect(error).toBeInstanceOf(AnswerEngineError)
+    expect((error as AnswerEngineError).code).toBe('llm_rate_limited')
+  })
+
   it('eval de confianza falla post-stream → fail-open a medium, sin matar la respuesta ya entregada', async () => {
     async function* healthy(): AsyncGenerator<string> { yield 'HbA1c entre 7,0 % y 10,0 % [1]' }
     mocks.streamText.mockReturnValue({ textStream: healthy() })
