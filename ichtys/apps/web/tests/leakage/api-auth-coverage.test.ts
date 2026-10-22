@@ -46,6 +46,7 @@ const DELEGATED_AUTH_ALLOWLIST: Record<string, string> = {
 
 /** Rutas públicas permitidas en el matcher de middleware.ts — revisar a mano al cambiar. */
 const EXPECTED_PUBLIC_ROUTES = [
+  '/',
   '/sign-in(.*)',
   '/sign-up(.*)',
   '/trust',
