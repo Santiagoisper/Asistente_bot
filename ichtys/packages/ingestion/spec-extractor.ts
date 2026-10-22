@@ -92,6 +92,8 @@ export interface ExtractStudySpecOptions {
   userId?: string | null
   /** PDF fuente ya descargado, para procesar visualmente solo secciones tabulares. */
   protocolPdf?: Uint8Array
+  /** Una guía SoA aporta visitas, sin reextraer identificación, criterios ni endpoints. */
+  visitsOnly?: boolean
 }
 
 type UsageRecordingCtx = Pick<ExtractStudySpecOptions, 'orgId' | 'studyId' | 'userId'>
@@ -590,6 +592,25 @@ function validateExtractedVisits(
   }
 }
 
+function safeProviderError(error: unknown): { name: string; code: string; status: string } {
+  const value = error && typeof error === 'object' ? error as Record<string, unknown> : {}
+  const safeToken = (candidate: unknown): string | null =>
+    typeof candidate === 'string' && /^[a-zA-Z0-9_.-]{1,64}$/.test(candidate) ? candidate : null
+  return {
+    name: safeToken(value.name) ?? 'UnknownError',
+    code: safeToken(value.code) ?? 'unknown',
+    status: typeof value.status === 'number' && Number.isFinite(value.status) ? String(value.status) : 'n/a',
+  }
+}
+
+function recordProviderFailure(stage: string, error: unknown): string {
+  const details = safeProviderError(error)
+  console.warn(
+    `[spec-extractor] ${stage} provider failure name=${details.name} status=${details.status} code=${details.code}`,
+  )
+  return `extraction_failed: el proveedor no devolvió una respuesta utilizable (código ${details.code})`
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Public API
 // ─────────────────────────────────────────────────────────────────────────────
@@ -627,8 +648,7 @@ export async function extractStudySpec(
       (fewShotExamples.length > 0 ? ` few-shot=${fewShotExamples.length}` : ''),
     )
   } catch (err) {
-    const cause = err instanceof Error ? err.message : String(err)
-    warnings.push(`section-location: semantic locator failed — ${cause}`)
+    warnings.push(`section-location: ${recordProviderFailure('semantic locator', err)}`)
     // Fallback conservador: solo la identificación (primeras 5 páginas)
     const lastPage = pages[pages.length - 1]?.pageNumber ?? 1
     sectionMap = {
@@ -711,8 +731,9 @@ export async function extractStudySpec(
           extractionError = fallbackErr
         }
       }
-      const cause = extractionError instanceof Error ? extractionError.message : String(extractionError)
-      warnings.push(`${group}: extraction failed (P${range.pageStart}–P${range.pageEnd}) — ${cause}`)
+      warnings.push(
+        `${group} (P${range.pageStart}–P${range.pageEnd}): ${recordProviderFailure(group, extractionError)}`,
+      )
       return empty
     }
   }
@@ -735,8 +756,7 @@ export async function extractStudySpec(
       extractionModelUsed = extracted.modelId
       return extracted.data
     } catch (err) {
-      const cause = err instanceof Error ? err.message : String(err)
-      warnings.push(`identification: extraction failed — ${cause}`)
+      warnings.push(`identification: ${recordProviderFailure('identification', err)}`)
       return {
         identification: { protocolCode: null, title: null, phase: null, sourcePages: [] },
       }
@@ -744,12 +764,14 @@ export async function extractStudySpec(
   }
 
   const [identification, eligibility, endpoints, visits] = await Promise.all([
-    runIdentification(),
-    runGroup('eligibility', eligibilityGroupSchema, {
+    options.visitsOnly
+      ? Promise.resolve({ identification: { protocolCode: null, title: null, phase: null, sourcePages: [] } })
+      : runIdentification(),
+    options.visitsOnly ? Promise.resolve({ inclusionCriteria: [], exclusionCriteria: [] }) : runGroup('eligibility', eligibilityGroupSchema, {
       inclusionCriteria: [],
       exclusionCriteria: [],
     }),
-    runGroup('endpoints', endpointsGroupSchema, { endpoints: [] }),
+    options.visitsOnly ? Promise.resolve({ endpoints: [] }) : runGroup('endpoints', endpointsGroupSchema, { endpoints: [] }),
     runGroup('visits', visitsGroupSchema, { visits: [] }),
   ])
 

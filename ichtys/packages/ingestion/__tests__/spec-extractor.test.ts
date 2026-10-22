@@ -210,13 +210,31 @@ describe('extractStudySpec', () => {
 
   it('leaves a group empty with a warning when the LLM call fails', async () => {
     mockExtractionByPrompt()
-    mocks.generateObject.mockImplementationOnce(() => Promise.reject(new Error('provider down')))
+    const providerError = Object.assign(new Error('sensitive provider body'), { code: 'rate_limit', status: 429 })
+    mocks.generateObject.mockImplementationOnce(() => Promise.reject(providerError))
+    const warningLog = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
     const result = await extractStudySpec(makeProtocolPages())
 
     // El primer call (identification, en paralelo) falló — campos null.
     expect(result.warnings.length).toBeGreaterThan(0)
+    expect(result.warnings.join(' ')).toContain('extraction_failed: el proveedor no devolvió una respuesta utilizable (código rate_limit)')
+    expect(result.warnings.join(' ')).not.toContain('sensitive provider body')
+    expect(JSON.stringify(warningLog.mock.calls)).not.toContain('sensitive provider body')
     expect(() => studySpecSchema.parse(result.spec)).not.toThrow()
+  })
+
+  it('extracts only visits when given a standalone SoA', async () => {
+    mockExtractionByPrompt()
+
+    const result = await extractStudySpec(makeProtocolPages(), [], { visitsOnly: true })
+
+    expect(result.spec.visits).toHaveLength(1)
+    expect(result.spec.identification).toEqual({ protocolCode: null, title: null, phase: null, sourcePages: [] })
+    expect(result.spec.inclusionCriteria).toEqual([])
+    expect(result.spec.exclusionCriteria).toEqual([])
+    expect(result.spec.endpoints).toEqual([])
+    expect(mocks.generateObject).toHaveBeenCalledTimes(2) // locator + visits, no other groups
   })
 
   it('sends a cropped PDF for the located SoA range and preserves source page numbers', async () => {

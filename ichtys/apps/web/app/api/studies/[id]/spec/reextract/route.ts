@@ -1,5 +1,5 @@
 import { handleApiError, validateStudyAccess } from '@ichtys/auth'
-import { getLatestStudySpec, isMeaningfulSpec, specRichness, studySpecSchema } from '@ichtys/ingestion'
+import { getLatestSpecAttempt, isMeaningfulSpec, specRichness, studySpecSchema } from '@ichtys/ingestion'
 import {
   getProtocolDocumentVersionId,
   reextractStudySpec,
@@ -39,10 +39,10 @@ export async function POST(
     }
 
     // Evita spam de versiones si el spec ya es útil (p. ej. clicks repetidos en demo).
-    const existing = await getLatestStudySpec({ orgId, studyId })
+    const existing = await getLatestSpecAttempt({ orgId, studyId })
     if (existing) {
       const parsed = studySpecSchema.safeParse(existing.spec)
-      if (parsed.success && isMeaningfulSpec(parsed.data)) {
+      if (parsed.success && !parsed.data.extractionFailed && isMeaningfulSpec(parsed.data)) {
         const richness = specRichness(parsed.data)
         const ageMs = Date.now() - existing.createdAt.getTime()
         if (richness >= 10 && ageMs < 15 * 60 * 1000) {
