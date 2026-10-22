@@ -6,7 +6,7 @@ import {
   redactPhiForLlm,
   type PatientProfile,
 } from '@ichtys/clinical'
-import { and, db, eq, getOrgLlmApiKeys, patientProfiles } from '@ichtys/db'
+import { and, db, eq, getOrgLlmApiKeys, patientProfiles, recordUsage } from '@ichtys/db'
 import { runWithLlmFallback } from '@ichtys/llm'
 import { generateObject } from 'ai'
 import { z } from 'zod'
@@ -39,14 +39,15 @@ const llmFactsSchema = z.object({
 
 async function extractFactsWithLlm(
   orgId: string,
+  studyId: string,
   redactedContent: string,
 ): Promise<ReturnType<typeof extractFactsFromEvolution> | null> {
   const orgApiKeys = await getOrgLlmApiKeys(orgId).catch(() => null)
 
   try {
-    const { result } = await runWithLlmFallback(
+    const { result, provider, modelId, usage, keySource } = await runWithLlmFallback(
       { purpose: 'clinical-extract', orgApiKeys },
-      async (model) => {
+      async (model, _provider, reportUsage) => {
         const response = await generateObject({
           model,
           schema: llmFactsSchema,
@@ -57,9 +58,22 @@ Medicaciones: nombre genérico, dosis y frecuencia si aparecen.`,
           prompt: redactedContent.slice(0, 8000),
           maxTokens: 1024,
         })
+        reportUsage({ inputTokens: response.usage?.promptTokens ?? 0, outputTokens: response.usage?.completionTokens ?? 0 })
         return response.object
       },
     )
+
+    await recordUsage({
+      orgId,
+      studyId,
+      userId: null,
+      kind: 'clinical_extraction',
+      provider,
+      model: modelId,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      keySource: keySource === 'none' ? 'platform' : keySource,
+    })
 
     return {
       ageYears: result.ageYears ?? undefined,
@@ -123,7 +137,7 @@ export async function refreshPatientProfileFromEvolution(params: {
 
   const heuristic = extractFactsFromEvolution(params.evolutionContent, params.evolutionId)
   const { text: redacted } = redactPhiForLlm(params.evolutionContent)
-  const llmFacts = await extractFactsWithLlm(params.orgId, redacted)
+  const llmFacts = await extractFactsWithLlm(params.orgId, params.studyId, redacted)
   const merged = mergeExtractions(heuristic, llmFacts)
   const profile = mergeProfileWithExtraction(current, merged, params.evolutionId)
   const profileEncrypted = encryptProfileJson(profile)

@@ -4,8 +4,11 @@ import { answerConfidence } from '@ichtys/db'
 import {
   createLanguageModel,
   getDefaultProviderPreference,
+  getKeySourceForProvider,
+  getModelId,
   isProviderConfigured,
   isProviderFallbackError,
+  LlmQuotaExceededError,
   resolveProviderChain,
   runWithLlmFallback,
   type LlmProviderPreference,
@@ -48,10 +51,26 @@ export type Evidence = {
   excerpt: string
 }
 
+/**
+ * Una llamada real a un modelo dentro del answer engine (chat_answer o
+ * chat_eval). El caller (con orgId/studyId/userId) es quien persiste esto
+ * vía `recordUsage` — el engine es puro y no toca la base de datos.
+ */
+export type LlmUsageEvent = {
+  kind: 'chat_answer' | 'chat_eval'
+  provider: string
+  model: string
+  inputTokens: number
+  outputTokens: number
+  keySource: 'org' | 'platform' | 'none'
+}
+
 export type AnswerResult = {
   answer: string
   confidence: Confidence
   evidences: Evidence[]
+  /** Llamadas a modelos hechas para producir este resultado. Vacío si no hubo evidencia. */
+  usageEvents?: LlmUsageEvent[]
 }
 
 /**
@@ -74,6 +93,8 @@ export type AnswerEngineInput = {
   llmProviderPreference?: LlmProviderPreference
   /** API keys LLM propias de la org (prioridad sobre env del servidor). */
   llmApiKeys?: OrgLlmApiKeys | null
+  /** Cupo mensual agotado: ignora la clave de plataforma, solo sigue con clave propia de la org. */
+  platformKeyBlocked?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -84,6 +105,7 @@ export type AnswerEngineErrorCode =
   | 'llm_provider_error'
   | 'llm_rate_limited'
   | 'llm_invalid_response'
+  | 'quota_exceeded'
 
 export class AnswerEngineError extends Error {
   constructor(
@@ -175,6 +197,9 @@ function statusFromError(err: unknown): number | null {
 
 function sanitizeLLMError(err: unknown): AnswerEngineError {
   if (err instanceof AnswerEngineError) return err
+  if (err instanceof LlmQuotaExceededError) {
+    return new AnswerEngineError('quota_exceeded', 'Monthly platform quota exceeded')
+  }
   if (statusFromError(err) === 429) {
     return new AnswerEngineError('llm_rate_limited', 'Answer generation rate limited')
   }
@@ -401,6 +426,7 @@ export async function answerEngine(input: AnswerEngineInput): Promise<AnswerResu
       answer: getInsufficientEvidenceMessage(question),
       confidence: 'insufficient_evidence',
       evidences: [],
+      usageEvents: [],
     }
   }
 
@@ -408,14 +434,16 @@ export async function answerEngine(input: AnswerEngineInput): Promise<AnswerResu
   const context = buildContext(aboveThreshold)
 
   let structured: StructuredAnswer
+  let usageEvents: LlmUsageEvent[]
   try {
-    const { result } = await runWithLlmFallback(
+    const { result, provider, modelId, usage, keySource } = await runWithLlmFallback(
       {
         purpose: 'answer',
         providerPreference: input.llmProviderPreference,
         orgApiKeys: input.llmApiKeys,
+        platformKeyBlocked: input.platformKeyBlocked,
       },
-      async (model) => {
+      async (model, _provider, reportUsage) => {
         const result = await generateObject({
           model,
           schema: answerSchema,
@@ -423,10 +451,21 @@ export async function answerEngine(input: AnswerEngineInput): Promise<AnswerResu
           system: SYSTEM_PROMPT,
           prompt: buildUserPrompt(question, context, conversationHistory),
         })
+        reportUsage({ inputTokens: result.usage?.promptTokens ?? 0, outputTokens: result.usage?.completionTokens ?? 0 })
         return result.object as StructuredAnswer
       },
     )
     structured = result
+    usageEvents = [
+      {
+        kind: 'chat_answer',
+        provider,
+        model: modelId,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        keySource,
+      },
+    ]
   } catch (err) {
     throw sanitizeLLMError(err)
   }
@@ -437,6 +476,7 @@ export async function answerEngine(input: AnswerEngineInput): Promise<AnswerResu
       answer: structured.answer,
       confidence: 'insufficient_evidence',
       evidences: [],
+      usageEvents,
     }
   }
 
@@ -455,6 +495,7 @@ export async function answerEngine(input: AnswerEngineInput): Promise<AnswerResu
       answer: getInsufficientEvidenceMessage(question),
       confidence: 'insufficient_evidence',
       evidences: [],
+      usageEvents,
     }
   }
 
@@ -462,6 +503,7 @@ export async function answerEngine(input: AnswerEngineInput): Promise<AnswerResu
     answer: structured.answer,
     confidence: structured.confidence,
     evidences,
+    usageEvents,
   }
 }
 
@@ -506,7 +548,7 @@ export * from './guardrails'
 
 export type AnswerStreamEvent =
   | { type: 'token'; text: string }
-  | { type: 'done'; confidence: Confidence; evidences: Evidence[]; fullAnswer: string }
+  | { type: 'done'; confidence: Confidence; evidences: Evidence[]; fullAnswer: string; usageEvents?: LlmUsageEvent[] }
 
 /**
  * Evalúa confianza de una respuesta ya generada contra el mismo contexto.
@@ -518,15 +560,17 @@ async function evaluateStreamedAnswerConfidence(
   fullAnswer: string,
   llmProviderPreference?: LlmProviderPreference,
   llmApiKeys?: OrgLlmApiKeys | null,
-): Promise<Confidence> {
+  platformKeyBlocked?: boolean,
+): Promise<{ confidence: Confidence; usageEvent: LlmUsageEvent | null }> {
   try {
-    const { result } = await runWithLlmFallback(
+    const { result, provider, modelId, usage, keySource } = await runWithLlmFallback(
       {
         purpose: 'answer',
         providerPreference: llmProviderPreference,
         orgApiKeys: llmApiKeys,
+        platformKeyBlocked,
       },
-      async (model) => {
+      async (model, _provider, reportUsage) => {
         const evalResult = await generateObject({
           model,
           schema: confidenceOnlySchema,
@@ -536,12 +580,16 @@ async function evaluateStreamedAnswerConfidence(
             'Return insufficient_evidence if the answer speculates, extrapolates, or is not supported by the excerpts.',
           prompt: `USER QUESTION:\n${question}\n\nDOCUMENT EXCERPTS:\n${context}\n\nGENERATED ANSWER:\n${fullAnswer}\n\nRate confidence for this answer.`,
         })
+        reportUsage({ inputTokens: evalResult.usage?.promptTokens ?? 0, outputTokens: evalResult.usage?.completionTokens ?? 0 })
         return evalResult.object.confidence
       },
     )
-    return result
+    return {
+      confidence: result,
+      usageEvent: { kind: 'chat_eval', provider, model: modelId, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, keySource },
+    }
   } catch {
-    return 'medium'
+    return { confidence: 'medium', usageEvent: null }
   }
 }
 
@@ -557,7 +605,7 @@ async function evaluateStreamedAnswerConfidence(
 export async function* answerEngineStream(
   input: AnswerEngineInput,
 ): AsyncGenerator<AnswerStreamEvent> {
-  const { question, retrievedChunks, conversationHistory, similarityThreshold, llmProviderPreference, llmApiKeys } =
+  const { question, retrievedChunks, conversationHistory, similarityThreshold, llmProviderPreference, llmApiKeys, platformKeyBlocked } =
     input
 
   // 1. Filter by similarity threshold (per-org override or system default).
@@ -568,7 +616,7 @@ export async function* answerEngineStream(
   if (!assessment.hasEvidence) {
     const msg = getInsufficientEvidenceMessage(question)
     yield { type: 'token', text: msg }
-    yield { type: 'done', confidence: 'insufficient_evidence', evidences: [], fullAnswer: msg }
+    yield { type: 'done', confidence: 'insufficient_evidence', evidences: [], fullAnswer: msg, usageEvents: [] }
     return
   }
 
@@ -581,10 +629,18 @@ export async function* answerEngineStream(
   let fullAnswer = ''
   let streamed = false
   let lastStreamError: unknown
+  let answerUsageEvent: LlmUsageEvent | null = null
+  let sawQuotaBlock = false
 
   for (let i = 0; i < providerOrder.length; i++) {
     const provider = providerOrder[i]!
-    if (!isProviderConfigured(provider, llmApiKeys)) continue
+    const configured = isProviderConfigured(provider, llmApiKeys)
+    const keySource = configured ? getKeySourceForProvider(provider, llmApiKeys) : 'none'
+    const quotaBlocksThis = Boolean(platformKeyBlocked) && keySource === 'platform'
+    if (!configured || quotaBlocksThis) {
+      if (quotaBlocksThis) sawQuotaBlock = true
+      continue
+    }
 
     const model = createLanguageModel(provider, 'answer', llmApiKeys)
     streamed = false
@@ -602,7 +658,18 @@ export async function* answerEngineStream(
       }
 
       fullAnswer = (await streamResult.text) || fullAnswer
-      if (fullAnswer.trim()) break
+      if (fullAnswer.trim()) {
+        const streamUsage = await Promise.resolve(streamResult.usage).catch(() => null)
+        answerUsageEvent = {
+          kind: 'chat_answer',
+          provider,
+          model: getModelId(provider, 'answer'),
+          inputTokens: streamUsage?.promptTokens ?? 0,
+          outputTokens: streamUsage?.completionTokens ?? 0,
+          keySource,
+        }
+        break
+      }
 
       const isLast = i === providerOrder.length - 1
       if (preference === 'auto' && !isLast) {
@@ -627,22 +694,25 @@ export async function* answerEngineStream(
 
   if (!fullAnswer.trim()) {
     if (lastStreamError) throw sanitizeLLMError(lastStreamError)
+    if (sawQuotaBlock) throw sanitizeLLMError(new LlmQuotaExceededError())
     const msg = getInsufficientEvidenceMessage(question)
-    yield { type: 'done', confidence: 'insufficient_evidence', evidences: [], fullAnswer: msg }
+    yield { type: 'done', confidence: 'insufficient_evidence', evidences: [], fullAnswer: msg, usageEvents: [] }
     return
   }
 
   // 4. Post-stream confidence eval (no bloquea tokens — corre después del stream).
-  const confidence = await evaluateStreamedAnswerConfidence(
+  const { confidence, usageEvent: evalUsageEvent } = await evaluateStreamedAnswerConfidence(
     question,
     context,
     fullAnswer,
     llmProviderPreference,
     llmApiKeys,
+    platformKeyBlocked,
   )
+  const usageEvents = [answerUsageEvent, evalUsageEvent].filter((e): e is LlmUsageEvent => e !== null)
 
   if (confidence === 'insufficient_evidence') {
-    yield { type: 'done', confidence: 'insufficient_evidence', evidences: [], fullAnswer }
+    yield { type: 'done', confidence: 'insufficient_evidence', evidences: [], fullAnswer, usageEvents }
     return
   }
 
@@ -655,9 +725,9 @@ export async function* answerEngineStream(
   )
 
   if (evidences.length === 0) {
-    yield { type: 'done', confidence: 'insufficient_evidence', evidences: [], fullAnswer }
+    yield { type: 'done', confidence: 'insufficient_evidence', evidences: [], fullAnswer, usageEvents }
     return
   }
 
-  yield { type: 'done', confidence, evidences, fullAnswer }
+  yield { type: 'done', confidence, evidences, fullAnswer, usageEvents }
 }

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@ichtys/db', () => ({
   EMBEDDING_DIMENSIONS: 1536,
@@ -54,6 +54,58 @@ function createClient(): {
 describe('embedBatch', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    // Sin esperas reales en los reintentos por rate limit.
+    vi.stubEnv('EMBEDDING_RETRY_BASE_MS', '0')
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('retries 429s and succeeds when the provider recovers', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    let attempts = 0
+    const client: EmbeddingClient = {
+      createEmbeddings: async (input) => {
+        attempts += 1
+        if (attempts <= 2) throw new RateLimitError('rate limited')
+        return { data: input.input.map((_, index) => ({ embedding: createEmbedding(1), index })) }
+      },
+    }
+
+    const results = await embedBatch(['texto sintetico'], { client })
+
+    expect(attempts).toBe(3)
+    expect(results).toHaveLength(1)
+  })
+
+  it('gives up with embedding_rate_limited when the 429 persists', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    let attempts = 0
+    const client: EmbeddingClient = {
+      createEmbeddings: async () => {
+        attempts += 1
+        throw new RateLimitError('rate limited')
+      },
+    }
+
+    await expect(embedBatch(['texto sintetico'], { client })).rejects.toMatchObject({
+      code: 'embedding_rate_limited',
+    })
+    expect(attempts).toBe(9)
+  })
+
+  it('does not log the provider message (could echo document text)', async () => {
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const client: EmbeddingClient = {
+      createEmbeddings: async () => {
+        throw new RateLimitError('echo: paciente con datos privados')
+      },
+    }
+
+    await expect(embedBatch(['x'], { client })).rejects.toBeInstanceOf(EmbeddingError)
+
+    expect(JSON.stringify(consoleWarn.mock.calls)).not.toContain('paciente')
   })
 
   it('generates embeddings with the configured 1536 dimensions', async () => {

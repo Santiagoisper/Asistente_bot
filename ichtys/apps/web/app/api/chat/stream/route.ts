@@ -1,8 +1,16 @@
 import { z } from 'zod'
 import { handleApiError, validateStudyAccess } from '@ichtys/auth'
 import { retrieveRelevantChunks, answerEngineStream } from '@ichtys/rag'
-import { getOrgLlmApiKeys, getOrgRagConfig, resolveLlmApiKey } from '@ichtys/db'
-import type { AnswerStreamEvent } from '@ichtys/rag'
+import {
+  canUsePlatformKey,
+  getOrgLlmApiKeys,
+  getOrgRagConfig,
+  getQuotaStatus,
+  recordUsage,
+  resolveLlmApiKey,
+} from '@ichtys/db'
+import { AnswerEngineError } from '@ichtys/rag'
+import type { AnswerStreamEvent, LlmUsageEvent } from '@ichtys/rag'
 import {
   generateAndPersistConversationTitle,
   getOrCreateConversation,
@@ -162,17 +170,22 @@ export async function POST(req: Request): Promise<Response> {
     return new Response('Internal Server Error', { status: 500 })
   }
 
-  // 9b. Load org RAG config (threshold + topK) — falls back to system defaults.
-  const orgRagConfig = await getOrgRagConfig(orgId).catch(() => null)
-  const orgLlmApiKeys = await getOrgLlmApiKeys(orgId).catch(() => ({}))
+  // 9b. Load org RAG config (threshold + topK) y estado del cupo — ninguno de los dos
+  //     puede bloquear el chat si falla (ver.catch): sin datos, no se limita nada.
+  const [orgRagConfig, orgLlmApiKeys, quotaStatus] = await Promise.all([
+    getOrgRagConfig(orgId).catch(() => null),
+    getOrgLlmApiKeys(orgId).catch(() => ({})),
+    getQuotaStatus(orgId).catch(() => null),
+  ])
   const openAiApiKey = resolveLlmApiKey('openai', orgLlmApiKeys)
+  const platformKeyBlocked = quotaStatus ? !canUsePlatformKey(quotaStatus) : false
 
   // 10. Kick off auto-title for new conversations (fire-and-forget, non-blocking).
   //     Haiku + 6-word title ≈ 300-500 ms — will resolve before the LLM stream ends.
   //     If it fails, title stays null and we swallow the error.
   const isNewConversation = !inputConversationId
   const titlePromise: Promise<string | null> = isNewConversation
-    ? generateAndPersistConversationTitle({ conversationId, question, studyName }).catch(() => null)
+    ? generateAndPersistConversationTitle({ conversationId, question, studyName, orgId, studyId, userId, platformKeyBlocked }).catch(() => null)
     : Promise.resolve(null)
 
   // 11. Return SSE stream.
@@ -208,6 +221,7 @@ export async function POST(req: Request): Promise<Response> {
             topK: topK ?? orgRagConfig?.topK ?? 20,
             documentType,
             openAiApiKey,
+            userId,
           }),
           // Inyección de spec: si el intent de la pregunta es claro, prepend
           // el spec estructurado como virtual chunks con score=1.0.
@@ -234,6 +248,7 @@ export async function POST(req: Request): Promise<Response> {
           similarityThreshold: orgRagConfig?.similarityThreshold,
           llmProviderPreference: orgRagConfig?.llmProvider,
           llmApiKeys: orgLlmApiKeys,
+          platformKeyBlocked,
         })
 
         // Para preguntas de terminología bufferizamos sin emitir tokens: la
@@ -243,6 +258,7 @@ export async function POST(req: Request): Promise<Response> {
         let engineAnswer = ''
         let engineConfidence: Confidence = 'insufficient_evidence'
         let engineEvidences: Evidence[] = []
+        let engineUsageEvents: LlmUsageEvent[] = []
 
         for await (const event of eventGen) {
           if (event.type === 'token') {
@@ -258,7 +274,23 @@ export async function POST(req: Request): Promise<Response> {
             engineConfidence = event.confidence
             engineEvidences = event.evidences
             engineAnswer = event.fullAnswer
+            engineUsageEvents = event.usageEvents ?? []
           }
+        }
+
+        // Medición de consumo (chat_answer + chat_eval). Nunca lanza — recordUsage no lanza.
+        for (const usageEvent of engineUsageEvents) {
+          await recordUsage({
+            orgId,
+            studyId,
+            userId,
+            kind: usageEvent.kind,
+            provider: usageEvent.provider,
+            model: usageEvent.model,
+            inputTokens: usageEvent.inputTokens,
+            outputTokens: usageEvent.outputTokens,
+            keySource: usageEvent.keySource === 'none' ? 'platform' : usageEvent.keySource,
+          })
         }
 
         if (terminologyIntent.isTerminologyQuery) {
@@ -354,7 +386,16 @@ export async function POST(req: Request): Promise<Response> {
         }
       } catch (err) {
         console.error('[POST /api/chat/stream] error:', err)
-        enqueue({ type: 'error' })
+        if (err instanceof AnswerEngineError && err.code === 'quota_exceeded') {
+          enqueue({
+            type: 'error',
+            code: 'quota_exceeded',
+            message:
+              'Se agotó el cupo mensual incluido de esta organización. Cargá tu propia clave de modelo en Ajustes para seguir usando el chat, o ampliá el plan.',
+          })
+        } else {
+          enqueue({ type: 'error' })
+        }
       } finally {
         controller.close()
       }

@@ -10,20 +10,33 @@ const mocks = vi.hoisted(() => {
     mockModel,
     anthropicProviderFn: vi.fn().mockReturnValue(mockModel),
     generateObject: vi.fn(),
+    recordUsage: vi.fn(),
   }
 })
 
 vi.mock('@ichtys/llm', () => ({
-  runWithLlmFallback: vi.fn(async (_opts: unknown, run: (model: unknown) => Promise<unknown>) => {
-    const result = await run(mocks.mockModel)
-    return { result, provider: 'anthropic', modelId: 'claude-sonnet-4-6' }
-  }),
+  runWithLlmFallback: vi.fn(
+    async (
+      _opts: unknown,
+      run: (model: unknown, provider: string, reportUsage: (u: unknown) => void) => Promise<unknown>,
+    ) => {
+      const result = await run(mocks.mockModel, 'anthropic', () => {})
+      return {
+        result,
+        provider: 'anthropic',
+        modelId: 'claude-sonnet-4-6',
+        usage: { inputTokens: 0, outputTokens: 0 },
+        keySource: 'platform',
+      }
+    },
+  ),
 }))
 vi.mock('ai', () => ({ generateObject: mocks.generateObject }))
 
-// @ichtys/db: el package se importa transitivamente via study-spec → ninguna
-// dependencia de DB en estos módulos, pero spec-store sí la usa. Este test no
-// importa spec-store.
+// @ichtys/db: mock minimal — spec-extractor.ts llama a recordUsage para medir consumo.
+vi.mock('@ichtys/db', () => ({
+  recordUsage: mocks.recordUsage,
+}))
 
 import {
   buildSectionContext,

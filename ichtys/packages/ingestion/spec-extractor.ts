@@ -1,5 +1,6 @@
 import { generateObject } from 'ai'
 import { z } from 'zod'
+import { recordUsage } from '@ichtys/db'
 import { runWithLlmFallback, type LlmProviderPreference, type OrgLlmApiKeys } from '@ichtys/llm'
 import type { ParsedPage } from './parser'
 import {
@@ -85,7 +86,13 @@ export const SPEC_EXTRACTION_LLM_PROVIDER = 'anthropic' as const
 export interface ExtractStudySpecOptions {
   llmProviderPreference?: LlmProviderPreference
   llmApiKeys?: OrgLlmApiKeys | null
+  /** Contexto para medición de consumo (usage_events). Sin orgId no se registra nada. */
+  orgId?: string | null
+  studyId?: string | null
+  userId?: string | null
 }
+
+type UsageRecordingCtx = Pick<ExtractStudySpecOptions, 'orgId' | 'studyId' | 'userId'>
 
 async function generateSpecObject<T>(params: {
   schema: z.ZodType<T>
@@ -94,10 +101,11 @@ async function generateSpecObject<T>(params: {
   maxTokens?: number
   providerPreference?: LlmProviderPreference
   orgApiKeys?: OrgLlmApiKeys | null
+  usageCtx?: UsageRecordingCtx
 }): Promise<{ object: T; modelId: string }> {
-  const { result, modelId } = await runWithLlmFallback(
+  const { result, provider, modelId, usage, keySource } = await runWithLlmFallback(
     { purpose: 'spec', providerPreference: params.providerPreference, orgApiKeys: params.orgApiKeys },
-    async (model) => {
+    async (model, _provider, reportUsage) => {
       const response = await generateObject({
         model,
         schema: params.schema,
@@ -105,9 +113,25 @@ async function generateSpecObject<T>(params: {
         prompt: params.prompt,
         maxTokens: params.maxTokens,
       })
+      reportUsage({ inputTokens: response.usage?.promptTokens ?? 0, outputTokens: response.usage?.completionTokens ?? 0 })
       return response.object as T
     },
   )
+
+  if (params.usageCtx?.orgId) {
+    await recordUsage({
+      orgId: params.usageCtx.orgId,
+      studyId: params.usageCtx.studyId ?? null,
+      userId: params.usageCtx.userId ?? null,
+      kind: 'spec_extraction',
+      provider,
+      model: modelId,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      keySource: keySource === 'none' ? 'platform' : keySource,
+    })
+  }
+
   return { object: result, modelId }
 }
 
@@ -184,6 +208,7 @@ export async function locateSectionsSemantic(
   pages: ParsedPage[],
   providerPreference?: LlmProviderPreference,
   orgApiKeys?: OrgLlmApiKeys | null,
+  usageCtx?: UsageRecordingCtx,
 ): Promise<SectionMap> {
   const compactMap = buildCompactPageMap(pages)
 
@@ -191,6 +216,7 @@ export async function locateSectionsSemantic(
     schema: sectionMapSchema,
     providerPreference,
     orgApiKeys,
+    usageCtx,
     system: `You are a clinical trial protocol document structure analyzer. Given a compact page map (page number + opening ~120 characters of each page), locate key sections of the protocol.
 
 WHAT TO LOCATE:
@@ -452,11 +478,13 @@ async function extractGroup<T>(
   fewShotContext: string,
   providerPreference?: LlmProviderPreference,
   orgApiKeys?: OrgLlmApiKeys | null,
+  usageCtx?: UsageRecordingCtx,
 ): Promise<{ data: T; modelId: string }> {
   const { object, modelId } = await generateSpecObject({
     schema,
     providerPreference,
     orgApiKeys,
+    usageCtx,
     system: SPEC_EXTRACTION_SYSTEM_PROMPT,
     prompt: `${instruction}${fewShotContext}\n\nPROTOCOL PAGES:\n${context}`,
     maxTokens: MAX_OUTPUT_TOKENS,
@@ -483,13 +511,14 @@ export async function extractStudySpec(
   const warnings: string[] = []
   const llmProviderPreference = options.llmProviderPreference
   const llmApiKeys = options.llmApiKeys
+  const usageCtx: UsageRecordingCtx = { orgId: options.orgId, studyId: options.studyId, userId: options.userId }
   let extractionModelUsed = getExtractionModelId()
 
   // ── Fase 1: Localización semántica ────────────────────────────────────────
   let sectionMap: SectionMap
 
   try {
-    const located = await locateSectionsSemantic(pages, llmProviderPreference, llmApiKeys)
+    const located = await locateSectionsSemantic(pages, llmProviderPreference, llmApiKeys, usageCtx)
     sectionMap = located
     console.log(
       `[spec-extractor] semantic-location lang=${sectionMap.detectedLanguage}` +
@@ -539,6 +568,7 @@ export async function extractStudySpec(
         fewShot,
         llmProviderPreference,
         llmApiKeys,
+        usageCtx,
       )
       extractionModelUsed = extracted.modelId
       return extracted.data
@@ -562,6 +592,7 @@ export async function extractStudySpec(
         fewShot,
         llmProviderPreference,
         llmApiKeys,
+        usageCtx,
       )
       extractionModelUsed = extracted.modelId
       return extracted.data

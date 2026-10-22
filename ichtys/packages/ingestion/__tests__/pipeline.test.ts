@@ -50,8 +50,9 @@ const mocks = vi.hoisted(() => ({
   fetchMock: vi.fn<typeof fetch>(),
   parsePdf: vi.fn<() => Promise<{ pageCount: number; pages: { pageNumber: number; rawText: string }[] }>>(),
   indexDocumentVersionChunks: vi.fn<
-    (input: RunIngestionInput) => Promise<{ embeddedChunkCount: number }>
+    (input: RunIngestionInput, options?: { startedAt?: number }) => Promise<{ embeddedChunkCount: number }>
   >(),
+  canReuseEmbeddedChunks: vi.fn<() => Promise<boolean>>(),
   transaction: vi.fn<(callback: TransactionCallback) => Promise<void>>(),
   operations: [] as DbOperation[],
   tables: {
@@ -120,6 +121,31 @@ vi.mock('../parser', () => ({
     }
   },
   parsePdf: mocks.parsePdf,
+}))
+
+const specMocks = vi.hoisted(() => ({
+  extractStudySpec: vi.fn(),
+  saveStudySpec: vi.fn(),
+  reextractStudySpec: vi.fn(),
+}))
+
+vi.mock('../spec-extractor', () => ({
+  SPEC_EXTRACTION_LLM_PROVIDER: 'glm',
+  extractStudySpec: specMocks.extractStudySpec,
+}))
+
+vi.mock('../spec-store', () => ({
+  getApprovedSpecExamples: vi.fn(async () => []),
+  isMeaningfulSpec: vi.fn(() => true),
+  saveStudySpec: specMocks.saveStudySpec,
+}))
+
+vi.mock('../reextract-spec', () => ({
+  reextractStudySpec: specMocks.reextractStudySpec,
+}))
+
+vi.mock('../chunk-reuse', () => ({
+  canReuseEmbeddedChunks: mocks.canReuseEmbeddedChunks,
 }))
 
 vi.mock('../indexer', () => ({
@@ -222,6 +248,14 @@ describe('runIngestion', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.operations.length = 0
+    mocks.canReuseEmbeddedChunks.mockResolvedValue(false)
+    specMocks.extractStudySpec.mockResolvedValue({
+      spec: {},
+      warnings: [],
+      extractionModel: 'modelo-sintetico',
+      detectedLanguage: null,
+    })
+    specMocks.saveStudySpec.mockResolvedValue({ id: 'spec-1', version: 1 })
     mocks.transaction.mockImplementation(async (callback) => callback(createDbClient()))
     // Mock global fetch — pipeline uses fetch(blobUrl) for public blobs.
     vi.stubGlobal('fetch', mocks.fetchMock)
@@ -289,7 +323,10 @@ describe('runIngestion', () => {
     expect(pageValues?.every((page) => page.studyId === fixture.input.studyId)).toBe(true)
     expect(chunkValues?.every((chunk) => chunk.organizationId === fixture.input.orgId)).toBe(true)
     expect(chunkValues?.every((chunk) => chunk.studyId === fixture.input.studyId)).toBe(true)
-    expect(mocks.indexDocumentVersionChunks).toHaveBeenCalledWith(fixture.input)
+    expect(mocks.indexDocumentVersionChunks).toHaveBeenCalledWith(
+      fixture.input,
+      expect.objectContaining({ startedAt: expect.any(Number) }),
+    )
     expect(readyUpdate).toBeDefined()
   })
 
@@ -351,5 +388,174 @@ describe('runIngestion', () => {
         return operation.kind === 'update' && values?.status === 'ready'
       }),
     ).toBe(false)
+  })
+})
+
+describe('runIngestion: reintentos y paralelismo', () => {
+  const twoPages = {
+    pageCount: 2,
+    pages: [
+      { pageNumber: 1, rawText: '1. ELIGIBILITY\nPatients must meet all criteria.' },
+      { pageNumber: 2, rawText: 'Study procedures continue on page two.' },
+    ],
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.operations.length = 0
+    mocks.canReuseEmbeddedChunks.mockResolvedValue(false)
+    mocks.transaction.mockImplementation(async (callback) => callback(createDbClient()))
+    vi.stubGlobal('fetch', mocks.fetchMock)
+    mocks.fetchMock.mockResolvedValue(new Response(createBlobStream()))
+    specMocks.extractStudySpec.mockResolvedValue({
+      spec: {},
+      warnings: [],
+      extractionModel: 'modelo-sintetico',
+      detectedLanguage: null,
+    })
+    specMocks.saveStudySpec.mockResolvedValue({ id: 'spec-1', version: 1 })
+  })
+
+  function arrange(documentType: 'protocol' | 'lab_manual' = 'protocol'): PipelineFixture {
+    const fixture = createFixture()
+    mocks.documentVersionsFindFirst.mockResolvedValue(fixture.documentVersion)
+    mocks.documentsFindFirst.mockResolvedValue({ ...fixture.document, documentType })
+    mocks.parsePdf.mockResolvedValue(twoPages)
+    return fixture
+  }
+
+  it('al reintentar con fragmentos ya embebidos no borra ni recrea paginas y fragmentos', async () => {
+    const fixture = arrange()
+    mocks.canReuseEmbeddedChunks.mockResolvedValue(true)
+    mocks.indexDocumentVersionChunks.mockResolvedValue({ embeddedChunkCount: 0 })
+
+    const result = await runIngestion(fixture.input)
+
+    expect(result.status).toBe('ready')
+    const touched = mocks.operations.filter(
+      (op) =>
+        (op.table === mocks.tables.chunks || op.table === mocks.tables.pages) &&
+        (op.kind === 'delete' || op.kind === 'insert'),
+    )
+    expect(touched).toEqual([])
+    expect(mocks.indexDocumentVersionChunks).toHaveBeenCalledTimes(1)
+  })
+
+  it('sin reutilizacion reemplaza paginas y fragmentos como antes', async () => {
+    const fixture = arrange()
+    mocks.indexDocumentVersionChunks.mockResolvedValue({ embeddedChunkCount: 1 })
+
+    await runIngestion(fixture.input)
+
+    const kinds = mocks.operations
+      .filter((op) => op.table === mocks.tables.chunks || op.table === mocks.tables.pages)
+      .map((op) => `${op.kind}:${op.table === mocks.tables.chunks ? 'chunks' : 'pages'}`)
+    expect(kinds).toEqual(
+      expect.arrayContaining(['delete:chunks', 'delete:pages', 'insert:pages', 'insert:chunks']),
+    )
+  })
+
+  it('lanza la extraccion del spec mientras los embeddings siguen en curso', async () => {
+    const fixture = arrange()
+    let finishEmbeddings: (value: { embeddedChunkCount: number }) => void = () => undefined
+    mocks.indexDocumentVersionChunks.mockImplementation(
+      () => new Promise((resolve) => { finishEmbeddings = resolve }),
+    )
+
+    const running = runIngestion(fixture.input)
+    await vi.waitFor(() => expect(mocks.indexDocumentVersionChunks).toHaveBeenCalledTimes(1))
+
+    // Los embeddings todavía no terminaron y el spec ya empezó.
+    expect(specMocks.extractStudySpec).toHaveBeenCalledTimes(1)
+    expect(specMocks.saveStudySpec).not.toHaveBeenCalled()
+
+    finishEmbeddings({ embeddedChunkCount: 2 })
+    const result = await running
+
+    expect(result.status).toBe('ready')
+    expect(specMocks.saveStudySpec).toHaveBeenCalledTimes(1)
+  })
+
+  it('no guarda un borrador de spec si los embeddings fallan', async () => {
+    const fixture = arrange()
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    mocks.indexDocumentVersionChunks.mockRejectedValue(new Error('embedding_rate_limited'))
+
+    const result = await runIngestion(fixture.input)
+
+    expect(result.status).toBe('error')
+    expect(specMocks.saveStudySpec).not.toHaveBeenCalled()
+  })
+
+  it('un fallo de la extraccion del spec no falla la ingesta', async () => {
+    const fixture = arrange()
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    specMocks.extractStudySpec.mockRejectedValue(new Error('llm caido'))
+    mocks.indexDocumentVersionChunks.mockResolvedValue({ embeddedChunkCount: 2 })
+
+    const result = await runIngestion(fixture.input)
+
+    expect(result.status).toBe('ready')
+    expect(specMocks.saveStudySpec).not.toHaveBeenCalled()
+  })
+
+  it('si el spec no llega antes del tope del trabajo, lo omite y la ingesta igual termina', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      const fixture = arrange()
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      specMocks.extractStudySpec.mockImplementation(() => new Promise(() => undefined)) // nunca responde
+      mocks.indexDocumentVersionChunks.mockResolvedValue({ embeddedChunkCount: 2 })
+
+      const running = runIngestion(fixture.input)
+      // Se avanza el reloj de a tramos: el temporizador del tope se registra recien cuando
+      // el pipeline termina los embeddings, y hay que dejar correr las promesas entre tramos.
+      for (let i = 0; i < 12; i += 1) {
+        await vi.advanceTimersByTimeAsync(30_000)
+      }
+      const result = await running
+
+      expect(result.status).toBe('ready')
+      expect(specMocks.saveStudySpec).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('le pasa a los embeddings el inicio real del trabajo para compartir un unico plazo', async () => {
+    const fixture = arrange()
+    mocks.indexDocumentVersionChunks.mockResolvedValue({ embeddedChunkCount: 2 })
+    const before = Date.now()
+
+    await runIngestion(fixture.input)
+
+    const options = mocks.indexDocumentVersionChunks.mock.calls[0]?.[1] as { startedAt: number } | undefined
+    expect(options?.startedAt).toBeGreaterThanOrEqual(before)
+    expect(options?.startedAt).toBeLessThanOrEqual(Date.now())
+  })
+
+  it('no extrae spec para documentos que no son protocolo', async () => {
+    const fixture = arrange('lab_manual')
+    mocks.indexDocumentVersionChunks.mockResolvedValue({ embeddedChunkCount: 2 })
+
+    const result = await runIngestion(fixture.input)
+
+    expect(result.status).toBe('ready')
+    expect(specMocks.extractStudySpec).not.toHaveBeenCalled()
+  })
+
+  it('registra los tiempos por etapa sin incluir texto del documento', async () => {
+    const fixture = arrange()
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    mocks.indexDocumentVersionChunks.mockResolvedValue({ embeddedChunkCount: 2 })
+
+    await runIngestion(fixture.input)
+
+    const line = log.mock.calls.map((call) => String(call[0])).find((text) => text.includes('[ingestion] timings'))
+    expect(line).toBeDefined()
+    for (const stage of ['downloadMs', 'parseMs', 'chunkMs', 'dbMs', 'embedMs', 'specExtractMs', 'totalMs']) {
+      expect(line).toContain(stage)
+    }
+    expect(line).not.toContain('ELIGIBILITY')
   })
 })

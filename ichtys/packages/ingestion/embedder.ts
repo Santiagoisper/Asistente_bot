@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import { EMBEDDING_DIMENSIONS } from '@ichtys/db'
+import { EMBEDDING_DIMENSIONS, recordUsage } from '@ichtys/db'
 import {
   formatEmbeddingInput,
   getEmbeddingApiKey,
@@ -51,29 +51,47 @@ interface ProviderEmbeddingResponse {
 }
 
 export interface EmbeddingClient {
-  createEmbeddings(input: { model: string; input: string[] }): Promise<ProviderEmbeddingResponse>
+  createEmbeddings(input: {
+    model: string
+    input: string[]
+    dimensions?: number
+    encoding_format?: 'float'
+  }): Promise<ProviderEmbeddingResponse>
 }
 
 export interface EmbedBatchOptions {
   batchSize?: number
+  /**
+   * Inicio (Date.now()) del trabajo completo. El presupuesto de reintentos por 429 se mide
+   * desde acá, de modo que varias llamadas del mismo trabajo comparten un único plazo.
+   */
+  startedAt?: number
   client?: EmbeddingClient
   /** Key OpenAI de la org (Ajustes). Si se pasa, ignora Groq y usa text-embedding-3-small. */
   openAiApiKey?: string
   /** Prefijo Nomic para Groq; por defecto search_document en batch. */
   task?: 'document' | 'query'
+  /** Contexto para medición de consumo (usage_events). Sin orgId no se registra nada. */
+  orgId?: string
+  studyId?: string | null
+  userId?: string | null
 }
 
 let defaultClient: EmbeddingClient | null = null
 
-function createOpenAiClient(apiKey: string, baseURL?: string): EmbeddingClient {
+function createOpenAiClient(apiKey: string, baseURL?: string, provider?: string): EmbeddingClient {
   const openai = new OpenAI({
     apiKey,
     baseURL,
     timeout: 20_000,
     maxRetries: 1,
   })
+  // Google: pedir 1536 dims (matryoshka) y 'float' explícito: el SDK usa base64 por defecto.
+  const extra = provider === 'google'
+    ? { dimensions: EMBEDDING_DIMENSIONS, encoding_format: 'float' as const }
+    : {}
   return {
-    createEmbeddings: (input) => openai.embeddings.create(input),
+    createEmbeddings: (input) => openai.embeddings.create({ ...input, ...extra }),
   }
 }
 
@@ -112,11 +130,15 @@ function getDefaultClient(explicitOpenAiKey?: string): EmbeddingClient {
     const apiKey = getEmbeddingApiKey()
     if (!apiKey) {
       const provider = resolveEmbeddingProvider()
-      const envVar = provider === 'groq' ? 'GROQ_API_KEY' : 'OPENAI_API_KEY'
+      const envVar = provider === 'groq'
+        ? 'GROQ_API_KEY'
+        : provider === 'google'
+          ? 'GOOGLE_GENERATIVE_AI_API_KEY'
+          : 'OPENAI_API_KEY'
       throw new EmbeddingError('embedding_config_missing', `${envVar} is not configured`)
     }
 
-    defaultClient = createOpenAiClient(apiKey, getEmbeddingBaseUrl())
+    defaultClient = createOpenAiClient(apiKey, getEmbeddingBaseUrl(), resolveEmbeddingProvider())
   }
 
   return defaultClient
@@ -126,6 +148,11 @@ function getBatchSize(options: EmbedBatchOptions): number {
   const envValue = Number.parseInt(process.env.EMBEDDING_BATCH_SIZE ?? '', 10)
   const configured = options.batchSize ?? (Number.isFinite(envValue) ? envValue : DEFAULT_EMBEDDING_BATCH_SIZE)
   return Math.max(1, Math.min(configured, 128))
+}
+
+/** Tamaño de lote efectivo (env EMBEDDING_BATCH_SIZE o el default), para quien persiste por lote. */
+export function resolveEmbeddingBatchSize(): number {
+  return getBatchSize({})
 }
 
 function estimateTokens(text: string): number {
@@ -138,6 +165,61 @@ function statusFromError(err: unknown): number | null {
 
   const status = err.status
   return typeof status === 'number' ? status : null
+}
+
+const MAX_RATE_LIMIT_RETRIES = 8
+// maxDuration de /api/ingestion/run es 300s. El presupuesto se mide desde el INICIO del trabajo
+// (startedAt lo fija el pipeline), así que ya incluye descarga, lectura y base de datos.
+const RATE_LIMIT_BUDGET_MS = 240_000
+// Un intento puede tardar hasta timeout (20s) x (1 + maxRetries): se reserva ese margen.
+const REQUEST_TIME_MARGIN_MS = 40_000
+const MAX_RETRY_WAIT_MS = 60_000
+
+function retryWaitMs(err: unknown, attempt: number): number {
+  const configured = Number.parseInt(process.env.EMBEDDING_RETRY_BASE_MS ?? '', 10)
+  const baseMs = Number.isFinite(configured) && configured >= 0 ? configured : 10_000
+  const headers = typeof err === 'object' && err !== null && 'headers' in err
+    ? (err.headers as Record<string, string | undefined> | null | undefined)
+    : undefined
+  const retryAfterSeconds = Number.parseFloat(headers?.['retry-after'] ?? '')
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0) {
+    return Math.min(retryAfterSeconds * 1000, MAX_RETRY_WAIT_MS)
+  }
+  return Math.min(baseMs * 2 ** attempt, MAX_RETRY_WAIT_MS)
+}
+
+// Diagnóstico solo en logs del servidor. Nunca se loguea el mensaje del proveedor:
+// podría repetir texto del documento (potencial PHI). Solo estado HTTP, código y tipo.
+function logProviderFailure(err: unknown): void {
+  const field = (name: 'code' | 'type'): string => {
+    if (typeof err !== 'object' || err === null || !(name in err)) return 'n/a'
+    const value = (err as Record<string, unknown>)[name]
+    return typeof value === 'string' ? value.slice(0, 60) : 'n/a'
+  }
+  console.warn(
+    `[embedder] provider failure status=${statusFromError(err) ?? 'n/a'} code=${field('code')} type=${field('type')}`,
+  )
+}
+
+async function createWithBackoff(
+  client: EmbeddingClient,
+  input: Parameters<EmbeddingClient['createEmbeddings']>[0],
+  startedAt: number,
+): Promise<ProviderEmbeddingResponse> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await client.createEmbeddings(input)
+    } catch (err) {
+      logProviderFailure(err)
+      const waitMs = retryWaitMs(err, attempt)
+      const canRetry =
+        statusFromError(err) === 429 &&
+        attempt < MAX_RATE_LIMIT_RETRIES &&
+        Date.now() - startedAt + waitMs + REQUEST_TIME_MARGIN_MS <= RATE_LIMIT_BUDGET_MS
+      if (!canRetry) throw err
+      await new Promise((resolve) => setTimeout(resolve, waitMs))
+    }
+  }
 }
 
 function sanitizeEmbeddingError(err: unknown): EmbeddingError {
@@ -174,9 +256,19 @@ function validateEmbeddingDimensions(embedding: readonly number[]): void {
   }
 }
 
+/**
+ * Una clave OpenAI explícita (la que la organización cargó en Ajustes) solo aplica si el
+ * proveedor de embeddings activo ES OpenAI. Si no, forzaría text-embedding-3-small para las
+ * consultas mientras los documentos se indexaron con otro modelo (p. ej. Gemini): las
+ * dimensiones coinciden (1536), no hay error y la búsqueda devuelve basura sin avisar.
+ */
+function effectiveOpenAiKey(options: EmbedBatchOptions): string | undefined {
+  return resolveEmbeddingProvider() === 'openai' ? options.openAiApiKey : undefined
+}
+
 function resolveModel(options: EmbedBatchOptions): string {
   if (options.client) return EMBEDDING_MODEL
-  if (options.openAiApiKey) return OPENAI_EMBEDDING_MODEL
+  if (effectiveOpenAiKey(options)) return OPENAI_EMBEDDING_MODEL
   return getEmbeddingModel()
 }
 
@@ -184,7 +276,7 @@ function formatBatchInput(
   batch: readonly string[],
   options: EmbedBatchOptions,
 ): string[] {
-  if (options.openAiApiKey || resolveEmbeddingProvider() !== 'groq') {
+  if (effectiveOpenAiKey(options) || resolveEmbeddingProvider() !== 'groq') {
     return [...batch]
   }
   const task = options.task ?? 'document'
@@ -201,20 +293,23 @@ export async function embedBatch(
 ): Promise<EmbeddingResult[]> {
   if (texts.length === 0) return []
 
-  const client = options.client ?? getDefaultClient(options.openAiApiKey)
+  const client = options.client ?? getDefaultClient(effectiveOpenAiKey(options))
   const batchSize = getBatchSize(options)
   const model = resolveModel(options)
   const results: EmbeddingResult[] = []
+  const startedAt = options.startedAt ?? Date.now()
 
   try {
     for (let start = 0; start < texts.length; start += batchSize) {
       const batch = texts.slice(start, start + batchSize)
-      const response = await client.createEmbeddings({
-        model,
-        input: formatBatchInput(batch, options),
-      })
+      const response = await createWithBackoff(
+        client,
+        { model, input: formatBatchInput(batch, options) },
+        startedAt,
+      )
 
       const embeddings = orderedEmbeddings(response.data, batch.length)
+      let batchTokens = 0
       for (let i = 0; i < embeddings.length; i += 1) {
         const raw = embeddings[i]?.embedding
         const text = batch[i] ?? ''
@@ -224,9 +319,25 @@ export async function embedBatch(
 
         const normalized = padEmbeddingToSchema(parseEmbeddingVector(raw))
         validateEmbeddingDimensions(normalized)
+        const tokenCount = estimateTokens(text)
+        batchTokens += tokenCount
         results.push({
           embedding: normalized,
-          tokenCount: estimateTokens(text),
+          tokenCount,
+        })
+      }
+
+      if (options.orgId) {
+        await recordUsage({
+          orgId: options.orgId,
+          studyId: options.studyId ?? null,
+          userId: options.userId ?? null,
+          kind: options.task === 'query' ? 'embedding_query' : 'embedding_document',
+          provider: effectiveOpenAiKey(options) ? 'openai' : resolveEmbeddingProvider(),
+          model,
+          inputTokens: batchTokens,
+          outputTokens: 0,
+          keySource: effectiveOpenAiKey(options) ? 'org' : 'platform',
         })
       }
     }

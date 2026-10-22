@@ -23,6 +23,8 @@ type ChatClientProps = {
 
 const SAFE_ERROR_MESSAGE = 'No se pudo completar la operacion. Intenta nuevamente.'
 
+class StreamQuotaExceededError extends Error {}
+
 const SUGGESTED = [
   'Cuales son los criterios de inclusion?',
   'Que medicacion concomitante esta prohibida?',
@@ -38,7 +40,7 @@ type StreamTokenFrame       = { type: 'token';       text: string }
 type StreamDoneFrame        = { type: 'done';        assistantMessageId: string; confidence: AnswerConfidence; evidences: Evidence[]; retrievalCount: number; conversationId: string; terminologySuggestions?: TerminologySuggestion[]; protocolMentionsFound?: boolean }
 type StreamAnnotationsFrame = { type: 'annotations'; annotations: MedicalAnnotation[] }
 type StreamTitleFrame       = { type: 'title';       conversationId: string; title: string }
-type StreamErrorFrame       = { type: 'error' }
+type StreamErrorFrame       = { type: 'error'; code?: 'quota_exceeded'; message?: string }
 type StreamFrame = StreamStartFrame | StreamTokenFrame | StreamDoneFrame | StreamAnnotationsFrame | StreamTitleFrame | StreamStatusFrame | StreamErrorFrame
 
 function isStartFrame(f: StreamFrame):       f is StreamStartFrame       { return f.type === 'start' }
@@ -312,12 +314,15 @@ export default function ChatClient({
             )
 
           } else if (frame.type === 'error') {
+            if (frame.code === 'quota_exceeded') {
+              throw new StreamQuotaExceededError(frame.message ?? SAFE_ERROR_MESSAGE)
+            }
             throw new Error('stream_error')
           }
         }
       }
-    } catch {
-      setSendError(SAFE_ERROR_MESSAGE)
+    } catch (err) {
+      setSendError(err instanceof StreamQuotaExceededError ? err.message : SAFE_ERROR_MESSAGE)
       setTurns((prev) =>
         prev.filter((t) => t.messageId !== pendingUserId && t.messageId !== streamId)
       )

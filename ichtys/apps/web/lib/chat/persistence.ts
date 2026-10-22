@@ -9,6 +9,7 @@ import {
   conversations,
   documents,
   messages,
+  recordUsage,
   type AnswerConfidence,
   type AuditAction,
 } from '@ichtys/db'
@@ -250,21 +251,41 @@ export async function generateAndPersistConversationTitle(params: {
   conversationId: string
   question: string
   studyName: string | null
+  orgId: string
+  studyId: string
+  userId: string
+  platformKeyBlocked?: boolean
 }): Promise<string | null> {
   const contextLine = params.studyName
     ? `Study: ${params.studyName}\nQuestion: ${params.question}`
     : `Question: ${params.question}`
 
-  const { result: text } = await runWithLlmFallback({ purpose: 'title' }, async (model) => {
-    const { text: titleText } = await generateText({
-      model,
-      system:
-        'You generate ultra-short conversation titles. Return ONLY the title: 6 words or fewer, no punctuation, no quotes, no explanation. Title should summarize what the user is asking about.',
-      prompt: contextLine,
-      maxTokens: 20,
-      temperature: 0.3,
-    })
-    return titleText
+  const { result: text, provider, modelId, usage, keySource } = await runWithLlmFallback(
+    { purpose: 'title', platformKeyBlocked: params.platformKeyBlocked },
+    async (model, _provider, reportUsage) => {
+      const { text: titleText, usage: titleUsage } = await generateText({
+        model,
+        system:
+          'You generate ultra-short conversation titles. Return ONLY the title: 6 words or fewer, no punctuation, no quotes, no explanation. Title should summarize what the user is asking about.',
+        prompt: contextLine,
+        maxTokens: 20,
+        temperature: 0.3,
+      })
+      reportUsage({ inputTokens: titleUsage?.promptTokens ?? 0, outputTokens: titleUsage?.completionTokens ?? 0 })
+      return titleText
+    },
+  )
+
+  await recordUsage({
+    orgId: params.orgId,
+    studyId: params.studyId,
+    userId: params.userId,
+    kind: 'chat_title',
+    provider,
+    model: modelId,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    keySource: keySource === 'none' ? 'platform' : keySource,
   })
 
   const title = text.trim().replace(/^["']|["']$/g, '').slice(0, 100)
