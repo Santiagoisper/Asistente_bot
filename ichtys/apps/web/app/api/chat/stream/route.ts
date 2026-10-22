@@ -454,7 +454,9 @@ export async function POST(req: Request): Promise<Response> {
   return new Response(stream, {
     status: 200,
     headers: {
-      'Content-Type': 'text/event-stream',
+      // charset explícito: sin él, clientes que decodifican por header (Playwright,
+      // requests) caen a latin-1 y el texto español llega mojibake (E2E corrida 2, #12).
+      'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
       'X-Accel-Buffering': 'no',
       'Connection': 'keep-alive',
