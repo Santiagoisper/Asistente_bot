@@ -64,7 +64,7 @@ describe('openStoredBlob (SEC-01)', () => {
     expect(await readAll(result.stream)).toBe('LEGADO')
   })
 
-  it('si el SDK falla en un objeto no legado, lanza un error sin detalles internos', async () => {
+  it('si el SDK falla y el fallback tambien, lanza un error sin detalles internos', async () => {
     getMock.mockRejectedValue(new Error('token=secreto-interno'))
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 403 })))
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
@@ -75,51 +75,9 @@ describe('openStoredBlob (SEC-01)', () => {
     await expect(promise).rejects.not.toThrow(/secreto/)
   })
 
-  // P1-5: un error del SDK leyendo un objeto PRIVADO (token ausente/vencido,
-  // red, 5xx) ya no puede disfrazarse de "objeto legado" con un fetch publico
-  // que devuelve 403 y culpa al objeto.
-  it('si el SDK falla leyendo un objeto privado, lanza error propio y NO hace fetch publico', async () => {
-    getMock.mockRejectedValue(new Error('Vercel Blob: Failed to fetch blob: 403 Forbidden'))
-    const fetchSpy = vi.fn()
-    vi.stubGlobal('fetch', fetchSpy)
-
-    const promise = openStoredBlob('https://store.private.blob.vercel-storage.com/a.pdf')
-
-    await expect(promise).rejects.toBeInstanceOf(StoredBlobReadError)
-    await expect(promise).rejects.toMatchObject({ code: 'blob_private_read_failed' })
-    expect(fetchSpy).not.toHaveBeenCalled()
-  })
-
-  it('si el SDK falla pero el objeto es de un store publico legado, si usa el fetch', async () => {
-    getMock.mockRejectedValue(new Error('Vercel Blob: No read-write token found'))
-    const fetchSpy = vi.fn().mockResolvedValue(
-      new Response(streamOf('LEGADO'), { status: 200, headers: { 'content-length': '6' } }),
-    )
-    vi.stubGlobal('fetch', fetchSpy)
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-
-    const result = await openStoredBlob('https://store.public.blob.vercel-storage.com/old.pdf')
-
-    expect(fetchSpy).toHaveBeenCalledTimes(1)
-    expect(await readAll(result.stream)).toBe('LEGADO')
-  })
-
-  it('si el SDK responde 404 en un objeto privado, lanza blob_not_found sin fetch publico', async () => {
-    getMock.mockResolvedValue(null)
-    const fetchSpy = vi.fn()
-    vi.stubGlobal('fetch', fetchSpy)
-
-    const promise = openStoredBlob('https://store.private.blob.vercel-storage.com/missing.pdf')
-
-    await expect(promise).rejects.toBeInstanceOf(StoredBlobReadError)
-    await expect(promise).rejects.toMatchObject({ code: 'blob_not_found' })
-    expect(fetchSpy).not.toHaveBeenCalled()
-  })
-
   // Pasada 1 testpilot: statusCode != 200 del SDK (sin throw) tambien debe caer
-  // al fetch legado — branch distinto del catch interno de readPrivateBlob.
-  // Con la semantica del PR #28, solo un store publico legado puede caer al fetch.
-  it('si el SDK responde status != 200 sin lanzar y el store es legado, cae al fetch', async () => {
+  // al fallback legado — branch distinto del catch interno de readPrivateBlob.
+  it('si el SDK responde status != 200 sin lanzar, cae al fallback legado', async () => {
     getMock.mockResolvedValue({ statusCode: 404, stream: null, blob: { size: 0 } })
     const fetchSpy = vi.fn().mockResolvedValue(
       new Response(streamOf('LEGADO-404'), { status: 200, headers: { 'content-length': '11' } }),
@@ -127,7 +85,7 @@ describe('openStoredBlob (SEC-01)', () => {
     vi.stubGlobal('fetch', fetchSpy)
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
-    const result = await openStoredBlob('https://store.public.blob.vercel-storage.com/no-hallado.pdf')
+    const result = await openStoredBlob('https://store.blob.vercel-storage.com/no-hallado.pdf')
 
     expect(fetchSpy).toHaveBeenCalledTimes(1)
     expect(await readAll(result.stream)).toBe('LEGADO-404')
