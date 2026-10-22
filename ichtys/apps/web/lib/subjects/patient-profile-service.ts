@@ -37,6 +37,26 @@ const llmFactsSchema = z.object({
   conditions: z.array(z.string()).default([]),
 })
 
+function httpStatusFromError(err: object): number | null {
+  for (const candidate of [(err as { status?: unknown }).status, (err as { statusCode?: unknown }).statusCode]) {
+    if (typeof candidate === 'number' && Number.isFinite(candidate)) return candidate
+  }
+  return null
+}
+
+/**
+ * Resumen seguro de un error de proveedor para logs: nombre de la clase y status
+ * HTTP. Nunca el mensaje completo: los errores del SDK de IA repiten en el
+ * mensaje el prompt enviado (PHI redactada, pero igual es texto clínico) o parte
+ * de la respuesta del modelo.
+ */
+function summarizeLlmError(err: unknown): string {
+  if (typeof err !== 'object' || err === null) return typeof err
+  const name = err instanceof Error && err.name ? err.name : 'Error'
+  const status = httpStatusFromError(err)
+  return status === null ? name : `${name} (status ${status})`
+}
+
 async function extractFactsWithLlm(
   orgId: string,
   studyId: string,
@@ -84,7 +104,7 @@ Medicaciones: nombre genérico, dosis y frecuencia si aparecen.`,
       conditions: result.conditions,
     }
   } catch (err) {
-    console.error('[clinical-extract] LLM extraction failed:', err)
+    console.error('[clinical-extract] LLM extraction failed:', summarizeLlmError(err))
     return null
   }
 }
