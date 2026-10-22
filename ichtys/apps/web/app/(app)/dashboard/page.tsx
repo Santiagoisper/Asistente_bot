@@ -27,6 +27,12 @@ async function getDashboardData(clerkOrgId: string, userId: string) {
   return { studyList: studyRows, recentConversations: convRows, docCount: allDocs.length }
 }
 
+const STUDY_STATUS_LABEL: Record<string, string> = {
+  active: 'Activo',
+  closed: 'Cerrado',
+  archived: 'Archivado',
+}
+
 function formatRelative(date: Date): string {
   const diff = Date.now() - date.getTime()
   const mins = Math.floor(diff / 60000)
@@ -73,8 +79,8 @@ export default async function DashboardPage() {
       <div className="flex items-start gap-3 rounded-xl border border-alphi-teal/20 bg-alphi-teal/5 px-4 py-3">
         <p className="text-sm leading-relaxed text-alphi-navy/80">
           <strong className="font-semibold text-alphi-navy">Recordatorio GCP:</strong>{' '}
-          ALPHI responde exclusivamente desde documentos cargados. Ante cualquier duda clinica
-          o de seguridad, consultar siempre la version vigente del protocolo aprobado por el Comite de Etica.
+          ALPHI responde exclusivamente desde documentos cargados. Ante cualquier duda clínica
+          o de seguridad, consultar siempre la versión vigente del protocolo aprobado por el Comité de Ética.
         </p>
       </div>
 
@@ -89,9 +95,9 @@ export default async function DashboardPage() {
 
           {studyList.length === 0 ? (
             <div className="alphi-card p-8 text-center">
-              <p className="text-sm font-semibold text-alphi-navy">Sin estudios todavia</p>
+              <p className="text-sm font-semibold text-alphi-navy">Sin estudios todavía</p>
               <p className="mt-1 text-xs text-alphi-muted">
-                Crea tu primer estudio y sube el protocolo para empezar.
+                Creá tu primer estudio y subí el protocolo para empezar.
               </p>
             </div>
           ) : (
@@ -117,7 +123,7 @@ export default async function DashboardPage() {
                         ? 'border-alphi-sage/30 bg-alphi-sage/10 text-alphi-sage'
                         : 'border-alphi-border bg-alphi-slate text-alphi-muted',
                     ].join(' ')}>
-                      {study.status === 'active' ? 'Activo' : study.status}
+                      {STUDY_STATUS_LABEL[study.status] ?? study.status}
                     </span>
                     <span className="text-alphi-muted transition-colors group-hover:text-alphi-teal">&rarr;</span>
                   </div>
@@ -137,7 +143,7 @@ export default async function DashboardPage() {
           {recentConversations.length === 0 ? (
             <div className="alphi-card p-4 text-center">
               <p className="text-sm text-alphi-muted">
-                Sin consultas previas. Abri un estudio y empieza a preguntar.
+                Sin consultas previas. Abrí un estudio y empezá a preguntar.
               </p>
             </div>
           ) : (
@@ -150,7 +156,7 @@ export default async function DashboardPage() {
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-alphi-navy transition-colors group-hover:text-alphi-teal">
-                      {conv.title ?? 'Consulta sin titulo'}
+                      {conv.title ?? 'Consulta sin título'}
                     </p>
                     <p className="mt-0.5 text-xs text-alphi-muted">{formatRelative(conv.updatedAt)}</p>
                   </div>
@@ -162,11 +168,11 @@ export default async function DashboardPage() {
           <div className="alphi-card mt-4 space-y-2.5 p-4">
             <p className="text-xs font-bold uppercase tracking-wider text-alphi-navy">Tips de consulta</p>
             {[
-              'Cuales son los criterios de exclusion?',
-              'Que medicacion prohibida menciona el protocolo?',
-              'Cuales son las ventanas de visitas del SoA?',
-              'Como proceso las muestras de PK?',
-              'Cual es el timeline de reporte de un SAE?',
+              '¿Cuáles son los criterios de exclusión?',
+              '¿Qué medicación prohibida menciona el protocolo?',
+              '¿Cuáles son las ventanas de visitas del SoA?',
+              '¿Cómo proceso las muestras de PK?',
+              '¿Cuál es el cronograma de reporte de un SAE?',
             ].map((tip) => (
               <p key={tip} className="border-l-2 border-alphi-teal/30 pl-2 text-[11px] leading-relaxed text-alphi-muted">
                 {tip}

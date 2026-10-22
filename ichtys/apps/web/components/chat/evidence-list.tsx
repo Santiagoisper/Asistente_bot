@@ -64,6 +64,7 @@ export function EvidenceCard({
   const label = pageLabel(evidence.pageStart, evidence.pageEnd)
   const downloadHref = privatePdfDownloadHref(evidence.documentVersionId)
   const isLong = evidence.excerpt.length > 300
+  const [expanded, setExpanded] = useState(false)
 
   return (
     <div
@@ -95,12 +96,37 @@ export function EvidenceCard({
         <p className="mb-1 text-[11px] font-medium text-alphi-teal">{evidence.sectionTitle}</p>
       )}
 
-      <p
-        className={['text-[13px] leading-6 text-alphi-navy/80 italic', isLong ? 'max-h-24 overflow-hidden' : ''].join(' ')}
-        data-full-excerpt={evidence.excerpt}
-      >
-        &ldquo;{evidence.excerpt}&rdquo;
-      </p>
+      <div className="relative">
+        <p
+          id={`evidence-excerpt-${index}`}
+          className={[
+            'text-[13px] leading-6 text-alphi-navy/80 italic',
+            isLong && !expanded ? 'max-h-24 overflow-hidden' : '',
+          ].join(' ')}
+          data-full-excerpt={evidence.excerpt}
+        >
+          &ldquo;{evidence.excerpt}&rdquo;
+        </p>
+        {isLong && !expanded && (
+          <div
+            className={[
+              'pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t to-transparent',
+              highlighted ? 'from-[#0891b20d]' : 'from-white',
+            ].join(' ')}
+          />
+        )}
+      </div>
+      {isLong && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          aria-controls={`evidence-excerpt-${index}`}
+          className="mt-1 text-[11px] font-semibold text-alphi-teal hover:underline"
+        >
+          {expanded ? 'Ver menos' : 'Ver cita completa'}
+        </button>
+      )}
 
       <div className="mt-2 flex gap-2">
         {evidence.pageStart !== null && onOpenViewer && (
@@ -274,7 +300,7 @@ export function EvidenceList({
 
       {viewerUrl ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-alphi-navy/70 p-4 backdrop-blur-sm">
-          <div className="animate-slide-up flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-alphi-modal">
+          <div className="animate-slide-up flex h-[90dvh] max-h-[90dvh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-alphi-modal">
             <div className="flex items-center justify-between border-b border-alphi-border px-5 py-3">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-alphi-navy">

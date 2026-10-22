@@ -1,11 +1,19 @@
 import { validateStudyAccess } from '@ichtys/auth'
 import { getLatestStudySpec, getLatestSpecAttempt, studySpecSchema, isMeaningfulSpec } from '@ichtys/ingestion'
-import { and, db, documents, documentVersions, inArray, eq } from '@ichtys/db'
+import { and, db, documents, eq, inArray } from '@ichtys/db'
 
 export const dynamic = 'force-dynamic'
 import { annotateAnswerSync } from '@ichtys/rag/medical-annotator'
 import SpecReview from '../../../../../components/spec/spec-review'
+import { SpecReextractButton } from '../../../../../components/spec/spec-reextract-button'
 import { SpecAutoRefresh } from '../../../../../components/spec/spec-auto-refresh'
+import {
+  hasLegacyExtractionFailure,
+  isProtocolProcessing,
+  resolveExtractionFailed,
+  specExtractionWarnings,
+  specHasExtractionFailed,
+} from '../../../../../lib/spec-extraction-status'
 import type { EligibilityCriterion } from '@ichtys/ingestion'
 import type { MedicalAnnotation } from '@ichtys/rag/medical-annotator'
 
@@ -35,29 +43,53 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
   const { id: studyId } = await params
   const { orgId } = await validateStudyAccess(studyId)
 
-  const [row, latestAttempt, protocolVersions] = await Promise.all([
+  const [row, latestAttemptRow, protocolDocsWithLatestVersion] = await Promise.all([
+    // Último spec ÚTIL (nunca un intento fallido) — esto es lo que renderiza
+    // la tabla de visitas/criterios más abajo.
     getLatestStudySpec({ orgId, studyId }),
+    // Último INTENTO, haya fallado o no (para el banner de error).
     getLatestSpecAttempt({ orgId, studyId }),
-    db
-      .select({ status: documentVersions.status })
-      .from(documents)
-      .innerJoin(documentVersions, eq(documentVersions.documentId, documents.id))
-      .where(
-        and(
-          eq(documents.studyId, studyId),
-          eq(documents.organizationId, orgId),
-          inArray(documents.documentType, ['protocol', 'soa']),
-        ),
+    // Solo la ÚLTIMA versión de cada documento 'protocol' o 'soa' — no todas las
+    // versiones históricas. Si no, un fallo viejo (ya resuelto por una
+    // re-subida) deja el banner de error pegado para siempre.
+    db.query.documents.findMany({
+      where: and(
+        eq(documents.studyId, studyId),
+        eq(documents.organizationId, orgId),
+        inArray(documents.documentType, ['protocol', 'soa']),
       ),
+      with: {
+        versions: {
+          columns: { status: true, errorMessage: true },
+          orderBy: (v, { desc: descBy }) => [descBy(v.createdAt)],
+          limit: 1,
+        },
+      },
+    }),
   ])
 
-  const protocolProcessing = protocolVersions.some(
-    (v) => v.status === 'pending' || v.status === 'processing',
-  )
+  const latestProtocolVersions = protocolDocsWithLatestVersion
+    .map((d) => d.versions[0])
+    .filter((v): v is NonNullable<typeof v> => v !== undefined)
 
-  const parsedAttempt = latestAttempt ? studySpecSchema.safeParse(latestAttempt.spec) : null
-  const extractionFailed = parsedAttempt?.success && parsedAttempt.data.extractionFailed === true
-  const extractionWarnings = parsedAttempt?.success ? parsedAttempt.data.extractionWarnings ?? [] : []
+  const protocolProcessing = isProtocolProcessing(latestProtocolVersions)
+  // Legado: antes de que el spec guardara su propio extractionFailed, un
+  // fallo de extracción dejaba el document_version entero en 'error'. Solo
+  // importa cuando no hay NINGÚN intento registrado todavía — si lo hay,
+  // manda su propio campo (abajo).
+  const legacyExtractionFailed = hasLegacyExtractionFailure(latestProtocolVersions)
+
+  const parsedAttempt = latestAttemptRow ? studySpecSchema.safeParse(latestAttemptRow.spec) : null
+  const attemptExtractionFailed =
+    parsedAttempt?.success ? specHasExtractionFailed(parsedAttempt.data) : false
+  const attemptExtractionWarnings =
+    parsedAttempt?.success ? specExtractionWarnings(parsedAttempt.data) : []
+  const extractionFailed = resolveExtractionFailed({
+    protocolProcessing,
+    specExtractionFailed: attemptExtractionFailed,
+    legacyExtractionFailed: latestAttemptRow ? false : legacyExtractionFailed,
+  })
+
   const parsedPreview = row ? studySpecSchema.safeParse(row.spec) : null
   const meaningfulPreview =
     parsedPreview?.success ? isMeaningfulSpec(parsedPreview.data) : false
@@ -65,30 +97,48 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
 
   if (!row) {
     return (
-      <div
-        className="space-y-4 py-8"
-        data-extraction-failed={extractionFailed}
-        data-extraction-warnings={JSON.stringify(extractionWarnings)}
-      >
+      <div className="space-y-4 py-8">
         <SpecAutoRefresh
           studyId={studyId}
           enabled={pollForSpec}
           initialVersion={null}
           initialMeaningful={false}
         />
-        <div className="py-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-alphi-teallit">
-            <span className="text-2xl">🔬</span>
+        {extractionFailed ? (
+          <div className="rounded-xl border border-alphi-rose/30 bg-alphi-rose/5 px-4 py-6 text-center">
+            <p className="text-sm font-semibold text-alphi-navy">
+              No se pudo extraer el cronograma ni los criterios
+            </p>
+            <p className="mt-2 text-sm text-alphi-muted">
+              El protocolo se indexó para el chat, pero la extracción automática del spec
+              falló{attemptExtractionWarnings.length > 0 ? ':' : '.'} Podés reintentarla desde acá.
+            </p>
+            {attemptExtractionWarnings.length > 0 && (
+              <ul className="mt-2 list-disc space-y-0.5 pl-5 text-left text-sm text-alphi-muted">
+                {attemptExtractionWarnings.map((w, i) => (
+                  <li key={i} className="break-words">{w}</li>
+                ))}
+              </ul>
+            )}
+            <div className="mt-4">
+              <SpecReextractButton studyId={studyId} />
+            </div>
           </div>
-          <p className="text-sm font-semibold text-alphi-navy">
-            {protocolProcessing ? 'Extrayendo spec del protocolo…' : 'Sin spec extraído todavía'}
-          </p>
-          <p className="mt-1 text-sm text-alphi-muted">
-            {protocolProcessing
-              ? 'ALPHI está indexando el PDF. Los criterios aparecerán acá automáticamente.'
-              : 'Subí un protocolo y ALPHI extraerá automáticamente los criterios, endpoints y visitas.'}
-          </p>
-        </div>
+        ) : (
+          <div className="py-8 text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-alphi-teallit">
+              <span className="text-2xl">🔬</span>
+            </div>
+            <p className="text-sm font-semibold text-alphi-navy">
+              {protocolProcessing ? 'Extrayendo spec del protocolo…' : 'Sin spec extraído todavía'}
+            </p>
+            <p className="mt-1 text-sm text-alphi-muted">
+              {protocolProcessing
+                ? 'ALPHI está indexando el PDF. Los criterios aparecerán acá automáticamente.'
+                : 'Subí un protocolo y ALPHI extraerá automáticamente los criterios, endpoints y visitas.'}
+            </p>
+          </div>
+        )}
       </div>
     )
   }
@@ -101,29 +151,80 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
         <p className="mt-2 text-sm text-alphi-muted">
           La versión v{row.version} no cumple el schema actual. Podés re-extraer el spec desde el protocolo indexado.
         </p>
+        <div className="mt-4">
+          <SpecReextractButton studyId={studyId} />
+        </div>
       </div>
     )
   }
 
   const spec = parsed.data
   const meaningful = isMeaningfulSpec(spec)
+  const extractionWarnings = specExtractionWarnings(spec)
 
   // Annotate criteria with SNOMED-CT / LOINC — deterministic, < 2 ms total
   const annotatedInclusion = annotateCriteria(spec.inclusionCriteria)
   const annotatedExclusion = annotateCriteria(spec.exclusionCriteria)
 
   return (
-    <div
-      className="space-y-4"
-      data-extraction-failed={extractionFailed}
-      data-extraction-warnings={JSON.stringify(extractionWarnings)}
-    >
+    <div className="space-y-4">
       <SpecAutoRefresh
         studyId={studyId}
         enabled={pollForSpec}
         initialVersion={row.version}
         initialMeaningful={meaningful}
       />
+      {extractionFailed ? (
+        <>
+          <div className="rounded-xl border border-alphi-rose/30 bg-alphi-rose/5 px-4 py-3 text-sm text-alphi-navy">
+            <p className="font-semibold">No se pudo extraer el cronograma ni los criterios</p>
+            <p className="mt-1 text-alphi-muted">
+              El protocolo está indexado para el chat, pero el último intento de extracción
+              del spec falló{attemptExtractionWarnings.length > 0 ? ':' : '.'}
+            </p>
+            {attemptExtractionWarnings.length > 0 && (
+              <ul className="mt-2 list-disc space-y-0.5 pl-5 text-alphi-muted">
+                {attemptExtractionWarnings.map((w, i) => (
+                  <li key={i} className="break-words">{w}</li>
+                ))}
+              </ul>
+            )}
+            <div className="mt-3">
+              <SpecReextractButton studyId={studyId} />
+            </div>
+          </div>
+          <p className="text-xs text-alphi-muted">
+            Se muestra la última versión extraída correctamente.
+          </p>
+        </>
+      ) : !meaningful ? (
+        <div className="rounded-xl border border-alphi-amber/40 bg-alphi-amber/10 px-4 py-3 text-sm text-alphi-navy">
+          <p className="font-semibold">Spec parcial — solo identificación del protocolo</p>
+          <p className="mt-1 text-alphi-muted">
+            ALPHI extrajo el código y título, pero no los criterios, endpoints ni visitas.
+            El documento sí está indexado para el chat. Podés re-intentar la extracción del spec.
+          </p>
+          <div className="mt-3">
+            <SpecReextractButton studyId={studyId} />
+          </div>
+        </div>
+      ) : extractionWarnings.length > 0 ? (
+        <div className="rounded-xl border border-alphi-amber/40 bg-alphi-amber/10 px-4 py-3 text-sm text-alphi-navy">
+          <p className="font-semibold">La extracción tuvo advertencias</p>
+          <p className="mt-1 text-alphi-muted">
+            Parte del spec pudo no haberse extraído con precisión. Revisá estos puntos antes
+            de aprobar:
+          </p>
+          <ul className="mt-2 list-disc space-y-0.5 pl-5 text-alphi-muted">
+            {extractionWarnings.map((w, i) => (
+              <li key={i} className="break-words">{w}</li>
+            ))}
+          </ul>
+          <div className="mt-3">
+            <SpecReextractButton studyId={studyId} />
+          </div>
+        </div>
+      ) : null}
       <SpecReview
         specId={row.id}
         studyId={studyId}

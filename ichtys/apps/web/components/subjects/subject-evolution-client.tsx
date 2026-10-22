@@ -391,7 +391,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       )}
 
       {error && (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">{error}</p>
+        <p className="rounded-lg border border-alphi-rose/30 bg-alphi-rose/10 px-4 py-2 text-sm text-alphi-rose">{error}</p>
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
