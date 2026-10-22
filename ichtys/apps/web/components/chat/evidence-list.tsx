@@ -98,6 +98,7 @@ export function EvidenceCard({
 
       <div className="relative">
         <p
+          id={`evidence-excerpt-${index}`}
           className={[
             'text-[13px] leading-6 text-alphi-navy/80 italic',
             isLong && !expanded ? 'max-h-24 overflow-hidden' : '',
@@ -107,13 +108,20 @@ export function EvidenceCard({
           &ldquo;{evidence.excerpt}&rdquo;
         </p>
         {isLong && !expanded && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-white to-transparent" />
+          <div
+            className={[
+              'pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t to-transparent',
+              highlighted ? 'from-[#0891b20d]' : 'from-white',
+            ].join(' ')}
+          />
         )}
       </div>
       {isLong && (
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          aria-controls={`evidence-excerpt-${index}`}
           className="mt-1 text-[11px] font-semibold text-alphi-teal hover:underline"
         >
           {expanded ? 'Ver menos' : 'Ver cita completa'}

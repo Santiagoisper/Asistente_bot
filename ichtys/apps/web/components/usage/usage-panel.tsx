@@ -86,6 +86,7 @@ export function UsagePanel() {
 
   const { quota, plan, period, breakdown, totals } = data
   const barPercent = quota.percentUsed ?? 0
+  const displayPercent = Math.round(Math.min(100, barPercent))
   const warningPercent = Math.round(quota.warningRatio * 100)
 
   return (
@@ -116,18 +117,18 @@ export function UsagePanel() {
                 className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-alphi-slate"
                 role="progressbar"
                 aria-label="Cupo mensual consumido"
-                aria-valuenow={Math.round(Math.min(100, barPercent))}
+                aria-valuenow={displayPercent}
                 aria-valuemin={0}
                 aria-valuemax={100}
-                aria-valuetext={`${barPercent}% — ${STATE_LABEL[quota.state]}`}
+                aria-valuetext={`${displayPercent}% — ${STATE_LABEL[quota.state]}`}
               >
                 <div
                   className={`h-full rounded-full transition-all ${BAR_COLOR[quota.state]}`}
-                  style={{ width: `${Math.min(100, barPercent)}%` }}
+                  style={{ width: `${displayPercent}%` }}
                 />
               </div>
               <div className="mt-1 flex items-center justify-between text-[11px] text-alphi-muted">
-                <span>{STATE_LABEL[quota.state]} · {barPercent}%</span>
+                <span>{STATE_LABEL[quota.state]} · {displayPercent}%</span>
                 {quota.remainingUsd !== null && quota.state !== 'exceeded' && (
                   <span>Quedan {formatUsd(quota.remainingUsd)}</span>
                 )}
@@ -136,7 +137,7 @@ export function UsagePanel() {
 
             {quota.state === 'warning' && (
               <p className="mt-3 rounded-md border border-alphi-amber/30 bg-alphi-amber/10 px-3 py-2 text-xs text-alphi-amber">
-                Ya usaste el {barPercent}% del cupo incluido (el aviso aparece a partir del {warningPercent}%).
+                Ya usaste el {displayPercent}% del cupo incluido (el aviso aparece a partir del {warningPercent}%).
                 Si se agota antes de fin de mes, podés cargar tu propia clave de modelo en{' '}
                 <a href="/settings" className="underline">Ajustes</a> para seguir sin interrupciones.
               </p>

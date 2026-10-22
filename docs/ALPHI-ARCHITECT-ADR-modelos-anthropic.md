@@ -31,12 +31,12 @@ sicario (sicario aún no publicó su propuesta en el chat/tablero).
    seteando `budget_tokens` en sonnet-5-5 falla con 400.
 4. **Timeout real de stream**: la deuda ya documentada por builder (`streamText` sin
    `abortSignal`/timeout) es crítica para que la UI de chat (mi responsabilidad visual)
-   no vuelva a colgar 300s. Pido que el timeout propio seaménor al límite de Vercel y
+   no vuelva a colgar 300s. Pido que el timeout propio sea menor al límite de Vercel y
    que el estado de error se refleje claro en pantalla (no un spinner infinito).
 5. **Barra de subida al 97%→"finalizado" mentiroso**: no es un tema de modelo, pero
    afecta directamente a mi prioridad 2 (pantalla de subida). Necesito que builder
    expone el estado real de etapas (parse/embed/ready) vía polling para que la UI no
-   mienta — ya until lo tiene diseñado según el chat.
+   mienta — ya lo tiene diseñado según el chat.
 6. **Gap de información**: sicario todavía no publicó su propuesta de modelo para
    spec/SoA en el chat ni en TABLERO.md. Este ADR queda con esa celda abierta hasta que
    sicario confirme.
