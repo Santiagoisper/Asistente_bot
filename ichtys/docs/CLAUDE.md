@@ -15,7 +15,7 @@ Opera en entornos regulados. Los errores acá tienen consecuencias clínicas rea
 
 ## Stack
 
-- **Frontend**: Next.js 15 App Router + TypeScript + Tailwind + Vercel AI SDK
+- **Frontend**: Next.js 16 App Router + TypeScript + Tailwind + Vercel AI SDK
 - **DB**: Neon Postgres + pgvector (Drizzle ORM)
 - **Auth**: Clerk Organizations (multi-tenant B2B)
 - **Storage**: Vercel Blob (PDFs)

@@ -14,7 +14,7 @@ genérico y lo vuelve correcto para un producto regulado.
 ---
 
 ## Stack actual (lo que NO se toca porque anda)
-Next.js 15 · Neon Postgres + pgvector · Clerk Orgs · Vercel Blob · Vercel hosting ·
+Next.js 16 · Neon Postgres + pgvector · Clerk Orgs · Vercel Blob · Vercel hosting ·
 GitHub Actions · Drizzle · Anthropic SDK (Sonnet/Haiku) + fallback Gemini · Vercel AI SDK ·
 pdf-parse/pdfjs · Turborepo/pnpm. **Se agrega y se mejora sobre esto.**
 
