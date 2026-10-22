@@ -10,7 +10,7 @@ export default async function SubjectDetailPage({ params }: SubjectDetailPagePro
   const { subject } = await validateSubjectAccess(subjectId)
 
   if (subject.studyId !== studyId) {
-    return <p className="text-sm text-red-600">Sujeto no pertenece a este estudio.</p>
+    return <p className="text-sm text-alphi-rose">Sujeto no pertenece a este estudio.</p>
   }
 
   return <SubjectEvolutionClient studyId={studyId} subjectId={subjectId} />

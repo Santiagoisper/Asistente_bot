@@ -35,29 +35,28 @@ export default async function StudyHistoryPage({ params }: HistoryPageProps) {
 
   return (
     <section className="mx-auto max-w-3xl space-y-4">
-      <h1 className="text-xl font-semibold">Historial de conversaciones</h1>
-      <p className="text-sm text-gray-500">Study ID: {studyId}</p>
+      <h1 className="text-xl font-semibold text-alphi-navy">Historial de conversaciones</h1>
       {items.length === 0 ? (
-        <div className="rounded-md border border-dashed border-gray-300 p-4 text-sm text-gray-500">
+        <div className="rounded-md border border-dashed border-alphi-border p-4 text-sm text-alphi-muted">
           No hay conversaciones previas para este estudio.
         </div>
       ) : (
-        <ul className="divide-y divide-gray-100 rounded-md border border-gray-200 bg-white">
+        <ul className="divide-y divide-alphi-border rounded-md border border-alphi-border bg-white">
           {items.map((conversation) => (
             <li key={conversation.id}>
               <Link
                 href={`/studies/${studyId}/chat?conversationId=${conversation.id}`}
-                className="flex items-center justify-between px-4 py-3 hover:bg-gray-50"
+                className="flex items-center justify-between px-4 py-3 hover:bg-alphi-slate"
               >
                 <div>
-                  <p className="text-sm font-medium text-gray-900">
+                  <p className="text-sm font-medium text-alphi-navy">
                     {conversation.title ?? 'Conversación sin título'}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-alphi-muted">
                     Actualizada: {conversation.updatedAt.toLocaleString('es-AR')}
                   </p>
                 </div>
-                <span className="text-xs text-gray-500">{conversation.id.slice(0, 8)}</span>
+                <span className="text-xs text-alphi-muted">{conversation.id.slice(0, 8)}</span>
               </Link>
             </li>
           ))}

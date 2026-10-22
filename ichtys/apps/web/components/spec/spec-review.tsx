@@ -225,7 +225,7 @@ function CriteriaCard({
 
           {/* Error message */}
           {saveError && (
-            <p className="text-xs text-red-500">{saveError}</p>
+            <p className="text-xs text-alphi-rose">{saveError}</p>
           )}
 
           {/* SNOMED / LOINC chips — keep visible even in edit mode */}
@@ -471,7 +471,7 @@ function EndpointRow({
                   onKeyDown={(e) => { if (e.key === 'Escape') handleCancel() }}
                 />
               </div>
-              {saveError && <p className="text-xs text-red-500">{saveError}</p>}
+              {saveError && <p className="text-xs text-alphi-rose">{saveError}</p>}
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => void handleSave()}
@@ -722,7 +722,7 @@ function VisitRow({
               />
             </div>
           </div>
-          {saveError && <p className="mt-2 text-xs text-red-500">{saveError}</p>}
+          {saveError && <p className="mt-2 text-xs text-alphi-rose">{saveError}</p>}
           <div className="mt-3 flex items-center gap-2">
             <button
               onClick={() => void handleSave()}

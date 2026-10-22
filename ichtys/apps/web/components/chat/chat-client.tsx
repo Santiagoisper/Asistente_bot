@@ -344,7 +344,7 @@ export default function ChatClient({
   }, [canSend])
 
   return (
-    <div className="flex h-[calc(100vh-220px)] min-h-[560px] gap-0">
+    <div className="flex h-[calc(100dvh-220px)] min-h-0 gap-0 sm:min-h-[560px]">
       {/* Study metadata -- used by tests and screen-readers */}
       <span className="sr-only">Study ID: {studyId}</span>
       {protocolNumber && <span className="sr-only">Protocolo {protocolNumber}</span>}

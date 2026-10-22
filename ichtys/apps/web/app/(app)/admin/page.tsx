@@ -15,8 +15,8 @@ export default async function AdminPage() {
   if (role !== 'org_admin' && role !== 'study_admin') {
     return (
       <section className="mx-auto max-w-3xl space-y-4">
-        <h1 className="text-2xl font-semibold">Administración</h1>
-        <p className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <h1 className="text-2xl font-semibold text-alphi-navy">Administración</h1>
+        <p className="rounded-md border border-alphi-amber/30 bg-alphi-amber/10 px-4 py-3 text-sm text-alphi-amber">
           Acceso restringido a roles <code>org_admin</code> o <code>study_admin</code>.
         </p>
       </section>
@@ -26,8 +26,8 @@ export default async function AdminPage() {
   if (!clerkOrgId) {
     return (
       <section className="mx-auto max-w-3xl space-y-4">
-        <h1 className="text-2xl font-semibold">Administración</h1>
-        <p className="text-sm text-gray-600">No hay una organización activa en la sesión.</p>
+        <h1 className="text-2xl font-semibold text-alphi-navy">Administración</h1>
+        <p className="text-sm text-alphi-muted">No hay una organización activa en la sesión.</p>
       </section>
     )
   }
@@ -39,8 +39,8 @@ export default async function AdminPage() {
   if (!org) {
     return (
       <section className="mx-auto max-w-3xl space-y-4">
-        <h1 className="text-2xl font-semibold">Administración</h1>
-        <p className="text-sm text-gray-600">No se encontró la organización en base de datos.</p>
+        <h1 className="text-2xl font-semibold text-alphi-navy">Administración</h1>
+        <p className="text-sm text-alphi-muted">No se encontró la organización en base de datos.</p>
       </section>
     )
   }
@@ -75,32 +75,32 @@ export default async function AdminPage() {
 
   return (
     <section className="mx-auto max-w-5xl space-y-6">
-      <h1 className="text-2xl font-semibold">Administración</h1>
-      <p className="text-gray-600">
+      <h1 className="text-2xl font-semibold text-alphi-navy">Administración</h1>
+      <p className="text-alphi-muted">
         Gestión de organización, estudios, documentos y usuarios. Restringido a
         roles <code>org_admin</code> / <code>study_admin</code>.
       </p>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-md border border-gray-200 bg-white p-4">
-          <p className="text-xs uppercase tracking-wide text-gray-500">Estudios</p>
-          <p className="mt-1 text-2xl font-semibold text-gray-900">{studyList.length}</p>
+        <div className="alphi-card p-4">
+          <p className="text-xs uppercase tracking-wide text-alphi-muted">Estudios</p>
+          <p className="mt-1 text-2xl font-semibold text-alphi-navy">{studyList.length}</p>
         </div>
-        <div className="rounded-md border border-gray-200 bg-white p-4">
-          <p className="text-xs uppercase tracking-wide text-gray-500">Documentos</p>
-          <p className="mt-1 text-2xl font-semibold text-gray-900">{docs.length}</p>
+        <div className="alphi-card p-4">
+          <p className="text-xs uppercase tracking-wide text-alphi-muted">Documentos</p>
+          <p className="mt-1 text-2xl font-semibold text-alphi-navy">{docs.length}</p>
         </div>
-        <div className="rounded-md border border-gray-200 bg-white p-4">
-          <p className="text-xs uppercase tracking-wide text-gray-500">Eventos de auditoría</p>
-          <p className="mt-1 text-2xl font-semibold text-gray-900">{recentAudit.length}</p>
+        <div className="alphi-card p-4">
+          <p className="text-xs uppercase tracking-wide text-alphi-muted">Eventos de auditoría</p>
+          <p className="mt-1 text-2xl font-semibold text-alphi-navy">{recentAudit.length}</p>
         </div>
       </div>
 
-      <div className="rounded-md border border-gray-200 bg-white">
-        <div className="border-b px-4 py-3">
-          <h2 className="text-sm font-semibold text-gray-900">Estado documental por estudio</h2>
+      <div className="alphi-card overflow-hidden">
+        <div className="border-b border-alphi-border px-4 py-3">
+          <h2 className="text-sm font-semibold text-alphi-navy">Estado documental por estudio</h2>
         </div>
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-alphi-border">
           {studyList.map((study) => {
             const studyDocs = docs.filter((d) => d.studyId === study.id)
             const readyCount = studyDocs.filter((d) => latestVersionByDocumentId.get(d.id)?.status === 'ready').length
@@ -108,44 +108,49 @@ export default async function AdminPage() {
             const errorCount = studyDocs.filter((d) => latestVersionByDocumentId.get(d.id)?.status === 'error').length
             return (
               <div key={study.id} className="px-4 py-3 text-sm">
-                <p className="font-medium text-gray-900">{study.name}</p>
-                <p className="text-xs text-gray-500">
-                  total: {studyDocs.length} · ready: {readyCount} · processing: {processingCount} · error: {errorCount}
+                <p className="font-medium text-alphi-navy">{study.name}</p>
+                <p className="text-xs text-alphi-muted">
+                  total: {studyDocs.length} · listos: {readyCount} · procesando: {processingCount} · con error: {errorCount}
                 </p>
               </div>
             )
           })}
           {studyList.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-gray-500">No hay estudios creados en esta organización.</p>
+            <p className="px-4 py-3 text-sm text-alphi-muted">No hay estudios creados en esta organización.</p>
           ) : null}
         </div>
       </div>
 
-      <div className="rounded-md border border-gray-200 bg-white">
-        <div className="border-b px-4 py-3">
-          <h2 className="text-sm font-semibold text-gray-900">Auditoría reciente (read-only)</h2>
+      <div className="alphi-card overflow-hidden">
+        <div className="border-b border-alphi-border px-4 py-3">
+          <h2 className="text-sm font-semibold text-alphi-navy">Auditoría reciente (solo lectura)</h2>
         </div>
-        <div className="max-h-96 overflow-auto">
-          <table className="min-w-full text-left text-xs">
-            <thead className="sticky top-0 bg-gray-50 text-gray-600">
+        <div className="max-h-96 overflow-x-auto overflow-y-auto">
+          <table className="w-full min-w-[480px] table-fixed text-left text-xs">
+            <colgroup>
+              <col className="w-[30%]" />
+              <col className="w-[30%]" />
+              <col className="w-[40%]" />
+            </colgroup>
+            <thead className="sticky top-0 bg-alphi-slate text-alphi-muted">
               <tr>
                 <th className="px-3 py-2">Fecha</th>
                 <th className="px-3 py-2">Acción</th>
                 <th className="px-3 py-2">Recurso</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-alphi-border bg-white">
               {recentAudit.map((entry) => (
                 <tr key={entry.id}>
-                  <td className="px-3 py-2">{entry.createdAt.toLocaleString('es-AR')}</td>
-                  <td className="px-3 py-2">{entry.action}</td>
-                  <td className="px-3 py-2">{entry.resourceType ?? '—'}:{entry.resourceId ?? '—'}</td>
+                  <td className="px-3 py-2 align-top text-alphi-navy">{entry.createdAt.toLocaleString('es-AR')}</td>
+                  <td className="px-3 py-2 align-top text-alphi-navy break-words">{entry.action}</td>
+                  <td className="px-3 py-2 align-top text-alphi-muted break-words">{entry.resourceType ?? '—'}:{entry.resourceId ?? '—'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
           {recentAudit.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-gray-500">No hay eventos de auditoría para mostrar.</p>
+            <p className="px-4 py-3 text-sm text-alphi-muted">No hay eventos de auditoría para mostrar.</p>
           ) : null}
         </div>
       </div>

@@ -49,51 +49,6 @@ const INITIAL_STATE: UploadState = {
   elapsed: 0,
 }
 
-const STEPPER_STEPS = ['Subir', 'Procesar', 'Listo'] as const
-
-/**
- * Indicador de 3 pasos fijos (subir / procesar / listo). Puramente visual —
- * no inventa progreso real de ingestion, solo ubica al usuario en qué etapa
- * del flujo está para que "éxito" no se sienta como un salto abrupto desde
- * la barra de subida. Si builder agrega etapas reales de ingestion (parse/
- * embed) acá es donde se reflejarían.
- */
-function UploadStepper({ status }: { status: 'uploading' | 'processing' | 'success' }) {
-  const activeIndex = status === 'uploading' ? 0 : status === 'processing' ? 1 : 2
-  return (
-    <div className="flex w-full max-w-xs items-center" aria-label={`Paso ${activeIndex + 1} de ${STEPPER_STEPS.length}: ${STEPPER_STEPS[activeIndex]}`}>
-      {STEPPER_STEPS.map((label, i) => {
-        const done = i < activeIndex || status === 'success'
-        const current = i === activeIndex && status !== 'success'
-        return (
-          <React.Fragment key={label}>
-            {i > 0 && (
-              <div className={['mx-1 h-0.5 flex-1', done || i <= activeIndex ? 'bg-alphi-teal' : 'bg-alphi-border'].join(' ')} />
-            )}
-            <div className="flex shrink-0 flex-col items-center gap-1">
-              <div
-                className={[
-                  'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold',
-                  done
-                    ? 'bg-alphi-teal text-white'
-                    : current
-                      ? 'border-2 border-alphi-teal text-alphi-teal'
-                      : 'border border-alphi-border text-alphi-border',
-                ].join(' ')}
-              >
-                {done ? '✓' : i + 1}
-              </div>
-              <span className={['whitespace-nowrap text-[10px]', done || current ? 'text-alphi-navy' : 'text-alphi-border'].join(' ')}>
-                {label}
-              </span>
-            </div>
-          </React.Fragment>
-        )
-      })}
-    </div>
-  )
-}
-
 export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
   const router = useRouter()
   const [state, setState] = useState<UploadState>(INITIAL_STATE)
@@ -232,7 +187,6 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
   if (status === 'success') {
     return (
       <div className="alphi-card flex flex-col items-center gap-3 px-6 py-8 text-center">
-        <UploadStepper status={status} />
         <span className="text-5xl text-alphi-teal">&#8682;</span>
         <div>
           <p className="text-base font-bold text-alphi-navy">Documento subido</p>
@@ -254,7 +208,6 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
   if (status === 'uploading' || status === 'processing') {
     return (
       <div className="alphi-card flex flex-col items-center gap-4 px-6 py-8 text-center">
-        <UploadStepper status={status} />
         <div className="flex items-center gap-2 text-sm text-alphi-muted">
           <span className="inline-flex items-center gap-0.5 text-alphi-teal">
             <span className="alphi-typing-dot" />

@@ -79,6 +79,8 @@ export function BulkImport() {
   const [items, setItems] = useState<QueuedItem[]>([])
   const [batchId, setBatchId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [pollError, setPollError] = useState<string | null>(null)
+  const pollFailuresRef = useRef(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -109,7 +111,7 @@ export function BulkImport() {
   const pollBatch = useCallback(async (currentBatchId: string) => {
     try {
       const res = await fetch(`/api/studies/bulk-import/${currentBatchId}`, { cache: 'no-store' })
-      if (!res.ok) return
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = (await res.json()) as BatchStatusResponse
       setItems(
         data.items.map((it) => ({
@@ -120,8 +122,15 @@ export function BulkImport() {
           error: it.error,
         })),
       )
+      pollFailuresRef.current = 0
+      setPollError(null)
     } catch {
-      // silencioso — reintenta en el próximo ciclo
+      // Un fallo suelto no se muestra (reintenta solo); recién avisamos si
+      // se repite, para no alarmar por un blip de red.
+      pollFailuresRef.current += 1
+      if (pollFailuresRef.current >= 2) {
+        setPollError('No se pudo actualizar el estado de la importación. Reintentando…')
+      }
     }
   }, [])
 
@@ -278,6 +287,11 @@ export function BulkImport() {
               </Link>
             )}
           </div>
+          {pollError && (
+            <p className="mb-3 rounded-md border border-alphi-amber/30 bg-alphi-amber/10 px-3 py-2 text-xs text-alphi-amber">
+              {pollError}
+            </p>
+          )}
           <ul className="space-y-1.5">
             {items.map((it) => (
               <li key={it.fileName} className="flex items-center justify-between gap-3 rounded-md border border-alphi-border/60 bg-white px-3 py-2">
