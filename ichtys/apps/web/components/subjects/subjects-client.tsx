@@ -125,7 +125,7 @@ export default function SubjectsClient({ studyId }: SubjectsClientProps) {
       </form>
 
       {error && (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+        <p className="rounded-lg border border-alphi-rose/30 bg-alphi-rose/10 px-4 py-2 text-sm text-alphi-rose">
           {error}
         </p>
       )}
@@ -135,8 +135,8 @@ export default function SubjectsClient({ studyId }: SubjectsClientProps) {
       ) : subjects.length === 0 ? (
         <p className="text-sm text-alphi-muted">No hay sujetos registrados. Creá el primero arriba.</p>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-alphi-border">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-lg border border-alphi-border">
+          <table className="w-full min-w-[480px] text-sm">
             <thead className="bg-alphi-slate/80 text-left text-xs uppercase tracking-wide text-alphi-muted">
               <tr>
                 <th className="px-4 py-3">Código</th>

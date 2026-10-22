@@ -23,7 +23,7 @@ export default async function SettingsPage() {
       </div>
 
       {!canEdit ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <p className="rounded-lg border border-alphi-amber/30 bg-alphi-amber/10 px-4 py-3 text-sm text-alphi-amber">
           Solo <code>org_admin</code> o <code>study_admin</code> pueden cambiar el proveedor de IA.
           Podés ver el estado actual pero no guardar cambios.
         </p>
