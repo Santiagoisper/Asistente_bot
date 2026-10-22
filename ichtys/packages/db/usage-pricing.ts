@@ -58,6 +58,7 @@ const PRICE_RULES: readonly PriceRule[] = [
   { modelPrefix: 'claude-sonnet-4-5', inputPerMTok: 3, outputPerMTok: 15 },
   { modelPrefix: 'claude-haiku-4-5', inputPerMTok: 1, outputPerMTok: 5 },
   // Genéricos conservadores para ids no listados de esa familia.
+  { modelPrefix: 'claude-opus', inputPerMTok: 15, outputPerMTok: 75 },
   { modelPrefix: 'claude-haiku', inputPerMTok: 1, outputPerMTok: 5 },
   { modelPrefix: 'claude-sonnet', inputPerMTok: 3, outputPerMTok: 15 },
   // Groq

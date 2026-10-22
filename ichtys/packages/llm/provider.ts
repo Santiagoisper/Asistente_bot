@@ -86,19 +86,17 @@ export function getModel(
 export function getModelId(provider: LlmProviderId, purpose: LlmPurpose): string {
   switch (provider) {
     case 'anthropic':
-      // Mapa por propósito (IDs y precios confirmados con la skill claude-api,
-      // 2026-10-22): chat/answer → sonnet-5-5 ($2/$10 MTok), título → haiku-5-5
-      // ($0.10/$0.50), clinical → sonnet-5-5, spec/SoA → opus-5-5 ($4/$20;
-      // decisión del Foreman 2026-10-22 coordinada con sicario, PDF visual del
-      // SoA; SPEC_EXTRACTION_MODEL permite bajar a otro modelo sin tocar código).
+      // Los claude-*-5-5 rechazan `temperature` y tool_choice "tool"/"any", que
+      // ai@4 + @ai-sdk/anthropic@1 envían siempre (verificado en prod 2026-10-22):
+      // los defaults quedan en 4.x hasta migrar a AI SDK 5. Override por env.
       if (purpose === 'title') {
-        return process.env.TITLE_MODEL ?? 'claude-haiku-5-5'
+        return process.env.TITLE_MODEL ?? 'claude-haiku-4-5'
       }
       if (purpose === 'clinical-extract') {
-        return process.env.CLINICAL_EXTRACTION_MODEL ?? 'claude-sonnet-5-5'
+        return process.env.CLINICAL_EXTRACTION_MODEL ?? 'claude-sonnet-4-6'
       }
-      if (purpose === 'spec') return process.env.SPEC_EXTRACTION_MODEL ?? 'claude-opus-5-5'
-      return process.env.ANSWER_MODEL ?? 'claude-sonnet-5-5'
+      if (purpose === 'spec') return process.env.SPEC_EXTRACTION_MODEL ?? 'claude-opus-4-6'
+      return process.env.ANSWER_MODEL ?? 'claude-sonnet-4-6'
     case 'openai':
       if (purpose === 'title' || purpose === 'clinical-extract') {
         return process.env.OPENAI_TITLE_MODEL ?? 'gpt-4o-mini'

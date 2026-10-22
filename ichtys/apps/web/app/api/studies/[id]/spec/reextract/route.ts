@@ -11,10 +11,10 @@ export const maxDuration = 300
 function formatReextractError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err)
   if (/invalid x-api-key|authentication|401|403/i.test(msg)) {
-    return 'La clave ANTHROPIC_API_KEY en Vercel parece inválida o faltante. Revisá Environment Variables → Production.'
+    return 'El servicio de IA rechazó la credencial de la plataforma. Avisale al administrador.'
   }
-  if (/usage limits|rate limit|429/i.test(msg)) {
-    return `Cuota del proveedor LLM agotada. Configurá GROQ_API_KEY u OPENROUTER_API_KEY (GLM) en .env.local, o esperá a que renueve Anthropic (~1 jul UTC).`
+  if (/usage limits|rate limit|429|quota/i.test(msg)) {
+    return 'El servicio de IA está saturado o sin cupo en este momento. Probá de nuevo en unos minutos.'
   }
   return msg
 }
@@ -25,10 +25,11 @@ function formatReextractError(err: unknown): string {
  * pero el spec salió vacío o parcial.
  */
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const { id: studyId } = await params
+  const force = new URL(req.url).searchParams.get('force') === '1'
 
   try {
     const { orgId, userId } = await validateStudyAccess(studyId)
@@ -39,10 +40,17 @@ export async function POST(
     }
 
     // Evita spam de versiones si el spec ya es útil (p. ej. clicks repetidos en demo).
-    const existing = await getLatestSpecAttempt({ orgId, studyId })
+    // Un spec con grupos fallidos (warnings) o sin visitas NO cuenta como listo: el usuario debe poder reintentar.
+    const existing = force ? null : await getLatestSpecAttempt({ orgId, studyId })
     if (existing) {
       const parsed = studySpecSchema.safeParse(existing.spec)
-      if (parsed.success && !parsed.data.extractionFailed && isMeaningfulSpec(parsed.data)) {
+      if (
+        parsed.success &&
+        !parsed.data.extractionFailed &&
+        (parsed.data.extractionWarnings ?? []).length === 0 &&
+        parsed.data.visits.length > 0 &&
+        isMeaningfulSpec(parsed.data)
+      ) {
         const richness = specRichness(parsed.data)
         const ageMs = Date.now() - existing.createdAt.getTime()
         if (richness >= 10 && ageMs < 15 * 60 * 1000) {
