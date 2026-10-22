@@ -20,51 +20,60 @@ corrección de citas, aislamiento (leakage) y latencia.
 
 ## 1. Dataset format
 
-El dataset vive en `packages/evals/dataset/` como archivos JSON. Cada caso
-sigue el tipo `EvalCase` (`packages/evals/metrics.ts`):
+El dataset vive en `packages/evals/dataset/` como archivos JSON validados con
+`FormalEvalDatasetSchema` (`packages/evals/types.ts`):
 
 ```jsonc
 {
-  "id": "elig-hba1c-001",
-  "organizationId": "<uuid org de fixture>",
-  "studyId": "<uuid study de fixture>",
-  "question": "¿Un paciente con HbA1c 9.2% cumple el criterio de inclusión?",
-
-  // Esperado (uno u otro, según el caso):
-  "expectedAnswer": "Sí; el protocolo exige HbA1c ≥ 7.0% y ≤ 10.5%.",
-  "expectedDocumentIds": ["<uuid documento protocolo>"],
-  "expectInsufficientEvidence": false,
-
-  // Metadata para slicing de métricas:
-  "jtbd": "eligibility",          // eligibility | pre_visit | conmeds | labs | safety | monitoring
-  "adversarial": false            // true para casos de leakage cross-tenant/cross-study
+  "_meta": { "version": "1.1", "phase": "10B", "studyMock": "MOCK-METABOLIC-T2D-v1", "totalCases": 12 },
+  "cases": [{
+    "id": "SM-001",
+    "category": "eligibility",          // eligibility | visit_schedule | lab_handling | pharmacy | safety | procedure | adversarial_no_evidence
+    "question": "¿Un paciente con HbA1c de 9% cumple criterio de inclusión?",
+    "expectedConfidence": "any",        // high | medium | low | insufficient_evidence | any (informativo)
+    "expectedAnswerType": "grounded",   // grounded | insufficient_evidence (informativo)
+    "expectedDocumentType": "protocol", // informativo: no se puntúa
+    "expectedDocumentName": "MOCK-METABOLIC-T2D-Protocol.pdf",
+    "expectedSectionTitle": "Procedures / Criteria", // se compara con evidence.sectionTitle; null = no aplica
+    "expectedPageStart": null,          // informativo: no se puntúa
+    "expectedPageEnd": null,
+    "expectedEvidenceKeywords": ["HbA1c", "7.0", "10.0", "3.1"],
+    "forbiddenAnswerKeywords": [],
+    "shouldHaveEvidence": true,
+    "shouldBeInsufficientEvidence": false,
+    "notes": "…"
+  }]
 }
 ```
 
 Reglas del dataset:
 
-- **~100 casos** cubriendo los 6 Jobs to Be Done (PRD §4).
-- **Casos adversariales de leakage**: la respuesta correcta vive en otro
-  study/org, por lo que el resultado correcto es `insufficient_evidence`
-  (`expectInsufficientEvidence: true`, `adversarial: true`).
-- IDs de org/study provienen de **fixtures aisladas**, nunca hardcodeados sin
-  aislamiento (CLAUDE.md).
+- El dataset mock (`mock-metabolic-eval-cases.json`) trae **12 casos**; el
+  objetivo del PRD es cubrir los 6 Jobs to Be Done con ~100.
+- **Casos adversariales**: `category: "adversarial_no_evidence"` y
+  `shouldBeInsufficientEvidence: true` — la respuesta correcta vive en otro
+  study/org, así que el caso pasa sólo si Alphi responde insuficiente evidencia.
+- Los ids de org/study **no** se embeben en el dataset: el runner los toma de
+  `EVAL_STUDY_ID` (y `EVAL_USER_ID`) en runtime, apuntando a una fixture aislada.
 
 ---
 
 ## 2. Scoring rubric
 
-| Métrica | Definición | Cómo se computa | Target |
-|---|---|---|---|
-| **Groundedness** | Cada afirmación de la respuesta se apoya en una cita recuperada | LLM-judge sobre (respuesta, citas) → soportada / no soportada; fallback correcto cuenta como grounded | maximizar |
-| **Citation correctness** | Las citas apuntan a la fuente esperada | `|citas ∩ expectedDocumentIds| / |expectedDocumentIds|` por caso, promediado | > 90% |
-| **Cited answer rate** | Respuestas no-fallback con ≥1 cita | proporción de casos con citas no vacías | > 90% |
-| **Cross-tenant leakage rate** | Evidencia de otra organización | casos adversariales donde aparece un chunk de otra org | **0% (bloqueante)** |
-| **Cross-study leakage rate** | Evidencia de otro estudio | casos adversariales donde aparece un chunk de otro study | **0% (bloqueante)** |
-| **Fallback correctness** | El fallback dispara cuando (y solo cuando) corresponde | `expectInsufficientEvidence === (confidence==='insufficient_evidence')` | maximizar |
+Todo lo que sigue lo computa `scoreCase` (`packages/evals/scoring.ts`) y se
+reporta por caso en `CaseResult`; el dataset **no** declara ids de documento.
 
-Escala por caso: cada métrica produce 0..1; se agregan a tasas globales
-(`AggregateMetrics`). Gate de release: **leakage = 0%**.
+| Métrica | Cómo se computa realmente | Target |
+|---|---|---|
+| **Case status** | `PASS` sólo si se cumplen todas: fallback/confianza esperada (`shouldBeInsufficientEvidence`), sin keywords prohibidas, al menos una keyword esperada en respuesta o excerpts, sección esperada encontrada (si el caso la declara) y evidencia presente (si el caso la exige) | maximizar |
+| **Keywords** | `matchedExpectedKeywords`: substring case-insensitive de `expectedEvidenceKeywords` sobre respuesta + excerpts; vacío = no exige nada | maximizar |
+| **Forbidden keywords** | `forbiddenKeywordsFound`: substring case-insensitive de `forbiddenAnswerKeywords` sobre la respuesta | 0 casos |
+| **Sección de la evidencia** | `matchedExpectedSection`: algún `evidence.sectionTitle` contiene `expectedSectionTitle`; `null` si el caso no lo declara. **No verifica el documento fuente**, sólo el título de sección | maximizar |
+| **Evidence rate** | `evidenceCount > 0` en casos con `shouldHaveEvidence` | > 90% |
+| **Fallback correctness** | `insufficientEvidenceCorrect`: `shouldBeInsufficientEvidence === (confidence === 'insufficient_evidence')` | maximizar |
+| **Cross-tenant / cross-study leakage** | Sin métrica propia: los casos adversariales exigen `insufficient_evidence`, así que una respuesta grounded en ellos falla el caso y queda con `missed_insufficient_evidence` | **0% (bloqueante)** |
+
+Gate de release: **ningún caso adversarial puede pasar como grounded**.
 
 ---
 
