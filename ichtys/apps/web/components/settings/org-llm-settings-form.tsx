@@ -1,10 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-
-type LlmProvider = 'auto' | 'anthropic' | 'openai' | 'google' | 'groq' | 'glm'
-
-type LlmKeyProvider = 'anthropic' | 'openai' | 'google' | 'groq' | 'openrouter'
+import {
+  PROVIDER_OPTIONS,
+  isProviderSelectable,
+  providerUnavailableHint,
+  type LlmProvider,
+  type LlmKeyProvider,
+} from './provider-options'
 
 type LlmKeyStatus = {
   provider: LlmKeyProvider
@@ -39,26 +42,12 @@ type SettingsPayload = {
   openAiUsage: OpenAiUsage | null
 }
 
-const PROVIDER_OPTIONS: { value: LlmProvider; label: string; description: string }[] = [
-  {
-    value: 'auto',
-    label: 'Automático (recomendado)',
-    description:
-      'Claude → OpenAI → Gemini → Groq → GLM. Si uno falla, prueba el siguiente.',
-  },
-  { value: 'anthropic', label: 'Claude (Anthropic)', description: 'Solo Claude Sonnet 4.5.' },
-  { value: 'openai', label: 'OpenAI (GPT)', description: 'Solo GPT-4o.' },
-  { value: 'google', label: 'Gemini (Google)', description: 'Solo Gemini 2.0 Flash.' },
-  { value: 'groq', label: 'Groq (gratis)', description: 'Solo Llama 3.3.' },
-  { value: 'glm', label: 'GLM 5.2 (OpenRouter)', description: 'Solo GLM vía OpenRouter.' },
-]
-
+// GLM salió del producto (E2E 2026-10-22): sin campo de clave OpenRouter.
 const KEY_FIELDS: { id: LlmKeyProvider; label: string; env: string }[] = [
   { id: 'anthropic', label: 'Claude (Anthropic)', env: 'ANTHROPIC_API_KEY' },
   { id: 'openai', label: 'OpenAI', env: 'OPENAI_API_KEY' },
   { id: 'google', label: 'Gemini (Google)', env: 'GOOGLE_GENERATIVE_AI_API_KEY' },
   { id: 'groq', label: 'Groq', env: 'GROQ_API_KEY' },
-  { id: 'openrouter', label: 'GLM (OpenRouter)', env: 'OPENROUTER_API_KEY' },
 ]
 
 const HEALTH_LABELS: Record<ProviderHealth['status'], string> = {
@@ -113,6 +102,11 @@ export function OrgLlmSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
     setSaving(true)
     setMessage(null)
     setError(null)
+    if (!isProviderSelectable(selected, settings?.llmKeys ?? [])) {
+      setError('El proveedor elegido no tiene una clave disponible. Elegí otro o cargá la clave abajo.')
+      setSaving(false)
+      return
+    }
     try {
       const llmApiKeys: Partial<Record<LlmKeyProvider, string | null>> = {}
       for (const field of KEY_FIELDS) {
@@ -195,30 +189,38 @@ export function OrgLlmSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
         </p>
 
         <div className="mt-4 space-y-3">
-          {PROVIDER_OPTIONS.map((opt) => (
-            <label
-              key={opt.value}
-              className={`flex cursor-pointer gap-3 rounded-lg border p-3 transition-colors ${
-                selected === opt.value
-                  ? 'border-alphi-teal bg-alphi-teal/5'
-                  : 'border-alphi-border hover:border-alphi-teal/40'
-              }`}
-            >
-              <input
-                type="radio"
-                name="llmProvider"
-                value={opt.value}
-                checked={selected === opt.value}
-                onChange={() => setSelected(opt.value)}
-                className="mt-1"
-                disabled={!canEdit}
-              />
-              <span>
-                <span className="block text-sm font-medium text-alphi-navy">{opt.label}</span>
-                <span className="block text-xs text-alphi-muted">{opt.description}</span>
-              </span>
-            </label>
-          ))}
+          {PROVIDER_OPTIONS.map((opt) => {
+            const selectable = isProviderSelectable(opt.value, settings?.llmKeys ?? [])
+            const unavailable = !selectable
+            return (
+              <label
+                key={opt.value}
+                className={`flex gap-3 rounded-lg border p-3 transition-colors ${
+                  unavailable ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+                } ${
+                  selected === opt.value
+                    ? 'border-alphi-teal bg-alphi-teal/5'
+                    : 'border-alphi-border hover:border-alphi-teal/40'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="llmProvider"
+                  value={opt.value}
+                  checked={selected === opt.value}
+                  onChange={() => setSelected(opt.value)}
+                  className="mt-1"
+                  disabled={!canEdit || unavailable}
+                />
+                <span>
+                  <span className="block text-sm font-medium text-alphi-navy">{opt.label}</span>
+                  <span className="block text-xs text-alphi-muted">
+                    {unavailable ? `${providerUnavailableHint()} (${opt.description})` : opt.description}
+                  </span>
+                </span>
+              </label>
+            )
+          })}
         </div>
 
         {settings && (

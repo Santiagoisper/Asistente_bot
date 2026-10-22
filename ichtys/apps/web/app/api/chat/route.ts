@@ -217,6 +217,12 @@ export async function POST(req: Request): Promise<Response> {
         { status: 402 },
       )
     }
+    if (ragErr instanceof AnswerOrchestratorError && ragErr.code === 'provider_unavailable') {
+      return Response.json(
+        { error: 'provider_unavailable', message: ragErr.message },
+        { status: 503 },
+      )
+    }
     return new Response('Internal Server Error', { status: 500 })
   }
 

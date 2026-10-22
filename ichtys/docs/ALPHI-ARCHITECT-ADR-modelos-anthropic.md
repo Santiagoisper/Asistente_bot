@@ -70,3 +70,29 @@ de más de 1 MB o con documentos PDF embebidos pasan intactos.
 - Si Santiago algún día quiere eliminar GLM del stack productivo por completo,
   el cambio es acotado (quitarlo de `AUTO_PROVIDER_CHAIN` y del enum de
   preferencias) y debe hacerse en un solo commit para no romper el typecheck.
+
+## Decisión de actualización — GLM sale del producto (2026-10-22, E2E en vivo)
+
+La consecuencia anticipada arriba se ejecutó el mismo día: Santiago confirmó que
+la cuenta Z.ai es solo para programación, no para la app. GLM se eliminó del
+producto (PR de fix E2E):
+
+- `AUTO_PROVIDER_CHAIN` queda `anthropic → openai → google → groq`.
+- `LLM_PROVIDER=glm` legado (el que colgó prod) se lee como `anthropic` con
+  warning una vez por proceso.
+- `rag_config.llmProvider='glm'` guardado se migra EN LECTURA a `anthropic`
+  (`normalizeLlmProvider` en `@ichtys/db` org-config, warning una vez por org);
+  no se toca la DB.
+- Ajustes ya no ofrece GLM ni el campo de clave OpenRouter, y el PATCH rechaza
+  `llmProvider` sin clave disponible (server-side, contando las claves del
+  mismo request).
+
+### Contexto del E2E que lo motivó
+
+Una org quedó con `llmProvider='glm'` sin clave utilizable. Con la cadena de 1,
+el chat iba solo a GLM; GLM fallaba y en ai@4 `streamText` no lanza — el error
+va a `onError` y `textStream` termina vacío. El engine clasificaba eso como
+"insufficient_evidence" con respuesta vacía: 20/20 preguntas sin respuesta en
+producción. Regla nueva grabada en tests: una falla del proveedor es un ERROR
+visible (`provider_unavailable` con el nombre del proveedor y dónde cambiarlo),
+nunca "evidencia insuficiente".

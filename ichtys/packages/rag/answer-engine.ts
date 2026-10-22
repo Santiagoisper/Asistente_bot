@@ -106,6 +106,7 @@ export type AnswerEngineErrorCode =
   | 'llm_rate_limited'
   | 'llm_invalid_response'
   | 'llm_timeout'
+  | 'provider_unavailable'
   | 'quota_exceeded'
 
 export class AnswerEngineError extends Error {
@@ -196,8 +197,35 @@ function statusFromError(err: unknown): number | null {
   return typeof s === 'number' ? s : null
 }
 
+/** Nombre visible del proveedor para mensajes al usuario. */
+function providerDisplayName(provider: string): string {
+  const names: Record<string, string> = {
+    glm: 'GLM',
+    anthropic: 'Anthropic',
+    openai: 'OpenAI',
+    google: 'Google',
+    groq: 'Groq',
+  }
+  return names[provider] ?? provider
+}
+
+/** Mensaje accionable cuando la cadena elegida no tiene proveedor utilizable. */
+export function providerUnavailableMessage(providers: readonly string[]): string {
+  const names = providers.map(providerDisplayName).join(', ')
+  return (
+    `El proveedor elegido en Ajustes (${names}) no está disponible ahora. ` +
+    'Elegí otro proveedor en Ajustes → Proveedor de modelos, o probá de nuevo en unos minutos.'
+  )
+}
+
 function sanitizeLLMError(err: unknown): AnswerEngineError {
   if (err instanceof AnswerEngineError) return err
+  // fallback.run cuando nadie en la cadena tiene clave: el usuario tiene que
+  // saber que es su configuración de proveedor, no un error genérico.
+  const notConfigured = err instanceof Error ? /^Proveedor (\S+) no configurado/.exec(err.message) : null
+  if (notConfigured) {
+    return new AnswerEngineError('provider_unavailable', providerUnavailableMessage([notConfigured[1]!]))
+  }
   if (err instanceof LlmQuotaExceededError) {
     return new AnswerEngineError('quota_exceeded', 'Monthly platform quota exceeded')
   }
@@ -600,7 +628,10 @@ async function evaluateStreamedAnswerConfidence(
       confidence: result,
       usageEvent: { kind: 'chat_eval', provider, model: modelId, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, keySource },
     }
-  } catch {
+  } catch (err) {
+    // Fail-open deliberado: la respuesta ya se streameó al usuario; un fallo
+    // del evaluador no puede tirarla. Pero no en silencio: queda en los logs.
+    console.warn('[answer-engine] confidence eval failed — keeping streamed answer (confidence=medium):', err)
     return { confidence: 'medium', usageEvent: null }
   }
 }
@@ -717,6 +748,7 @@ export async function* answerEngineStream(
   let lastStreamError: unknown
   let answerUsageEvent: LlmUsageEvent | null = null
   let sawQuotaBlock = false
+  let attempted = 0
   let timing: LlmStreamTiming | undefined
   const streamStartedAt = Date.now()
 
@@ -732,7 +764,13 @@ export async function* answerEngineStream(
 
     const model = createLanguageModel(provider, 'answer', llmApiKeys)
     streamed = false
+    attempted += 1
     let firstTokenMs: number | null = null
+    // ai@4 NO lanza los errores del stream: los pasa a onError y textStream
+    // termina vacío. Sin capturarlo, un 401/429 del proveedor (p. ej. GLM sin
+    // clave) se reportaba como "insufficient_evidence" con respuesta vacía —
+    // E2E 2026-10-22: 20/20 respuestas vacías en producción.
+    let streamError: unknown = null
     try {
       // Timeout propio al primer token + inactividad (streamTextWithTimeout):
       // un proveedor colgado corta acá y cae al siguiente — nunca al timeout
@@ -744,6 +782,9 @@ export async function* answerEngineStream(
           system: STREAM_ANSWER_SYSTEM_PROMPT,
           prompt: userPrompt,
           abortSignal: signal,
+          onError: ({ error }) => {
+            streamError = error
+          },
         })
         return streamResultRef.textStream
       })
@@ -776,6 +817,10 @@ export async function* answerEngineStream(
         break
       }
 
+      // ai@4: proveedor caído = onError + textStream terminado sin texto.
+      // Convertirlo en excepción ANTES de clasificarlo como "respuesta vacía".
+      if (streamError !== null && !streamed) throw streamError
+
       const isLast = i === providerOrder.length - 1
       if (!isLast) {
         console.warn(`[answer-engine] ${provider} returned empty response — trying next provider`)
@@ -796,6 +841,11 @@ export async function* answerEngineStream(
         continue
       }
       console.error('[answer-engine] stream error:', err)
+      // Cadena de 1 (preferencia explícita de proveedor): sin red a la que
+      // caer, el mensaje tiene que decir QUÉ proveedor falló y dónde se cambia.
+      if (providerOrder.length === 1 && !(err instanceof StreamTimeoutError)) {
+        throw new AnswerEngineError('provider_unavailable', providerUnavailableMessage([provider]))
+      }
       throw sanitizeLLMError(err)
     }
   }
@@ -803,7 +853,16 @@ export async function* answerEngineStream(
   if (!fullAnswer.trim()) {
     if (lastStreamError) throw sanitizeLLMError(lastStreamError)
     if (sawQuotaBlock) throw sanitizeLLMError(new LlmQuotaExceededError())
+    // Nadie fue llamado: la preferencia elegida no tiene proveedor con clave.
+    // Nunca un "insufficient_evidence" silencioso por un problema de config.
+    if (attempted === 0) {
+      throw new AnswerEngineError('provider_unavailable', providerUnavailableMessage(providerOrder))
+    }
+    // El modelo contestó vacío SIN error (raro pero posible): mismo mensaje
+    // cortés que el guardrail, emitido COMO token para que la UI lo muestre
+    // — un done sin tokens deja la burbuja vacía (hallazgo E2E de testpilot).
     const msg = getInsufficientEvidenceMessage(question)
+    yield { type: 'token', text: msg }
     yield { type: 'done', confidence: 'insufficient_evidence', evidences: [], fullAnswer: msg, usageEvents: [] }
     return
   }
