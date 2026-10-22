@@ -64,6 +64,7 @@ export function EvidenceCard({
   const label = pageLabel(evidence.pageStart, evidence.pageEnd)
   const downloadHref = privatePdfDownloadHref(evidence.documentVersionId)
   const isLong = evidence.excerpt.length > 300
+  const [expanded, setExpanded] = useState(false)
 
   return (
     <div
@@ -95,12 +96,29 @@ export function EvidenceCard({
         <p className="mb-1 text-[11px] font-medium text-alphi-teal">{evidence.sectionTitle}</p>
       )}
 
-      <p
-        className={['text-[13px] leading-6 text-alphi-navy/80 italic', isLong ? 'max-h-24 overflow-hidden' : ''].join(' ')}
-        data-full-excerpt={evidence.excerpt}
-      >
-        &ldquo;{evidence.excerpt}&rdquo;
-      </p>
+      <div className="relative">
+        <p
+          className={[
+            'text-[13px] leading-6 text-alphi-navy/80 italic',
+            isLong && !expanded ? 'max-h-24 overflow-hidden' : '',
+          ].join(' ')}
+          data-full-excerpt={evidence.excerpt}
+        >
+          &ldquo;{evidence.excerpt}&rdquo;
+        </p>
+        {isLong && !expanded && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-white to-transparent" />
+        )}
+      </div>
+      {isLong && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-1 text-[11px] font-semibold text-alphi-teal hover:underline"
+        >
+          {expanded ? 'Ver menos' : 'Ver cita completa'}
+        </button>
+      )}
 
       <div className="mt-2 flex gap-2">
         {evidence.pageStart !== null && onOpenViewer && (
