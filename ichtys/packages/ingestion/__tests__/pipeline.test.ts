@@ -505,14 +505,22 @@ describe('runIngestion: reintentos y paralelismo', () => {
       const fixture = arrange()
       vi.spyOn(console, 'warn').mockImplementation(() => undefined)
       specMocks.extractStudySpec.mockImplementation(() => new Promise(() => undefined)) // nunca responde
-      mocks.indexDocumentVersionChunks.mockResolvedValue({ embeddedChunkCount: 2 })
+      let startIndexing!: () => void
+      let finishIndexing!: (result: { embeddedChunkCount: number }) => void
+      const indexingStarted = new Promise<void>((resolve) => { startIndexing = resolve })
+      mocks.indexDocumentVersionChunks.mockImplementation(() => {
+        startIndexing()
+        return new Promise((resolve) => { finishIndexing = resolve })
+      })
 
       const running = runIngestion(fixture.input)
-      // Se avanza el reloj de a tramos: el temporizador del tope se registra recien cuando
-      // el pipeline termina los embeddings, y hay que dejar correr las promesas entre tramos.
-      for (let i = 0; i < 12; i += 1) {
-        await vi.advanceTimersByTimeAsync(30_000)
-      }
+      await indexingStarted
+      finishIndexing({ embeddedChunkCount: 2 })
+      // El plazo se programa después de completar embeddings; la barrera garantiza que
+      // el reloj avance solo cuando ese temporizador ya está instalado.
+      await Promise.resolve()
+      expect(vi.getTimerCount()).toBe(1)
+      await vi.advanceTimersByTimeAsync(265_000)
       const result = await running
 
       expect(result.status).toBe('ready')
