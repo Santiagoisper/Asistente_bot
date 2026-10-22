@@ -103,7 +103,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-alphi-teal/40 bg-alphi-teal/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-alphi-teal/90">
+          {/* lg (no md): entre 768-1023px (tablet, ej. iPad 820) ya conviven
+              logo + nav + divisor + OrganizationSwitcher a la izquierda; sumar
+              esta píldora ahí desborda el header ~9px y genera scroll
+              horizontal en TODAS las pantallas logueadas (medido por Foreman). */}
+          <span className="hidden lg:inline-flex items-center gap-1.5 rounded-full border border-alphi-teal/40 bg-alphi-teal/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-alphi-teal/90">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-alphi-teal" />
             GCP Compliant
           </span>

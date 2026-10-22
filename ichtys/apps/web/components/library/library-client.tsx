@@ -134,9 +134,15 @@ export function LibraryClient({ rows }: { rows: LibraryRow[] }) {
           No hay protocolos que coincidan con el filtro.
         </p>
       ) : (
-        <div className="grid gap-3">
+        <div className="grid min-w-0 grid-cols-1 gap-3">
           {filtered.map((r) => (
-            <div key={r.studyId} className="alphi-card p-5">
+            // min-w-0: un grid item usa min-width:auto por default, que se
+            // calcula a partir del contenido (ej. r.title sin espacios para
+            // cortar con white-space:nowrap de "truncate"). Sin esto, la
+            // tarjeta crecía hasta ~2550-2700px aunque el texto interno ya
+            // tuviera truncate — el ellipsis nunca llegaba a aplicarse
+            // porque el grid primero agrandaba la columna para "hacer lugar".
+            <div key={r.studyId} className="alphi-card min-w-0 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
