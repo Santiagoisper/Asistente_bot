@@ -12,7 +12,6 @@ export function handleApiError(err: unknown): Response {
     return new Response(ACCESS_ERROR_MESSAGES[err.status], { status: err.status })
   }
 
-  void err
   logServerError('api route error', 'internal_error')
   return new Response('Internal Server Error', { status: 500 })
 }

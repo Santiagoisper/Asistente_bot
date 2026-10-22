@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { handleApiError } from '@ichtys/auth'
+import { handleApiError, validateStudyAccess } from '@ichtys/auth'
 import {
   generateAnswerForStudy,
   AnswerOrchestratorError,
@@ -93,7 +93,15 @@ export async function POST(req: Request): Promise<Response> {
     return new Response('Bad Request', { status: 400 })
   }
 
-  // 6. Delegate to the server-only orchestration wrapper.
+  // 6. Auth + study access (defense-in-depth). The wrapper re-validates, but
+  //    this rejects unauthenticated / cross-tenant callers before any work.
+  try {
+    await validateStudyAccess(parsed.data.studyId)
+  } catch (err) {
+    return handleApiError(err)
+  }
+
+  // 7. Delegate to the server-only orchestration wrapper.
   try {
     const result = await generateAnswerForStudy(parsed.data)
     return Response.json(result, { status: 200 })

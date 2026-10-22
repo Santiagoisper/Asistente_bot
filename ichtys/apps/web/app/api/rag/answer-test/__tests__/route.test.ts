@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => {
       .mockReturnValue(new Response('Internal Server Error', { status: 500 })),
     clientIpRateLimitKey: vi.fn().mockReturnValue('203.0.113.10'),
     enforceSlidingWindowRateLimit: vi.fn(),
+    validateStudyAccess: vi.fn(),
     rateLimitResponse: vi
       .fn<(retryAfterSeconds: number) => Response>()
       .mockImplementation((retryAfterSeconds: number) =>
@@ -46,6 +47,7 @@ vi.mock('../../../../../lib/rag/answer-orchestrator', () => ({
 
 vi.mock('@ichtys/auth', () => ({
   handleApiError: mocks.handleApiError,
+  validateStudyAccess: mocks.validateStudyAccess,
 }))
 
 vi.mock('../../../../../lib/security/rate-limit', () => ({
@@ -128,6 +130,11 @@ describe('POST /api/rag/answer-test — feature flag enabled', () => {
     vi.stubEnv('ENABLE_INTERNAL_RAG_ANSWER_TEST', 'true')
     mocks.clientIpRateLimitKey.mockReturnValue('203.0.113.10')
     mocks.enforceSlidingWindowRateLimit.mockResolvedValue({ limited: false })
+    mocks.validateStudyAccess.mockResolvedValue({
+      userId: 'user_test',
+      orgId: crypto.randomUUID(),
+      study: { id: STUDY_ID, name: 'Test study' },
+    })
   })
   afterEach(() => {
     vi.unstubAllEnvs()
@@ -265,7 +272,40 @@ describe('POST /api/rag/answer-test — feature flag enabled', () => {
   })
 
   // -------------------------------------------------------------------------
-  // Access denied
+  // Explicit auth + study access guard (defense-in-depth)
+  // -------------------------------------------------------------------------
+
+  it('validates study access before calling the wrapper', async () => {
+    mocks.generateAnswerForStudy.mockResolvedValueOnce(makeSuccessResult())
+
+    await POST(makeRequest({ studyId: STUDY_ID, question: 'eligibility' }))
+
+    expect(mocks.validateStudyAccess).toHaveBeenCalledWith(STUDY_ID)
+    expect(mocks.generateAnswerForStudy).toHaveBeenCalled()
+  })
+
+  it('returns 401 without calling the wrapper when there is no session', async () => {
+    mocks.validateStudyAccess.mockRejectedValueOnce(new Error('Unauthorized'))
+    mocks.handleApiError.mockReturnValueOnce(new Response('Unauthorized', { status: 401 }))
+
+    const res = await POST(makeRequest({ studyId: STUDY_ID, question: 'eligibility' }))
+
+    expect(res.status).toBe(401)
+    expect(mocks.generateAnswerForStudy).not.toHaveBeenCalled()
+  })
+
+  it('returns 404 without calling the wrapper when the study is outside the active org', async () => {
+    mocks.validateStudyAccess.mockRejectedValueOnce(new Error('Study not found or access denied'))
+    mocks.handleApiError.mockReturnValueOnce(new Response('Not Found', { status: 404 }))
+
+    const res = await POST(makeRequest({ studyId: STUDY_ID, question: 'eligibility' }))
+
+    expect(res.status).toBe(404)
+    expect(mocks.generateAnswerForStudy).not.toHaveBeenCalled()
+  })
+
+  // -------------------------------------------------------------------------
+  // Access denied (wrapper-level, defense-in-depth)
   // -------------------------------------------------------------------------
 
   it('returns 403 with generic message when study access is denied (no session)', async () => {
