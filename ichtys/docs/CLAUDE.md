@@ -33,7 +33,7 @@ Ver `docs/ARCHITECTURE.md` para el modelo de datos completo y flujos.
 1. **NUNCA** acceder a datos sin validar `organization_id` y `study_id` server-side
 2. **NUNCA** tomar `organization_id` del body del request — siempre desde el token de Clerk
 3. **NUNCA** hacer retrieval sin filtrar por `organization_id` + `study_id` primero
-4. **NUNCA** servir PDFs con URLs públicas — siempre signed URLs con expiración
+4. **NUNCA** servir PDFs con URLs públicas — solo desde `/api/document-versions/[id]/download` y `/api/documents/[id]/page/[pageNumber]`, con auth de Clerk y validación de acceso al objeto (blob privado; los identificadores de Blob nunca llegan al cliente)
 5. Todo acceso sensible debe generar una entrada en `audit_logs`
 
 ### Answer engine

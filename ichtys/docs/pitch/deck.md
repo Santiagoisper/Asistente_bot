@@ -70,7 +70,7 @@ Mostrar en chat:
 2. **Study spec** — extracción estructurada del protocolo (criterios, endpoints, visitas)
 3. **Screening orientativo** — reglas deterministas vs spec aprobado; PI decide
 
-Stack: Next.js 15 · Neon/pgvector · Clerk · Vercel · multi-LLM con fallback
+Stack: Next.js 16 · Neon/pgvector · Clerk · Vercel · multi-LLM con fallback
 
 ---
 
