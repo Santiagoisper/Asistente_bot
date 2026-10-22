@@ -1,6 +1,6 @@
 # ALPHI — Consumo y cuota mensual (modelo híbrido)
 
-Estado: **etapas 1, 2 y 3 implementadas en código (migración sin aplicar a producción)**. Etapa 4 (cobro) pendiente.
+Estado: **etapas 1, 2 y 3 implementadas en código y migración 0009 aplicada en producción (2026-10-22)**. Ninguna organización tiene plan/cupo asignado todavía (`plan_name`/`monthly_budget_micros` en null) — hasta que se asigne uno, el consumo se mide pero no se limita. Etapa 4 (cobro) pendiente.
 
 ## Modelo de negocio (decisión: opción C, híbrido)
 
@@ -97,12 +97,12 @@ cambiar los precios no reescribe el historial.
 
 | Etapa | Contenido | Estado |
 |---|---|---|
-| 1 | Tabla `usage_events`, columnas `organizations.plan_name` / `monthly_budget_micros`, migración `0009`, módulo `packages/db/usage.ts` + `usage-pricing.ts` y tests (70 en el paquete) | Hecha, **migración sin aplicar** |
+| 1 | Tabla `usage_events`, columnas `organizations.plan_name` / `monthly_budget_micros`, migración `0009`, módulo `packages/db/usage.ts` + `usage-pricing.ts` y tests (70 en el paquete) | Hecha, **migración aplicada en producción** |
 | 2 | Enganchar cada llamada a un modelo para registrar el consumo (chat ×3, título, spec, perfil clínico, embeddings de documentos y de consultas) | Hecha, **sin cupo visible para el cliente aún** (eso es la etapa 3) |
 | 3 | Pantalla "Consumo" para el cliente (barra del cupo, desglose por tipo, aviso al 80 %) y tope cuando el cupo se agota (mensaje claro: cargar clave propia o ampliar plan) | Hecha |
 | 4 | Cobro automático de la cuota (Stripe u otro) | Pendiente; requiere decisiones comerciales |
 
-## Cómo aplicar la migración (acción manual)
+## Cómo aplicar la migración (acción manual) — ✅ ya aplicada en producción el 2026-10-22
 
 La migración `0009_usage_metering.sql` solo **agrega** objetos nuevos y es idempotente
 (`IF NOT EXISTS`). No modifica ni borra datos. Las migraciones **no** se aplican en el deploy
