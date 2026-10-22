@@ -20,13 +20,13 @@ import {
   fetchOpenAiUsageSummary,
   getDefaultProviderPreference,
   isAnthropicConfigured,
-  isGlmConfigured,
   isGoogleConfigured,
   isGroqConfigured,
   isOpenAiConfigured,
   providerLabel,
 } from '@ichtys/llm'
 import { resolveLlmApiKey } from '@ichtys/db'
+import { isProviderChoiceSupported, mergeOrgKeys } from '../../../../lib/settings/provider-guard'
 
 export const runtime = 'nodejs'
 
@@ -52,7 +52,7 @@ async function resolveOrgContext() {
 }
 
 const patchSchema = z.object({
-  llmProvider: z.enum(['anthropic', 'openai', 'google', 'groq', 'glm', 'auto']).optional(),
+  llmProvider: z.enum(['anthropic', 'openai', 'google', 'groq', 'auto']).optional(),
   similarityThreshold: z.number().min(0.05).max(0.95).optional(),
   topK: z.number().int().min(1).max(20).optional(),
   llmApiKeys: z
@@ -95,7 +95,6 @@ export async function GET(): Promise<Response> {
         openai: isOpenAiConfigured(orgKeys),
         google: isGoogleConfigured(orgKeys),
         groq: isGroqConfigured(orgKeys),
-        glm: isGlmConfigured(orgKeys),
       },
     })
   } catch (err) {
@@ -120,7 +119,22 @@ export async function PATCH(req: Request): Promise<Response> {
       similarityThreshold: number
       topK: number
     }> = {}
-    if (body.llmProvider !== undefined) ragPatch.llmProvider = body.llmProvider as OrgLlmProvider
+    if (body.llmProvider !== undefined) {
+      // Guard (E2E 2026-10-22): un proveedor sin clave disponible deja el
+      // chat de la org sin respuestas. Las claves del MISMO request cuentan.
+      const currentKeys = await getOrgLlmApiKeys(orgId)
+      const effectiveKeys = mergeOrgKeys(currentKeys, body.llmApiKeys)
+      if (!isProviderChoiceSupported(body.llmProvider, effectiveKeys)) {
+        return Response.json(
+          {
+            error:
+              'El proveedor elegido no tiene una clave disponible. Cargá su clave en este formulario o elegí otro proveedor.',
+          },
+          { status: 400 },
+        )
+      }
+      ragPatch.llmProvider = body.llmProvider as OrgLlmProvider
+    }
     if (body.similarityThreshold !== undefined) ragPatch.similarityThreshold = body.similarityThreshold
     if (body.topK !== undefined) ragPatch.topK = body.topK
 

@@ -420,6 +420,13 @@ export async function POST(req: Request): Promise<Response> {
             message:
               'El asistente tardó demasiado en generar la respuesta y se detuvo para no dejarte esperando. Probá enviar la pregunta otra vez; si vuelve a pasar, avisanos.',
           })
+        } else if (err instanceof AnswerEngineError && err.code === 'provider_unavailable') {
+          // Mensaje del engine (español, nombra el proveedor elegido en Ajustes).
+          enqueue({
+            type: 'error',
+            code: 'provider_unavailable',
+            message: err.message,
+          })
         } else if (err instanceof AnswerEngineError && err.code === 'llm_rate_limited') {
           enqueue({
             type: 'error',
