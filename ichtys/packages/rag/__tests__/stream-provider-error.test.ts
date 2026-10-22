@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
     getModelId: vi.fn().mockReturnValue('claude-sonnet-5-5'),
     getDefaultProviderPreference: vi.fn().mockReturnValue('anthropic'),
     isProviderFallbackError: vi.fn().mockReturnValue(false),
+    isProviderQuotaError: vi.fn().mockReturnValue(false),
     streamText: vi.fn(),
     generateObject: vi.fn(),
   }
@@ -175,6 +176,18 @@ describe('answerEngineStream — falla del proveedor ≠ evidencia insuficiente 
     const done = events.find((e) => (e as { type: string }).type === 'done') as { confidence: string; evidences: unknown[] } | undefined
     expect(done?.confidence).toBe('high')
     expect(done?.evidences.length).toBeGreaterThan(0)
+  })
+
+  it('cadena de 1 con 429 transitorio → llm_rate_limited (saturación), no "proveedor no disponible" (sugerencia reviewer #39)', async () => {
+    mocks.resolveProviderChain.mockReturnValue(['anthropic'])
+    mocks.isProviderQuotaError.mockReturnValue(true) // el 429 es quota/saturación
+    const rateLimited = Object.assign(new Error('API error (429): overloaded'), { status: 429 })
+    streamTextFailingWith(rateLimited)
+
+    const { error } = await collectStream(makeInput({ llmProviderPreference: 'anthropic' }))
+
+    expect(error).toBeInstanceOf(AnswerEngineError)
+    expect((error as AnswerEngineError).code).toBe('llm_rate_limited')
   })
 
   it('eval de confianza falla post-stream → fail-open a medium, sin matar la respuesta ya entregada', async () => {
