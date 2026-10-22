@@ -196,7 +196,11 @@ function CriteriaCard({
     >
       <div className="flex gap-3 px-4 py-3">
         {/* Criterion number */}
-        <span className="shrink-0 mt-0.5 flex h-6 w-7 items-center justify-center rounded bg-alphi-slate font-mono text-[11px] font-semibold text-alphi-muted">
+        {/* Numeraciones compuestas ("3 [Participantes con T2D - bullet 1]") deben envolver dentro del badge, no desbordarlo. */}
+        <span
+          title={criterion.number}
+          className="shrink-0 mt-0.5 inline-flex min-h-6 min-w-7 max-w-[6.5rem] items-center justify-center whitespace-normal break-words rounded bg-alphi-slate px-1.5 py-0.5 text-center font-mono text-[11px] font-semibold leading-tight text-alphi-muted"
+        >
           {criterion.number}
         </span>
 
