@@ -126,6 +126,10 @@ function AlphiRobotMark({
 function AlphiWordmark({ color, teal }: { color: string; teal: string }) {
   return (
     <>
+      {/* "ALPH" y "I" van en tspans del mismo <text> (sin x propio en el segundo)
+          para que el navegador encadene el ancho real del glifo previo — un x
+          fijo (ej. 82) se separaba del final de "ALPH" apenas la fuente Inter
+          no cargaba y el fallback medía distinto, dejando "ALPH I" con hueco. */}
       <text
         x="0"
         y="24"
@@ -133,24 +137,19 @@ function AlphiWordmark({ color, teal }: { color: string; teal: string }) {
         fontSize="26"
         fontWeight="800"
         letterSpacing="-0.5"
-        fill={color}
       >
-        ALPH
+        <tspan fill={color}>ALPH</tspan>
+        <tspan fill={teal}>I</tspan>
       </text>
-      <text
-        x="82"
-        y="24"
-        fontFamily="Inter, system-ui, -apple-system, sans-serif"
-        fontSize="26"
-        fontWeight="800"
-        letterSpacing="-0.5"
-        fill={teal}
-      >
-        I
-      </text>
+      {/* textLength fuerza el ancho exacto del subtítulo dentro del viewBox
+          (0 0 168 40 / 0 0 126 32): sin esto, "CLINICAL INTELLIGENCE" con el
+          fallback de fuente del sistema se pasaba del borde derecho y el SVG
+          (overflow:hidden por defecto) lo recortaba a "CLINICAL INTELLIGENC". */}
       <text
         x="1"
         y="34"
+        textLength="115"
+        lengthAdjust="spacingAndGlyphs"
         fontFamily="Inter, system-ui, -apple-system, sans-serif"
         fontSize="8"
         fontWeight="500"

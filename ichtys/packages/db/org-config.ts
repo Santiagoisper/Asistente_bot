@@ -27,19 +27,33 @@ export interface ResolvedOrgRagConfig {
   llmProvider: OrgLlmProvider
 }
 
-function normalizeLlmProvider(value: unknown): OrgLlmProvider {
+// GLM salió del producto (decisión de Santiago, E2E 2026-10-22): la cuenta
+// Z.ai es solo para programación. Una preferencia 'glm' guardada se lee como
+// 'anthropic' — migración en lectura, sin tocar la DB. Warning una vez por
+// org y por proceso para no llenar los logs.
+const orgsWarnedGlm = new Set<string>()
+
+function normalizeLlmProvider(value: unknown, orgId?: string): OrgLlmProvider {
+  // Migración suave desde config antigua
+  if (value === 'gemini') return 'google'
+  if (value === 'glm') {
+    if (orgId && !orgsWarnedGlm.has(orgId)) {
+      orgsWarnedGlm.add(orgId)
+      console.warn(
+        `[org-config] rag_config.llmProvider='glm' legado (org ${orgId}) — GLM salió del producto; se usa 'anthropic'.`,
+      )
+    }
+    return 'anthropic'
+  }
   if (
     value === 'anthropic' ||
     value === 'openai' ||
     value === 'google' ||
     value === 'groq' ||
-    value === 'glm' ||
     value === 'auto'
   ) {
     return value
   }
-  // Migración suave desde config antigua
-  if (value === 'gemini') return 'google'
   return 'auto'
 }
 
@@ -60,7 +74,7 @@ export async function getOrgRagConfig(orgId: string): Promise<ResolvedOrgRagConf
     ? Math.min(MAX_TOP_K, Math.max(1, Math.round(raw.topK)))
     : DEFAULT_TOP_K
 
-  const llmProvider = normalizeLlmProvider(raw?.llmProvider)
+  const llmProvider = normalizeLlmProvider(raw?.llmProvider, orgId)
 
   return { similarityThreshold: threshold, topK, llmProvider }
 }

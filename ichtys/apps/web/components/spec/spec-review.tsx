@@ -224,7 +224,7 @@ function CriteriaCard({
               }}
             />
           ) : (
-            <p className="text-sm leading-relaxed text-alphi-navy">{displayText}</p>
+            <p className="text-sm leading-relaxed text-alphi-navy break-words">{displayText}</p>
           )}
 
           {/* Error message */}

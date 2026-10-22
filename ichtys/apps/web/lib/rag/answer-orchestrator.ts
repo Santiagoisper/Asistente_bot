@@ -81,6 +81,7 @@ export type WrapperErrorCode =
   | 'access_denied'
   | 'retrieval_error'
   | 'answer_generation_error'
+  | 'provider_unavailable'
   | 'quota_exceeded'
 
 export class AnswerOrchestratorError extends Error {
@@ -167,6 +168,11 @@ export async function generateAnswerForStudy(
   } catch (err) {
     if (err instanceof AnswerEngineError && err.code === 'quota_exceeded') {
       throw new AnswerOrchestratorError('quota_exceeded', 'Monthly platform quota exceeded')
+    }
+    // El mensaje del engine ya viene en español y nombra el proveedor elegido:
+    // no lo aplanemos a un genérico que esconde el problema de configuración.
+    if (err instanceof AnswerEngineError && err.code === 'provider_unavailable') {
+      throw new AnswerOrchestratorError('provider_unavailable', err.message)
     }
     throw new AnswerOrchestratorError('answer_generation_error', 'Answer generation failed')
   }

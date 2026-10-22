@@ -63,7 +63,7 @@ export default async function StudiesPage() {
             <Link
               key={study.id}
               href={`/studies/${study.id}/chat`}
-              className="alphi-card group flex flex-col gap-3 p-5 transition-all duration-150 hover:border-alphi-teal/40 hover:shadow-alphi-panel"
+              className="alphi-card group flex min-w-0 flex-col gap-3 p-5 transition-all duration-150 hover:border-alphi-teal/40 hover:shadow-alphi-panel"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">

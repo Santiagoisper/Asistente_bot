@@ -10,13 +10,23 @@ import { AUTO_PROVIDER_CHAIN, type LlmProviderId, type LlmProviderPreference, ty
 
 export type { OrgLlmApiKeys }
 
+let warnedLegacyGlmDefault = false
+
 export function getDefaultProviderPreference(): LlmProviderPreference {
   const env = process.env.LLM_PROVIDER?.toLowerCase().trim()
   if (env === 'anthropic' || env === 'claude') return 'anthropic'
   if (env === 'openai' || env === 'gpt') return 'openai'
   if (env === 'google' || env === 'gemini') return 'google'
   if (env === 'groq') return 'groq'
-  if (env === 'glm' || env === 'openrouter') return 'glm'
+  // GLM salió del producto (E2E 2026-10-22): un LLM_PROVIDER=glm legado (fue
+  // el que colgó el chat de prod en octubre) ya no puede revivirlo.
+  if (env === 'glm' || env === 'openrouter') {
+    if (!warnedLegacyGlmDefault) {
+      warnedLegacyGlmDefault = true
+      console.warn('[llm] LLM_PROVIDER=glm legado — GLM salió del producto; se usa anthropic.')
+    }
+    return 'anthropic'
+  }
   return 'auto'
 }
 

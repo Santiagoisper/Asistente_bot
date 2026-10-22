@@ -26,7 +26,12 @@ export function MarketingShell({ children, eyebrow, title, description }: Market
       <header className="border-b border-alphi-border bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-4">
           <Link href="/sign-in" className="flex items-center gap-3">
-            <IchtysLogo height={26} />
+            {/* showLink=false: este logo ya está dentro del <Link> del header.
+                Con el default (showLink=true) quedaba un <a> anidado dentro
+                de otro <a> — HTML inválido que el navegador reestructura
+                distinto a como lo espera React, y produce un mismatch de
+                hidratación (error #418) apenas carga la página. */}
+            <IchtysLogo height={26} showLink={false} />
             <span className="text-alphi-muted/40" aria-hidden="true">
               ×
             </span>

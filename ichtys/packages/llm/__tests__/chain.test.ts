@@ -3,8 +3,8 @@ import { AUTO_PROVIDER_CHAIN } from '../types'
 import { getDefaultProviderPreference, isOpenAiConfigured, resolveProviderChain } from '../provider'
 
 describe('LLM provider chain', () => {
-  it('AUTO_PROVIDER_CHAIN has 5 providers in expected order', () => {
-    expect(AUTO_PROVIDER_CHAIN).toEqual(['anthropic', 'openai', 'google', 'groq', 'glm'])
+  it('AUTO_PROVIDER_CHAIN sin GLM (salió del producto, E2E 2026-10-22)', () => {
+    expect(AUTO_PROVIDER_CHAIN).toEqual(['anthropic', 'openai', 'google', 'groq'])
   })
 
   it('isProviderConfigured respects org keys over env', () => {
@@ -26,23 +26,26 @@ describe('resolveKeyForProvider', () => {
   })
 })
 
-describe('resolveProviderChain — Anthropic primario, GLM nunca único (anti-cuelle de 300 s)', () => {
+describe('resolveProviderChain — Anthropic primario (anti-cuelgue de 300 s)', () => {
   it('preferencia explícita anthropic queda como cadena de 1', () => {
     expect(resolveProviderChain('anthropic')).toEqual(['anthropic'])
   })
 
-  it('glm explícito queda como cadena de 1 (decisión de datos: sin respaldo cruzado)', () => {
-    expect(resolveProviderChain('glm')).toEqual(['glm'])
-  })
-
   it('toda preferencia explícita no-auto es cadena de 1 sin respaldo', () => {
-    for (const pref of ['anthropic', 'openai', 'google', 'groq', 'glm'] as const) {
+    for (const pref of ['anthropic', 'openai', 'google', 'groq'] as const) {
       expect(resolveProviderChain(pref)).toEqual([pref])
     }
   })
 
   it("'auto' es la única cadena multi-proveedor con el orden de AUTO_PROVIDER_CHAIN", () => {
-    expect(resolveProviderChain('auto')).toEqual(['anthropic', 'openai', 'google', 'groq', 'glm'])
+    expect(resolveProviderChain('auto')).toEqual(['anthropic', 'openai', 'google', 'groq'])
+  })
+
+  it('LLM_PROVIDER=glm legado (el que colgó prod) → default anthropic, GLM no revive', () => {
+    const prev = process.env.LLM_PROVIDER
+    process.env.LLM_PROVIDER = 'glm'
+    expect(getDefaultProviderPreference()).toBe('anthropic')
+    process.env.LLM_PROVIDER = prev
   })
 
   it('sin preferencia, default auto (cadena completa con anthropic primero)', () => {
