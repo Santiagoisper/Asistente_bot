@@ -1,6 +1,6 @@
 import type { CriterionAssessment, PatientProfile } from './profile-schema'
 
-export interface EligibilityCriterionInput {
+interface EligibilityCriterionInput {
   number: string
   text: string
   sourcePages?: number[]

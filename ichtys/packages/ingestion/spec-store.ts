@@ -126,8 +126,8 @@ export async function getApprovedSpecExamples(params: {
  * Devuelve la última versión del spec del estudio (cualquier status), o la
  * última aprobada si `approvedOnly`.
  *
- * Si la versión más alta es un "shell" vacío (p. ej. re-extracción fallida),
- * devuelve la versión anterior con contenido útil.
+ * Devuelve el último spec útil; los intentos fallidos se consultan con
+ * `getLatestSpecAttempt` para la UI de estado.
  */
 export async function getLatestStudySpec(params: {
   orgId: string
@@ -153,9 +153,58 @@ export async function getLatestStudySpec(params: {
   for (const row of rows) {
     const parsed = studySpecSchema.safeParse(row.spec)
     if (!parsed.success) continue
-    if (isMeaningfulSpec(parsed.data)) return row
+    if (!parsed.data.extractionFailed && isMeaningfulSpec(parsed.data)) return row
   }
 
-  // Fallback: última versión aunque sea solo identificación (mejor que null).
+  // Fallback: último registro legado válido aunque sea parcial, pero nunca un shell de fallo.
+  for (const row of rows) {
+    const parsed = studySpecSchema.safeParse(row.spec)
+    if (parsed.success && !parsed.data.extractionFailed) return row
+  }
+
+  return null
+}
+
+/** Devuelve siempre el intento más reciente, incluso si la extracción falló. */
+export async function getLatestSpecAttempt(params: {
+  orgId: string
+  studyId: string
+  approvedOnly?: boolean
+}): Promise<StudySpecRow | null> {
+  const tenantFilter = and(
+    eq(studySpecs.organizationId, params.orgId),
+    eq(studySpecs.studyId, params.studyId),
+  )
+
+  const rows = await db
+    .select()
+    .from(studySpecs)
+    .where(params.approvedOnly ? and(tenantFilter, eq(studySpecs.status, 'approved')) : tenantFilter)
+    .orderBy(desc(studySpecs.version))
+    .limit(1)
+
   return rows[0] ?? null
+}
+
+/** Devuelve la versión más reciente con contenido utilizable, ignorando shells de fallo. */
+export async function getLatestMeaningfulStudySpec(params: {
+  orgId: string
+  studyId: string
+}): Promise<StudySpecRow | null> {
+  const rows = await db
+    .select()
+    .from(studySpecs)
+    .where(and(
+      eq(studySpecs.organizationId, params.orgId),
+      eq(studySpecs.studyId, params.studyId),
+    ))
+    .orderBy(desc(studySpecs.version))
+    .limit(20)
+
+  for (const row of rows) {
+    const parsed = studySpecSchema.safeParse(row.spec)
+    if (parsed.success && !parsed.data.extractionFailed && isMeaningfulSpec(parsed.data)) return row
+  }
+
+  return null
 }

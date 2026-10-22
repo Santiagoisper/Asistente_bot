@@ -80,5 +80,38 @@ export const studySpecSchema = z.object({
   exclusionCriteria: z.array(eligibilityCriterionSchema),
   endpoints: z.array(studyEndpointSchema),
   visits: z.array(studyVisitSchema),
+  /** Fuente de las visitas incorporadas desde una guía SoA separada. */
+  visitsSource: z.object({
+    documentVersionId: z.string().min(1),
+    documentType: z.literal('soa'),
+  }).optional(),
+  /** Indica que la extracción no produjo un spec utilizable y permite ofrecer reintento. */
+  extractionFailed: z.boolean().optional(),
+  /** Advertencias de la extracción, guardadas junto al spec para conservar trazabilidad. */
+  extractionWarnings: z.array(z.string()).optional(),
 })
 export type StudySpec = z.infer<typeof studySpecSchema>
+
+export function emptyStudySpec(): StudySpec {
+  return {
+    identification: { protocolCode: null, title: null, phase: null, sourcePages: [] },
+    inclusionCriteria: [],
+    exclusionCriteria: [],
+    endpoints: [],
+    visits: [],
+  }
+}
+
+export function mergeSoaVisits(
+  previous: StudySpec | null,
+  visits: StudySpec['visits'],
+  documentVersionId: string,
+): StudySpec {
+  return {
+    ...(previous ?? emptyStudySpec()),
+    visits,
+    extractionFailed: false,
+    extractionWarnings: [],
+    visitsSource: { documentVersionId, documentType: 'soa' },
+  }
+}

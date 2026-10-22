@@ -33,6 +33,8 @@ const INGESTION_ERROR_LABELS: Record<string, string> = {
   blob_download_failed: 'No se pudo leer el archivo almacenado. Volvé a subirlo.',
   stuck_timeout: 'El procesamiento quedó colgado. Usá Reprocesar.',
   ingestion_internal_error: 'Error interno de ingesta.',
+  spec_extraction_failed:
+    'El documento se indexó, pero no se pudo extraer el cronograma de visitas ni los criterios automáticamente. Podés reintentar la extracción desde la pantalla del spec.',
 }
 
 function formatIngestionError(code: string | null): string | null {
@@ -80,6 +82,8 @@ export function DocumentsStatusList({ items: initialItems, studyId }: DocumentsS
   const [items, setItems] = useState<DocumentStatusItem[]>(initialItems)
   const [busyVersionId, setBusyVersionId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [pollError, setPollError] = useState<string | null>(null)
+  const pollFailuresRef = useRef(0)
   const [now, setNow] = useState<number>(() => Date.now())
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -132,16 +136,23 @@ export function DocumentsStatusList({ items: initialItems, studyId }: DocumentsS
   const fetchDocuments = useCallback(async () => {
     try {
       const res = await fetch(`/api/studies/${studyId}/documents`, { cache: 'no-store' })
-      if (!res.ok) return
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const fresh = (await res.json()) as DocumentStatusItem[]
       const wasPolling = needsPolling(itemsRef.current)
       setItems(fresh)
+      pollFailuresRef.current = 0
+      setPollError(null)
       // Refrescar server components (spec, layout) cuando termina la ingesta.
       if (wasPolling && !needsPolling(fresh)) {
         router.refresh()
       }
     } catch {
-      // silencioso — el polling reintenta en el próximo ciclo
+      // Un fallo suelto de red no se muestra (el polling reintenta solo);
+      // recién avisamos si se repite, para no alarmar por un blip.
+      pollFailuresRef.current += 1
+      if (pollFailuresRef.current >= 2) {
+        setPollError('No se pudo actualizar el estado de los documentos. Reintentando…')
+      }
     }
   }, [studyId, router])
 
@@ -219,22 +230,33 @@ export function DocumentsStatusList({ items: initialItems, studyId }: DocumentsS
   }
 
   return (
-    <div className="space-y-3 rounded-md border border-gray-200 bg-white p-4">
+    <div className="space-y-3 rounded-md border border-alphi-border bg-white p-4">
       <div>
-        <h2 className="text-sm font-semibold text-gray-900">Estado de documentos del estudio</h2>
-        <p className="text-xs text-gray-500">Mostramos la última versión de cada documento cargado.</p>
+        <h2 className="text-sm font-semibold text-alphi-navy">Estado de documentos del estudio</h2>
+        <p className="text-xs text-alphi-muted">Mostramos la última versión de cada documento cargado.</p>
       </div>
 
       {actionError ? (
-        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">{actionError}</p>
+        <p className="rounded-md border border-alphi-rose/30 bg-alphi-rose/10 px-3 py-2 text-xs text-alphi-rose">{actionError}</p>
+      ) : null}
+      {pollError ? (
+        <p className="rounded-md border border-alphi-amber/30 bg-alphi-amber/10 px-3 py-2 text-xs text-alphi-amber">{pollError}</p>
       ) : null}
 
       {sortedItems.length === 0 ? (
-        <p className="text-sm text-gray-500">Todavía no hay documentos cargados en este estudio.</p>
+        <p className="text-sm text-alphi-muted">Todavía no hay documentos cargados en este estudio.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-xs">
-            <thead className="bg-gray-50 text-gray-600">
+          <table className="min-w-[640px] w-full table-fixed text-left text-xs">
+            <colgroup>
+              <col className="w-[20%]" />
+              <col className="w-[12%]" />
+              <col className="w-[16%]" />
+              <col className="w-[8%]" />
+              <col className="w-[22%]" />
+              <col className="w-[22%]" />
+            </colgroup>
+            <thead className="bg-alphi-slate text-alphi-muted">
               <tr>
                 <th className="px-3 py-2">Documento</th>
                 <th className="px-3 py-2">Tipo</th>
@@ -244,12 +266,12 @@ export function DocumentsStatusList({ items: initialItems, studyId }: DocumentsS
                 <th className="px-3 py-2">Acción</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-alphi-border">
               {sortedItems.map((item) => (
                 <tr key={item.documentId}>
-                  <td className="px-3 py-2 text-gray-900">{item.documentName}</td>
-                  <td className="px-3 py-2 text-gray-700">{item.documentType}</td>
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-2 align-top text-alphi-navy break-words">{item.documentName}</td>
+                  <td className="px-3 py-2 align-top text-alphi-muted">{item.documentType}</td>
+                  <td className="px-3 py-2 align-top">
                     {item.status === 'processing' || item.status === 'pending' ? (
                       <ProgressIndicator
                         startedAt={
@@ -263,15 +285,15 @@ export function DocumentsStatusList({ items: initialItems, studyId }: DocumentsS
                       <StatusPill status={item.status} />
                     )}
                   </td>
-                  <td className="px-3 py-2 text-gray-700">{item.pageCount ?? '—'}</td>
-                  <td className="max-w-xs px-3 py-2 text-gray-700">
+                  <td className="px-3 py-2 align-top text-alphi-muted">{item.pageCount ?? '—'}</td>
+                  <td className="px-3 py-2 align-top text-alphi-muted">
                     {item.errorMessage ? (
                       <span className="break-words">{formatIngestionError(item.errorMessage)}</span>
                     ) : (
                       '—'
                     )}
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-2 align-top">
                     <div className="flex flex-wrap items-center gap-1.5">
                       {item.latestVersionId ? (
                         <>
@@ -285,7 +307,7 @@ export function DocumentsStatusList({ items: initialItems, studyId }: DocumentsS
                           </a>
                           <a
                             href={`/api/document-versions/${item.latestVersionId}/download`}
-                            className="rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                            className="rounded-md border border-alphi-border px-2 py-1 text-xs font-medium text-alphi-muted hover:bg-alphi-slate"
                           >
                             Descargar
                           </a>
@@ -300,7 +322,7 @@ export function DocumentsStatusList({ items: initialItems, studyId }: DocumentsS
                         onClick={() => {
                           void triggerReprocess(item)
                         }}
-                        className="rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="rounded-md border border-alphi-border px-2 py-1 text-xs font-medium text-alphi-muted hover:bg-alphi-slate disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         {busyVersionId === item.latestVersionId
                           ? 'Iniciando...'
@@ -329,10 +351,10 @@ function ProgressIndicator({ startedAt, now }: { startedAt: number; now: number 
     <div className="min-w-[150px] space-y-1">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-alphi-teal">{pct}%</span>
-        <span className="font-mono text-[10px] text-gray-400">{seconds}s</span>
+        <span className="font-mono text-[10px] text-alphi-muted">{seconds}s</span>
       </div>
       <div
-        className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100"
+        className="h-1.5 w-full overflow-hidden rounded-full bg-alphi-slate"
         role="progressbar"
         aria-valuenow={pct}
         aria-valuemin={0}
@@ -343,30 +365,37 @@ function ProgressIndicator({ startedAt, now }: { startedAt: number; now: number 
           style={{ width: `${pct}%` }}
         />
       </div>
-      <p className="text-[10px] leading-tight text-gray-500">{stageLabel(pct)}</p>
+      <p className="text-[10px] leading-tight text-alphi-muted">{stageLabel(pct)}</p>
     </div>
   )
+}
+
+const STATUS_LABEL: Record<DocumentVersionStatus, string> = {
+  ready: 'Listo',
+  processing: 'Procesando',
+  error: 'Error',
+  pending: 'Pendiente',
 }
 
 function StatusPill({ status }: { status: DocumentVersionStatus }) {
   const className =
     status === 'ready'
-      ? 'border-green-200 bg-green-50 text-green-800'
+      ? 'border-alphi-sage/30 bg-alphi-sage/10 text-alphi-sage'
       : status === 'processing'
-        ? 'border-blue-200 bg-blue-50 text-blue-800'
+        ? 'border-alphi-teal/30 bg-alphi-teal/10 text-alphi-teal'
         : status === 'error'
-          ? 'border-red-200 bg-red-50 text-red-800'
-          : 'border-gray-200 bg-gray-50 text-gray-700'
+          ? 'border-alphi-rose/30 bg-alphi-rose/10 text-alphi-rose'
+          : 'border-alphi-border bg-alphi-slate text-alphi-muted'
 
   return (
     <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${className}`}>
       {status === 'processing' ? (
         <span className="flex items-center gap-1">
-          <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
-          {status}
+          <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-alphi-teal" />
+          {STATUS_LABEL[status]}
         </span>
       ) : (
-        status
+        STATUS_LABEL[status]
       )}
     </span>
   )

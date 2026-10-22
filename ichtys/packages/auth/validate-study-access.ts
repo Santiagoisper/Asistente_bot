@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { and, eq } from 'drizzle-orm'
 import { db, studies, type Study } from '@ichtys/db'
-import { isRole, roleSatisfies, type Role } from './roles'
+import { normalizeRole, roleSatisfies, type Role } from './roles'
 import { resolveOrProvisionOrganization } from './resolve-org'
 
 /**
@@ -69,17 +69,4 @@ export async function validateStudyAccess(
   }
 
   return { userId, orgId: org.id, study }
-}
-
-/**
- * Convierte el rol de Clerk a un Role de Ichtys.
- * Clerk puede devolver "org:admin" (admin nativo) u "org:study_admin" (custom).
- * Default conservador: read_only_monitor (mínimo privilegio).
- */
-function normalizeRole(orgRole: string | null | undefined): Role {
-  if (!orgRole) return 'read_only_monitor'
-  const stripped = orgRole.replace(/^org:/, '')
-  // Clerk admin nativo ("org:admin") mapea a org_admin de Ichtys.
-  if (stripped === 'admin') return 'org_admin'
-  return isRole(stripped) ? stripped : 'read_only_monitor'
 }

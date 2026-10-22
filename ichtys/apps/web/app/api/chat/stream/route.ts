@@ -170,15 +170,29 @@ export async function POST(req: Request): Promise<Response> {
     return new Response('Internal Server Error', { status: 500 })
   }
 
-  // 9b. Load org RAG config (threshold + topK) y estado del cupo — ninguno de los dos
-  //     puede bloquear el chat si falla (ver.catch): sin datos, no se limita nada.
+  // 9b. Load org RAG config (threshold + topK), keys propias y estado del cupo.
+  //     Config RAG: fail-open con log — sin ella el chat sigue con defaults del
+  //     sistema. Cuota: FAIL-CLOSED — si no podemos conocer el estado del cupo,
+  //     el chat NO puede seguir sin límites sobre la clave de plataforma
+  //     (orden del Foreman 2026-10-22): quotaLookupFailed bloquea la platform key.
+  let quotaLookupFailed = false
   const [orgRagConfig, orgLlmApiKeys, quotaStatus] = await Promise.all([
-    getOrgRagConfig(orgId).catch(() => null),
-    getOrgLlmApiKeys(orgId).catch(() => ({})),
-    getQuotaStatus(orgId).catch(() => null),
+    getOrgRagConfig(orgId).catch((err) => {
+      console.warn(`[stream:${requestId}] getOrgRagConfig failed — using system defaults`, err)
+      return null
+    }),
+    getOrgLlmApiKeys(orgId).catch((err) => {
+      console.warn(`[stream:${requestId}] getOrgLlmApiKeys failed — env keys only`, err)
+      return {}
+    }),
+    getQuotaStatus(orgId).catch((err) => {
+      quotaLookupFailed = true
+      console.error(`[stream:${requestId}] getQuotaStatus failed — failing closed (platform key blocked)`, err)
+      return null
+    }),
   ])
   const openAiApiKey = resolveLlmApiKey('openai', orgLlmApiKeys)
-  const platformKeyBlocked = quotaStatus ? !canUsePlatformKey(quotaStatus) : false
+  const platformKeyBlocked = quotaLookupFailed ? true : quotaStatus ? !canUsePlatformKey(quotaStatus) : false
 
   // 10. Kick off auto-title for new conversations (fire-and-forget, non-blocking).
   //     Haiku + 6-word title ≈ 300-500 ms — will resolve before the LLM stream ends.
@@ -275,6 +289,12 @@ export async function POST(req: Request): Promise<Response> {
             engineEvidences = event.evidences
             engineAnswer = event.fullAnswer
             engineUsageEvents = event.usageEvents ?? []
+            if (event.timing) {
+              console.log(
+                `[stream:${requestId}] llm provider=${event.timing.provider} model=${event.timing.modelId} ` +
+                  `firstTokenMs=${event.timing.firstTokenMs} totalMs=${event.timing.totalMs}`,
+              )
+            }
           }
         }
 
@@ -393,8 +413,25 @@ export async function POST(req: Request): Promise<Response> {
             message:
               'Se agotó el cupo mensual incluido de esta organización. Cargá tu propia clave de modelo en Ajustes para seguir usando el chat, o ampliá el plan.',
           })
+        } else if (err instanceof AnswerEngineError && err.code === 'llm_timeout') {
+          enqueue({
+            type: 'error',
+            code: 'llm_timeout',
+            message:
+              'El asistente tardó demasiado en generar la respuesta y se detuvo para no dejarte esperando. Probá enviar la pregunta otra vez; si vuelve a pasar, avisanos.',
+          })
+        } else if (err instanceof AnswerEngineError && err.code === 'llm_rate_limited') {
+          enqueue({
+            type: 'error',
+            code: 'llm_rate_limited',
+            message: 'El modelo está momentáneamente saturado. Esperá unos segundos e intentá de nuevo.',
+          })
         } else {
-          enqueue({ type: 'error' })
+          enqueue({
+            type: 'error',
+            code: 'internal_error',
+            message: 'No se pudo generar la respuesta. Intentá de nuevo en unos instantes.',
+          })
         }
       } finally {
         controller.close()

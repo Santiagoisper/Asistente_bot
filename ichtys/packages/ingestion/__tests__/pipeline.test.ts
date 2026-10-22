@@ -125,6 +125,7 @@ vi.mock('../parser', () => ({
 
 const specMocks = vi.hoisted(() => ({
   extractStudySpec: vi.fn(),
+  getLatestMeaningfulStudySpec: vi.fn(),
   saveStudySpec: vi.fn(),
   reextractStudySpec: vi.fn(),
 }))
@@ -132,10 +133,12 @@ const specMocks = vi.hoisted(() => ({
 vi.mock('../spec-extractor', () => ({
   SPEC_EXTRACTION_LLM_PROVIDER: 'glm',
   extractStudySpec: specMocks.extractStudySpec,
+  getExtractionModelId: () => 'claude-opus-5-5',
 }))
 
 vi.mock('../spec-store', () => ({
   getApprovedSpecExamples: vi.fn(async () => []),
+  getLatestMeaningfulStudySpec: specMocks.getLatestMeaningfulStudySpec,
   isMeaningfulSpec: vi.fn(() => true),
   saveStudySpec: specMocks.saveStudySpec,
 }))
@@ -219,7 +222,9 @@ function createFixture(): PipelineFixture {
       documentId,
       organizationId: orgId,
       studyId,
-      blobUrl: crypto.randomUUID(),
+      // Objeto legado de un store PUBLICO: el pipeline lo lee con fetch plano
+      // (los objetos nuevos van al store privado y pasan por el SDK).
+      blobUrl: `https://store.public.blob.vercel-storage.com/${crypto.randomUUID()}.pdf`,
       blobKey: `clinical-documents/${crypto.randomUUID()}/document.pdf`,
       pageCount: null,
       fileSizeBytes: 100,
@@ -255,6 +260,8 @@ describe('runIngestion', () => {
       extractionModel: 'modelo-sintetico',
       detectedLanguage: null,
     })
+    specMocks.reextractStudySpec.mockResolvedValue({ version: 2, richness: 1 })
+    specMocks.getLatestMeaningfulStudySpec.mockResolvedValue(null)
     specMocks.saveStudySpec.mockResolvedValue({ id: 'spec-1', version: 1 })
     mocks.transaction.mockImplementation(async (callback) => callback(createDbClient()))
     // Mock global fetch — pipeline uses fetch(blobUrl) for public blobs.
@@ -413,10 +420,12 @@ describe('runIngestion: reintentos y paralelismo', () => {
       extractionModel: 'modelo-sintetico',
       detectedLanguage: null,
     })
+    specMocks.reextractStudySpec.mockResolvedValue({ version: 2, richness: 1 })
+    specMocks.getLatestMeaningfulStudySpec.mockResolvedValue(null)
     specMocks.saveStudySpec.mockResolvedValue({ id: 'spec-1', version: 1 })
   })
 
-  function arrange(documentType: 'protocol' | 'lab_manual' = 'protocol'): PipelineFixture {
+  function arrange(documentType: 'protocol' | 'soa' | 'lab_manual' = 'protocol'): PipelineFixture {
     const fixture = createFixture()
     mocks.documentVersionsFindFirst.mockResolvedValue(fixture.documentVersion)
     mocks.documentsFindFirst.mockResolvedValue({ ...fixture.document, documentType })
@@ -474,6 +483,11 @@ describe('runIngestion: reintentos y paralelismo', () => {
 
     expect(result.status).toBe('ready')
     expect(specMocks.saveStudySpec).toHaveBeenCalledTimes(1)
+    expect(specMocks.extractStudySpec).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.any(Array),
+      expect.objectContaining({ protocolPdf: expect.any(Uint8Array) }),
+    )
   })
 
   it('no guarda un borrador de spec si los embeddings fallan', async () => {
@@ -487,7 +501,7 @@ describe('runIngestion: reintentos y paralelismo', () => {
     expect(specMocks.saveStudySpec).not.toHaveBeenCalled()
   })
 
-  it('un fallo de la extraccion del spec no falla la ingesta', async () => {
+  it('mantiene ready y registra el fallo si falla la extraccion del spec', async () => {
     const fixture = arrange()
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
     specMocks.extractStudySpec.mockRejectedValue(new Error('llm caido'))
@@ -496,10 +510,15 @@ describe('runIngestion: reintentos y paralelismo', () => {
     const result = await runIngestion(fixture.input)
 
     expect(result.status).toBe('ready')
-    expect(specMocks.saveStudySpec).not.toHaveBeenCalled()
+    expect(result.errorMessage).toBeUndefined()
+    expect(specMocks.saveStudySpec).toHaveBeenCalledTimes(1)
+    expect(specMocks.saveStudySpec.mock.calls[0]?.[0].spec).toMatchObject({
+      extractionFailed: true,
+      extractionWarnings: [expect.stringContaining('falló')],
+    })
   })
 
-  it('si el spec no llega antes del tope del trabajo, lo omite y la ingesta igual termina', async () => {
+  it('mantiene ready y registra el timeout si el spec no llega antes del tope', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
     try {
       const fixture = arrange()
@@ -524,7 +543,12 @@ describe('runIngestion: reintentos y paralelismo', () => {
       const result = await running
 
       expect(result.status).toBe('ready')
-      expect(specMocks.saveStudySpec).not.toHaveBeenCalled()
+      expect(result.errorMessage).toBeUndefined()
+      expect(specMocks.saveStudySpec).toHaveBeenCalledTimes(1)
+      expect(specMocks.saveStudySpec.mock.calls[0]?.[0].spec).toMatchObject({
+        extractionFailed: true,
+        extractionWarnings: [expect.stringContaining('excedió')],
+      })
     } finally {
       vi.useRealTimers()
     }
@@ -550,6 +574,158 @@ describe('runIngestion: reintentos y paralelismo', () => {
 
     expect(result.status).toBe('ready')
     expect(specMocks.extractStudySpec).not.toHaveBeenCalled()
+  })
+
+  it('extrae spec para documentos del tipo soa', async () => {
+    const fixture = arrange('soa')
+    specMocks.extractStudySpec.mockResolvedValue({
+      spec: {
+        identification: { protocolCode: null, title: null, phase: null, sourcePages: [] },
+        inclusionCriteria: [],
+        exclusionCriteria: [],
+        endpoints: [],
+        visits: [{ name: 'Visita SoA', label: null, day: 1, windowDays: null, procedures: ['ECG'], sourcePages: [2], confidence: 'high' }],
+      },
+      warnings: [],
+      extractionModel: 'modelo-sintetico',
+      detectedLanguage: null,
+    })
+    mocks.indexDocumentVersionChunks.mockResolvedValue({ embeddedChunkCount: 2 })
+
+    const result = await runIngestion(fixture.input)
+
+    expect(result.status).toBe('ready')
+    expect(specMocks.extractStudySpec).toHaveBeenCalledTimes(1)
+    expect(specMocks.extractStudySpec.mock.calls[0]?.[2]).toMatchObject({ visitsOnly: true })
+  })
+
+  it('SoA reemplaza solo visitas y conserva identification, criterios y endpoints del protocolo', async () => {
+    const fixture = arrange('soa')
+    const priorSpec = {
+      identification: { protocolCode: 'ABC-101', title: 'Estudio', phase: '3', sourcePages: [1] },
+      inclusionCriteria: [{ number: '1', text: 'Mayores de edad', sourcePages: [10], confidence: 'high' }],
+      exclusionCriteria: [{ number: '2', text: 'Sin enfermedad', sourcePages: [11], confidence: 'medium' }],
+      endpoints: [{ type: 'primary', objective: 'Evaluar eficacia', endpoint: 'Cambio clínico', sourcePages: [20], confidence: 'high' }],
+      visits: [{ name: 'Visita previa', label: null, day: 1, windowDays: null, procedures: ['ECG'], sourcePages: [30], confidence: 'high' }],
+    }
+    specMocks.getLatestMeaningfulStudySpec.mockResolvedValue({
+      documentVersionId: 'protocol-version-1',
+      spec: priorSpec,
+    })
+    specMocks.extractStudySpec.mockResolvedValue({
+      spec: {
+        ...priorSpec,
+        identification: { protocolCode: null, title: null, phase: null, sourcePages: [] },
+        inclusionCriteria: [],
+        exclusionCriteria: [],
+        endpoints: [],
+        visits: [{ name: 'Visita SoA 1', label: 'Semana 4', day: 28, windowDays: 2, procedures: ['PK'], sourcePages: [3], confidence: 'high' }],
+      },
+      warnings: [],
+      extractionModel: 'modelo-sintetico',
+      detectedLanguage: null,
+    })
+    mocks.indexDocumentVersionChunks.mockResolvedValue({ embeddedChunkCount: 2 })
+
+    await runIngestion(fixture.input)
+
+    const saved = specMocks.saveStudySpec.mock.calls[0]?.[0]
+    expect(saved?.documentVersionId).toBe('protocol-version-1')
+    expect(saved?.spec).toMatchObject({
+      identification: priorSpec.identification,
+      inclusionCriteria: priorSpec.inclusionCriteria,
+      exclusionCriteria: priorSpec.exclusionCriteria,
+      endpoints: priorSpec.endpoints,
+      visits: [{ name: 'Visita SoA 1' }],
+      visitsSource: { documentVersionId: fixture.input.documentVersionId, documentType: 'soa' },
+    })
+  })
+
+  it('SoA sin spec meaningful previo guarda solo visitas con visitsSource', async () => {
+    const fixture = arrange('soa')
+    specMocks.extractStudySpec.mockResolvedValue({
+      spec: {
+        identification: { protocolCode: null, title: null, phase: null, sourcePages: [] },
+        inclusionCriteria: [],
+        exclusionCriteria: [],
+        endpoints: [],
+        visits: [{ name: 'Visita 1', label: null, day: 1, windowDays: null, procedures: ['ECG'], sourcePages: [2], confidence: 'high' }],
+      },
+      warnings: [],
+      extractionModel: 'modelo-sintetico',
+      detectedLanguage: null,
+    })
+    mocks.indexDocumentVersionChunks.mockResolvedValue({ embeddedChunkCount: 2 })
+
+    await runIngestion(fixture.input)
+
+    expect(specMocks.saveStudySpec.mock.calls[0]?.[0].spec).toMatchObject({
+      identification: { protocolCode: null, title: null, phase: null, sourcePages: [] },
+      inclusionCriteria: [],
+      exclusionCriteria: [],
+      endpoints: [],
+      visits: [{ name: 'Visita 1' }],
+      visitsSource: { documentVersionId: fixture.input.documentVersionId, documentType: 'soa' },
+    })
+  })
+
+  it('un protocolo posterior a SoA reemplaza el spec completo sin visitsSource', async () => {
+    const fixture = arrange('protocol')
+    specMocks.getLatestMeaningfulStudySpec.mockResolvedValue({ documentVersionId: 'soa-version-1', spec: {} })
+    specMocks.extractStudySpec.mockResolvedValue({
+      spec: {
+        identification: { protocolCode: 'NEW-2026', title: 'Protocolo', phase: '2', sourcePages: [1] },
+        inclusionCriteria: [{ number: '1', text: 'Criterio nuevo', sourcePages: [8], confidence: 'high' }],
+        exclusionCriteria: [],
+        endpoints: [{ type: 'primary', objective: 'Objetivo nuevo', endpoint: 'Endpoint nuevo', sourcePages: [12], confidence: 'high' }],
+        visits: [{ name: 'Visita protocolo', label: null, day: 1, windowDays: null, procedures: ['ECG'], sourcePages: [20], confidence: 'high' }],
+      },
+      warnings: [],
+      extractionModel: 'modelo-sintetico',
+      detectedLanguage: null,
+    })
+    mocks.indexDocumentVersionChunks.mockResolvedValue({ embeddedChunkCount: 2 })
+
+    await runIngestion(fixture.input)
+
+    expect(specMocks.getLatestMeaningfulStudySpec).not.toHaveBeenCalled()
+    expect(specMocks.saveStudySpec.mock.calls[0]?.[0].spec).toMatchObject({
+      identification: { protocolCode: 'NEW-2026' },
+      inclusionCriteria: [{ text: 'Criterio nuevo' }],
+      endpoints: [{ objective: 'Objetivo nuevo' }],
+      visits: [{ name: 'Visita protocolo' }],
+    })
+    expect(specMocks.saveStudySpec.mock.calls[0]?.[0].spec).not.toHaveProperty('visitsSource')
+  })
+
+  it('mantiene ready y registra extractionFailed si persistSpecDraft lanza', async () => {
+    const fixture = arrange()
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    specMocks.extractStudySpec.mockResolvedValue({
+      spec: {
+        identification: { protocolCode: null, title: null, phase: null, sourcePages: [] },
+        inclusionCriteria: [{ number: '1', text: 'Adultos', sourcePages: [1], confidence: 'high' }],
+        exclusionCriteria: [],
+        endpoints: [],
+        visits: [],
+      },
+      warnings: [],
+      extractionModel: 'modelo-sintetico',
+      detectedLanguage: null,
+    })
+    specMocks.saveStudySpec
+      .mockRejectedValueOnce(new Error('store unavailable'))
+      .mockResolvedValueOnce({ id: 'failed-spec', version: 2 })
+    mocks.indexDocumentVersionChunks.mockResolvedValue({ embeddedChunkCount: 2 })
+
+    const result = await runIngestion(fixture.input)
+
+    expect(result.status).toBe('ready')
+    expect(specMocks.saveStudySpec).toHaveBeenCalledTimes(2)
+    expect(specMocks.saveStudySpec.mock.calls[1]?.[0].spec).toMatchObject({
+      extractionFailed: true,
+      extractionWarnings: [expect.stringContaining('No se pudo guardar')],
+    })
   })
 
   it('registra los tiempos por etapa sin incluir texto del documento', async () => {

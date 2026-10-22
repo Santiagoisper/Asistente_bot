@@ -3,12 +3,12 @@ import { z } from 'zod'
 import { recordUsage } from '@ichtys/db'
 import { runWithLlmFallback, type LlmProviderPreference, type OrgLlmApiKeys } from '@ichtys/llm'
 import type { ParsedPage } from './parser'
+import { cropPdfPages } from './parser'
 import {
   eligibilityCriterionSchema,
   studyEndpointSchema,
   studyIdentificationSchema,
   studySpecSchema,
-  studyVisitSchema,
   type StudySpec,
 } from './study-spec'
 
@@ -77,7 +77,7 @@ export const MAX_SECTION_PAGES = 30
 export const MAX_OUTPUT_TOKENS = 16_000
 
 export function getExtractionModelId(): string {
-  return process.env.SPEC_EXTRACTION_MODEL ?? 'claude-sonnet-4-6'
+  return process.env.SPEC_EXTRACTION_MODEL ?? 'claude-opus-5-5'
 }
 
 /** Spec extraction siempre usa Claude — independiente del proveedor de chat de la org. */
@@ -90,6 +90,10 @@ export interface ExtractStudySpecOptions {
   orgId?: string | null
   studyId?: string | null
   userId?: string | null
+  /** PDF fuente ya descargado, para procesar visualmente solo secciones tabulares. */
+  protocolPdf?: Uint8Array
+  /** Una guía SoA aporta visitas, sin reextraer identificación, criterios ni endpoints. */
+  visitsOnly?: boolean
 }
 
 type UsageRecordingCtx = Pick<ExtractStudySpecOptions, 'orgId' | 'studyId' | 'userId'>
@@ -102,15 +106,27 @@ async function generateSpecObject<T>(params: {
   providerPreference?: LlmProviderPreference
   orgApiKeys?: OrgLlmApiKeys | null
   usageCtx?: UsageRecordingCtx
+  pdf?: Uint8Array
 }): Promise<{ object: T; modelId: string }> {
   const { result, provider, modelId, usage, keySource } = await runWithLlmFallback(
     { purpose: 'spec', providerPreference: params.providerPreference, orgApiKeys: params.orgApiKeys },
-    async (model, _provider, reportUsage) => {
+    async (model, _provider, reportUsage, signal) => {
       const response = await generateObject({
         model,
+        abortSignal: signal,
         schema: params.schema,
         system: params.system,
-        prompt: params.prompt,
+        ...(params.pdf
+          ? {
+              messages: [{
+                role: 'user' as const,
+                content: [
+                  { type: 'file' as const, data: params.pdf, mimeType: 'application/pdf' },
+                  { type: 'text' as const, text: params.prompt },
+                ],
+              }],
+            }
+          : { prompt: params.prompt }),
         maxTokens: params.maxTokens,
       })
       reportUsage({ inputTokens: response.usage?.promptTokens ?? 0, outputTokens: response.usage?.completionTokens ?? 0 })
@@ -421,7 +437,15 @@ const endpointsGroupSchema = z.object({
 })
 
 const visitsGroupSchema = z.object({
-  visits: z.array(studyVisitSchema),
+  visits: z.array(z.object({
+    name: z.string().min(1),
+    label: z.string().nullable(),
+    day: z.number().nullable(),
+    windowDays: z.number().nullable(),
+    procedures: z.array(z.string()),
+    sourcePages: z.array(z.number().int().positive()).min(1),
+    confidence: z.enum(['high', 'medium', 'low']),
+  })),
 })
 
 const identificationGroupSchema = z.object({
@@ -479,17 +503,113 @@ async function extractGroup<T>(
   providerPreference?: LlmProviderPreference,
   orgApiKeys?: OrgLlmApiKeys | null,
   usageCtx?: UsageRecordingCtx,
+  pdf?: Uint8Array,
+  originalPageStart?: number,
+  originalPageEnd?: number,
 ): Promise<{ data: T; modelId: string }> {
   const { object, modelId } = await generateSpecObject({
     schema,
     providerPreference,
     orgApiKeys,
     usageCtx,
+    pdf,
     system: SPEC_EXTRACTION_SYSTEM_PROMPT,
-    prompt: `${instruction}${fewShotContext}\n\nPROTOCOL PAGES:\n${context}`,
+    prompt: `${instruction}${fewShotContext}\n\n${pdf ? `The attached PDF contains original PDF pages ${originalPageStart} through ${originalPageEnd}, in order. Its first page is original page ${originalPageStart}. Use [PAGE N] below for sourcePages, not cropped-PDF local page numbers.\n\n` : ''}PROTOCOL PAGES:\n${context}`,
     maxTokens: MAX_OUTPUT_TOKENS,
   })
   return { data: object, modelId }
+}
+
+function validateExtractedVisits(
+  result: { visits: StudySpec['visits'] },
+  pages: ParsedPage[],
+  warnings: string[],
+): { visits: StudySpec['visits'] } {
+  const visits = result.visits
+  const invalid = new Set<number>()
+  const seenNames = new Map<string, number>()
+
+  for (const [index, visit] of visits.entries()) {
+    const key = visit.name.trim().toLocaleLowerCase()
+    const previous = seenNames.get(key)
+    if (previous !== undefined) {
+      invalid.add(previous)
+      invalid.add(index)
+      warnings.push(`visits: duplicate visit name "${visit.name}"`)
+    } else {
+      seenNames.set(key, index)
+    }
+
+    if (visit.procedures.every((procedure) => !procedure.trim())) {
+      invalid.add(index)
+      warnings.push(`visits: "${visit.name}" has no procedures`)
+    } else if (visit.procedures.some((procedure) => !procedure.trim())) {
+      invalid.add(index)
+      warnings.push(`visits: "${visit.name}" contains an empty procedure`)
+    }
+
+    if (visit.day !== null && !Number.isInteger(visit.day)) {
+      invalid.add(index)
+      warnings.push(`visits: "${visit.name}" has a non-integer study day`)
+    }
+    if (visit.windowDays !== null && (!Number.isInteger(visit.windowDays) || visit.windowDays < 0)) {
+      invalid.add(index)
+      warnings.push(`visits: "${visit.name}" has an invalid visit window`)
+    }
+  }
+
+  let previousDay: number | null = null
+  for (const [index, visit] of visits.entries()) {
+    if (visit.day === null) continue
+    if (previousDay !== null && visit.day < previousDay) {
+      invalid.add(index)
+      warnings.push(`visits: visits are not ordered by day near "${visit.name}"`)
+    }
+    previousDay = visit.day
+  }
+
+  const sourceText = pages.map((page) => page.rawText).join('\n')
+  const columnLabels = new Set(
+    sourceText.match(/\b(?:visit|visita)\s*#?\s*\d+\b/gi)
+      ?.map((label) => label.trim().replace(/\s+/g, ' ').toLocaleLowerCase()) ?? [],
+  )
+  if (columnLabels.size > 0 && (visits.length > columnLabels.size * 3 || columnLabels.size > visits.length * 2)) {
+    warnings.push(
+      `visits: extracted visit count (${visits.length}) is inconsistent with ${columnLabels.size} detected visit/time labels`,
+    )
+  }
+
+  return {
+    visits: visits.map((visit, index) => ({
+      ...visit,
+      day: visit.day === null || Number.isInteger(visit.day) ? visit.day : null,
+      windowDays:
+        visit.windowDays === null || (Number.isInteger(visit.windowDays) && visit.windowDays >= 0)
+          ? visit.windowDays
+          : null,
+      procedures: visit.procedures.map((procedure) => procedure.trim()).filter(Boolean),
+      confidence: invalid.has(index) ? 'low' as const : visit.confidence,
+    })),
+  }
+}
+
+function safeProviderError(error: unknown): { name: string; code: string; status: string } {
+  const value = error && typeof error === 'object' ? error as Record<string, unknown> : {}
+  const safeToken = (candidate: unknown): string | null =>
+    typeof candidate === 'string' && /^[a-zA-Z0-9_.-]{1,64}$/.test(candidate) ? candidate : null
+  return {
+    name: safeToken(value.name) ?? 'UnknownError',
+    code: safeToken(value.code) ?? 'unknown',
+    status: typeof value.status === 'number' && Number.isFinite(value.status) ? String(value.status) : 'n/a',
+  }
+}
+
+function recordProviderFailure(stage: string, error: unknown): string {
+  const details = safeProviderError(error)
+  console.warn(
+    `[spec-extractor] ${stage} provider failure name=${details.name} status=${details.status} code=${details.code}`,
+  )
+  return `extraction_failed: el proveedor no devolvió una respuesta utilizable (código ${details.code})`
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -529,8 +649,7 @@ export async function extractStudySpec(
       (fewShotExamples.length > 0 ? ` few-shot=${fewShotExamples.length}` : ''),
     )
   } catch (err) {
-    const cause = err instanceof Error ? err.message : String(err)
-    warnings.push(`section-location: semantic locator failed — ${cause}`)
+    warnings.push(`section-location: ${recordProviderFailure('semantic locator', err)}`)
     // Fallback conservador: solo la identificación (primeras 5 páginas)
     const lastPage = pages[pages.length - 1]?.pageNumber ?? 1
     sectionMap = {
@@ -560,21 +679,62 @@ export async function extractStudySpec(
       return empty
     }
     const fewShot = buildFewShotContext(fewShotExamples, group)
+    const sectionPages = pagesInRange(pages, range)
+    const context = buildSectionContext(sectionPages)
+    let visualPdf: Uint8Array | undefined
+    if (options.protocolPdf && (group === 'visits' || group === 'eligibility')) {
+      try {
+        visualPdf = await cropPdfPages(options.protocolPdf, range.pageStart, range.pageEnd)
+        if (visualPdf.byteLength > 24 * 1024 * 1024) {
+          visualPdf = undefined
+          warnings.push(`${group}: visual PDF exceeds Anthropic request size limit; text fallback used`)
+        }
+      } catch {
+        warnings.push(`${group}: visual PDF preparation failed; text fallback used`)
+      }
+    }
     try {
       const extracted = await extractGroup(
         schema,
         GROUP_INSTRUCTIONS[group],
-        buildSectionContext(pagesInRange(pages, range)),
+        context,
         fewShot,
         llmProviderPreference,
         llmApiKeys,
         usageCtx,
+        visualPdf,
+        range.pageStart,
+        range.pageEnd,
       )
       extractionModelUsed = extracted.modelId
-      return extracted.data
+      return group === 'visits'
+        ? validateExtractedVisits(extracted.data as { visits: StudySpec['visits'] }, sectionPages, warnings) as T
+        : extracted.data
     } catch (err) {
-      const cause = err instanceof Error ? err.message : String(err)
-      warnings.push(`${group}: extraction failed (P${range.pageStart}–P${range.pageEnd}) — ${cause}`)
+      let extractionError = err
+      if (visualPdf) {
+        warnings.push(`${group}: visual PDF extraction failed; text fallback used`)
+        try {
+          const extracted = await extractGroup(
+            schema,
+            GROUP_INSTRUCTIONS[group],
+            context,
+            fewShot,
+            llmProviderPreference,
+            llmApiKeys,
+            usageCtx,
+          )
+          extractionModelUsed = extracted.modelId
+          return group === 'visits'
+            ? validateExtractedVisits(extracted.data as { visits: StudySpec['visits'] }, sectionPages, warnings) as T
+            : extracted.data
+        } catch (fallbackErr) {
+          extractionError = fallbackErr
+        }
+      }
+      warnings.push(
+        `${group} (P${range.pageStart}–P${range.pageEnd}): ${recordProviderFailure(group, extractionError)}`,
+      )
       return empty
     }
   }
@@ -597,8 +757,7 @@ export async function extractStudySpec(
       extractionModelUsed = extracted.modelId
       return extracted.data
     } catch (err) {
-      const cause = err instanceof Error ? err.message : String(err)
-      warnings.push(`identification: extraction failed — ${cause}`)
+      warnings.push(`identification: ${recordProviderFailure('identification', err)}`)
       return {
         identification: { protocolCode: null, title: null, phase: null, sourcePages: [] },
       }
@@ -606,12 +765,14 @@ export async function extractStudySpec(
   }
 
   const [identification, eligibility, endpoints, visits] = await Promise.all([
-    runIdentification(),
-    runGroup('eligibility', eligibilityGroupSchema, {
+    options.visitsOnly
+      ? Promise.resolve({ identification: { protocolCode: null, title: null, phase: null, sourcePages: [] } })
+      : runIdentification(),
+    options.visitsOnly ? Promise.resolve({ inclusionCriteria: [], exclusionCriteria: [] }) : runGroup('eligibility', eligibilityGroupSchema, {
       inclusionCriteria: [],
       exclusionCriteria: [],
     }),
-    runGroup('endpoints', endpointsGroupSchema, { endpoints: [] }),
+    options.visitsOnly ? Promise.resolve({ endpoints: [] }) : runGroup('endpoints', endpointsGroupSchema, { endpoints: [] }),
     runGroup('visits', visitsGroupSchema, { visits: [] }),
   ])
 

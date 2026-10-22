@@ -122,6 +122,11 @@ const mocks = vi.hoisted(() => ({
   conversationsFindFirst: vi.fn<FindFirst<Conversation>>(),
   citationsFindMany: vi.fn<FindMany<Citation>>(),
   runIngestion: vi.fn<(input: IngestionContextInput) => Promise<IngestionRouteResult>>(),
+  // db.select({value: count()}).from(x).where(y) del endpoint de estado de ingesta.
+  selectChain: {
+    from: vi.fn().mockReturnThis(),
+    where: vi.fn().mockResolvedValue([{ value: 0 }]),
+  },
   transaction: vi.fn<(callback: TransactionCallback) => Promise<unknown>>(),
   txInsert: vi.fn<(table: unknown) => InsertValuesBuilder>().mockReturnValue({
     values: vi.fn().mockResolvedValue(undefined),
@@ -158,14 +163,18 @@ vi.mock('drizzle-orm', () => ({
 
 vi.mock('@ichtys/db', () => ({
   // Enums needed at module-load time by rag/retriever.ts and rag/answer-engine.ts
-  documentType: ['protocol', 'investigator_brochure', 'lab_manual', 'pharmacy_manual', 'other'],
+  documentType: ['protocol', 'soa', 'investigator_brochure', 'lab_manual', 'pharmacy_manual', 'other'],
   answerConfidence: ['high', 'medium', 'low', 'insufficient_evidence'],
   EMBEDDING_DIMENSIONS: 1536,
-  // Drizzle operators re-exported from @ichtys/db (used by lib/chat/persistence.ts)
+  // Drizzle operators re-exported from @ichtys/db (used by lib/chat/persistence.ts
+  // y por el endpoint de estado de ingesta)
   and: mocks.and,
   eq: mocks.eq,
   inArray: vi.fn(() => ({ kind: 'inArray' })),
+  count: vi.fn(() => 'count()'),
+  isNotNull: vi.fn((col: unknown) => ({ kind: 'isNotNull', col })),
   db: {
+    select: vi.fn().mockReturnValue(mocks.selectChain),
     insert: mocks.txInsert,
     transaction: mocks.transaction,
     query: {
@@ -228,6 +237,7 @@ vi.mock('@ichtys/db', () => ({
   },
   chunks: {
     id: 'chunks.id',
+    documentVersionId: 'chunks.documentVersionId',
     organizationId: 'chunks.organizationId',
     studyId: 'chunks.studyId',
     documentType: 'chunks.documentType',
@@ -853,8 +863,11 @@ describe('object-level authorization', () => {
       documentId: errorFixture.documentId,
       latestDocumentVersionId: errorFixture.documentVersionId,
       status: 'error',
-      errorMessage: 'Document processing failed',
+      // Código interno desconocido → mensaje genérico en español; NUNCA el
+      // errorMessage crudo (el fixture pone un stack trace, no un código válido).
+      errorMessage: 'No pudimos procesar el documento. Probá de nuevo o escribinos si sigue fallando.',
     })
+    expect(String((errorBody as { errorMessage: string }).errorMessage)).not.toContain('stack trace')
   })
 
   it('citations rejects a messageId from another org', async () => {

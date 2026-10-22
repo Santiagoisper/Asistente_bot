@@ -7,11 +7,13 @@ export function SpecReextractButton({ studyId }: { studyId: string }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [isError, setIsError] = useState(false)
 
   async function handleClick(): Promise<void> {
     if (loading) return
     setLoading(true)
     setMessage(null)
+    setIsError(false)
     try {
       const res = await fetch(`/api/studies/${encodeURIComponent(studyId)}/spec/reextract`, {
         method: 'POST',
@@ -23,6 +25,7 @@ export function SpecReextractButton({ studyId }: { studyId: string }) {
         status?: string
       }
       if (!res.ok) {
+        setIsError(true)
         setMessage(payload.error ?? 'No se pudo completar la re-extracción.')
         return
       }
@@ -32,6 +35,7 @@ export function SpecReextractButton({ studyId }: { studyId: string }) {
       )
       router.refresh()
     } catch {
+      setIsError(true)
       setMessage('Error de red al iniciar la re-extracción.')
     } finally {
       setLoading(false)
@@ -46,9 +50,13 @@ export function SpecReextractButton({ studyId }: { studyId: string }) {
         disabled={loading}
         onClick={() => void handleClick()}
       >
-        {loading ? 'Extrayendo (2–5 min)…' : 'Re-extraer spec completo'}
+        {loading ? 'Reintentando (2–5 min)…' : 'Reintentar extracción'}
       </button>
-      {message && <p className="mt-2 text-xs text-alphi-muted">{message}</p>}
+      {message && (
+        <p className={['mt-2 text-xs', isError ? 'text-alphi-rose' : 'text-alphi-muted'].join(' ')}>
+          {message}
+        </p>
+      )}
     </div>
   )
 }

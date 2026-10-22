@@ -4,6 +4,12 @@ import { resolveOrProvisionOrganization } from '@ichtys/auth'
 import { db, eq, studies } from '@ichtys/db'
 import { CreateStudyForm } from '../../../components/documents/create-study-form'
 
+const STUDY_STATUS_LABEL: Record<string, string> = {
+  active: 'Activo',
+  closed: 'Cerrado',
+  archived: 'Archivado',
+}
+
 export default async function StudiesPage() {
   const { orgId: clerkOrgId } = await auth()
   let studyList: { id: string; name: string; protocolNumber: string | null; status: string; createdAt: Date }[] = []
@@ -25,7 +31,7 @@ export default async function StudiesPage() {
       <div className="flex items-center justify-between">
         <div>
           <p className="alphi-label mb-1">Mis estudios</p>
-          <h1 className="text-2xl font-bold text-alphi-navy">Estudios clinicos</h1>
+          <h1 className="text-2xl font-bold text-alphi-navy">Estudios clínicos</h1>
           <p className="mt-1 text-sm text-alphi-muted">
             {activeCount} activo{activeCount !== 1 ? 's' : ''} &middot; {studyList.length} en total
           </p>
@@ -44,9 +50,9 @@ export default async function StudiesPage() {
       {studyList.length === 0 ? (
         <div className="alphi-card flex flex-col items-center justify-center gap-4 py-16 text-center">
           <div>
-            <p className="text-base font-bold text-alphi-navy">Sin estudios todavia</p>
+            <p className="text-base font-bold text-alphi-navy">Sin estudios todavía</p>
             <p className="mt-1 max-w-xs text-sm text-alphi-muted">
-              Crea tu primer estudio, subi el protocolo y empieza a consultar.
+              Creá tu primer estudio, subí el protocolo y empezá a consultar.
             </p>
           </div>
           <CreateStudyForm />
@@ -74,7 +80,7 @@ export default async function StudiesPage() {
                     ? 'border-alphi-sage/30 bg-alphi-sage/10 text-alphi-sage'
                     : 'border-alphi-border bg-alphi-slate text-alphi-muted',
                 ].join(' ')}>
-                  {study.status === 'active' ? 'Activo' : study.status}
+                  {STUDY_STATUS_LABEL[study.status] ?? study.status}
                 </span>
               </div>
               <div className="flex items-center justify-between">

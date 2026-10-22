@@ -5,18 +5,10 @@ import {
   organizations,
   studies,
   subjects,
-  type Study,
   type Subject,
 } from '@ichtys/db'
-import { canAccessPhiData, isRole, type Role } from './roles'
+import { canAccessPhiData, normalizeRole } from './roles'
 import { AccessError, type StudyAccessContext } from './validate-study-access'
-
-function normalizeRole(orgRole: string | null | undefined): Role {
-  if (!orgRole) return 'read_only_monitor'
-  const stripped = orgRole.replace(/^org:/, '')
-  if (stripped === 'admin') return 'org_admin'
-  return isRole(stripped) ? stripped : 'read_only_monitor'
-}
 
 /**
  * Valida acceso al estudio + permiso PHI (coordinador, PI, study_admin, org_admin).
@@ -97,5 +89,3 @@ export async function validateSubjectAccess(subjectId: string): Promise<SubjectA
 
   return { userId, orgId: org.id, study, subject }
 }
-
-export type { Study }

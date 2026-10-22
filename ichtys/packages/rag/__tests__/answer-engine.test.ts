@@ -49,7 +49,7 @@ vi.mock('ai', () => ({ generateObject: mocks.generateObject, streamText: mocks.s
 vi.mock('@ichtys/db', () => ({
   answerConfidence: ['high', 'medium', 'low', 'insufficient_evidence'] as const,
   EMBEDDING_DIMENSIONS: 1536,
-  documentType: ['protocol', 'investigator_brochure', 'lab_manual', 'pharmacy_manual', 'other'],
+  documentType: ['protocol', 'soa', 'investigator_brochure', 'lab_manual', 'pharmacy_manual', 'other'],
   chunks: {},
   db: { select: vi.fn() },
 }))

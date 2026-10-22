@@ -561,8 +561,7 @@ if (isMain) {
 }
 
 // ---------------------------------------------------------------------------
-// Legacy exports (backwards compat with pre-10B code)
+// Public re-exports
 // ---------------------------------------------------------------------------
 
-export { aggregate, aggregateResults, evaluateCase, evaluateFormalCase } from './metrics'
-export type { AggregateMetrics, CaseEvaluation } from './metrics'
+export { aggregateResults, evaluateFormalCase } from './metrics'

@@ -84,7 +84,7 @@ Antes de entregar, el cambio DEBE:
 ## 5. Layout (referencia rápida)
 
 ```
-apps/web          # Next.js 15 App Router (UI + API routes)
+apps/web          # Next.js 16 App Router (UI + API routes)
 packages/db       # Drizzle schema, client, migrations   (@ichtys/db)   [bloqueado]
 packages/auth     # Tenant guards y roles                (@ichtys/auth) [bloqueado]
 packages/ingestion# PDF → pages → chunks → embeddings    (@ichtys/ingestion)

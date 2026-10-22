@@ -36,6 +36,7 @@ const documentType = z.enum([
   'investigator_brochure',
   'lab_manual',
   'pharmacy_manual',
+  'soa',
   'other',
 ])
 
@@ -129,7 +130,37 @@ export async function POST(req: Request): Promise<Response> {
     const fileName = file.name.trim().length > 0 ? file.name : 'document.pdf'
     const name = meta.data.name ?? fileName
     const blobKey = buildBlobKey(fileName)
-    const blob = await putPrivateDocumentPdf({ blobKey, file })
+    // P1-6: el guardado en almacenamiento es la unica dependencia externa de
+    // esta ruta. Su fallo se reporta como 502 (storage no disponible) con un
+    // mensaje claro, no como el 500 generico de handleApiError.
+    const blob = await putPrivateDocumentPdf({ blobKey, file }).catch((err: unknown) => {
+      log(makeRecord({
+        requestId,
+        level: 'error',
+        event: 'api.request.failed',
+        endpoint: '/api/documents/upload',
+        method: 'POST',
+        userId,
+        studyId: meta.data.studyId,
+        statusCode: 502,
+        errorCode: 'blob_storage_unavailable',
+        durationMs: Date.now() - startMs,
+      }))
+      // Solo el nombre del error: el mensaje del SDK incluye la URL del blob,
+      // que contiene el nombre del archivo subido (posible PHI).
+      console.error(
+        '[documents/upload] no se pudo guardar el PDF en el almacenamiento:',
+        err instanceof Error ? err.name : 'unknown',
+      )
+      return null
+    })
+
+    if (!blob) {
+      return new Response(
+        'No se pudo guardar el archivo en el almacenamiento. Intentá de nuevo en unos segundos.',
+        { status: 502, headers: { 'Content-Type': 'text/plain; charset=utf-8' } },
+      )
+    }
 
     const result = await db.transaction(async (tx) => {
       const [document] = await tx

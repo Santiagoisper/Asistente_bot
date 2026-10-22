@@ -1,10 +1,10 @@
-import { and, asc, eq } from 'drizzle-orm'
-import { db, documents, pages } from '@ichtys/db'
+import { and, asc, desc, eq, inArray } from 'drizzle-orm'
+import { db, documents, documentVersions, pages } from '@ichtys/db'
 import { getOrgLlmApiKeys } from '@ichtys/db'
 import type { ParsedPage } from './parser'
 import { extractStudySpec, SPEC_EXTRACTION_LLM_PROVIDER } from './spec-extractor'
-import { getApprovedSpecExamples, saveStudySpec } from './spec-store'
-import { studySpecSchema, type StudySpec } from './study-spec'
+import { getApprovedSpecExamples, getLatestMeaningfulStudySpec, saveStudySpec } from './spec-store'
+import { mergeSoaVisits, studySpecSchema, type StudySpec } from './study-spec'
 
 /** Puntuación simple para comparar specs (criterios + endpoints + visitas). */
 export function specRichness(spec: StudySpec): number {
@@ -30,6 +30,20 @@ export async function reextractStudySpec(params: {
   documentVersionId: string
   userId?: string | null
 }): Promise<{ specId: string; version: number; richness: number; warnings: string[] }> {
+  const sourceDocument = await db
+    .select({ documentType: documents.documentType })
+    .from(documentVersions)
+    .innerJoin(documents, eq(documents.id, documentVersions.documentId))
+    .where(and(
+      eq(documentVersions.id, params.documentVersionId),
+      eq(documentVersions.organizationId, params.orgId),
+      eq(documentVersions.studyId, params.studyId),
+      eq(documents.organizationId, params.orgId),
+      eq(documents.studyId, params.studyId),
+    ))
+    .limit(1)
+  const visitsOnly = sourceDocument[0]?.documentType === 'soa'
+
   const pageRows = await db.query.pages.findMany({
     where: and(
       eq(pages.documentVersionId, params.documentVersionId),
@@ -64,30 +78,42 @@ export async function reextractStudySpec(params: {
       orgId: params.orgId,
       studyId: params.studyId,
       userId: params.userId,
+      visitsOnly,
     },
   )
 
   const validated = studySpecSchema.parse(spec)
 
-  if (!isMeaningfulSpec(validated)) {
-    const detail = warnings.length > 0 ? warnings.join('; ') : 'localizador sin secciones'
+  if (visitsOnly ? validated.visits.length === 0 : !isMeaningfulSpec(validated)) {
     throw new Error(
-      `La extracción no produjo criterios, endpoints ni visitas. ${detail}`,
+      visitsOnly
+        ? 'La extracción de la guía SoA no produjo visitas utilizables.'
+        : 'La extracción no produjo criterios, endpoints ni visitas.',
     )
   }
+
+  const previousMeaningful = visitsOnly
+    ? await getLatestMeaningfulStudySpec({ orgId: params.orgId, studyId: params.studyId })
+    : null
+  const previousSpec = previousMeaningful
+    ? studySpecSchema.parse(previousMeaningful.spec)
+    : null
+  const specToSave = visitsOnly
+    ? { ...mergeSoaVisits(previousSpec, validated.visits, params.documentVersionId), extractionWarnings: warnings }
+    : { ...validated, extractionWarnings: warnings }
 
   const { id, version } = await saveStudySpec({
     orgId: params.orgId,
     studyId: params.studyId,
-    documentVersionId: params.documentVersionId,
-    spec: validated,
+    documentVersionId: visitsOnly ? previousMeaningful?.documentVersionId ?? params.documentVersionId : params.documentVersionId,
+    spec: specToSave,
     extractionModel,
   })
 
   return {
     specId: id,
     version,
-    richness: specRichness(validated),
+    richness: specRichness(specToSave),
     warnings,
   }
 }
@@ -97,19 +123,19 @@ export async function getProtocolDocumentVersionId(params: {
   orgId: string
   studyId: string
 }): Promise<string | null> {
-  const doc = await db.query.documents.findFirst({
-    where: and(
+  const latest = await db
+    .select({ documentVersionId: documentVersions.id })
+    .from(documents)
+    .innerJoin(documentVersions, eq(documentVersions.documentId, documents.id))
+    .where(and(
       eq(documents.organizationId, params.orgId),
       eq(documents.studyId, params.studyId),
-      eq(documents.documentType, 'protocol'),
-    ),
-    with: {
-      versions: {
-        orderBy: (v, { desc }) => [desc(v.createdAt)],
-        limit: 1,
-      },
-    },
-  })
+      inArray(documents.documentType, ['protocol', 'soa']),
+      eq(documentVersions.organizationId, params.orgId),
+      eq(documentVersions.studyId, params.studyId),
+    ))
+    .orderBy(desc(documentVersions.createdAt))
+    .limit(1)
 
-  return doc?.versions[0]?.id ?? null
+  return latest[0]?.documentVersionId ?? null
 }
