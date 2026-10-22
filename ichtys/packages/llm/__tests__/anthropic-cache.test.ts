@@ -12,6 +12,48 @@ function lastBody(fetchMock: ReturnType<typeof vi.fn>): Record<string, unknown> 
   return JSON.parse((call?.[1] as RequestInit).body as string) as Record<string, unknown>
 }
 
+describe('bodies grandes / PDF pasan intactos', () => {
+  it('body de más de 1 MB pasa intacto (sin parsear, sin cache_control)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(RESPONSE)
+    const wrapped = withAnthropicPromptCache(fetchMock as unknown as typeof fetch)
+    const bigPrompt = 'x'.repeat(1_100_000)
+    await wrapped('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {},
+      body: JSON.stringify({ system: 'Sistema', messages: [{ role: 'user', content: bigPrompt }] }),
+    })
+    const sent = (fetchMock.mock.calls.at(-1)?.[1] as RequestInit).body as string
+    expect(sent).not.toContain('cache_control')
+  })
+
+  it('body con documento PDF embebido pasa intacto aunque sea chico', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(RESPONSE)
+    const wrapped = withAnthropicPromptCache(fetchMock as unknown as typeof fetch)
+    await wrapped('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {},
+      body: JSON.stringify({
+        system: 'Sistema',
+        messages: [{ role: 'user', content: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: 'aGk=' } }] }],
+      }),
+    })
+    const sent = (fetchMock.mock.calls.at(-1)?.[1] as RequestInit).body as string
+    expect(sent).not.toContain('cache_control')
+  })
+
+  it('body chico sin PDF sigue aplicando cache_control al system', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(RESPONSE)
+    const wrapped = withAnthropicPromptCache(fetchMock as unknown as typeof fetch)
+    await wrapped('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {},
+      body: JSON.stringify({ system: 'Sistema', messages: [] }),
+    })
+    const sent = (fetchMock.mock.calls.at(-1)?.[1] as RequestInit).body as string
+    expect(sent).toContain('cache_control')
+  })
+})
+
 describe('isPromptCachingEnabled', () => {
   it('default: activado', () => {
     expect(isPromptCachingEnabled()).toBe(true)

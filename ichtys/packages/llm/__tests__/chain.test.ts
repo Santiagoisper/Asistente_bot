@@ -31,25 +31,18 @@ describe('resolveProviderChain — Anthropic primario, GLM nunca único (anti-cu
     expect(resolveProviderChain('anthropic')).toEqual(['anthropic'])
   })
 
-  it('glm explícito NUNCA queda como único proveedor: anthropic queda de respaldo', () => {
-    const chain = resolveProviderChain('glm')
-    expect(chain[0]).toBe('glm')
-    expect(chain).toContain('anthropic')
-    expect(chain.length).toBeGreaterThan(1)
-    expect(new Set(chain).size).toBe(chain.length) // sin duplicados
+  it('glm explícito queda como cadena de 1 (decisión de datos: sin respaldo cruzado)', () => {
+    expect(resolveProviderChain('glm')).toEqual(['glm'])
   })
 
-  it('toda preferencia explícita no-anthropic conserva anthropic en la cadena', () => {
-    for (const pref of ['openai', 'google', 'groq', 'glm'] as const) {
-      const chain = resolveProviderChain(pref)
-      expect(chain[0]).toBe(pref)
-      expect(chain).toContain('anthropic')
-      expect(new Set(chain).size).toBe(chain.length)
+  it('toda preferencia explícita no-auto es cadena de 1 sin respaldo', () => {
+    for (const pref of ['anthropic', 'openai', 'google', 'groq', 'glm'] as const) {
+      expect(resolveProviderChain(pref)).toEqual([pref])
     }
   })
 
-  it('la cadena respeta el orden de AUTO_PROVIDER_CHAIN tras la preferencia', () => {
-    expect(resolveProviderChain('openai')).toEqual(['openai', 'anthropic', 'google', 'groq', 'glm'])
+  it("'auto' es la única cadena multi-proveedor con el orden de AUTO_PROVIDER_CHAIN", () => {
+    expect(resolveProviderChain('auto')).toEqual(['anthropic', 'openai', 'google', 'groq', 'glm'])
   })
 
   it('sin preferencia, default auto (cadena completa con anthropic primero)', () => {

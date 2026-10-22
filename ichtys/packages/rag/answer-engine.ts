@@ -453,9 +453,10 @@ export async function answerEngine(input: AnswerEngineInput): Promise<AnswerResu
         orgApiKeys: input.llmApiKeys,
         platformKeyBlocked: input.platformKeyBlocked,
       },
-      async (model, _provider, reportUsage) => {
+      async (model, _provider, reportUsage, signal) => {
         const result = await generateObject({
           model,
+          abortSignal: signal,
           schema: answerSchema,
           mode: 'tool',
           system: SYSTEM_PROMPT,
@@ -580,9 +581,10 @@ async function evaluateStreamedAnswerConfidence(
         orgApiKeys: llmApiKeys,
         platformKeyBlocked,
       },
-      async (model, _provider, reportUsage) => {
+      async (model, _provider, reportUsage, signal) => {
         const evalResult = await generateObject({
           model,
+          abortSignal: signal,
           schema: confidenceOnlySchema,
           mode: 'tool',
           system:

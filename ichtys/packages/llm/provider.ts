@@ -49,16 +49,17 @@ export function isGlmConfigured(orgKeys?: OrgLlmApiKeys | null): boolean {
 
 export function resolveProviderChain(preference?: LlmProviderPreference): LlmProviderId[] {
   const resolved = preference ?? getDefaultProviderPreference()
+  // 'auto' es la ÚNICA cadena multi-proveedor (respaldo cruzado completo,
+  // anthropic primero, GLM solo como red final).
   if (resolved === 'auto') return [...AUTO_PROVIDER_CHAIN]
-  // Anthropic explícito: cadena de 1 (es el proveedor primario de la plataforma
-  // y en prod así corre: LLM_PROVIDER=anthropic).
-  if (resolved === 'anthropic') return ['anthropic']
-  // Cualquier OTRA preferencia explícita va primera, pero Anthropic queda
-  // SIEMPRE de respaldo — ningún proveedor puede quedar como cadena de 1.
-  // Regla anti-cuelle: LLM_PROVIDER=glm dejaba a GLM solo y colgó el chat
-  // 300 s hasta el corte de Vercel (43 veces en producción).
-  const rest = AUTO_PROVIDER_CHAIN.filter((provider) => provider !== resolved)
-  return [resolved, ...rest]
+  // Preferencia explícita (de la org o de LLM_PROVIDER) = cadena de 1, SIN
+  // respaldo cruzado: los datos de una org solo van al proveedor que eligió
+  // — decisión de tratamiento de datos del Foreman 2026-10-22, ver
+  // docs/ALPHI-ARCHITECT-ADR-modelos-anthropic.md. El anti-cuelgue no es la
+  // cadena: es el timeout propio (LLM_CALL_TIMEOUT_MS y timeouts de stream)
+  // con error claro en español — LLM_PROVIDER=glm colgó el chat 300 s en
+  // producción, pero la solución fue el timeout, no mezclar proveedores.
+  return [resolved]
 }
 
 export function resolvePrimaryProvider(

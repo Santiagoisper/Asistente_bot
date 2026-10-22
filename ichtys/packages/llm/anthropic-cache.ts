@@ -17,6 +17,14 @@
 
 const ANTHROPIC_MESSAGES_URL_RE = /\/v1\/messages\/?$/
 
+/**
+ * Bodies de más de 1 MB (o con documentos PDF embebidos) pasan intactos, sin
+ * parsear ni marcar: parsear/stringify ~1 MB de JSON solo para inyectar una
+ * marca en el system cuesta más que el ahorro del cache, y esos bodies no son
+ * el caso de uso (el caching apunta al system corto y repetido del chat).
+ */
+const MAX_CACHEABLE_BODY_CHARS = 1_000_000
+
 /** ANTHROPIC_PROMPT_CACHING=0|false|off desactiva la inyección (default: activada). */
 export function isPromptCachingEnabled(): boolean {
   const raw = process.env.ANTHROPIC_PROMPT_CACHING?.toLowerCase().trim()
@@ -59,6 +67,8 @@ export function withAnthropicPromptCache(fetchFn: typeof fetch = fetch): typeof 
     }
     const rawBody = init?.body
     if (typeof rawBody !== 'string') return fetchFn(input, init)
+    if (rawBody.length > MAX_CACHEABLE_BODY_CHARS) return fetchFn(input, init)
+    if (rawBody.includes('"application/pdf"')) return fetchFn(input, init)
     try {
       const body = JSON.parse(rawBody) as Record<string, unknown>
       if (typeof body.system === 'undefined') return fetchFn(input, init)

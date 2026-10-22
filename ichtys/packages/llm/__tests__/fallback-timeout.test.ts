@@ -17,25 +17,37 @@ describe('runWithLlmFallback — timeout propio (nunca esperar el corte de 300 s
     ).rejects.toThrow(/timeout/i)
   })
 
-  it('una llamada que cuelga cae al siguiente proveedor de la cadena', async () => {
+  it("con 'auto', una llamada que cuelga cae al siguiente proveedor de la cadena", async () => {
     vi.stubEnv('LLM_CALL_TIMEOUT_MS', '50')
-    vi.stubEnv('LLM_PROVIDER', 'openai') // cadena: openai → anthropic → ...
+    vi.stubEnv('LLM_PROVIDER', 'auto') // única cadena multi-proveedor
     let calls = 0
     const result = await runWithLlmFallback(
       { purpose: 'answer', orgApiKeys: ORG_KEYS },
       async (_model, provider, reportUsage) => {
         calls++
-        if (provider === 'openai') {
-          await new Promise(() => {}) // openai cuelga → timeout → fallback
+        if (provider === 'anthropic') {
+          await new Promise(() => {}) // anthropic cuelga → timeout → fallback
         }
         reportUsage({ inputTokens: 10, outputTokens: 5 })
         return `ok-${provider}`
       },
     )
     expect(calls).toBe(2)
-    expect(result.result).toBe('ok-anthropic')
-    expect(result.provider).toBe('anthropic')
-    expect(result.modelId).toBe('claude-sonnet-5-5')
+    expect(result.result).toBe('ok-openai')
+    expect(result.provider).toBe('openai')
+  })
+
+  it('preferencia explícita: SIN respaldo cruzado — el timeout sube como error (decisión de datos)', async () => {
+    vi.stubEnv('LLM_CALL_TIMEOUT_MS', '50')
+    vi.stubEnv('LLM_PROVIDER', 'openai') // cadena de 1
+    await expect(
+      runWithLlmFallback(
+        { purpose: 'answer', orgApiKeys: ORG_KEYS },
+        async () => {
+          await new Promise(() => {}) // cuelga → timeout → no hay a dónde caer
+        },
+      ),
+    ).rejects.toThrow(/LLM call timeout after 50ms/)
   })
 
   it('el callback recibe un AbortSignal que se aborta al timeout', async () => {

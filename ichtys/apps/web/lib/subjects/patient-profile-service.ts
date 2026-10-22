@@ -47,9 +47,10 @@ async function extractFactsWithLlm(
   try {
     const { result, provider, modelId, usage, keySource } = await runWithLlmFallback(
       { purpose: 'clinical-extract', orgApiKeys },
-      async (model, _provider, reportUsage) => {
+      async (model, _provider, reportUsage, signal) => {
         const response = await generateObject({
           model,
+          abortSignal: signal,
           schema: llmFactsSchema,
           system: `Sos un extractor clínico para ensayos. Devolvé SOLO datos estructurados presentes en el texto.
 No inventes valores. Si un dato no está explícito, omitilo o usá null.
