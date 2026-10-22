@@ -64,6 +64,13 @@
       "when": 1751702400000,
       "tag": "0008_spec_amendment_tracking",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1751788800000,
+      "tag": "0009_usage_metering",
+      "breakpoints": true
     }
   ]
 }

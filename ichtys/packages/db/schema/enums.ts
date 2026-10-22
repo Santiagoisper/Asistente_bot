@@ -86,3 +86,25 @@ export const auditAction = [
   'lab.reject',
 ] as const
 export type AuditAction = (typeof auditAction)[number]
+
+/**
+ * Tipo de operación que consume tokens (usage_events.kind). Sirve para mostrarle al cliente
+ * en qué se gasta su cupo. Nunca se guarda el contenido (preguntas, documentos): solo conteos.
+ */
+export const usageKind = [
+  'chat_answer',
+  'chat_eval',
+  'chat_title',
+  'spec_extraction',
+  'clinical_extraction',
+  'embedding_document',
+  'embedding_query',
+] as const
+export type UsageKind = (typeof usageKind)[number]
+
+/**
+ * Quién paga el consumo: 'platform' = clave propia de la plataforma (cuenta contra el cupo del
+ * plan); 'org' = clave que la organización cargó en Ajustes (no consume el cupo).
+ */
+export const usageKeySource = ['platform', 'org'] as const
+export type UsageKeySource = (typeof usageKeySource)[number]

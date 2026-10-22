@@ -15,7 +15,8 @@
     "./spec-extractor": "./spec-extractor.ts",
     "./spec-store": "./spec-store.ts",
     "./ingestion-jobs": "./ingestion-jobs.ts",
-    "./reextract-spec": "./reextract-spec.ts"
+    "./reextract-spec": "./reextract-spec.ts",
+    "./blob-read": "./blob-read.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -26,12 +27,12 @@
     "@ai-sdk/anthropic": "^1.0.6",
     "@ichtys/db": "workspace:*",
     "@ichtys/llm": "workspace:*",
-    "@vercel/blob": "^2.8.0",
+    "@vercel/blob": "^2.4.0",
     "ai": "^4.0.30",
-    "drizzle-orm": "^0.45.3",
+    "drizzle-orm": "^0.45.2",
     "openai": "^4.77.0",
     "pdf-parse": "^1.1.1",
-    "pdfjs-dist": "^6.3.289",
+    "pdfjs-dist": "^6.2.108",
     "zod": "^3.24.1"
   },
   "devDependencies": {

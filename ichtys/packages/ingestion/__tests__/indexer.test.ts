@@ -37,7 +37,9 @@ const mocks = vi.hoisted(() => ({
   documentVersionsFindFirst: vi.fn<FindFirst<DocumentVersion>>(),
   documentsFindFirst: vi.fn<FindFirst<Document>>(),
   chunksFindMany: vi.fn<FindMany<Chunk>>(),
-  embedBatch: vi.fn<(texts: readonly string[]) => Promise<{ embedding: number[]; tokenCount: number }[]>>(),
+  embedBatch: vi.fn<
+    (texts: readonly string[], options?: unknown) => Promise<{ embedding: number[]; tokenCount: number }[]>
+  >(),
   transaction: vi.fn<(callback: TransactionCallback) => Promise<void>>(),
   operations: [] as DbOperation[],
   tables: {
@@ -97,6 +99,7 @@ vi.mock('../embedder', () => ({
     }
   },
   embedBatch: mocks.embedBatch,
+  resolveEmbeddingBatchSize: () => 64,
 }))
 
 vi.mock('@ichtys/db', () => ({
@@ -223,12 +226,127 @@ describe('indexDocumentVersionChunks', () => {
       chunkCount: 1,
       embeddedChunkCount: 1,
     })
-    expect(mocks.embedBatch).toHaveBeenCalledWith([fixture.chunks[0]?.content])
+    expect(mocks.embedBatch).toHaveBeenCalledWith(
+      [fixture.chunks[0]?.content],
+      expect.objectContaining({ batchSize: 64, startedAt: expect.any(Number) }),
+    )
     expect(mocks.eq).toHaveBeenCalledWith('documentVersions.organizationId', fixture.input.orgId)
     expect(mocks.eq).toHaveBeenCalledWith('documentVersions.studyId', fixture.input.studyId)
     expect(mocks.eq).toHaveBeenCalledWith('chunks.organizationId', fixture.input.orgId)
     expect(mocks.eq).toHaveBeenCalledWith('chunks.studyId', fixture.input.studyId)
     expect(mocks.isNull).toHaveBeenCalledWith('chunks.embedding')
+  })
+
+  it('persists each batch as soon as it is embedded and keeps progress when a later batch fails', async () => {
+    const fixture = createFixture()
+    const base = fixture.chunks[0]
+    if (!base) throw new Error('fixture without chunk')
+    // 130 fragmentos con lote de 64 => 3 llamadas (64, 64, 2).
+    const many = Array.from({ length: 130 }, (_, i) => ({
+      ...base,
+      id: crypto.randomUUID(),
+      content: `fragmento sintetico ${i}`,
+    }))
+    mocks.documentVersionsFindFirst.mockResolvedValue(fixture.documentVersion)
+    mocks.documentsFindFirst.mockResolvedValue(fixture.document)
+    mocks.chunksFindMany.mockResolvedValue(many)
+    mocks.embedBatch
+      .mockImplementationOnce(async (texts) => texts.map(() => ({ embedding: createEmbedding(0.1), tokenCount: 5 })))
+      .mockRejectedValueOnce(Object.assign(new Error('boom'), { code: 'embedding_rate_limited' }))
+
+    await expect(indexDocumentVersionChunks(fixture.input)).rejects.toBeDefined()
+
+    expect(mocks.embedBatch).toHaveBeenCalledTimes(2)
+    // El primer lote (64) quedó guardado aunque el segundo falló.
+    const chunkUpdates = mocks.operations.filter(
+      (operation) => operation.kind === 'update' && operation.table === mocks.tables.chunks,
+    )
+    expect(chunkUpdates).toHaveLength(64)
+    expect(mocks.operations).toContainEqual({
+      kind: 'insert',
+      table: mocks.tables.auditLogs,
+      values: expect.objectContaining({
+        action: 'embeddings.failed',
+        metadata: expect.objectContaining({ persistedBeforeFailure: 64 }),
+      }),
+    })
+  })
+
+  it('records the embedding fingerprint in embeddings.started so retries can resume safely', async () => {
+    const fixture = createFixture()
+    mocks.documentVersionsFindFirst.mockResolvedValue(fixture.documentVersion)
+    mocks.documentsFindFirst.mockResolvedValue(fixture.document)
+    mocks.chunksFindMany.mockResolvedValue(fixture.chunks)
+    mocks.embedBatch.mockResolvedValue([{ embedding: createEmbedding(0.1), tokenCount: 5 }])
+
+    await indexDocumentVersionChunks(fixture.input)
+
+    const started = mocks.operations.find(
+      (operation) =>
+        operation.kind === 'insert' &&
+        operation.table === mocks.tables.auditLogs &&
+        (operation.values as { action?: string }).action === 'embeddings.started',
+    )
+    const metadata = (started?.values as { metadata?: { embeddingFingerprint?: unknown } }).metadata
+    expect(typeof metadata?.embeddingFingerprint).toBe('string')
+    expect((metadata?.embeddingFingerprint as string).length).toBeGreaterThan(0)
+  })
+
+  it('uses the job start passed by the pipeline as the shared retry deadline', async () => {
+    const fixture = createFixture()
+    mocks.documentVersionsFindFirst.mockResolvedValue(fixture.documentVersion)
+    mocks.documentsFindFirst.mockResolvedValue(fixture.document)
+    mocks.chunksFindMany.mockResolvedValue(fixture.chunks)
+    mocks.embedBatch.mockResolvedValue([{ embedding: createEmbedding(0.1), tokenCount: 5 }])
+
+    await indexDocumentVersionChunks(fixture.input, { startedAt: 12345 })
+
+    expect(mocks.embedBatch).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ startedAt: 12345 }),
+    )
+  })
+
+  it('on retry only embeds the chunks still missing an embedding', async () => {
+    const fixture = createFixture()
+    const base = fixture.chunks[0]
+    if (!base) throw new Error('fixture without chunk')
+    const pending = Array.from({ length: 3 }, (_, i) => ({ ...base, id: crypto.randomUUID(), content: `pendiente ${i}` }))
+    mocks.documentVersionsFindFirst.mockResolvedValue(fixture.documentVersion)
+    mocks.documentsFindFirst.mockResolvedValue(fixture.document)
+    // loadUnembeddedChunks (isNull(embedding)) ya devuelve solo lo que falta.
+    mocks.chunksFindMany.mockResolvedValue(pending)
+    mocks.embedBatch.mockImplementation(async (texts) =>
+      texts.map(() => ({ embedding: createEmbedding(0.1), tokenCount: 5 })),
+    )
+
+    const result = await indexDocumentVersionChunks(fixture.input)
+
+    expect(result.embeddedChunkCount).toBe(3)
+    expect(mocks.embedBatch).toHaveBeenCalledTimes(1)
+    expect(mocks.embedBatch.mock.calls[0]?.[0]).toEqual(['pendiente 0', 'pendiente 1', 'pendiente 2'])
+    expect(mocks.isNull).toHaveBeenCalledWith('chunks.embedding')
+  })
+
+  it('shares one retry deadline (startedAt) across all batches of the job', async () => {
+    const fixture = createFixture()
+    const base = fixture.chunks[0]
+    if (!base) throw new Error('fixture without chunk')
+    const many = Array.from({ length: 70 }, (_, i) => ({ ...base, id: crypto.randomUUID(), content: `c${i}` }))
+    mocks.documentVersionsFindFirst.mockResolvedValue(fixture.documentVersion)
+    mocks.documentsFindFirst.mockResolvedValue(fixture.document)
+    mocks.chunksFindMany.mockResolvedValue(many)
+    mocks.embedBatch.mockImplementation(async (texts) =>
+      texts.map(() => ({ embedding: createEmbedding(0.1), tokenCount: 5 })),
+    )
+
+    await indexDocumentVersionChunks(fixture.input)
+
+    const startedAts = mocks.embedBatch.mock.calls.map(
+      (call) => (call[1] as { startedAt: number } | undefined)?.startedAt,
+    )
+    expect(startedAts).toHaveLength(2)
+    expect(startedAts[0]).toBe(startedAts[1])
   })
 
   it('does not touch chunks when documentVersion is outside the authorized tenant', async () => {

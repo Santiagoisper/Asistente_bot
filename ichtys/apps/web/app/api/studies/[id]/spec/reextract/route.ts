@@ -31,7 +31,7 @@ export async function POST(
   const { id: studyId } = await params
 
   try {
-    const { orgId } = await validateStudyAccess(studyId)
+    const { orgId, userId } = await validateStudyAccess(studyId)
 
     const documentVersionId = await getProtocolDocumentVersionId({ orgId, studyId })
     if (!documentVersionId) {
@@ -58,7 +58,7 @@ export async function POST(
     }
 
     try {
-      const result = await reextractStudySpec({ orgId, studyId, documentVersionId })
+      const result = await reextractStudySpec({ orgId, studyId, documentVersionId, userId })
       console.log(
         `[spec/reextract] study=${studyId} v${result.version} richness=${result.richness} warnings=${result.warnings.length}`,
       )

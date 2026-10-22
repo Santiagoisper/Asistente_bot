@@ -10,6 +10,8 @@ import {
   type Document,
   type DocumentVersion,
 } from '@ichtys/db'
+import { openStoredBlob } from './blob-read'
+import { canReuseEmbeddedChunks } from './chunk-reuse'
 import { chunkPages } from './chunker'
 import { EmbeddingIndexingError, indexDocumentVersionChunks } from './indexer'
 import { parsePdf, PdfParseError } from './parser'
@@ -154,12 +156,13 @@ async function downloadBlob(blobUrl: string): Promise<Uint8Array> {
     }
   }
 
-  const response = await fetch(blobUrl)
-  if (!response.ok || !response.body) {
-    throw new IngestionPipelineError('blob_download_failed', `Failed to fetch blob: ${response.status}`)
+  try {
+    const { stream } = await openStoredBlob(blobUrl)
+    return await readStream(stream)
+  } catch (err) {
+    console.warn('[ingestion] stored blob read failed:', err instanceof Error ? err.message : err)
+    throw new IngestionPipelineError('blob_download_failed', 'Failed to read stored blob')
   }
-
-  return readStream(response.body)
 }
 
 function sanitizeIngestionError(err: unknown): IngestionErrorCode {
@@ -218,16 +221,117 @@ async function markError(input: RunIngestionInput, errorMessage: IngestionErrorC
 /**
  * Runs ingestion for one document version.
  */
+// maxDuration de /api/ingestion/run = 300s. Topes (desde el inicio del trabajo) para no morir a medias.
+const JOB_SPEC_DEADLINE_MS = 265_000
+const JOB_REEXTRACT_DEADLINE_MS = 200_000
+
+type ParsedPages = Awaited<ReturnType<typeof parsePdf>>['pages']
+type ExtractedSpec = Awaited<ReturnType<typeof extractStudySpec>>
+
+/**
+ * Lanza la extracción del spec (llamada al LLM). Nunca rechaza: un fallo del spec no falla
+ * la ingesta — el documento queda 'ready' sin spec y el usuario puede reprocesar.
+ */
+function startSpecExtraction(
+  specPages: ParsedPages,
+  input: RunIngestionInput,
+): Promise<{ extracted: ExtractedSpec | null; ms: number }> {
+  const startedAt = Date.now()
+  return (async () => {
+    try {
+      const fewShotExamples = await getApprovedSpecExamples({
+        orgId: input.orgId,
+        limit: 3,
+      }).catch(err => {
+        console.warn('[spec-extractor] Could not load few-shot examples:', err)
+        return []
+      })
+
+      const orgLlmKeys = await getOrgLlmApiKeys(input.orgId).catch(() => ({}))
+
+      const extracted = await extractStudySpec(specPages, fewShotExamples, {
+        llmProviderPreference: SPEC_EXTRACTION_LLM_PROVIDER,
+        llmApiKeys: orgLlmKeys,
+        orgId: input.orgId,
+        studyId: input.studyId,
+        userId: input.userId,
+      })
+      return { extracted, ms: Date.now() - startedAt }
+    } catch (err) {
+      console.error(`[spec-extractor] FAILED for documentVersionId=${input.documentVersionId}:`, err)
+      return { extracted: null, ms: Date.now() - startedAt }
+    }
+  })()
+}
+
+/** Guarda el spec extraído como borrador y, si resultó parcial, reintenta la extracción. */
+async function persistSpecDraft(
+  extracted: ExtractedSpec,
+  input: RunIngestionInput,
+  options: { allowReextract: boolean },
+): Promise<void> {
+  try {
+    const { spec, warnings, extractionModel, detectedLanguage } = extracted
+
+    if (warnings.length > 0) {
+      console.warn(`[spec-extractor] warnings for documentVersionId=${input.documentVersionId}:`, warnings)
+    }
+    if (detectedLanguage) {
+      console.log(`[spec-extractor] detected language: ${detectedLanguage}`)
+    }
+
+    const { id, version } = await saveStudySpec({
+      orgId: input.orgId,
+      studyId: input.studyId,
+      documentVersionId: input.documentVersionId,
+      spec,
+      extractionModel,
+    })
+    console.log(`[spec-extractor] saved draft spec id=${id} version=${version}`)
+
+    if (!isMeaningfulSpec(spec) && options.allowReextract) {
+      console.warn(
+        `[spec-extractor] partial spec v${version} for documentVersionId=${input.documentVersionId}, auto re-extracting…`,
+      )
+      try {
+        const retry = await reextractStudySpec({
+          orgId: input.orgId,
+          studyId: input.studyId,
+          documentVersionId: input.documentVersionId,
+          userId: input.userId,
+        })
+        console.log(`[spec-extractor] auto re-extract ok v${retry.version} richness=${retry.richness}`)
+      } catch (retryErr) {
+        console.error('[spec-extractor] auto re-extract failed:', retryErr)
+      }
+    }
+  } catch (err) {
+    console.error(`[spec-extractor] FAILED for documentVersionId=${input.documentVersionId}:`, err)
+  }
+}
+
 export async function runIngestion(input: RunIngestionInput): Promise<IngestionResult> {
   const parsedInput = runIngestionInput.parse(input)
   const { document, documentVersion } = await loadAuthorizedDocumentVersion(parsedInput)
 
   await markProcessing(parsedInput)
 
+  const startedAt = Date.now()
+  const timings: Record<string, number> = {}
+  let lapStart = startedAt
+  const lap = (name: string): void => {
+    const now = Date.now()
+    timings[name] = now - lapStart
+    lapStart = now
+  }
+
   try {
     const pdfData = await downloadBlob(documentVersion.blobUrl)
+    lap('downloadMs')
     const parsedDocument = await parsePdf(pdfData)
+    lap('parseMs')
     const contentChunks = chunkPages(parsedDocument.pages)
+    lap('chunkMs')
 
     if (contentChunks.length === 0) {
       throw new IngestionPipelineError(
@@ -236,113 +340,105 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
       )
     }
 
-    await db.transaction(async (tx) => {
-      await tx
-        .delete(chunks)
-        .where(
-          and(
-            eq(chunks.documentVersionId, parsedInput.documentVersionId),
-            eq(chunks.organizationId, parsedInput.orgId),
-            eq(chunks.studyId, parsedInput.studyId),
-          ),
-        )
+    // Reintento del mismo documento: si los fragmentos ya están guardados y embebidos con
+    // el mismo modelo, se conservan y solo se calcula lo que falta.
+    const reuseChunks = await canReuseEmbeddedChunks(
+      {
+        orgId: parsedInput.orgId,
+        studyId: parsedInput.studyId,
+        documentId: parsedInput.documentId,
+        documentVersionId: parsedInput.documentVersionId,
+      },
+      contentChunks,
+    )
 
-      await tx
-        .delete(pages)
-        .where(
-          and(
-            eq(pages.documentVersionId, parsedInput.documentVersionId),
-            eq(pages.organizationId, parsedInput.orgId),
-            eq(pages.studyId, parsedInput.studyId),
-          ),
-        )
-
-      await tx.insert(pages).values(
-        parsedDocument.pages.map((page) => ({
-          documentVersionId: parsedInput.documentVersionId,
-          organizationId: parsedInput.orgId,
-          studyId: parsedInput.studyId,
-          pageNumber: page.pageNumber,
-          rawText: page.rawText,
-        })),
-      )
-
-      await tx.insert(chunks).values(
-        contentChunks.map((chunk) => ({
-          documentId: parsedInput.documentId,
-          documentVersionId: parsedInput.documentVersionId,
-          organizationId: parsedInput.orgId,
-          studyId: parsedInput.studyId,
-          documentType: document.documentType,
-          pageStart: chunk.pageStart,
-          pageEnd: chunk.pageEnd,
-          sectionTitle: chunk.sectionTitle,
-          content: chunk.content,
-          tokenCount: chunk.tokenCount,
-        })),
-      )
-    })
-
-    const indexingResult = await indexDocumentVersionChunks(parsedInput)
-
-    // Extraer study spec si el documento es un protocolo.
-    // AWAITED: fire-and-forget no funciona en Lambda (el runtime se congela
-    // cuando se envía la respuesta HTTP, matando los calls a Claude pendientes).
-    if (document.documentType === 'protocol') {
-      try {
-        const fewShotExamples = await getApprovedSpecExamples({
-          orgId: parsedInput.orgId,
-          limit: 3,
-        }).catch(err => {
-          console.warn('[spec-extractor] Could not load few-shot examples:', err)
-          return []
-        })
-
-        const orgLlmKeys = await getOrgLlmApiKeys(parsedInput.orgId).catch(() => ({}))
-
-        const { spec, warnings, extractionModel, detectedLanguage } =
-          await extractStudySpec(parsedDocument.pages, fewShotExamples, {
-            llmProviderPreference: SPEC_EXTRACTION_LLM_PROVIDER,
-            llmApiKeys: orgLlmKeys,
-          })
-
-        if (warnings.length > 0) {
-          console.warn(`[spec-extractor] warnings for documentVersionId=${parsedInput.documentVersionId}:`, warnings)
-        }
-        if (detectedLanguage) {
-          console.log(`[spec-extractor] detected language: ${detectedLanguage}`)
-        }
-
-        const { id, version } = await saveStudySpec({
-          orgId: parsedInput.orgId,
-          studyId: parsedInput.studyId,
-          documentVersionId: parsedInput.documentVersionId,
-          spec,
-          extractionModel,
-        })
-        console.log(`[spec-extractor] saved draft spec id=${id} version=${version}`)
-
-        if (!isMeaningfulSpec(spec)) {
-          console.warn(
-            `[spec-extractor] partial spec v${version} for documentVersionId=${parsedInput.documentVersionId}, auto re-extracting…`,
+    if (!reuseChunks) {
+      await db.transaction(async (tx) => {
+        await tx
+          .delete(chunks)
+          .where(
+            and(
+              eq(chunks.documentVersionId, parsedInput.documentVersionId),
+              eq(chunks.organizationId, parsedInput.orgId),
+              eq(chunks.studyId, parsedInput.studyId),
+            ),
           )
-          try {
-            const retry = await reextractStudySpec({
-              orgId: parsedInput.orgId,
-              studyId: parsedInput.studyId,
-              documentVersionId: parsedInput.documentVersionId,
-            })
-            console.log(
-              `[spec-extractor] auto re-extract ok v${retry.version} richness=${retry.richness}`,
-            )
-          } catch (retryErr) {
-            console.error('[spec-extractor] auto re-extract failed:', retryErr)
-          }
+
+        await tx
+          .delete(pages)
+          .where(
+            and(
+              eq(pages.documentVersionId, parsedInput.documentVersionId),
+              eq(pages.organizationId, parsedInput.orgId),
+              eq(pages.studyId, parsedInput.studyId),
+            ),
+          )
+
+        await tx.insert(pages).values(
+          parsedDocument.pages.map((page) => ({
+            documentVersionId: parsedInput.documentVersionId,
+            organizationId: parsedInput.orgId,
+            studyId: parsedInput.studyId,
+            pageNumber: page.pageNumber,
+            rawText: page.rawText,
+          })),
+        )
+
+        await tx.insert(chunks).values(
+          contentChunks.map((chunk) => ({
+            documentId: parsedInput.documentId,
+            documentVersionId: parsedInput.documentVersionId,
+            organizationId: parsedInput.orgId,
+            studyId: parsedInput.studyId,
+            documentType: document.documentType,
+            pageStart: chunk.pageStart,
+            pageEnd: chunk.pageEnd,
+            sectionTitle: chunk.sectionTitle,
+            content: chunk.content,
+            tokenCount: chunk.tokenCount,
+          })),
+        )
+      })
+    }
+    lap('dbMs')
+
+    // La extracción del spec (LLM) y los embeddings son independientes: ambos dependen solo
+    // del texto ya leído. Se lanzan juntos y se espera a los dos. El spec solo se GUARDA si
+    // los embeddings terminaron bien (no queda un borrador de un documento fallido).
+    const specExtraction =
+      document.documentType === 'protocol'
+        ? startSpecExtraction(parsedDocument.pages, parsedInput)
+        : null
+
+    const indexingResult = await indexDocumentVersionChunks(parsedInput, { startedAt })
+    lap('embedMs')
+
+    // AWAITED: fire-and-forget no funciona en Lambda (el runtime se congela cuando se envía
+    // la respuesta HTTP y mata las llamadas pendientes).
+    if (specExtraction) {
+      // La espera del spec tiene tope: la función de Vercel muere a los 300s y el documento
+      // quedaría 'processing'. Si el spec no llega a tiempo se omite (se puede re-extraer a mano).
+      const remainingMs = startedAt + JOB_SPEC_DEADLINE_MS - Date.now()
+      let deadlineTimer: ReturnType<typeof setTimeout> | undefined
+      const settled = await Promise.race([
+        specExtraction,
+        new Promise<'timeout'>((resolve) => {
+          deadlineTimer = setTimeout(() => resolve('timeout'), Math.max(0, remainingMs))
+        }),
+      ]).finally(() => clearTimeout(deadlineTimer))
+      if (settled === 'timeout') {
+        console.warn(
+          `[spec-extractor] skipped: not ready before the job deadline documentVersionId=${parsedInput.documentVersionId}`,
+        )
+      } else {
+        timings.specExtractMs = settled.ms
+        lap('specWaitMs')
+        if (settled.extracted) {
+          await persistSpecDraft(settled.extracted, parsedInput, {
+            allowReextract: Date.now() < startedAt + JOB_REEXTRACT_DEADLINE_MS,
+          })
         }
-      } catch (err) {
-        // El fallo del spec no falla la ingestion — el documento queda 'ready'
-        // pero sin spec. El usuario puede reprocesar o el sistema lo detectará.
-        console.error(`[spec-extractor] FAILED for documentVersionId=${parsedInput.documentVersionId}:`, err)
+        lap('specSaveMs')
       }
     }
 
@@ -377,6 +473,11 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
         },
       })
     })
+
+    timings.totalMs = Date.now() - startedAt
+    console.log(
+      `[ingestion] timings documentVersionId=${parsedInput.documentVersionId} pages=${parsedDocument.pageCount} chunks=${contentChunks.length} reusedChunks=${reuseChunks} newlyEmbedded=${indexingResult.embeddedChunkCount} ${JSON.stringify(timings)}`,
+    )
 
     return {
       documentId: parsedInput.documentId,

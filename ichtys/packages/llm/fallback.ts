@@ -1,5 +1,5 @@
 import type { LanguageModel } from 'ai'
-import type { OrgLlmApiKeys } from './keys'
+import { getKeySourceForProvider, type OrgLlmApiKeys } from './keys'
 import {
   createLanguageModel,
   getDefaultProviderPreference,
@@ -8,6 +8,26 @@ import {
   resolveProviderChain,
 } from './provider'
 import type { LlmProviderId, LlmProviderPreference, LlmPurpose } from './types'
+
+/** Tokens consumidos por una llamada real a un modelo (ver `packages/db/usage.ts`). */
+export interface LlmUsage {
+  inputTokens: number
+  outputTokens: number
+}
+
+const ZERO_USAGE: LlmUsage = { inputTokens: 0, outputTokens: 0 }
+
+/**
+ * El cupo mensual de la organización está agotado y la llamada solo tenía disponible la
+ * clave de la plataforma (ninguna clave propia de la org cubre un proveedor configurado).
+ * El caller debe mostrar un mensaje claro: cargar clave propia o ampliar el plan.
+ */
+export class LlmQuotaExceededError extends Error {
+  constructor() {
+    super('Monthly platform quota exceeded for this organization.')
+    this.name = 'LlmQuotaExceededError'
+  }
+}
 
 function statusFromError(err: unknown): number | null {
   if (typeof err !== 'object' || err === null || !('status' in err)) return null
@@ -38,32 +58,52 @@ export interface RunWithLlmFallbackOptions {
   purpose: LlmPurpose
   providerPreference?: LlmProviderPreference
   orgApiKeys?: OrgLlmApiKeys | null
+  /**
+   * Cupo mensual agotado: ignora la clave de la plataforma para cualquier proveedor —
+   * solo sigue funcionando si la organización tiene su propia clave. Ver `LlmQuotaExceededError`.
+   */
+  platformKeyBlocked?: boolean
 }
 
 export interface LlmRunResult<T> {
   result: T
   provider: LlmProviderId
   modelId: string
+  /** Tokens de la llamada real (0/0 si el callback nunca reportó uso). */
+  usage: LlmUsage
+  /** Quién paga esta llamada: clave propia de la organización o de la plataforma. */
+  keySource: 'org' | 'platform' | 'none'
 }
 
 /**
  * Ejecuta una llamada LLM. En modo `auto` recorre:
  * Claude → OpenAI → Gemini → Groq → GLM hasta que uno responda.
+ *
+ * `run` recibe `reportUsage`: el callback debe invocarlo con los tokens reales
+ * (`result.usage` de `generateText`/`generateObject`/`streamText`) antes de
+ * devolver su resultado, para que el medidor de consumo (`@ichtys/db` usage.ts)
+ * pueda registrar la llamada. Si no se llama, se asume 0/0 (no se registra nada).
  */
 export async function runWithLlmFallback<T>(
   options: RunWithLlmFallbackOptions,
-  run: (model: LanguageModel, provider: LlmProviderId) => Promise<T>,
+  run: (model: LanguageModel, provider: LlmProviderId, reportUsage: (usage: LlmUsage) => void) => Promise<T>,
 ): Promise<LlmRunResult<T>> {
   const preference = options.providerPreference ?? getDefaultProviderPreference()
   const providers = resolveProviderChain(preference)
 
   let lastError: unknown
+  let sawQuotaBlock = false
 
   for (let i = 0; i < providers.length; i++) {
     const provider = providers[i]!
+    const configured = isProviderConfigured(provider, options.orgApiKeys)
+    const keySource = configured ? getKeySourceForProvider(provider, options.orgApiKeys) : 'none'
+    const quotaBlocksThis = Boolean(options.platformKeyBlocked) && keySource === 'platform'
 
-    if (!isProviderConfigured(provider, options.orgApiKeys)) {
+    if (!configured || quotaBlocksThis) {
+      if (quotaBlocksThis) sawQuotaBlock = true
       if (preference === provider) {
+        if (quotaBlocksThis) throw new LlmQuotaExceededError()
         throw new Error(`Proveedor ${provider} no configurado (falta API key en el servidor).`)
       }
       continue
@@ -71,8 +111,11 @@ export async function runWithLlmFallback<T>(
 
     try {
       const model = createLanguageModel(provider, options.purpose, options.orgApiKeys)
-      const result = await run(model, provider)
-      return { result, provider, modelId: getModelId(provider, options.purpose) }
+      let usage: LlmUsage = ZERO_USAGE
+      const result = await run(model, provider, (reported) => {
+        usage = reported
+      })
+      return { result, provider, modelId: getModelId(provider, options.purpose), usage, keySource }
     } catch (err) {
       lastError = err
       const isLast = i === providers.length - 1
@@ -84,6 +127,8 @@ export async function runWithLlmFallback<T>(
       throw err
     }
   }
+
+  if (sawQuotaBlock) throw new LlmQuotaExceededError()
 
   throw lastError instanceof Error
     ? lastError
