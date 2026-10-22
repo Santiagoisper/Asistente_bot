@@ -33,6 +33,8 @@ const INGESTION_ERROR_LABELS: Record<string, string> = {
   blob_download_failed: 'No se pudo leer el archivo almacenado. Volvé a subirlo.',
   stuck_timeout: 'El procesamiento quedó colgado. Usá Reprocesar.',
   ingestion_internal_error: 'Error interno de ingesta.',
+  spec_extraction_failed:
+    'El documento se indexó, pero no se pudo extraer el cronograma de visitas ni los criterios automáticamente. Podés reintentar la extracción desde la pantalla del spec.',
 }
 
 function formatIngestionError(code: string | null): string | null {

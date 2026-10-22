@@ -39,7 +39,7 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
   const [row, protocolVersions] = await Promise.all([
     getLatestStudySpec({ orgId, studyId }),
     db
-      .select({ status: documentVersions.status })
+      .select({ status: documentVersions.status, errorMessage: documentVersions.errorMessage })
       .from(documents)
       .innerJoin(documentVersions, eq(documentVersions.documentId, documents.id))
       .where(
@@ -54,6 +54,9 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
   const protocolProcessing = protocolVersions.some(
     (v) => v.status === 'pending' || v.status === 'processing',
   )
+  const specExtractionFailed = protocolVersions.some(
+    (v) => v.status === 'error' && v.errorMessage === 'spec_extraction_failed',
+  )
 
   const parsedPreview = row ? studySpecSchema.safeParse(row.spec) : null
   const meaningfulPreview =
@@ -65,23 +68,38 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
       <div className="space-y-4 py-8">
         <SpecAutoRefresh
           studyId={studyId}
-          enabled={pollForSpec}
+          enabled={pollForSpec && !specExtractionFailed}
           initialVersion={null}
           initialMeaningful={false}
         />
-        <div className="py-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-alphi-teallit">
-            <span className="text-2xl">🔬</span>
+        {specExtractionFailed ? (
+          <div className="rounded-xl border border-alphi-rose/30 bg-alphi-rose/5 px-4 py-6 text-center">
+            <p className="text-sm font-semibold text-alphi-navy">
+              No se pudo extraer el cronograma ni los criterios
+            </p>
+            <p className="mt-2 text-sm text-alphi-muted">
+              El protocolo se indexó para el chat, pero la extracción automática del spec
+              falló. Podés reintentarla desde acá.
+            </p>
+            <div className="mt-4">
+              <SpecReextractButton studyId={studyId} />
+            </div>
           </div>
-          <p className="text-sm font-semibold text-alphi-navy">
-            {protocolProcessing ? 'Extrayendo spec del protocolo…' : 'Sin spec extraído todavía'}
-          </p>
-          <p className="mt-1 text-sm text-alphi-muted">
-            {protocolProcessing
-              ? 'ALPHI está indexando el PDF. Los criterios aparecerán acá automáticamente.'
-              : 'Subí un protocolo y ALPHI extraerá automáticamente los criterios, endpoints y visitas.'}
-          </p>
-        </div>
+        ) : (
+          <div className="py-8 text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-alphi-teallit">
+              <span className="text-2xl">🔬</span>
+            </div>
+            <p className="text-sm font-semibold text-alphi-navy">
+              {protocolProcessing ? 'Extrayendo spec del protocolo…' : 'Sin spec extraído todavía'}
+            </p>
+            <p className="mt-1 text-sm text-alphi-muted">
+              {protocolProcessing
+                ? 'ALPHI está indexando el PDF. Los criterios aparecerán acá automáticamente.'
+                : 'Subí un protocolo y ALPHI extraerá automáticamente los criterios, endpoints y visitas.'}
+            </p>
+          </div>
+        )}
       </div>
     )
   }
@@ -103,6 +121,10 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
 
   const spec = parsed.data
   const meaningful = isMeaningfulSpec(spec)
+  // extractionWarnings todavía no está en @ichtys/ingestion (en camino en otra
+  // rama) — se lee en forma defensiva para no bloquear esta pantalla mientras
+  // tanto, y empieza a funcionar sola apenas el campo exista en el spec guardado.
+  const extractionWarnings = (spec as { extractionWarnings?: string[] }).extractionWarnings ?? []
 
   // Annotate criteria with SNOMED-CT / LOINC — deterministic, < 2 ms total
   const annotatedInclusion = annotateCriteria(spec.inclusionCriteria)
@@ -123,6 +145,23 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
             ALPHI extrajo el código y título, pero no los criterios, endpoints ni visitas.
             El documento sí está indexado para el chat. Podés re-intentar la extracción del spec.
           </p>
+          <div className="mt-3">
+            <SpecReextractButton studyId={studyId} />
+          </div>
+        </div>
+      )}
+      {meaningful && extractionWarnings.length > 0 && (
+        <div className="rounded-xl border border-alphi-amber/40 bg-alphi-amber/10 px-4 py-3 text-sm text-alphi-navy">
+          <p className="font-semibold">La extracción tuvo advertencias</p>
+          <p className="mt-1 text-alphi-muted">
+            Parte del spec pudo no haberse extraído con precisión. Revisá estos puntos antes
+            de aprobar:
+          </p>
+          <ul className="mt-2 list-disc space-y-0.5 pl-5 text-alphi-muted">
+            {extractionWarnings.map((w, i) => (
+              <li key={i} className="break-words">{w}</li>
+            ))}
+          </ul>
           <div className="mt-3">
             <SpecReextractButton studyId={studyId} />
           </div>
