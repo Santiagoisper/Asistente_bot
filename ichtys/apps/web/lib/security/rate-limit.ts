@@ -49,6 +49,24 @@ export function isRateLimitEnabled(): boolean {
   return process.env.RATE_LIMIT_ENABLED !== 'false'
 }
 
+/**
+ * El rate limiting es fail-open a propósito (Redis caído no debe tumbar prod),
+ * pero un fail-open silencioso deja los topes de gasto inertes sin que nadie se
+ * entere. Avisamos UNA vez por cold start y por motivo, no en cada request.
+ */
+const disabledWarnings = new Set<string>()
+
+function warnRateLimitDisabledOnce(reason: string): void {
+  if (disabledWarnings.has(reason)) return
+  disabledWarnings.add(reason)
+  console.warn(`[rate-limit] DESHABILITADO (${reason}) — los requests NO se están limitando`)
+}
+
+/** Solo para tests: permite volver a observar el warning dentro del mismo proceso. */
+export function resetRateLimitWarningsForTests(): void {
+  disabledWarnings.clear()
+}
+
 export function getChatRateLimitConfig(): RateLimitConfig {
   return {
     limit: parsePositiveInt(process.env.RATE_LIMIT_CHAT_PER_MINUTE, 30),
@@ -59,6 +77,29 @@ export function getChatRateLimitConfig(): RateLimitConfig {
 export function getUploadRateLimitConfig(): RateLimitConfig {
   return {
     limit: parsePositiveInt(process.env.RATE_LIMIT_UPLOAD_PER_MINUTE, 10),
+    windowSeconds: 60,
+  }
+}
+
+/**
+ * Ingestión: cada corrida descarga, parsea y extrae el spec con Opus (~60-120 s).
+ * El cliente puede repetir el POST sobre el mismo documentoVersionId.
+ */
+export function getIngestionRateLimitConfig(): RateLimitConfig {
+  return {
+    limit: parsePositiveInt(process.env.RATE_LIMIT_INGESTION_PER_MINUTE, 5),
+    windowSeconds: 60,
+  }
+}
+
+/**
+ * Re-extracción de spec: cada corrida es una llamada a Claude Opus sobre hasta
+ * 150 páginas (hasta 300 s). Tope bajo por usuario+estudio para que el gasto de
+ * la clave de plataforma no sea ilimitado.
+ */
+export function getSpecReextractRateLimitConfig(): RateLimitConfig {
+  return {
+    limit: parsePositiveInt(process.env.RATE_LIMIT_SPEC_REEXTRACT_PER_MINUTE, 3),
     windowSeconds: 60,
   }
 }
@@ -80,10 +121,16 @@ export function getCitationsRateLimitConfig(): RateLimitConfig {
 export async function enforceSlidingWindowRateLimit(
   params: RateLimitParams,
 ): Promise<RateLimitResult> {
-  if (!isRateLimitEnabled()) return { limited: false }
+  if (!isRateLimitEnabled()) {
+    warnRateLimitDisabledOnce('RATE_LIMIT_ENABLED=false')
+    return { limited: false }
+  }
 
   const redis = getRedisRestConfig()
-  if (!redis) return { limited: false }
+  if (!redis) {
+    warnRateLimitDisabledOnce('falta config Redis REST (UPSTASH_REDIS_REST_URL/TOKEN)')
+    return { limited: false }
+  }
 
   try {
     const now = Date.now()

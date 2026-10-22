@@ -2,6 +2,11 @@ import { after } from 'next/server'
 import { z } from 'zod'
 import { handleApiError, validateDocumentVersionAccess } from '@ichtys/auth'
 import { runIngestion } from '@ichtys/ingestion'
+import {
+  enforceSlidingWindowRateLimit,
+  getIngestionRateLimitConfig,
+  rateLimitResponse,
+} from '../../../../lib/security/rate-limit'
 
 export const runtime = 'nodejs'
 // Ingestion + spec extraction para un protocolo de 200+ páginas toma ~60-120s.
@@ -45,6 +50,16 @@ export async function POST(req: Request): Promise<Response> {
   try {
     const { userId, orgId, studyId, document, documentVersion } =
       await validateDocumentVersionAccess(parsed.data.documentVersionId)
+
+    // Tope de gasto: cada POST re-lanza la extracción de spec con Opus (~60-120 s) y el
+    // cliente puede repetirlo. Sin esto era un bypass del tope de /spec/reextract.
+    const rlConfig = getIngestionRateLimitConfig()
+    const rateLimit = await enforceSlidingWindowRateLimit({
+      key: `ingestion:${userId}:${documentVersion.id}`,
+      limit: rlConfig.limit,
+      windowSeconds: rlConfig.windowSeconds,
+    })
+    if (rateLimit.limited) return rateLimitResponse(rateLimit.retryAfterSeconds)
 
     // Encolar el trabajo en background. after() garantiza que el Lambda
     // continúa corriendo después de que la respuesta HTTP es enviada —
