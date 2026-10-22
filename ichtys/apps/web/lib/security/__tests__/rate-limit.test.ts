@@ -5,9 +5,12 @@ import {
   getChatRateLimitConfig,
   getCitationsRateLimitConfig,
   getHistoryRateLimitConfig,
+  getIngestionRateLimitConfig,
+  getSpecReextractRateLimitConfig,
   getUploadRateLimitConfig,
   isRateLimitEnabled,
   rateLimitResponse,
+  resetRateLimitWarningsForTests,
 } from '../rate-limit'
 
 const ORIGINAL_FETCH = globalThis.fetch
@@ -110,6 +113,44 @@ describe('rate limit helper', () => {
     })
   })
 
+  describe('warning de fail-open (una vez por cold start)', () => {
+    it('avisa una sola vez cuando falta la config de Redis', async () => {
+      resetRateLimitWarningsForTests()
+      vi.stubEnv('RATE_LIMIT_ENABLED', '')
+      vi.stubEnv('UPSTASH_REDIS_REST_URL', '')
+      vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', '')
+      vi.stubEnv('KV_REST_API_URL', '')
+      vi.stubEnv('KV_REST_API_TOKEN', '')
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+      await enforceSlidingWindowRateLimit({ key: 'a', limit: 1, windowSeconds: 60 })
+      await enforceSlidingWindowRateLimit({ key: 'b', limit: 1, windowSeconds: 60 })
+
+      const avisos = warn.mock.calls
+        .map((c) => String(c[0]))
+        .filter((m) => m.includes('[rate-limit] DESHABILITADO'))
+      expect(avisos).toHaveLength(1)
+      expect(avisos[0]).toContain('Redis')
+      warn.mockRestore()
+    })
+
+    it('avisa una sola vez cuando RATE_LIMIT_ENABLED=false', async () => {
+      resetRateLimitWarningsForTests()
+      vi.stubEnv('RATE_LIMIT_ENABLED', 'false')
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+      await enforceSlidingWindowRateLimit({ key: 'a', limit: 1, windowSeconds: 60 })
+      await enforceSlidingWindowRateLimit({ key: 'b', limit: 1, windowSeconds: 60 })
+
+      const avisos = warn.mock.calls
+        .map((c) => String(c[0]))
+        .filter((m) => m.includes('[rate-limit] DESHABILITADO'))
+      expect(avisos).toHaveLength(1)
+      expect(avisos[0]).toContain('RATE_LIMIT_ENABLED=false')
+      warn.mockRestore()
+    })
+  })
+
   describe('configurable limits', () => {
     it('getChatRateLimitConfig returns default 30 when env var not set', () => {
       vi.stubEnv('RATE_LIMIT_CHAT_PER_MINUTE', '')
@@ -134,6 +175,26 @@ describe('rate limit helper', () => {
     it('getHistoryRateLimitConfig returns default 100', () => {
       vi.stubEnv('RATE_LIMIT_HISTORY_PER_MINUTE', '')
       expect(getHistoryRateLimitConfig()).toEqual({ limit: 100, windowSeconds: 60 })
+    })
+
+    it('getIngestionRateLimitConfig returns default 5', () => {
+      vi.stubEnv('RATE_LIMIT_INGESTION_PER_MINUTE', '')
+      expect(getIngestionRateLimitConfig()).toEqual({ limit: 5, windowSeconds: 60 })
+    })
+
+    it('getIngestionRateLimitConfig reads env var', () => {
+      vi.stubEnv('RATE_LIMIT_INGESTION_PER_MINUTE', '2')
+      expect(getIngestionRateLimitConfig()).toEqual({ limit: 2, windowSeconds: 60 })
+    })
+
+    it('getSpecReextractRateLimitConfig returns default 3', () => {
+      vi.stubEnv('RATE_LIMIT_SPEC_REEXTRACT_PER_MINUTE', '')
+      expect(getSpecReextractRateLimitConfig()).toEqual({ limit: 3, windowSeconds: 60 })
+    })
+
+    it('getSpecReextractRateLimitConfig reads env var', () => {
+      vi.stubEnv('RATE_LIMIT_SPEC_REEXTRACT_PER_MINUTE', '1')
+      expect(getSpecReextractRateLimitConfig()).toEqual({ limit: 1, windowSeconds: 60 })
     })
 
     it('getCitationsRateLimitConfig returns default 100', () => {
