@@ -1,6 +1,6 @@
 import { validateStudyAccess } from '@ichtys/auth'
 import { getLatestStudySpec, studySpecSchema, isMeaningfulSpec } from '@ichtys/ingestion'
-import { and, db, documents, documentVersions, eq } from '@ichtys/db'
+import { and, db, documents, documentVersions, inArray, eq } from '@ichtys/db'
 
 export const dynamic = 'force-dynamic'
 import { annotateAnswerSync } from '@ichtys/rag/medical-annotator'
@@ -46,7 +46,7 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
         and(
           eq(documents.studyId, studyId),
           eq(documents.organizationId, orgId),
-          eq(documents.documentType, 'protocol'),
+          inArray(documents.documentType, ['protocol', 'soa']),
         ),
       ),
   ])
@@ -58,7 +58,8 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
   const parsedPreview = row ? studySpecSchema.safeParse(row.spec) : null
   const meaningfulPreview =
     parsedPreview?.success ? isMeaningfulSpec(parsedPreview.data) : false
-  const pollForSpec = protocolProcessing || !meaningfulPreview
+  const extractionFailedPreview = parsedPreview?.success && parsedPreview.data.extractionFailed === true
+  const pollForSpec = protocolProcessing || (!meaningfulPreview && !extractionFailedPreview)
 
   if (!row) {
     return (
@@ -103,6 +104,8 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
 
   const spec = parsed.data
   const meaningful = isMeaningfulSpec(spec)
+  const extractionFailed = spec.extractionFailed === true
+  const extractionWarnings = spec.extractionWarnings ?? []
 
   // Annotate criteria with SNOMED-CT / LOINC — deterministic, < 2 ms total
   const annotatedInclusion = annotateCriteria(spec.inclusionCriteria)
@@ -116,13 +119,21 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
         initialVersion={row.version}
         initialMeaningful={meaningful}
       />
-      {!meaningful && (
+      {(!meaningful || extractionFailed) && (
         <div className="rounded-xl border border-alphi-amber/40 bg-alphi-amber/10 px-4 py-3 text-sm text-alphi-navy">
-          <p className="font-semibold">Spec parcial — solo identificación del protocolo</p>
-          <p className="mt-1 text-alphi-muted">
-            ALPHI extrajo el código y título, pero no los criterios, endpoints ni visitas.
-            El documento sí está indexado para el chat. Podés re-intentar la extracción del spec.
+          <p className="font-semibold">
+            {extractionFailed ? 'No se pudo extraer el spec' : 'Spec parcial — solo identificación del protocolo'}
           </p>
+          <p className="mt-1 text-alphi-muted">
+            {extractionFailed
+              ? 'El documento quedó indexado y está listo para el chat. Podés reintentar la extracción del spec.'
+              : 'ALPHI extrajo el código y título, pero no los criterios, endpoints ni visitas. El documento sí está indexado para el chat.'}
+          </p>
+          {extractionWarnings.length > 0 && (
+            <ul className="mt-2 list-inside list-disc text-alphi-muted">
+              {extractionWarnings.map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}
+            </ul>
+          )}
           <div className="mt-3">
             <SpecReextractButton studyId={studyId} />
           </div>

@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm'
+import { and, asc, eq, inArray } from 'drizzle-orm'
 import { db, documents, pages } from '@ichtys/db'
 import { getOrgLlmApiKeys } from '@ichtys/db'
 import type { ParsedPage } from './parser'
@@ -101,7 +101,7 @@ export async function getProtocolDocumentVersionId(params: {
     where: and(
       eq(documents.organizationId, params.orgId),
       eq(documents.studyId, params.studyId),
-      eq(documents.documentType, 'protocol'),
+      inArray(documents.documentType, ['protocol', 'soa']),
     ),
     with: {
       versions: {

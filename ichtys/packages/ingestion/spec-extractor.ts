@@ -567,11 +567,10 @@ function validateExtractedVisits(
 
   const sourceText = pages.map((page) => page.rawText).join('\n')
   const columnLabels = new Set(
-    sourceText.match(/\b(?:visit(?:a)?\s*\d+|v\s*\d+)\b/gi)
+    sourceText.match(/\b(?:visit|visita)\s*#?\s*\d+\b/gi)
       ?.map((label) => label.trim().replace(/\s+/g, ' ').toLocaleLowerCase()) ?? [],
   )
   if (columnLabels.size > 0 && (visits.length > columnLabels.size * 3 || columnLabels.size > visits.length * 2)) {
-    for (const index of visits.keys()) invalid.add(index)
     warnings.push(
       `visits: extracted visit count (${visits.length}) is inconsistent with ${columnLabels.size} detected visit/time labels`,
     )

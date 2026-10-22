@@ -132,6 +132,7 @@ const specMocks = vi.hoisted(() => ({
 vi.mock('../spec-extractor', () => ({
   SPEC_EXTRACTION_LLM_PROVIDER: 'glm',
   extractStudySpec: specMocks.extractStudySpec,
+  getExtractionModelId: () => 'claude-opus-5-5',
 }))
 
 vi.mock('../spec-store', () => ({
@@ -255,6 +256,7 @@ describe('runIngestion', () => {
       extractionModel: 'modelo-sintetico',
       detectedLanguage: null,
     })
+    specMocks.reextractStudySpec.mockResolvedValue({ version: 2, richness: 1 })
     specMocks.saveStudySpec.mockResolvedValue({ id: 'spec-1', version: 1 })
     mocks.transaction.mockImplementation(async (callback) => callback(createDbClient()))
     // Mock global fetch — pipeline uses fetch(blobUrl) for public blobs.
@@ -413,10 +415,11 @@ describe('runIngestion: reintentos y paralelismo', () => {
       extractionModel: 'modelo-sintetico',
       detectedLanguage: null,
     })
+    specMocks.reextractStudySpec.mockResolvedValue({ version: 2, richness: 1 })
     specMocks.saveStudySpec.mockResolvedValue({ id: 'spec-1', version: 1 })
   })
 
-  function arrange(documentType: 'protocol' | 'lab_manual' = 'protocol'): PipelineFixture {
+  function arrange(documentType: 'protocol' | 'soa' | 'lab_manual' = 'protocol'): PipelineFixture {
     const fixture = createFixture()
     mocks.documentVersionsFindFirst.mockResolvedValue(fixture.documentVersion)
     mocks.documentsFindFirst.mockResolvedValue({ ...fixture.document, documentType })
@@ -474,6 +477,11 @@ describe('runIngestion: reintentos y paralelismo', () => {
 
     expect(result.status).toBe('ready')
     expect(specMocks.saveStudySpec).toHaveBeenCalledTimes(1)
+    expect(specMocks.extractStudySpec).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.any(Array),
+      expect.objectContaining({ protocolPdf: expect.any(Uint8Array) }),
+    )
   })
 
   it('no guarda un borrador de spec si los embeddings fallan', async () => {
@@ -487,7 +495,7 @@ describe('runIngestion: reintentos y paralelismo', () => {
     expect(specMocks.saveStudySpec).not.toHaveBeenCalled()
   })
 
-  it('marca error visible si falla la extraccion del spec', async () => {
+  it('mantiene ready y registra el fallo si falla la extraccion del spec', async () => {
     const fixture = arrange()
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
     specMocks.extractStudySpec.mockRejectedValue(new Error('llm caido'))
@@ -495,12 +503,16 @@ describe('runIngestion: reintentos y paralelismo', () => {
 
     const result = await runIngestion(fixture.input)
 
-    expect(result.status).toBe('error')
-    expect(result.errorMessage).toBe('spec_extraction_failed')
-    expect(specMocks.saveStudySpec).not.toHaveBeenCalled()
+    expect(result.status).toBe('ready')
+    expect(result.errorMessage).toBeUndefined()
+    expect(specMocks.saveStudySpec).toHaveBeenCalledTimes(1)
+    expect(specMocks.saveStudySpec.mock.calls[0]?.[0].spec).toMatchObject({
+      extractionFailed: true,
+      extractionWarnings: [expect.stringContaining('falló')],
+    })
   })
 
-  it('marca error visible si el spec no llega antes del tope del trabajo', async () => {
+  it('mantiene ready y registra el timeout si el spec no llega antes del tope', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
     try {
       const fixture = arrange()
@@ -524,9 +536,13 @@ describe('runIngestion: reintentos y paralelismo', () => {
       await vi.advanceTimersByTimeAsync(265_000)
       const result = await running
 
-      expect(result.status).toBe('error')
-      expect(result.errorMessage).toBe('spec_extraction_failed')
-      expect(specMocks.saveStudySpec).not.toHaveBeenCalled()
+      expect(result.status).toBe('ready')
+      expect(result.errorMessage).toBeUndefined()
+      expect(specMocks.saveStudySpec).toHaveBeenCalledTimes(1)
+      expect(specMocks.saveStudySpec.mock.calls[0]?.[0].spec).toMatchObject({
+        extractionFailed: true,
+        extractionWarnings: [expect.stringContaining('excedió')],
+      })
     } finally {
       vi.useRealTimers()
     }
@@ -552,6 +568,46 @@ describe('runIngestion: reintentos y paralelismo', () => {
 
     expect(result.status).toBe('ready')
     expect(specMocks.extractStudySpec).not.toHaveBeenCalled()
+  })
+
+  it('extrae spec para documentos del tipo soa', async () => {
+    const fixture = arrange('soa')
+    mocks.indexDocumentVersionChunks.mockResolvedValue({ embeddedChunkCount: 2 })
+
+    const result = await runIngestion(fixture.input)
+
+    expect(result.status).toBe('ready')
+    expect(specMocks.extractStudySpec).toHaveBeenCalledTimes(1)
+  })
+
+  it('mantiene ready y registra extractionFailed si persistSpecDraft lanza', async () => {
+    const fixture = arrange()
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    specMocks.extractStudySpec.mockResolvedValue({
+      spec: {
+        identification: { protocolCode: null, title: null, phase: null, sourcePages: [] },
+        inclusionCriteria: [{ number: '1', text: 'Adultos', sourcePages: [1], confidence: 'high' }],
+        exclusionCriteria: [],
+        endpoints: [],
+        visits: [],
+      },
+      warnings: [],
+      extractionModel: 'modelo-sintetico',
+      detectedLanguage: null,
+    })
+    specMocks.saveStudySpec
+      .mockRejectedValueOnce(new Error('store unavailable'))
+      .mockResolvedValueOnce({ id: 'failed-spec', version: 2 })
+    mocks.indexDocumentVersionChunks.mockResolvedValue({ embeddedChunkCount: 2 })
+
+    const result = await runIngestion(fixture.input)
+
+    expect(result.status).toBe('ready')
+    expect(specMocks.saveStudySpec).toHaveBeenCalledTimes(2)
+    expect(specMocks.saveStudySpec.mock.calls[1]?.[0].spec).toMatchObject({
+      extractionFailed: true,
+      extractionWarnings: [expect.stringContaining('No se pudo guardar')],
+    })
   })
 
   it('registra los tiempos por etapa sin incluir texto del documento', async () => {

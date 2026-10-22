@@ -15,7 +15,7 @@ import { canReuseEmbeddedChunks } from './chunk-reuse'
 import { chunkPages } from './chunker'
 import { EmbeddingIndexingError, indexDocumentVersionChunks } from './indexer'
 import { parsePdf, PdfParseError } from './parser'
-import { extractStudySpec, SPEC_EXTRACTION_LLM_PROVIDER } from './spec-extractor'
+import { extractStudySpec, getExtractionModelId, SPEC_EXTRACTION_LLM_PROVIDER } from './spec-extractor'
 import { getApprovedSpecExamples, isMeaningfulSpec, saveStudySpec } from './spec-store'
 import { reextractStudySpec } from './reextract-spec'
 import { getOrgLlmApiKeys } from '@ichtys/db'
@@ -226,12 +226,16 @@ async function markError(input: RunIngestionInput, errorMessage: IngestionErrorC
 const JOB_SPEC_DEADLINE_MS = 265_000
 const JOB_REEXTRACT_DEADLINE_MS = 200_000
 
+export function shouldExtractStudySpec(documentType: Document['documentType']): boolean {
+  return documentType === 'protocol' || documentType === 'soa'
+}
+
 type ParsedPages = Awaited<ReturnType<typeof parsePdf>>['pages']
 type ExtractedSpec = Awaited<ReturnType<typeof extractStudySpec>>
 
 /**
  * Lanza la extracción del spec (llamada al LLM). Nunca rechaza: un fallo del spec no falla
- * la ingesta — el documento queda 'ready' sin spec y el usuario puede reprocesar.
+ * la ingesta; el estado del fallo se persiste en study_specs para habilitar un reintento.
  */
 function startSpecExtraction(
   specPages: ParsedPages,
@@ -316,6 +320,30 @@ async function persistSpecDraft(
     throw err instanceof IngestionPipelineError
       ? err
       : new IngestionPipelineError('spec_extraction_failed', 'No se pudo guardar el spec extraído')
+  }
+}
+
+/** Guarda un registro visible de fallo sin convertir un documento ya indexado en error. */
+async function persistSpecFailure(input: RunIngestionInput, warnings: string[]): Promise<void> {
+  try {
+    await saveStudySpec({
+      orgId: input.orgId,
+      studyId: input.studyId,
+      documentVersionId: input.documentVersionId,
+      spec: {
+        identification: { protocolCode: null, title: null, phase: null, sourcePages: [] },
+        inclusionCriteria: [],
+        exclusionCriteria: [],
+        endpoints: [],
+        visits: [],
+        extractionFailed: true,
+        extractionWarnings: [...new Set(warnings)],
+      },
+      extractionModel: getExtractionModelId(),
+    })
+  } catch {
+    // No exponer el error del proveedor ni texto potencialmente sensible en logs.
+    console.error(`[spec-extractor] failure record could not be saved documentVersionId=${input.documentVersionId}`)
   }
 }
 
@@ -415,7 +443,7 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
     // del texto ya leído. Se lanzan juntos y se espera a los dos. El spec solo se GUARDA si
     // los embeddings terminaron bien (no queda un borrador de un documento fallido).
     const specExtraction =
-      document.documentType === 'protocol'
+      shouldExtractStudySpec(document.documentType)
         ? startSpecExtraction(parsedDocument.pages, pdfData, parsedInput)
         : null
 
@@ -439,16 +467,23 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
         console.warn(
           `[spec-extractor] skipped: not ready before the job deadline documentVersionId=${parsedInput.documentVersionId}`,
         )
-        throw new IngestionPipelineError('spec_extraction_failed', 'La extracción del spec excedió el tiempo disponible')
+        await persistSpecFailure(parsedInput, ['La extracción excedió el tiempo disponible; se puede reintentar.'])
       } else {
         timings.specExtractMs = settled.ms
         lap('specWaitMs')
-        if (settled.extracted) {
-          await persistSpecDraft(settled.extracted, parsedInput, {
-            allowReextract: Date.now() < startedAt + JOB_REEXTRACT_DEADLINE_MS,
-          })
+        if (!settled.extracted) {
+          await persistSpecFailure(parsedInput, ['La extracción del spec falló; se puede reintentar.'])
         } else {
-          throw new IngestionPipelineError('spec_extraction_failed', 'Falló la extracción del spec; revisar evidencia del worker')
+          try {
+            await persistSpecDraft(settled.extracted, parsedInput, {
+              allowReextract: Date.now() < startedAt + JOB_REEXTRACT_DEADLINE_MS,
+            })
+          } catch {
+            await persistSpecFailure(parsedInput, [
+              ...settled.extracted.warnings,
+              'No se pudo guardar un spec utilizable; se puede reintentar la extracción.',
+            ])
+          }
         }
         lap('specSaveMs')
       }

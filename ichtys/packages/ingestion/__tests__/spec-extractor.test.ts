@@ -273,6 +273,22 @@ describe('extractStudySpec', () => {
     expect(result.spec.visits.map((visit) => visit.confidence)).toEqual(['low', 'low'])
     expect(result.spec.visits[1]?.windowDays).toBeNull()
   })
+
+  it('does not treat prose "v 12" as a visit label or lower every visit on count mismatch', async () => {
+    mockExtractionByPrompt()
+    const pages = makeProtocolPages().map((item) =>
+      item.pageNumber === 19
+        ? { ...item, rawText: `${item.rawText}\nVisit 2, Visit 3; participants v 12 are excluded.` }
+        : item,
+    )
+
+    const result = await extractStudySpec(pages)
+
+    expect(result.warnings).toContain(
+      'visits: extracted visit count (1) is inconsistent with 4 detected visit/time labels',
+    )
+    expect(result.spec.visits[0]?.confidence).toBe('high')
+  })
 })
 
 // ---------------------------------------------------------------------------

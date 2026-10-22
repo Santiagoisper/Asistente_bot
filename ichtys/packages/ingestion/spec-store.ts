@@ -126,8 +126,8 @@ export async function getApprovedSpecExamples(params: {
  * Devuelve la última versión del spec del estudio (cualquier status), o la
  * última aprobada si `approvedOnly`.
  *
- * Si la versión más alta es un "shell" vacío (p. ej. re-extracción fallida),
- * devuelve la versión anterior con contenido útil.
+ * Un fallo de extracción más reciente se devuelve para mostrar el estado y ofrecer reintento.
+ * Para shells vacíos heredados sin marca de fallo, devuelve una versión anterior con contenido.
  */
 export async function getLatestStudySpec(params: {
   orgId: string
@@ -149,6 +149,10 @@ export async function getLatestStudySpec(params: {
     .limit(10)
 
   if (rows.length === 0) return null
+
+  const latest = rows[0]
+  const latestSpec = latest ? studySpecSchema.safeParse(latest.spec) : null
+  if (latest && latestSpec?.success && latestSpec.data.extractionFailed) return latest
 
   for (const row of rows) {
     const parsed = studySpecSchema.safeParse(row.spec)

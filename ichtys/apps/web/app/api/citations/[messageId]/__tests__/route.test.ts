@@ -64,7 +64,7 @@ vi.mock('@ichtys/db', () => ({
     organizationId: 'conversations.organizationId',
   },
   answerConfidence: ['high', 'medium', 'low', 'insufficient_evidence'],
-  documentType: ['protocol', 'investigator_brochure', 'lab_manual', 'pharmacy_manual', 'other'],
+  documentType: ['protocol', 'soa', 'investigator_brochure', 'lab_manual', 'pharmacy_manual', 'other'],
 }))
 
 vi.mock('../../../../../lib/chat/history', () => ({

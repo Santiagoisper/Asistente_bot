@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { AccessError, validateStudyAccess } from '@ichtys/auth'
 import { getLatestStudySpec, isMeaningfulSpec, specRichness, studySpecSchema } from '@ichtys/ingestion'
-import { and, db, documents, documentVersions, eq } from '@ichtys/db'
+import { and, db, documents, documentVersions, inArray, eq } from '@ichtys/db'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -25,7 +25,7 @@ export async function GET(req: Request, { params }: RouteParams) {
             and(
               eq(documents.studyId, studyId),
               eq(documents.organizationId, orgId),
-              eq(documents.documentType, 'protocol'),
+              inArray(documents.documentType, ['protocol', 'soa']),
             ),
           ),
       ])
@@ -41,6 +41,8 @@ export async function GET(req: Request, { params }: RouteParams) {
         meaningful,
         richness: parsed?.success ? specRichness(parsed.data) : 0,
         protocolProcessing,
+        extractionFailed: parsed?.success ? parsed.data.extractionFailed === true : false,
+        extractionWarnings: parsed?.success ? parsed.data.extractionWarnings ?? [] : [],
         status: specRow?.status ?? null,
       })
     }

@@ -80,6 +80,8 @@ export const studySpecSchema = z.object({
   exclusionCriteria: z.array(eligibilityCriterionSchema),
   endpoints: z.array(studyEndpointSchema),
   visits: z.array(studyVisitSchema),
+  /** Indica que la extracción no produjo un spec utilizable y permite ofrecer reintento. */
+  extractionFailed: z.boolean().optional(),
   /** Advertencias de la extracción, guardadas junto al spec para conservar trazabilidad. */
   extractionWarnings: z.array(z.string()).optional(),
 })
