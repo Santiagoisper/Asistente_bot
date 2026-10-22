@@ -10,7 +10,7 @@ import {
   resolveLlmApiKey,
 } from '@ichtys/db'
 import { AnswerEngineError } from '@ichtys/rag'
-import type { AnswerStreamEvent, LlmUsageEvent } from '@ichtys/rag'
+import type { AnswerStreamEvent, LlmStreamTiming, LlmUsageEvent } from '@ichtys/rag'
 import {
   generateAndPersistConversationTitle,
   getOrCreateConversation,
@@ -273,6 +273,9 @@ export async function POST(req: Request): Promise<Response> {
         let engineConfidence: Confidence = 'insufficient_evidence'
         let engineEvidences: Evidence[] = []
         let engineUsageEvents: LlmUsageEvent[] = []
+        // Timing del stream (proveedor/modelo/primer token/total) — se expone en el
+        // frame done para que el cliente pueda medir el primer token (corrida 2 E2E).
+        let engineTiming: LlmStreamTiming | undefined
 
         for await (const event of eventGen) {
           if (event.type === 'token') {
@@ -290,6 +293,7 @@ export async function POST(req: Request): Promise<Response> {
             engineAnswer = event.fullAnswer
             engineUsageEvents = event.usageEvents ?? []
             if (event.timing) {
+              engineTiming = event.timing
               console.log(
                 `[stream:${requestId}] llm provider=${event.timing.provider} model=${event.timing.modelId} ` +
                   `firstTokenMs=${event.timing.firstTokenMs} totalMs=${event.timing.totalMs}`,
@@ -388,6 +392,7 @@ export async function POST(req: Request): Promise<Response> {
           conversationId,
           terminologySuggestions,
           protocolMentionsFound,
+          timing: engineTiming,
         })
 
         // 10g. Annotation frame — emitted after done so client has the messageId bound.

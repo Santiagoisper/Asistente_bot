@@ -267,7 +267,7 @@ export async function generateAndPersistConversationTitle(params: {
         model,
         abortSignal: signal,
         system:
-          'You generate ultra-short conversation titles. Return ONLY the title: 6 words or fewer, no punctuation, no quotes, no explanation. Title should summarize what the user is asking about.',
+          'You generate ultra-short conversation titles. Return ONLY the title: 6 words or fewer, no punctuation, no quotes, no explanation. Title should summarize what the user is asking about. Always write the title in Spanish, even when the question is in another language.',
         prompt: contextLine,
         maxTokens: 20,
         temperature: 0.3,
