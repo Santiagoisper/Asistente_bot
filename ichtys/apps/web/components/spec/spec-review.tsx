@@ -84,6 +84,9 @@ function ConfidenceDot({ confidence }: { confidence: 'high' | 'medium' | 'low' }
 }
 
 function SourcePagesBadge({ pages }: { pages: number[] }) {
+  if (pages.length === 0) {
+    return <span className="font-mono text-[10px] text-alphi-border tracking-tight">sin fuente</span>
+  }
   return (
     <span className="font-mono text-[10px] text-alphi-muted tracking-tight">
       p.{pages.join(',')}
@@ -435,7 +438,7 @@ function EndpointRow({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <td className="px-4 py-3">
+      <td className="px-4 py-3 align-top">
         <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${cfg.bg} ${cfg.text}`}>
           {cfg.label}
         </span>
@@ -491,12 +494,12 @@ function EndpointRow({
         </>
       ) : (
         <>
-          <td className="px-4 py-3 text-alphi-navy leading-relaxed">{endpoint.objective}</td>
-          <td className="px-4 py-3 text-alphi-muted leading-relaxed">{endpoint.endpoint}</td>
+          <td className="px-4 py-3 align-top text-alphi-navy leading-relaxed break-words">{endpoint.objective}</td>
+          <td className="px-4 py-3 align-top text-alphi-muted leading-relaxed break-words">{endpoint.endpoint}</td>
         </>
       )}
 
-      <td className="px-4 py-3">
+      <td className="px-4 py-3 align-top">
         <div className="flex flex-col gap-1">
           <ConfidenceDot confidence={endpoint.confidence} />
           <SourcePagesBadge pages={endpoint.sourcePages} />
@@ -537,14 +540,20 @@ function EndpointsTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-alphi-border">
-      <table className="w-full text-sm">
-        <thead>
+    <div className="max-h-[70vh] overflow-x-auto overflow-y-auto rounded-lg border border-alphi-border">
+      <table className="w-full min-w-[720px] table-fixed text-sm">
+        <colgroup>
+          <col className="w-[12%]" />
+          <col className="w-[32%]" />
+          <col className="w-[38%]" />
+          <col className="w-[18%]" />
+        </colgroup>
+        <thead className="sticky top-0 z-10">
           <tr className="border-b border-alphi-border bg-alphi-slate text-left">
-            <th className="px-4 py-2.5 text-xs font-semibold text-alphi-muted uppercase tracking-wide w-28">Tipo</th>
+            <th className="px-4 py-2.5 text-xs font-semibold text-alphi-muted uppercase tracking-wide">Tipo</th>
             <th className="px-4 py-2.5 text-xs font-semibold text-alphi-muted uppercase tracking-wide">Objetivo</th>
             <th className="px-4 py-2.5 text-xs font-semibold text-alphi-muted uppercase tracking-wide">Criterio de valoración</th>
-            <th className="px-4 py-2.5 text-xs font-semibold text-alphi-muted uppercase tracking-wide w-28">Fuente</th>
+            <th className="px-4 py-2.5 text-xs font-semibold text-alphi-muted uppercase tracking-wide">Fuente</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-alphi-border bg-white">
@@ -742,9 +751,9 @@ function VisitRow({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <td className="px-4 py-3">
+      <td className="px-4 py-3 align-top">
         <div className="flex items-start gap-2">
-          <span className="font-semibold text-alphi-navy">{visit.name}</span>
+          <span className="font-semibold text-alphi-navy break-words">{visit.name}</span>
           {isDraft && (
             <button
               onClick={handleEditStart}
@@ -760,18 +769,18 @@ function VisitRow({
           )}
         </div>
       </td>
-      <td className="px-4 py-3 text-alphi-muted">{visit.label ?? <span className="text-alphi-border">—</span>}</td>
-      <td className="px-4 py-3 font-mono text-alphi-muted">
+      <td className="px-4 py-3 align-top text-alphi-muted break-words">{visit.label ?? <span className="text-alphi-border">—</span>}</td>
+      <td className="px-4 py-3 align-top font-mono text-alphi-muted">
         {visit.day !== null && visit.day !== undefined ? visit.day : <span className="text-alphi-border">—</span>}
       </td>
-      <td className="px-4 py-3 font-mono text-alphi-muted">
+      <td className="px-4 py-3 align-top font-mono text-alphi-muted">
         {visit.windowDays !== null && visit.windowDays !== undefined ? `±${visit.windowDays}d` : <span className="text-alphi-border">—</span>}
       </td>
-      <td className="px-4 py-3">
+      <td className="px-4 py-3 align-top">
         {visit.procedures.length > 0 ? (
           <div className="flex flex-wrap gap-1">
             {visit.procedures.map((p, j) => (
-              <span key={j} className="inline-block rounded bg-alphi-slate px-1.5 py-0.5 text-[11px] text-alphi-muted">
+              <span key={j} className="inline-block rounded bg-alphi-slate px-1.5 py-0.5 text-[11px] text-alphi-muted break-words">
                 {p}
               </span>
             ))}
@@ -802,14 +811,21 @@ function VisitsTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-alphi-border">
-      <table className="w-full text-sm">
-        <thead>
+    <div className="max-h-[70vh] overflow-x-auto overflow-y-auto rounded-lg border border-alphi-border">
+      <table className="w-full min-w-[720px] table-fixed text-sm">
+        <colgroup>
+          <col className="w-[22%]" />
+          <col className="w-[14%]" />
+          <col className="w-[10%]" />
+          <col className="w-[12%]" />
+          <col className="w-[42%]" />
+        </colgroup>
+        <thead className="sticky top-0 z-10">
           <tr className="border-b border-alphi-border bg-alphi-slate text-left">
             <th className="px-4 py-2.5 text-xs font-semibold text-alphi-muted uppercase tracking-wide">Visita</th>
-            <th className="px-4 py-2.5 text-xs font-semibold text-alphi-muted uppercase tracking-wide w-28">Etiqueta</th>
-            <th className="px-4 py-2.5 text-xs font-semibold text-alphi-muted uppercase tracking-wide w-20">Día</th>
-            <th className="px-4 py-2.5 text-xs font-semibold text-alphi-muted uppercase tracking-wide w-20">Ventana</th>
+            <th className="px-4 py-2.5 text-xs font-semibold text-alphi-muted uppercase tracking-wide">Etiqueta</th>
+            <th className="px-4 py-2.5 text-xs font-semibold text-alphi-muted uppercase tracking-wide">Día</th>
+            <th className="px-4 py-2.5 text-xs font-semibold text-alphi-muted uppercase tracking-wide">Ventana</th>
             <th className="px-4 py-2.5 text-xs font-semibold text-alphi-muted uppercase tracking-wide">Procedimientos</th>
           </tr>
         </thead>

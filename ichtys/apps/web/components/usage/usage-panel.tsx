@@ -112,7 +112,15 @@ export function UsagePanel() {
                   de {plan.budgetUsd !== null ? formatUsd(plan.budgetUsd) : '—'} incluidos
                 </span>
               </div>
-              <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-alphi-slate">
+              <div
+                className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-alphi-slate"
+                role="progressbar"
+                aria-label="Cupo mensual consumido"
+                aria-valuenow={Math.round(Math.min(100, barPercent))}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuetext={`${barPercent}% — ${STATE_LABEL[quota.state]}`}
+              >
                 <div
                   className={`h-full rounded-full transition-all ${BAR_COLOR[quota.state]}`}
                   style={{ width: `${Math.min(100, barPercent)}%` }}
@@ -159,11 +167,11 @@ export function UsagePanel() {
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="text-alphi-muted">
-                  <th className="pb-2 font-medium">Tipo</th>
-                  <th className="pb-2 font-medium">Clave</th>
-                  <th className="pb-2 font-medium">Llamadas</th>
-                  <th className="pb-2 font-medium">Tokens</th>
-                  <th className="pb-2 font-medium">Costo</th>
+                  <th scope="col" className="pb-2 font-medium">Tipo</th>
+                  <th scope="col" className="pb-2 font-medium">Clave</th>
+                  <th scope="col" className="pb-2 font-medium">Llamadas</th>
+                  <th scope="col" className="pb-2 font-medium">Tokens</th>
+                  <th scope="col" className="pb-2 font-medium">Costo</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-alphi-border">
