@@ -1,11 +1,10 @@
 import { validateStudyAccess } from '@ichtys/auth'
-import { getLatestStudySpec, studySpecSchema, isMeaningfulSpec } from '@ichtys/ingestion'
-import { and, db, documents, documentVersions, eq } from '@ichtys/db'
+import { getLatestStudySpec, getLatestSpecAttempt, studySpecSchema, isMeaningfulSpec } from '@ichtys/ingestion'
+import { and, db, documents, documentVersions, inArray, eq } from '@ichtys/db'
 
 export const dynamic = 'force-dynamic'
 import { annotateAnswerSync } from '@ichtys/rag/medical-annotator'
 import SpecReview from '../../../../../components/spec/spec-review'
-import { SpecReextractButton } from '../../../../../components/spec/spec-reextract-button'
 import { SpecAutoRefresh } from '../../../../../components/spec/spec-auto-refresh'
 import type { EligibilityCriterion } from '@ichtys/ingestion'
 import type { MedicalAnnotation } from '@ichtys/rag/medical-annotator'
@@ -36,8 +35,9 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
   const { id: studyId } = await params
   const { orgId } = await validateStudyAccess(studyId)
 
-  const [row, protocolVersions] = await Promise.all([
+  const [row, latestAttempt, protocolVersions] = await Promise.all([
     getLatestStudySpec({ orgId, studyId }),
+    getLatestSpecAttempt({ orgId, studyId }),
     db
       .select({ status: documentVersions.status })
       .from(documents)
@@ -46,7 +46,7 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
         and(
           eq(documents.studyId, studyId),
           eq(documents.organizationId, orgId),
-          eq(documents.documentType, 'protocol'),
+          inArray(documents.documentType, ['protocol', 'soa']),
         ),
       ),
   ])
@@ -55,14 +55,21 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
     (v) => v.status === 'pending' || v.status === 'processing',
   )
 
+  const parsedAttempt = latestAttempt ? studySpecSchema.safeParse(latestAttempt.spec) : null
+  const extractionFailed = parsedAttempt?.success && parsedAttempt.data.extractionFailed === true
+  const extractionWarnings = parsedAttempt?.success ? parsedAttempt.data.extractionWarnings ?? [] : []
   const parsedPreview = row ? studySpecSchema.safeParse(row.spec) : null
   const meaningfulPreview =
     parsedPreview?.success ? isMeaningfulSpec(parsedPreview.data) : false
-  const pollForSpec = protocolProcessing || !meaningfulPreview
+  const pollForSpec = protocolProcessing || (!meaningfulPreview && !extractionFailed)
 
   if (!row) {
     return (
-      <div className="space-y-4 py-8">
+      <div
+        className="space-y-4 py-8"
+        data-extraction-failed={extractionFailed}
+        data-extraction-warnings={JSON.stringify(extractionWarnings)}
+      >
         <SpecAutoRefresh
           studyId={studyId}
           enabled={pollForSpec}
@@ -94,9 +101,6 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
         <p className="mt-2 text-sm text-alphi-muted">
           La versión v{row.version} no cumple el schema actual. Podés re-extraer el spec desde el protocolo indexado.
         </p>
-        <div className="mt-4">
-          <SpecReextractButton studyId={studyId} />
-        </div>
       </div>
     )
   }
@@ -109,25 +113,17 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
   const annotatedExclusion = annotateCriteria(spec.exclusionCriteria)
 
   return (
-    <div className="space-y-4">
+    <div
+      className="space-y-4"
+      data-extraction-failed={extractionFailed}
+      data-extraction-warnings={JSON.stringify(extractionWarnings)}
+    >
       <SpecAutoRefresh
         studyId={studyId}
         enabled={pollForSpec}
         initialVersion={row.version}
         initialMeaningful={meaningful}
       />
-      {!meaningful && (
-        <div className="rounded-xl border border-alphi-amber/40 bg-alphi-amber/10 px-4 py-3 text-sm text-alphi-navy">
-          <p className="font-semibold">Spec parcial — solo identificación del protocolo</p>
-          <p className="mt-1 text-alphi-muted">
-            ALPHI extrajo el código y título, pero no los criterios, endpoints ni visitas.
-            El documento sí está indexado para el chat. Podés re-intentar la extracción del spec.
-          </p>
-          <div className="mt-3">
-            <SpecReextractButton studyId={studyId} />
-          </div>
-        </div>
-      )}
       <SpecReview
         specId={row.id}
         studyId={studyId}

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { PDFDocument } from 'pdf-lib'
 
 // ---------------------------------------------------------------------------
 // Mock pdf-parse — tests verify parsePdf logic, not the underlying library.
@@ -8,7 +9,7 @@ const mockPdfParse = vi.hoisted(() => vi.fn())
 
 vi.mock('pdf-parse', () => ({ default: mockPdfParse }))
 
-import { parsePdf, PdfParseError } from '../parser'
+import { cropPdfPages, parsePdf, PdfParseError } from '../parser'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -60,5 +61,30 @@ describe('parsePdf', () => {
     )
 
     await expect(parsePdf(new Uint8Array([0x00]))).rejects.toThrow(PdfParseError)
+  })
+})
+
+describe('cropPdfPages', () => {
+  it('copies only the requested 1-based pages into the outgoing PDF', async () => {
+    const source = await PDFDocument.create()
+    source.addPage([100, 100])
+    source.addPage([200, 200])
+    source.addPage([300, 300])
+
+    const cropped = await cropPdfPages(await source.save(), 2, 3)
+    const result = await PDFDocument.load(cropped)
+
+    expect(result.getPageCount()).toBe(2)
+    expect(result.getPage(0)?.getWidth()).toBe(200)
+    expect(result.getPage(1)?.getWidth()).toBe(300)
+  })
+
+  it('rejects invalid and out-of-document ranges', async () => {
+    const source = await PDFDocument.create()
+    source.addPage()
+    const pdf = await source.save()
+
+    await expect(cropPdfPages(pdf, 0, 1)).rejects.toThrow('Invalid PDF page range')
+    await expect(cropPdfPages(pdf, 1, 2)).rejects.toThrow('PDF page range exceeds document')
   })
 })

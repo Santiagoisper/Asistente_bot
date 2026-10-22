@@ -15,10 +15,16 @@ import { canReuseEmbeddedChunks } from './chunk-reuse'
 import { chunkPages } from './chunker'
 import { EmbeddingIndexingError, indexDocumentVersionChunks } from './indexer'
 import { parsePdf, PdfParseError } from './parser'
-import { extractStudySpec, SPEC_EXTRACTION_LLM_PROVIDER } from './spec-extractor'
-import { getApprovedSpecExamples, isMeaningfulSpec, saveStudySpec } from './spec-store'
+import { extractStudySpec, getExtractionModelId, SPEC_EXTRACTION_LLM_PROVIDER } from './spec-extractor'
+import {
+  getApprovedSpecExamples,
+  getLatestMeaningfulStudySpec,
+  isMeaningfulSpec,
+  saveStudySpec,
+} from './spec-store'
 import { reextractStudySpec } from './reextract-spec'
 import { getOrgLlmApiKeys } from '@ichtys/db'
+import { emptyStudySpec, mergeSoaVisits, studySpecSchema, type StudySpec } from './study-spec'
 
 /**
  * pipeline.ts - ingestion orchestrator.
@@ -59,6 +65,7 @@ export type IngestionErrorCode =
   | 'embedding_rate_limited'
   | 'pdf_text_extraction_failed'
   | 'pdf_contains_no_extractable_text'
+  | 'spec_extraction_failed'
   | 'ingestion_internal_error'
 
 class IngestionPipelineError extends Error {
@@ -172,6 +179,16 @@ function sanitizeIngestionError(err: unknown): IngestionErrorCode {
   return 'ingestion_internal_error'
 }
 
+function safeErrorMetadata(error: unknown): string {
+  const value = error && typeof error === 'object' ? error as Record<string, unknown> : {}
+  const safeToken = (candidate: unknown): string | null =>
+    typeof candidate === 'string' && /^[a-zA-Z0-9_.-]{1,64}$/.test(candidate) ? candidate : null
+  const name = safeToken(value.name) ?? 'UnknownError'
+  const code = safeToken(value.code) ?? 'unknown'
+  const status = typeof value.status === 'number' && Number.isFinite(value.status) ? value.status : 'n/a'
+  return `name=${name} status=${status} code=${code}`
+}
+
 async function markProcessing(input: RunIngestionInput): Promise<void> {
   await db
     .update(documentVersions)
@@ -225,16 +242,22 @@ async function markError(input: RunIngestionInput, errorMessage: IngestionErrorC
 const JOB_SPEC_DEADLINE_MS = 265_000
 const JOB_REEXTRACT_DEADLINE_MS = 200_000
 
+export function shouldExtractStudySpec(documentType: Document['documentType']): boolean {
+  return documentType === 'protocol' || documentType === 'soa'
+}
+
 type ParsedPages = Awaited<ReturnType<typeof parsePdf>>['pages']
 type ExtractedSpec = Awaited<ReturnType<typeof extractStudySpec>>
 
 /**
  * Lanza la extracción del spec (llamada al LLM). Nunca rechaza: un fallo del spec no falla
- * la ingesta — el documento queda 'ready' sin spec y el usuario puede reprocesar.
+ * la ingesta; el estado del fallo se persiste en study_specs para habilitar un reintento.
  */
 function startSpecExtraction(
   specPages: ParsedPages,
+  protocolPdf: Uint8Array,
   input: RunIngestionInput,
+  documentType: Document['documentType'],
 ): Promise<{ extracted: ExtractedSpec | null; ms: number }> {
   const startedAt = Date.now()
   return (async () => {
@@ -243,7 +266,7 @@ function startSpecExtraction(
         orgId: input.orgId,
         limit: 3,
       }).catch(err => {
-        console.warn('[spec-extractor] Could not load few-shot examples:', err)
+        console.warn(`[spec-extractor] Could not load few-shot examples ${safeErrorMetadata(err)}`)
         return []
       })
 
@@ -255,10 +278,14 @@ function startSpecExtraction(
         orgId: input.orgId,
         studyId: input.studyId,
         userId: input.userId,
+        protocolPdf,
+        visitsOnly: documentType === 'soa',
       })
       return { extracted, ms: Date.now() - startedAt }
     } catch (err) {
-      console.error(`[spec-extractor] FAILED for documentVersionId=${input.documentVersionId}:`, err)
+      console.error(
+        `[spec-extractor] FAILED for documentVersionId=${input.documentVersionId} ${safeErrorMetadata(err)}`,
+      )
       return { extracted: null, ms: Date.now() - startedAt }
     }
   })()
@@ -268,10 +295,20 @@ function startSpecExtraction(
 async function persistSpecDraft(
   extracted: ExtractedSpec,
   input: RunIngestionInput,
-  options: { allowReextract: boolean },
+  options: { allowReextract: boolean; documentType: Document['documentType'] },
 ): Promise<void> {
   try {
     const { spec, warnings, extractionModel, detectedLanguage } = extracted
+    const previousMeaningful = options.documentType === 'soa'
+      ? await getLatestMeaningfulStudySpec({ orgId: input.orgId, studyId: input.studyId })
+      : null
+    const previousSpec = previousMeaningful ? studySpecSchema.parse(previousMeaningful.spec) : null
+    const specToSave = options.documentType === 'soa'
+      ? { ...mergeSoaVisits(previousSpec, spec.visits, input.documentVersionId), extractionWarnings: warnings }
+      : { ...spec, extractionWarnings: warnings }
+    const specDocumentVersionId = options.documentType === 'soa'
+      ? previousMeaningful?.documentVersionId ?? input.documentVersionId
+      : input.documentVersionId
 
     if (warnings.length > 0) {
       console.warn(`[spec-extractor] warnings for documentVersionId=${input.documentVersionId}:`, warnings)
@@ -283,13 +320,13 @@ async function persistSpecDraft(
     const { id, version } = await saveStudySpec({
       orgId: input.orgId,
       studyId: input.studyId,
-      documentVersionId: input.documentVersionId,
-      spec,
+      documentVersionId: specDocumentVersionId,
+      spec: specToSave,
       extractionModel,
     })
     console.log(`[spec-extractor] saved draft spec id=${id} version=${version}`)
 
-    if (!isMeaningfulSpec(spec) && options.allowReextract) {
+    if (!isMeaningfulSpec(specToSave) && options.allowReextract) {
       console.warn(
         `[spec-extractor] partial spec v${version} for documentVersionId=${input.documentVersionId}, auto re-extracting…`,
       )
@@ -302,11 +339,48 @@ async function persistSpecDraft(
         })
         console.log(`[spec-extractor] auto re-extract ok v${retry.version} richness=${retry.richness}`)
       } catch (retryErr) {
-        console.error('[spec-extractor] auto re-extract failed:', retryErr)
+        console.error(`[spec-extractor] auto re-extract failed ${safeErrorMetadata(retryErr)}`)
+        throw new IngestionPipelineError('spec_extraction_failed', 'La extracción del spec no produjo contenido útil')
       }
+    } else if (!isMeaningfulSpec(specToSave)) {
+      throw new IngestionPipelineError('spec_extraction_failed', 'La extracción del spec no produjo contenido útil')
     }
   } catch (err) {
-    console.error(`[spec-extractor] FAILED for documentVersionId=${input.documentVersionId}:`, err)
+    console.error(
+      `[spec-extractor] FAILED for documentVersionId=${input.documentVersionId} ${safeErrorMetadata(err)}`,
+    )
+    throw err instanceof IngestionPipelineError
+      ? err
+      : new IngestionPipelineError('spec_extraction_failed', 'No se pudo guardar el spec extraído')
+  }
+}
+
+/** Guarda un registro visible de fallo sin convertir un documento ya indexado en error. */
+async function persistSpecFailure(
+  input: RunIngestionInput,
+  warnings: string[],
+  documentType: Document['documentType'],
+): Promise<void> {
+  try {
+    const previousMeaningful = documentType === 'soa'
+      ? await getLatestMeaningfulStudySpec({ orgId: input.orgId, studyId: input.studyId })
+      : null
+    const previousSpec = previousMeaningful
+      ? studySpecSchema.parse(previousMeaningful.spec)
+      : emptyStudySpec()
+    const failedSpec: StudySpec = documentType === 'soa'
+      ? { ...previousSpec, extractionFailed: true, extractionWarnings: [...new Set(warnings)] }
+      : { ...emptyStudySpec(), extractionFailed: true, extractionWarnings: [...new Set(warnings)] }
+    await saveStudySpec({
+      orgId: input.orgId,
+      studyId: input.studyId,
+      documentVersionId: input.documentVersionId,
+      spec: failedSpec,
+      extractionModel: getExtractionModelId(),
+    })
+  } catch {
+    // No exponer el error del proveedor ni texto potencialmente sensible en logs.
+    console.error(`[spec-extractor] failure record could not be saved documentVersionId=${input.documentVersionId}`)
   }
 }
 
@@ -406,8 +480,8 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
     // del texto ya leído. Se lanzan juntos y se espera a los dos. El spec solo se GUARDA si
     // los embeddings terminaron bien (no queda un borrador de un documento fallido).
     const specExtraction =
-      document.documentType === 'protocol'
-        ? startSpecExtraction(parsedDocument.pages, parsedInput)
+      shouldExtractStudySpec(document.documentType)
+        ? startSpecExtraction(parsedDocument.pages, pdfData, parsedInput, document.documentType)
         : null
 
     const indexingResult = await indexDocumentVersionChunks(parsedInput, { startedAt })
@@ -430,13 +504,39 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
         console.warn(
           `[spec-extractor] skipped: not ready before the job deadline documentVersionId=${parsedInput.documentVersionId}`,
         )
+        await persistSpecFailure(
+          parsedInput,
+          ['La extracción excedió el tiempo disponible; se puede reintentar.'],
+          document.documentType,
+        )
       } else {
         timings.specExtractMs = settled.ms
         lap('specWaitMs')
-        if (settled.extracted) {
-          await persistSpecDraft(settled.extracted, parsedInput, {
-            allowReextract: Date.now() < startedAt + JOB_REEXTRACT_DEADLINE_MS,
-          })
+        if (!settled.extracted) {
+          await persistSpecFailure(
+            parsedInput,
+            ['La extracción del spec falló; se puede reintentar.'],
+            document.documentType,
+          )
+        } else if (document.documentType === 'soa' && settled.extracted.spec.visits.length === 0) {
+          await persistSpecFailure(
+            parsedInput,
+            [...settled.extracted.warnings, 'La guía SoA no produjo visitas utilizables; se puede reintentar.'],
+            document.documentType,
+          )
+        } else {
+          try {
+            await persistSpecDraft(settled.extracted, parsedInput, {
+              allowReextract:
+                document.documentType === 'protocol' && Date.now() < startedAt + JOB_REEXTRACT_DEADLINE_MS,
+              documentType: document.documentType,
+            })
+          } catch {
+            await persistSpecFailure(parsedInput, [
+              ...settled.extracted.warnings,
+              'No se pudo guardar un spec utilizable; se puede reintentar la extracción.',
+            ], document.documentType)
+          }
         }
         lap('specSaveMs')
       }
@@ -550,7 +650,13 @@ export { chunkPages } from './chunker'
 export { embedBatch, embedQuery } from './embedder'
 export { indexDocumentVersionChunks } from './indexer'
 export { extractStudySpec } from './spec-extractor'
-export { saveStudySpec, getLatestStudySpec, specRichness, isMeaningfulSpec } from './spec-store'
+export {
+  saveStudySpec,
+  getLatestStudySpec,
+  getLatestSpecAttempt,
+  specRichness,
+  isMeaningfulSpec,
+} from './spec-store'
 export { reextractStudySpec, getProtocolDocumentVersionId } from './reextract-spec'
 export { studySpecSchema } from './study-spec'
 export type { StudySpec, EligibilityCriterion, StudyEndpoint, StudyVisit } from './study-spec'
