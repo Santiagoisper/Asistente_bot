@@ -17,7 +17,7 @@ import type {
 // Tipos de diff
 // ---------------------------------------------------------------------------
 
-export type DiffType = 'added' | 'removed' | 'modified' | 'unchanged'
+type DiffType = 'added' | 'removed' | 'modified' | 'unchanged'
 
 export interface CriterionDiff {
   diffType: DiffType
@@ -33,7 +33,7 @@ export interface EndpointDiff {
   new: StudyEndpoint | null
 }
 
-export interface ProcedureDiff {
+interface ProcedureDiff {
   diffType: DiffType
   text: string
 }
@@ -47,7 +47,7 @@ export interface VisitDiff {
   procedureDiffs: ProcedureDiff[]
 }
 
-export interface SpecDiffSummary {
+interface SpecDiffSummary {
   added: number
   removed: number
   modified: number

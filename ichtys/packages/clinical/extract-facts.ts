@@ -1,3 +1,4 @@
+import { parseDecimal, upsertLab } from './lab-utils'
 import type { LabObservation, Medication, PatientProfile } from './profile-schema'
 
 export interface ExtractedFacts {
@@ -7,18 +8,6 @@ export interface ExtractedFacts {
   labs: LabObservation[]
   medications: Medication[]
   conditions: string[]
-}
-
-function parseDecimal(raw: string): number {
-  return Number.parseFloat(raw.replace(',', '.'))
-}
-
-function upsertLab(labs: LabObservation[], entry: LabObservation): LabObservation[] {
-  const idx = labs.findIndex((l) => l.name.toLowerCase() === entry.name.toLowerCase())
-  if (idx === -1) return [...labs, entry]
-  const next = [...labs]
-  next[idx] = entry
-  return next
 }
 
 /**

@@ -29,6 +29,19 @@ export function isRole(value: string): value is Role {
 }
 
 /**
+ * Convierte el rol de Clerk a un Role de Ichtys.
+ * Clerk puede devolver "org:admin" (admin nativo) u "org:study_admin" (custom).
+ * Default conservador: read_only_monitor (mínimo privilegio).
+ */
+export function normalizeRole(orgRole: string | null | undefined): Role {
+  if (!orgRole) return ROLES.READ_ONLY_MONITOR
+  const stripped = orgRole.replace(/^org:/, '')
+  // Clerk admin nativo ("org:admin") mapea a org_admin de Ichtys.
+  if (stripped === 'admin') return ROLES.ORG_ADMIN
+  return isRole(stripped) ? stripped : ROLES.READ_ONLY_MONITOR
+}
+
+/**
  * ¿`role` satisface el requisito mínimo `required`?
  */
 export function roleSatisfies(role: Role, required: Role): boolean {

@@ -17,13 +17,13 @@
 
 | Capa | Tecnología | Razón |
 |---|---|---|
-| Frontend | Next.js 15 App Router + TypeScript | SSR, streaming nativo, Vercel-native |
+| Frontend | Next.js 16 App Router + TypeScript | SSR, streaming nativo, Vercel-native |
 | Streaming chat | Vercel AI SDK (`streamText`, `generateObject`) | Integración limpia con App Router |
 | Styling | Tailwind CSS | Velocidad, mobile-first |
 | Auth | Clerk Organizations | Multi-tenant B2B out-of-the-box, roles, invites |
 | Database | Neon Postgres (serverless) | Branching para tests, scale-to-zero, compatible pgvector |
 | Vector search | pgvector (extensión en Neon) | Embeddings + similarity search en la misma DB |
-| File storage | Vercel Blob | Upload de PDFs, acceso controlado, signed URLs |
+| File storage | Vercel Blob | Upload de PDFs con blob privado; acceso solo por endpoint autenticado |
 | Hosting | Vercel | Preview deployments, GitHub integration, AI SDK native |
 | CI/CD | GitHub Actions | Tests, lint, typecheck, migration checks, deploy gates |
 | Source control | GitHub | Monorepo, PR reviews, Claude Code Action |
@@ -80,8 +80,8 @@ POST /api/chat
       — contexto para interpretar la pregunta; NUNCA evidencia
     → embed question
     → pgvector search WHERE organization_id=$org AND study_id=$study
-      ORDER BY embedding <=> $q LIMIT 8
-    → filtrar por similarity threshold (>= 0.30, calibrado para text-embedding-3-small)
+      ORDER BY embedding <=> $q LIMIT 12 (topK configurable por org; default 12, máximo 20)
+    → filtrar por similarity threshold (>= 0.15, configurable por org, calibrado para text-embedding-3-small)
     → assemble context → LLM con grounded prompt
     → parse structured response (answer + citations + confidence)
     → insufficient_evidence → fallback explícito
@@ -98,7 +98,7 @@ Ver `docs/SECURITY.md` para la versión expandida. Reglas no negociables:
 1. Todo acceso a datos validado server-side
 2. `organization_id` siempre desde el token de Clerk
 3. `study_id` validado contra membresía del usuario
-4. PDFs servidos con signed URLs (expiración corta)
+4. PDFs servidos solo por endpoints autenticados, desde blob privado (nunca URL pública directa)
 5. Audit log en toda acción sensible
 
 ---

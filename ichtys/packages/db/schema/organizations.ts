@@ -11,11 +11,11 @@ import { studies } from './studies'
 export interface OrgRagConfig {
   /** Minimum cosine similarity to consider a chunk as evidence. Default: 0.15 */
   similarityThreshold?: number
-  /** Max chunks to retrieve. Default: 20. Hard cap: 20. */
+  /** Max chunks to retrieve. Default: 12. Hard cap: 20. */
   topK?: number
   /**
    * Proveedor LLM para chat y extracción de specs.
-   * `auto` = Claude → OpenAI → Groq → GLM (salta sin API key).
+   * `auto` = Claude → OpenAI → Gemini → Groq → GLM (salta sin API key).
    */
   llmProvider?: 'anthropic' | 'openai' | 'google' | 'groq' | 'glm' | 'auto'
 }
