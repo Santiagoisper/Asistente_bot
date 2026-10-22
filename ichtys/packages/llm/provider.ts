@@ -3,6 +3,7 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createGroq } from '@ai-sdk/groq'
 import { createOpenAI } from '@ai-sdk/openai'
 import type { LanguageModel } from 'ai'
+import { withAnthropicPromptCache } from './anthropic-cache'
 import { resolveKeyForProvider } from './keys'
 import type { OrgLlmApiKeys } from './keys'
 import { AUTO_PROVIDER_CHAIN, type LlmProviderId, type LlmProviderPreference, type LlmPurpose } from './types'
@@ -48,7 +49,16 @@ export function isGlmConfigured(orgKeys?: OrgLlmApiKeys | null): boolean {
 
 export function resolveProviderChain(preference?: LlmProviderPreference): LlmProviderId[] {
   const resolved = preference ?? getDefaultProviderPreference()
+  // 'auto' es la ÚNICA cadena multi-proveedor (respaldo cruzado completo,
+  // anthropic primero, GLM solo como red final).
   if (resolved === 'auto') return [...AUTO_PROVIDER_CHAIN]
+  // Preferencia explícita (de la org o de LLM_PROVIDER) = cadena de 1, SIN
+  // respaldo cruzado: los datos de una org solo van al proveedor que eligió
+  // — decisión de tratamiento de datos del Foreman 2026-10-22, ver
+  // docs/ALPHI-ARCHITECT-ADR-modelos-anthropic.md. El anti-cuelgue no es la
+  // cadena: es el timeout propio (LLM_CALL_TIMEOUT_MS y timeouts de stream)
+  // con error claro en español — LLM_PROVIDER=glm colgó el chat 300 s en
+  // producción, pero la solución fue el timeout, no mezclar proveedores.
   return [resolved]
 }
 
@@ -76,11 +86,19 @@ export function getModel(
 export function getModelId(provider: LlmProviderId, purpose: LlmPurpose): string {
   switch (provider) {
     case 'anthropic':
-      if (purpose === 'title' || purpose === 'clinical-extract') {
-        return process.env.TITLE_MODEL ?? 'claude-haiku-4-5'
+      // Mapa por propósito (IDs y precios confirmados con la skill claude-api,
+      // 2026-10-22): chat/answer → sonnet-5-5 ($2/$10 MTok), título → haiku-5-5
+      // ($0.10/$0.50), clinical → sonnet-5-5, spec/SoA → opus-5-5 ($4/$20;
+      // decisión del Foreman 2026-10-22 coordinada con sicario, PDF visual del
+      // SoA; SPEC_EXTRACTION_MODEL permite bajar a otro modelo sin tocar código).
+      if (purpose === 'title') {
+        return process.env.TITLE_MODEL ?? 'claude-haiku-5-5'
       }
-      if (purpose === 'spec') return process.env.SPEC_EXTRACTION_MODEL ?? 'claude-sonnet-4-6'
-      return process.env.ANSWER_MODEL ?? 'claude-sonnet-4-5'
+      if (purpose === 'clinical-extract') {
+        return process.env.CLINICAL_EXTRACTION_MODEL ?? 'claude-sonnet-5-5'
+      }
+      if (purpose === 'spec') return process.env.SPEC_EXTRACTION_MODEL ?? 'claude-opus-5-5'
+      return process.env.ANSWER_MODEL ?? 'claude-sonnet-5-5'
     case 'openai':
       if (purpose === 'title' || purpose === 'clinical-extract') {
         return process.env.OPENAI_TITLE_MODEL ?? 'gpt-4o-mini'
@@ -130,7 +148,11 @@ export function createLanguageModel(
 
   switch (provider) {
     case 'anthropic': {
-      const anthropic = createAnthropic({ apiKey })
+      const anthropic = createAnthropic({
+        apiKey,
+        // Prompt caching del system prompt (ver anthropic-cache.ts).
+        fetch: withAnthropicPromptCache(),
+      })
       return anthropic(modelId)
     }
     case 'openai': {

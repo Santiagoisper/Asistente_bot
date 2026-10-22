@@ -36,6 +36,7 @@ const documentType = z.enum([
   'investigator_brochure',
   'lab_manual',
   'pharmacy_manual',
+  'soa',
   'other',
 ])
 

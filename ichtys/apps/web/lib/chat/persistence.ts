@@ -262,9 +262,10 @@ export async function generateAndPersistConversationTitle(params: {
 
   const { result: text, provider, modelId, usage, keySource } = await runWithLlmFallback(
     { purpose: 'title', platformKeyBlocked: params.platformKeyBlocked },
-    async (model, _provider, reportUsage) => {
+    async (model, _provider, reportUsage, signal) => {
       const { text: titleText, usage: titleUsage } = await generateText({
         model,
+        abortSignal: signal,
         system:
           'You generate ultra-short conversation titles. Return ONLY the title: 6 words or fewer, no punctuation, no quotes, no explanation. Title should summarize what the user is asking about.',
         prompt: contextLine,

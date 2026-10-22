@@ -1,7 +1,13 @@
 'use client'
 
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import {
+  INGESTION_STAGE_LABELS,
+  POLL_INTERVAL_MS,
+  POLL_MAX_DURATION_MS,
+  type IngestionStageId,
+} from '../../lib/documents/ingestion-stage'
 
 interface UploadZoneProps {
   studyId: string
@@ -27,7 +33,7 @@ const DOC_TYPE_VALUES = [
   'investigator_brochure',
   'other',
   'other',
-  'other',
+  'soa',
   'other',
 ] as const
 
@@ -39,6 +45,11 @@ interface UploadState {
   progress: number
   errorMessage: string | null
   elapsed: number
+  /** Etapa real de la ingesta, del polling a /api/documents/[id]/status. */
+  stage: IngestionStageId | null
+  stageLabel: string | null
+  chunksEmbedded: number
+  chunksTotal: number
 }
 
 const INITIAL_STATE: UploadState = {
@@ -47,7 +58,23 @@ const INITIAL_STATE: UploadState = {
   progress: 0,
   errorMessage: null,
   elapsed: 0,
+  stage: null,
+  stageLabel: null,
+  chunksEmbedded: 0,
+  chunksTotal: 0,
 }
+
+interface IngestionStatusResponse {
+  status: 'pending' | 'processing' | 'ready' | 'error'
+  stage?: IngestionStageId
+  stageLabel?: string
+  chunksEmbedded?: number
+  chunksTotal?: number
+  errorMessage?: string | null
+}
+
+/** Errores de red consecutivos tolerados antes de dar por perdida la conexión. */
+const MAX_POLL_FAILURES = 3
 
 export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
   const router = useRouter()
@@ -57,6 +84,22 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
   const [selectedDocType, setSelectedDocType] = useState<number>(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const stopPolling = useCallback(() => {
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current)
+      pollTimerRef.current = null
+    }
+  }, [])
+
+  // Al desmontar (navegación): cortar timers — sin esto el polling seguía vivo.
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
+    }
+  }, [])
 
   const startTimer = useCallback(() => {
     setState((s) => ({ ...s, elapsed: 0 }))
@@ -72,6 +115,96 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
     }
   }, [])
 
+  /**
+   * Polling del estado REAL de la versión: la ingesta corre en background
+   * (after() en /api/ingestion/run) y antes mostrábamos "éxito" a los 800 ms
+   * de dispararla, cuando apenas empezaba. Acá esperamos el estado verdadero
+   * con sus etapas (leyendo PDF → indexando → extrayendo SoA → listo).
+   */
+  const pollIngestionStatus = useCallback(
+    async (documentId: string, startedAt: number, failures: number) => {
+      let data: IngestionStatusResponse
+      try {
+        const res = await fetch(`/api/documents/${documentId}/status`, { cache: 'no-store' })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        data = (await res.json()) as IngestionStatusResponse
+      } catch (err) {
+        console.warn('[upload-zone] status poll failed', err)
+        if (failures + 1 >= MAX_POLL_FAILURES) {
+          stopTimer()
+          stopPolling()
+          setState((s) => ({
+            ...s,
+            status: 'error',
+            errorMessage:
+              'Se perdió la conexión mientras se procesaba el documento. El procesamiento sigue en el servidor: revisá el estado en la tabla de documentos en unos minutos.',
+          }))
+          return
+        }
+        pollTimerRef.current = setTimeout(
+          () => void pollIngestionStatus(documentId, startedAt, failures + 1),
+          POLL_INTERVAL_MS,
+        )
+        return
+      }
+
+      const stage = data.stage ?? null
+      setState((s) => ({
+        ...s,
+        status: 'processing',
+        stage,
+        stageLabel: data.stageLabel ?? (stage ? INGESTION_STAGE_LABELS[stage] : null),
+        chunksEmbedded: data.chunksEmbedded ?? 0,
+        chunksTotal: data.chunksTotal ?? 0,
+      }))
+
+      if (data.status === 'error') {
+        stopTimer()
+        stopPolling()
+        setState((s) => ({
+          ...s,
+          status: 'error',
+          errorMessage:
+            data.errorMessage ??
+            'El documento no pudo procesarse. Intentá subirlo de nuevo o escribinos si sigue fallando.',
+        }))
+        router.refresh()
+        return
+      }
+
+      if (data.status === 'ready') {
+        stopTimer()
+        stopPolling()
+        setState((s) => ({ ...s, status: 'success', progress: 100, stage: 'ready', stageLabel: INGESTION_STAGE_LABELS.ready }))
+        router.refresh()
+        onUploadComplete?.()
+        setTimeout(() => setState(INITIAL_STATE), 6000)
+        return
+      }
+
+      if (Date.now() - startedAt > POLL_MAX_DURATION_MS) {
+        // Protocolos muy largos: dejamos de ocupar la pantalla, pero el
+        // proceso sigue en el servidor y se ve en la tabla de documentos.
+        stopTimer()
+        stopPolling()
+        setState((s) => ({
+          ...s,
+          status: 'success',
+          stage: null,
+          stageLabel: 'Sigue procesándose en segundo plano',
+        }))
+        router.refresh()
+        return
+      }
+
+      pollTimerRef.current = setTimeout(
+        () => void pollIngestionStatus(documentId, startedAt, 0),
+        POLL_INTERVAL_MS,
+      )
+    },
+    [onUploadComplete, router, stopPolling, stopTimer],
+  )
+
   const handleFile = useCallback(async (file: File) => {
     if (!file) return
 
@@ -81,17 +214,16 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
       file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
     if (!isPdf) {
       setState({
+        ...INITIAL_STATE,
         status: 'error',
         fileName: file.name,
-        progress: 0,
         errorMessage:
           'Por ahora solo se procesan archivos PDF. Convertí el documento a PDF e intentá de nuevo.',
-        elapsed: 0,
       })
       return
     }
 
-    setState({ status: 'uploading', fileName: file.name, progress: 0, errorMessage: null, elapsed: 0 })
+    setState({ ...INITIAL_STATE, status: 'uploading', fileName: file.name })
     startTimer()
 
     const formData = new FormData()
@@ -117,45 +249,74 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
         xhr.send(formData)
       })
 
-      // Parsear la respuesta para obtener el documentVersionId.
+      // Parsear la respuesta: se necesitan AMBOS ids (documentVersionId para
+      // disparar la ingesta, documentId para consultar su estado real).
+      let documentId: string | null = null
       let documentVersionId: string | null = null
       try {
-        const uploadResult = JSON.parse(xhr.responseText) as { documentVersionId?: string }
+        const uploadResult = JSON.parse(xhr.responseText) as {
+          documentId?: string
+          documentVersionId?: string
+        }
+        documentId = uploadResult.documentId ?? null
         documentVersionId = uploadResult.documentVersionId ?? null
-      } catch {
-        // silencioso — el usuario puede reprocesar manualmente
+      } catch (err) {
+        console.error('[upload-zone] could not parse upload response', err)
       }
 
-      setState((s) => ({ ...s, status: 'processing', progress: 100 }))
+      setState((s) => ({
+        ...s,
+        status: 'processing',
+        progress: 100,
+        stage: 'queued',
+        stageLabel: INGESTION_STAGE_LABELS.queued,
+      }))
 
-      // Disparar ingestion. La route retorna 202 inmediatamente (usa after()
-      // internamente para correr en background). No necesitamos fire-and-forget.
-      if (documentVersionId) {
-        await fetch('/api/ingestion/run', {
+      if (!documentId || !documentVersionId) {
+        // Antes esto seguía en silencio y el usuario veía un éxito falso.
+        stopTimer()
+        setState((s) => ({
+          ...s,
+          status: 'error',
+          errorMessage:
+            'La subida terminó pero no se pudo iniciar el procesamiento. Buscá el documento en la tabla de abajo y usá “Reprocesar”.',
+        }))
+        router.refresh()
+        return
+      }
+
+      // Disparar la ingesta (202: corre en background con after()). El éxito
+      // real lo decide el polling del estado — no un delay fijo.
+      try {
+        const ingestionRes = await fetch('/api/ingestion/run', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ documentVersionId }),
-        }).catch(() => {
-          // silencioso — el usuario puede reprocesar manualmente
         })
+        if (!ingestionRes.ok && ingestionRes.status !== 202) {
+          throw new Error(`HTTP ${ingestionRes.status}`)
+        }
+      } catch (err) {
+        // Antes esto era silencioso y el documento quedaba pendiente sin aviso.
+        console.error('[upload-zone] failed to trigger ingestion', err)
+        stopTimer()
+        setState((s) => ({
+          ...s,
+          status: 'error',
+          errorMessage:
+            'El archivo se subió, pero no se pudo iniciar el procesamiento. Buscá el documento en la tabla de abajo y usá “Reprocesar”.',
+        }))
+        router.refresh()
+        return
       }
 
-      // Pequeño delay para dar feedback visual antes de volver al idle.
-      await new Promise((r) => setTimeout(r, 800))
-      stopTimer()
-      setState((s) => ({ ...s, status: 'success' }))
-
-      // Actualizar el server component para que aparezca el nuevo documento.
-      router.refresh()
-      onUploadComplete?.()
-
-      setTimeout(() => setState(INITIAL_STATE), 3200)
+      await pollIngestionStatus(documentId, Date.now(), 0)
     } catch (err) {
       stopTimer()
       const msg = err instanceof Error ? err.message : 'Error desconocido'
-      setState({ status: 'error', fileName: file.name, progress: 0, errorMessage: msg, elapsed: 0 })
+      setState({ ...INITIAL_STATE, status: 'error', fileName: file.name, errorMessage: msg })
     }
-  }, [studyId, selectedDocType, startTimer, stopTimer, onUploadComplete, router])
+  }, [studyId, selectedDocType, startTimer, stopTimer, pollIngestionStatus, onUploadComplete, router])
 
   const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -179,24 +340,40 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
 
   const handleReset = useCallback(() => {
     stopTimer()
+    stopPolling()
     setState(INITIAL_STATE)
-  }, [stopTimer])
+  }, [stopTimer, stopPolling])
 
-  const { status, fileName, progress, errorMessage, elapsed } = state
+  const { status, fileName, progress, errorMessage, elapsed, stage, stageLabel, chunksEmbedded, chunksTotal } = state
+
+  const fullyProcessed = status === 'success' && stage === 'ready'
 
   if (status === 'success') {
     return (
       <div className="alphi-card flex flex-col items-center gap-3 px-6 py-8 text-center">
         <span className="text-5xl text-alphi-teal">&#8682;</span>
         <div>
-          <p className="text-base font-bold text-alphi-navy">Documento subido</p>
+          <p className="text-base font-bold text-alphi-navy">
+            {fullyProcessed ? 'Documento procesado' : 'Documento subido'}
+          </p>
           <p className="mt-0.5 text-sm text-alphi-muted">
-            <strong>{fileName}</strong> se esta procesando en segundo plano.
+            {fullyProcessed ? (
+              <>
+                <strong>{fileName}</strong> quedo listo: indexado y con sus visitas y
+                criterios extraidos, disponible para consultas.
+              </>
+            ) : (
+              <>
+                <strong>{fileName}</strong> sigue procesandose en segundo plano.
+              </>
+            )}
           </p>
-          <p className="mt-1 text-xs text-alphi-muted">
-            Segui el avance en la tabla de estado mas abajo. Puede tardar 1-2 minutos
-            en protocolos largos; el spec y las consultas quedan disponibles al finalizar.
-          </p>
+          {!fullyProcessed && (
+            <p className="mt-1 text-xs text-alphi-muted">
+              Puede tardar algunos minutos en protocolos largos. Segui el avance en la
+              tabla de estado mas abajo.
+            </p>
+          )}
         </div>
         <button type="button" onClick={handleReset} className="alphi-btn-secondary mt-1">
           Subir otro documento
@@ -214,8 +391,10 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
             <span className="alphi-typing-dot" />
             <span className="alphi-typing-dot" />
           </span>
-          <span className="ml-1">
-            {status === 'uploading' ? 'Subiendo...' : 'Procesando e indexando...'}
+          <span className="ml-1" data-testid="upload-stage-label">
+            {status === 'uploading'
+              ? 'Subiendo...'
+              : (stageLabel ?? 'Procesando e indexando...')}
           </span>
         </div>
         <p className="font-mono text-sm text-alphi-navy">{fileName}</p>
@@ -228,7 +407,29 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
           </div>
         )}
         {status === 'processing' && (
-          <p className="text-xs text-alphi-muted">Vectorizando fragmentos... {elapsed}s</p>
+          <>
+            <div className="h-2 w-full max-w-xs overflow-hidden rounded-full bg-alphi-slate">
+              <div
+                className="h-full rounded-full bg-alphi-teal transition-all duration-300"
+                style={{
+                  width:
+                    chunksTotal > 0 && stage === 'indexing'
+                      ? `${Math.min(100, Math.round((chunksEmbedded / chunksTotal) * 100))}%`
+                      : '100%',
+                  opacity: chunksTotal > 0 && stage === 'indexing' ? 1 : 0.5,
+                }}
+              />
+            </div>
+            <p className="text-xs text-alphi-muted" data-testid="upload-stage-detail">
+              {chunksTotal > 0 && stage === 'indexing'
+                ? `Fragmentos: ${chunksEmbedded} de ${chunksTotal}`
+                : stage === 'extracting'
+                  ? 'Ultimo paso: visitas y criterios del protocolo'
+                  : 'Puede tardar 1-2 minutos en protocolos largos'}
+              {' — '}
+              {elapsed}s
+            </p>
+          </>
         )}
         <p className="max-w-xs text-xs text-alphi-muted">
           Los protocolos largos pueden tardar 1-2 minutos dependiendo del numero de paginas.

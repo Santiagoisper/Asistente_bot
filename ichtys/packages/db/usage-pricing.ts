@@ -30,8 +30,9 @@ export const FALLBACK_PRICE: ModelPrice = { inputPerMTok: 3, outputPerMTok: 15 }
 /**
  * Orden importa: la primera regla cuyo prefijo coincide gana, así que los prefijos más
  * específicos van antes (p. ej. 'gpt-4o-mini' antes de 'gpt-4o').
- * Fuentes: páginas de precios de cada proveedor al 2026-10-21; GLM-5.2 verificado en fuentes
- * secundarias con valores contradictorios (0.98/3.08 vs 1.40/4.40): se usa el mayor.
+ * Fuentes: páginas de precios de cada proveedor; Anthropic verificado con la skill
+ * claude-api al 2026-10-22; GLM-5.2 en fuentes secundarias con valores contradictorios
+ * (0.98/3.08 vs 1.40/4.40): se usa el mayor.
  */
 const PRICE_RULES: readonly PriceRule[] = [
   // Z.ai / GLM (también aparece como 'z-ai/glm-…' vía OpenRouter)
@@ -45,7 +46,18 @@ const PRICE_RULES: readonly PriceRule[] = [
   { modelPrefix: 'text-embedding-3-small', inputPerMTok: 0.02, outputPerMTok: 0 },
   { modelPrefix: 'gpt-4o-mini', inputPerMTok: 0.15, outputPerMTok: 0.6 },
   { modelPrefix: 'gpt-4o', inputPerMTok: 2.5, outputPerMTok: 10 },
-  // Anthropic
+  // Anthropic — vigentes 2026-10-22 (skill claude-api; USD por MTok).
+  // Cache reads se tarifican a precio pleno de input (sobre-estima ≈10x su
+  // costo real: seguro para dimensionar el cupo). Prefijos específicos antes
+  // que los genéricos.
+  { modelPrefix: 'claude-opus-5-5', inputPerMTok: 4, outputPerMTok: 20 },
+  { modelPrefix: 'claude-sonnet-5-5', inputPerMTok: 2, outputPerMTok: 10 },
+  { modelPrefix: 'claude-haiku-5-5', inputPerMTok: 0.1, outputPerMTok: 0.5 },
+  // Históricos 4.x (eventos ya registrados con esos ids).
+  { modelPrefix: 'claude-sonnet-4-6', inputPerMTok: 3, outputPerMTok: 15 },
+  { modelPrefix: 'claude-sonnet-4-5', inputPerMTok: 3, outputPerMTok: 15 },
+  { modelPrefix: 'claude-haiku-4-5', inputPerMTok: 1, outputPerMTok: 5 },
+  // Genéricos conservadores para ids no listados de esa familia.
   { modelPrefix: 'claude-haiku', inputPerMTok: 1, outputPerMTok: 5 },
   { modelPrefix: 'claude-sonnet', inputPerMTok: 3, outputPerMTok: 15 },
   // Groq

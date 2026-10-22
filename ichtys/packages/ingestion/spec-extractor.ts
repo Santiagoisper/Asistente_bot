@@ -110,9 +110,10 @@ async function generateSpecObject<T>(params: {
 }): Promise<{ object: T; modelId: string }> {
   const { result, provider, modelId, usage, keySource } = await runWithLlmFallback(
     { purpose: 'spec', providerPreference: params.providerPreference, orgApiKeys: params.orgApiKeys },
-    async (model, _provider, reportUsage) => {
+    async (model, _provider, reportUsage, signal) => {
       const response = await generateObject({
         model,
+        abortSignal: signal,
         schema: params.schema,
         system: params.system,
         ...(params.pdf
