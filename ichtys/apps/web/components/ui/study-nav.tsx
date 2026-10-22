@@ -15,7 +15,11 @@ export function StudyNav({ studyId }: { studyId: string }) {
   const pathname = usePathname()
 
   return (
-    <nav className="flex gap-0">
+    // Sin overflow-x-auto, los 5 tabs no entraban en 375px: en vez de
+    // achicarse, empujaban el ancho de TODA la tarjeta/página y rompían el
+    // header sticky de arriba (medido por Foreman: desbordaba hasta 573px).
+    // shrink-0 evita que el propio flex los comprima y trunque el texto.
+    <nav className="-mx-5 flex gap-0 overflow-x-auto px-5 sm:mx-0 sm:px-0" aria-label="Secciones del estudio">
       {TABS.map((tab) => {
         const href = `/studies/${studyId}/${tab.suffix}`
         const active = pathname?.includes(`/${tab.suffix}`)
@@ -25,7 +29,7 @@ export function StudyNav({ studyId }: { studyId: string }) {
             key={tab.label}
             href={href}
             className={[
-              'flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold',
+              'flex shrink-0 items-center gap-1.5 whitespace-nowrap px-4 py-2.5 text-sm font-semibold',
               'border-b-2 -mb-px transition-all duration-150',
               active
                 ? 'border-alphi-teal text-alphi-teal'

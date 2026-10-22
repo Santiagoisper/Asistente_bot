@@ -84,8 +84,8 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-3 lg:col-span-2">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-3">
+        <div className="min-w-0 space-y-3 lg:col-span-2">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-alphi-navy">Mis estudios</h2>
             <Link href="/studies" className="text-sm font-medium text-alphi-teal hover:underline">
@@ -137,7 +137,7 @@ export default async function DashboardPage() {
           </Link>
         </div>
 
-        <div className="space-y-3">
+        <div className="min-w-0 space-y-3">
           <h2 className="text-base font-bold text-alphi-navy">Consultas recientes</h2>
 
           {recentConversations.length === 0 ? (
