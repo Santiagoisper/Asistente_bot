@@ -1,6 +1,6 @@
 # ALPHI — Consumo y cuota mensual (modelo híbrido)
 
-Estado: **etapa 1 implementada en código (migración sin aplicar a producción)**. Etapas 2 y 3 pendientes.
+Estado: **etapas 1 y 2 implementadas en código (migración sin aplicar a producción)**. Etapa 3 pendiente.
 
 ## Modelo de negocio (decisión: opción C, híbrido)
 
@@ -32,6 +32,23 @@ Tipos (`usage_events.kind`): `chat_answer`, `chat_eval`, `chat_title`, `spec_ext
 El cupo del mes (calendario UTC) = suma de `cost_micros` de los eventos con `key_source = 'platform'`.
 Importes en micro-USD: 1 USD = 1 000 000 (100 USD = `100000000`).
 
+## Dónde se registra cada tipo (etapa 2)
+
+`runWithLlmFallback` (`packages/llm/fallback.ts`) devuelve `usage` (tokens reales de
+`generateText`/`generateObject`/`streamText`) y `keySource` (clave de la org o de la plataforma)
+junto al resultado de la llamada. Cada caller con contexto de organización/estudio llama a
+`recordUsage` después:
+
+| Tipo | Dónde se mide |
+|---|---|
+| `chat_answer` / `chat_eval` | `packages/rag/answer-engine.ts` devuelve `usageEvents`; lo registran `answer-orchestrator.ts` (ruta sin streaming) y `/api/chat/stream/route.ts` (streaming) |
+| `chat_title` | `apps/web/lib/chat/persistence.ts` → `generateAndPersistConversationTitle` |
+| `spec_extraction` | `packages/ingestion/spec-extractor.ts` (una fila por llamada interna: localizador + cada grupo) |
+| `clinical_extraction` | `apps/web/lib/subjects/patient-profile-service.ts` → `extractFactsWithLlm` |
+| `embedding_document` / `embedding_query` | `packages/ingestion/embedder.ts` → `embedBatch` (una fila por lote real al proveedor) |
+
+Si el caller no pasa `orgId` (p. ej. un test unitario), no se registra nada — no es un error.
+
 ## Precios (estimados, revisar)
 
 `packages/db/usage-pricing.ts` tiene una tabla de USD por millón de tokens. Es una **estimación**, no
@@ -57,7 +74,7 @@ cambiar los precios no reescribe el historial.
 | Etapa | Contenido | Estado |
 |---|---|---|
 | 1 | Tabla `usage_events`, columnas `organizations.plan_name` / `monthly_budget_micros`, migración `0009`, módulo `packages/db/usage.ts` + `usage-pricing.ts` y tests (70 en el paquete) | Hecha, **migración sin aplicar** |
-| 2 | Enganchar cada llamada a un modelo para registrar el consumo (chat ×3, título, spec, perfil clínico, embeddings de documentos y de consultas) | Pendiente |
+| 2 | Enganchar cada llamada a un modelo para registrar el consumo (chat ×3, título, spec, perfil clínico, embeddings de documentos y de consultas) | Hecha, **sin cupo visible para el cliente aún** (eso es la etapa 3) |
 | 3 | Pantalla "Consumo" para el cliente (barra del cupo, desglose por tipo, aviso al 80 %) y tope cuando el cupo se agota (mensaje claro: cargar clave propia o ampliar plan) | Pendiente |
 | 4 | Cobro automático de la cuota (Stripe u otro) | Pendiente; requiere decisiones comerciales |
 

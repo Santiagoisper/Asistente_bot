@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import { EMBEDDING_DIMENSIONS } from '@ichtys/db'
+import { EMBEDDING_DIMENSIONS, recordUsage } from '@ichtys/db'
 import {
   formatEmbeddingInput,
   getEmbeddingApiKey,
@@ -71,6 +71,10 @@ export interface EmbedBatchOptions {
   openAiApiKey?: string
   /** Prefijo Nomic para Groq; por defecto search_document en batch. */
   task?: 'document' | 'query'
+  /** Contexto para medición de consumo (usage_events). Sin orgId no se registra nada. */
+  orgId?: string
+  studyId?: string | null
+  userId?: string | null
 }
 
 let defaultClient: EmbeddingClient | null = null
@@ -305,6 +309,7 @@ export async function embedBatch(
       )
 
       const embeddings = orderedEmbeddings(response.data, batch.length)
+      let batchTokens = 0
       for (let i = 0; i < embeddings.length; i += 1) {
         const raw = embeddings[i]?.embedding
         const text = batch[i] ?? ''
@@ -314,9 +319,25 @@ export async function embedBatch(
 
         const normalized = padEmbeddingToSchema(parseEmbeddingVector(raw))
         validateEmbeddingDimensions(normalized)
+        const tokenCount = estimateTokens(text)
+        batchTokens += tokenCount
         results.push({
           embedding: normalized,
-          tokenCount: estimateTokens(text),
+          tokenCount,
+        })
+      }
+
+      if (options.orgId) {
+        await recordUsage({
+          orgId: options.orgId,
+          studyId: options.studyId ?? null,
+          userId: options.userId ?? null,
+          kind: options.task === 'query' ? 'embedding_query' : 'embedding_document',
+          provider: effectiveOpenAiKey(options) ? 'openai' : resolveEmbeddingProvider(),
+          model,
+          inputTokens: batchTokens,
+          outputTokens: 0,
+          keySource: effectiveOpenAiKey(options) ? 'org' : 'platform',
         })
       }
     }
