@@ -33,6 +33,12 @@ const INTENT_KEYWORDS: Record<SpecSection, string[]> = {
     'apto', 'selección', 'seleccion', 'inclusion', 'exclusion', 'eligible',
     'criteria', 'enroll', 'inscribir', 'inscripcion', 'reclut',
     'minimum age', 'age requirement', 'who can',
+    // Conceptos clínicos que en la práctica siempre son elegibilidad, aunque la
+    // pregunta no diga "criterio" (corrida 2 E2E 2026-10-22: #3 IMC y #4 eGFR/UACR
+    // caían en insufficient_evidence porque el spec nunca se inyectaba).
+    'imc', 'bmi', 'masa corporal', 'egfr', 'uacr', 'nefropat', 'hba1c',
+    'aclaramiento', 'filtración glomerular', 'filtracion glomerular',
+    'ingresar', 'ingreso', 'admisi',
   ],
   endpoints: [
     'endpoint', 'objetivo', 'variable', 'eficacia', 'seguridad', 'primario',
