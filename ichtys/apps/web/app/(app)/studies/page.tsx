@@ -28,7 +28,11 @@ export default async function StudiesPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Los 3 botones de la derecha no entraban en 375px junto al título
+          (fila fija empujaba la página a 392px). flex-col en mobile baja los
+          botones debajo del título, y flex-wrap los deja envolver entre sí
+          si hace falta en vez de forzar el ancho de la página. */}
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="alphi-label mb-1">Mis estudios</p>
           <h1 className="text-2xl font-bold text-alphi-navy">Estudios clínicos</h1>
@@ -36,7 +40,7 @@ export default async function StudiesPage() {
             {activeCount} activo{activeCount !== 1 ? 's' : ''} &middot; {studyList.length} en total
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Link href="/library" className="alphi-btn-secondary text-sm">
             Librería
           </Link>

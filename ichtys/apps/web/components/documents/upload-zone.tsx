@@ -359,8 +359,8 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
           <p className="mt-0.5 text-sm text-alphi-muted">
             {fullyProcessed ? (
               <>
-                <strong>{fileName}</strong> quedo listo: indexado y con sus visitas y
-                criterios extraidos, disponible para consultas.
+                <strong>{fileName}</strong> quedó listo: indexado y con sus visitas y
+                criterios extraídos, disponible para consultas.
               </>
             ) : (
               <>
