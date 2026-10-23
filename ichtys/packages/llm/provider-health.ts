@@ -193,7 +193,10 @@ export async function fetchOpenAiUsageSummary(apiKey: string): Promise<OpenAiUsa
 export async function checkAllProviderHealth(
   orgKeys?: OrgLlmApiKeys | null,
 ): Promise<ProviderHealthResult[]> {
-  const providers: LlmProviderId[] = ['anthropic', 'openai', 'google', 'groq', 'glm']
+  // GLM salió del producto (E2E 2026-10-22): no se prueba ni se lista en
+  // Ajustes — mostrar una fila de un proveedor que ya no se puede elegir
+  // confunde, y una OPENROUTER_API_KEY legada en env lo probaría de verdad.
+  const providers: LlmProviderId[] = ['anthropic', 'openai', 'google', 'groq']
   const results: ProviderHealthResult[] = []
   for (const provider of providers) {
     results.push(await checkProviderHealth(provider, orgKeys))
