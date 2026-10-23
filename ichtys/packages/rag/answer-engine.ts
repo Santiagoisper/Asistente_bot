@@ -7,6 +7,7 @@ import {
   getModelId,
   isProviderConfigured,
   isProviderFallbackError,
+  isProviderQuotaError,
   LlmQuotaExceededError,
   resolveProviderChain,
   runWithLlmFallback,
@@ -192,9 +193,10 @@ export type StructuredAnswer = z.infer<typeof answerSchema>
 
 function statusFromError(err: unknown): number | null {
   if (typeof err !== 'object' || err === null) return null
-  if (!('status' in err)) return null
-  const s = (err as { status: unknown }).status
-  return typeof s === 'number' ? s : null
+  // ai@4 expone statusCode en APICallError; los SDK directos usan status.
+  const raw = (err as { status?: unknown; statusCode?: unknown })
+  const status = raw.statusCode ?? raw.status
+  return typeof status === 'number' ? status : null
 }
 
 /** Nombre visible del proveedor para mensajes al usuario. */
@@ -843,7 +845,13 @@ export async function* answerEngineStream(
       console.error('[answer-engine] stream error:', err)
       // Cadena de 1 (preferencia explícita de proveedor): sin red a la que
       // caer, el mensaje tiene que decir QUÉ proveedor falló y dónde se cambia.
-      if (providerOrder.length === 1 && !(err instanceof StreamTimeoutError)) {
+      // Excepción: 429/cuota/overload es saturación transitoria, no "elegí
+      // otro proveedor" — sanitizeLLMError lo mapea a llm_rate_limited.
+      if (
+        providerOrder.length === 1 &&
+        !(err instanceof StreamTimeoutError) &&
+        !isProviderQuotaError(err)
+      ) {
         throw new AnswerEngineError('provider_unavailable', providerUnavailableMessage([provider]))
       }
       throw sanitizeLLMError(err)
