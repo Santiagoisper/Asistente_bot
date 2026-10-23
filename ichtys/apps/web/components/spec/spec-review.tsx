@@ -1520,14 +1520,18 @@ export default function SpecReview({
       </div>
 
       {/* ── Tab bar ── */}
+      {/* Las 4 sub-pestañas (Elegibilidad/Endpoints/Visitas-SoA/Comparar
+          versiones) no entraban en 375px y empujaban la página a 528px
+          (mismo patrón que study-nav.tsx) — overflow-x-auto + shrink-0 para
+          que scrolleen dentro de su propio contenedor. */}
       <div className="border-b border-alphi-border">
-        <div className="flex gap-0">
+        <div className="flex gap-0 overflow-x-auto">
           {TABS.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
               className={[
-                'flex items-center gap-2 px-4 py-2.5 text-sm font-semibold',
+                'flex shrink-0 items-center gap-2 whitespace-nowrap px-4 py-2.5 text-sm font-semibold',
                 'border-b-2 -mb-px transition-all duration-150',
                 activeTab === tab.key
                   ? 'border-alphi-teal text-alphi-teal'
