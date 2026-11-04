@@ -84,6 +84,11 @@ vi.mock('../../../../../lib/security/rate-limit', () => ({
   enforceSlidingWindowRateLimit: mocks.enforceSlidingWindowRateLimit,
   getChatRateLimitConfig: () => ({ limit: 30, windowSeconds: 60 }),
   rateLimitResponse: () => new Response('Too Many Requests', { status: 429 }),
+  rateLimitUnavailableResponse: () =>
+    Response.json(
+      { error: 'rate_limit_unavailable', message: 'No se pudo verificar el cupo. Probá de nuevo en unos minutos.' },
+      { status: 503, headers: { 'Retry-After': '60' } },
+    ),
 }))
 
 vi.mock('../../../../../lib/rag/query-expander', () => ({
@@ -156,6 +161,22 @@ beforeEach(() => {
   mocks.getSpecContextChunks.mockResolvedValue({ chunks: [], specFound: false })
   mocks.retrieveRelevantChunks.mockResolvedValue([])
   mocks.answerEngineStream.mockImplementation(() => doneStream())
+})
+
+describe('POST /api/chat/stream — cupo', () => {
+  it('responde 503 y no abre el stream si no se puede verificar el cupo', async () => {
+    mocks.enforceSlidingWindowRateLimit.mockResolvedValueOnce({
+      limited: true,
+      retryAfterSeconds: 60,
+      reason: 'unavailable',
+    })
+
+    const res = await POST(streamRequest())
+
+    expect(res.status).toBe(503)
+    expect(mocks.answerEngineStream).not.toHaveBeenCalled()
+    expect(mocks.getOrCreateConversation).not.toHaveBeenCalled()
+  })
 })
 
 describe('POST /api/chat/stream — S8 mensaje crudo', () => {

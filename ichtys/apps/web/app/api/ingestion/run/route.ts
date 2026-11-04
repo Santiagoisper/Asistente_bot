@@ -5,6 +5,7 @@ import {
   enforceSlidingWindowRateLimit,
   getIngestionRateLimitConfig,
   rateLimitResponse,
+  rateLimitUnavailableResponse,
 } from '../../../../lib/security/rate-limit'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../lib/api/body-limit'
 import { triggerInput } from '../../../../lib/api/input-schemas'
@@ -59,12 +60,15 @@ export async function POST(req: Request): Promise<Response> {
     // cliente puede repetirlo. Sin esto era un bypass del tope de /spec/reextract.
     const rlConfig = getIngestionRateLimitConfig()
     const rateLimit = await enforceSlidingWindowRateLimit({
-      key: `ingestion:${userId}:${documentVersion.id}`,
+      key: `ingestion:${orgId}:${userId}:${documentVersion.id}`,
       limit: rlConfig.limit,
       windowSeconds: rlConfig.windowSeconds,
-      onRedisUnavailable: 'memory',
     })
-    if (rateLimit.limited) return rateLimitResponse(rateLimit.retryAfterSeconds)
+    if (rateLimit.limited) {
+      return rateLimit.reason === 'unavailable'
+        ? rateLimitUnavailableResponse()
+        : rateLimitResponse(rateLimit.retryAfterSeconds)
+    }
 
     // Encolar el trabajo en background. after() garantiza que el Lambda
     // continúa corriendo después de que la respuesta HTTP es enviada —

@@ -41,6 +41,7 @@ export async function GET(req: Request, { params }: RouteContext): Promise<Respo
       key: `citations:${userId}:${orgId}`,
       limit: citationsRlConfig.limit,
       windowSeconds: citationsRlConfig.windowSeconds,
+      onRedisUnavailable: 'allow',
     })
     if (rateLimit.limited) {
       log(makeRecord({ requestId, level: 'warn', event: 'api.rate_limit.blocked', endpoint: '/api/citations/[messageId]', method: 'GET', userId, messageId, statusCode: 429 }))

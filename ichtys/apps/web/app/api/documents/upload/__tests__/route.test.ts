@@ -56,6 +56,11 @@ vi.mock('../../../../../lib/security/rate-limit', () => ({
   enforceSlidingWindowRateLimit: mocks.enforceSlidingWindowRateLimit,
   getUploadRateLimitConfig: mocks.getUploadRateLimitConfig,
   rateLimitResponse: mocks.rateLimitResponse,
+  rateLimitUnavailableResponse: () =>
+    Response.json(
+      { error: 'rate_limit_unavailable', message: 'No se pudo verificar el cupo. Probá de nuevo en unos minutos.' },
+      { status: 503, headers: { 'Retry-After': '60' } },
+    ),
 }))
 
 // El logger real es puro; solo silenciamos la salida.
@@ -136,6 +141,22 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 // P1-6: fallo de almacenamiento
 // ---------------------------------------------------------------------------
+
+describe('POST /api/documents/upload — cupo', () => {
+  it('responde 503 y no guarda el PDF si no se puede verificar el cupo', async () => {
+    mocks.enforceSlidingWindowRateLimit.mockResolvedValueOnce({
+      limited: true,
+      retryAfterSeconds: 60,
+      reason: 'unavailable',
+    })
+
+    const res = await POST(uploadRequest())
+
+    expect(res.status).toBe(503)
+    expect(mocks.putPrivateDocumentPdf).not.toHaveBeenCalled()
+    expect(mocks.transaction).not.toHaveBeenCalled()
+  })
+})
 
 describe('POST /api/documents/upload — fallo de almacenamiento (P1-6)', () => {
   it('devuelve 502 con mensaje en español cuando el blob falla, sin tocar la DB', async () => {

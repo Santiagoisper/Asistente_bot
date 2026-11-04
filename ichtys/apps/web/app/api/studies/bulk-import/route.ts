@@ -8,6 +8,7 @@ import {
   enforceSlidingWindowRateLimit,
   getUploadRateLimitConfig,
   rateLimitResponse,
+  rateLimitUnavailableResponse,
 } from '../../../../lib/security/rate-limit'
 import { getOrCreateRequestId, log, makeRecord } from '../../../../lib/observability/logger'
 import { validatePdfUpload } from '../../../../lib/documents/pdf-upload-validation'
@@ -61,6 +62,18 @@ export async function POST(req: Request): Promise<Response> {
     return new Response('Forbidden', { status: 403 })
   }
 
+  const uploadRlConfig = getUploadRateLimitConfig()
+  const rateLimit = await enforceSlidingWindowRateLimit({
+    key: `bulk-import:${clerkOrgId}:${userId}`,
+    limit: uploadRlConfig.limit,
+    windowSeconds: uploadRlConfig.windowSeconds,
+  })
+  if (rateLimit.limited) {
+    return rateLimit.reason === 'unavailable'
+      ? rateLimitUnavailableResponse()
+      : rateLimitResponse(rateLimit.retryAfterSeconds)
+  }
+
   let form: FormData
   try {
     form = await req.formData()
@@ -77,14 +90,6 @@ export async function POST(req: Request): Promise<Response> {
   if (files.length > MAX_FILES_PER_BATCH) {
     return new Response(`Too many files (max ${MAX_FILES_PER_BATCH})`, { status: 413 })
   }
-
-  const uploadRlConfig = getUploadRateLimitConfig()
-  const rateLimit = await enforceSlidingWindowRateLimit({
-    key: `bulk-import:${userId}:${clerkOrgId}`,
-    limit: uploadRlConfig.limit,
-    windowSeconds: uploadRlConfig.windowSeconds,
-  })
-  if (rateLimit.limited) return rateLimitResponse(rateLimit.retryAfterSeconds)
 
   const org = await resolveOrProvisionOrganization(clerkOrgId)
   if (!org) {

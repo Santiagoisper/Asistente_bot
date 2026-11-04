@@ -14,6 +14,7 @@ import {
   enforceSlidingWindowRateLimit,
   getChatRateLimitConfig,
   rateLimitResponse,
+  rateLimitUnavailableResponse,
 } from '../../../lib/security/rate-limit'
 import { getOrCreateRequestId, log, makeRecord } from '../../../lib/observability/logger'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../lib/api/body-limit'
@@ -105,11 +106,15 @@ export async function POST(req: Request): Promise<Response> {
 
   const chatRlConfig = getChatRateLimitConfig()
   const rateLimit = await enforceSlidingWindowRateLimit({
-    key: `chat:${userId}:${studyId}`,
+    key: `chat:${orgId}:${userId}:${studyId}`,
     limit: chatRlConfig.limit,
     windowSeconds: chatRlConfig.windowSeconds,
   })
   if (rateLimit.limited) {
+    if (rateLimit.reason === 'unavailable') {
+      log(makeRecord({ requestId, level: 'warn', event: 'api.rate_limit.blocked', endpoint: '/api/chat', method: 'POST', userId, statusCode: 503 }))
+      return rateLimitUnavailableResponse()
+    }
     log(makeRecord({ requestId, level: 'warn', event: 'api.rate_limit.blocked', endpoint: '/api/chat', method: 'POST', userId, statusCode: 429 }))
     return rateLimitResponse(rateLimit.retryAfterSeconds)
   }

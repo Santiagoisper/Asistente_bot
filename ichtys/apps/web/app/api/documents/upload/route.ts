@@ -5,6 +5,7 @@ import {
   enforceSlidingWindowRateLimit,
   getUploadRateLimitConfig,
   rateLimitResponse,
+  rateLimitUnavailableResponse,
 } from '../../../../lib/security/rate-limit'
 import { getOrCreateRequestId, log, makeRecord } from '../../../../lib/observability/logger'
 import { uploadMetaInput as uploadMeta } from '../../../../lib/api/input-schemas'
@@ -84,11 +85,15 @@ export async function POST(req: Request): Promise<Response> {
 
     const uploadRlConfig = getUploadRateLimitConfig()
     const rateLimit = await enforceSlidingWindowRateLimit({
-      key: `upload:${userId}:${orgId}`,
+      key: `upload:${orgId}:${userId}`,
       limit: uploadRlConfig.limit,
       windowSeconds: uploadRlConfig.windowSeconds,
     })
     if (rateLimit.limited) {
+      if (rateLimit.reason === 'unavailable') {
+        log(makeRecord({ requestId, level: 'warn', event: 'api.rate_limit.blocked', endpoint: '/api/documents/upload', method: 'POST', userId, studyId: meta.data.studyId, statusCode: 503 }))
+        return rateLimitUnavailableResponse()
+      }
       log(makeRecord({ requestId, level: 'warn', event: 'api.rate_limit.blocked', endpoint: '/api/documents/upload', method: 'POST', userId, studyId: meta.data.studyId, statusCode: 429 }))
       return rateLimitResponse(rateLimit.retryAfterSeconds)
     }

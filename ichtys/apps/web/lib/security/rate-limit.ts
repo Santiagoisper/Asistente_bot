@@ -1,16 +1,17 @@
 export type RateLimitResult =
   | { limited: false }
-  | { limited: true; retryAfterSeconds: number }
+  | { limited: true; retryAfterSeconds: number; reason?: 'quota' | 'unavailable' }
 
 export type RateLimitParams = {
   key: string
   limit: number
   windowSeconds: number
   /**
-   * `allow` (default): si falta Redis, el request sigue. Chat y subida usan esto.
-   * `memory`: operación cara. Sin Redis, o si Redis falla, cuenta en este proceso.
+   * `deny` (default): si falta Redis o falla, la operación se bloquea.
+   * `allow`: solo lecturas. Sin Redis, el request sigue.
+   * `memory`: ráfaga dentro de este proceso. No reemplaza el cupo compartido.
    */
-  onRedisUnavailable?: 'allow' | 'memory'
+  onRedisUnavailable?: 'deny' | 'allow' | 'memory'
 }
 
 export interface RateLimitConfig {
@@ -51,13 +52,15 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
 }
 
 export function isRateLimitEnabled(): boolean {
+  // En producción el cupo no se apaga con una variable. Solo test y desarrollo
+  // pueden desactivarlo, y tienen que hacerlo explícito.
+  if (process.env.NODE_ENV === 'production') return true
   return process.env.RATE_LIMIT_ENABLED !== 'false'
 }
 
 /**
- * El rate limiting es fail-open a propósito (Redis caído no debe tumbar prod),
- * pero un fail-open silencioso deja los topes de gasto inertes sin que nadie se
- * entere. Avisamos UNA vez por cold start y por motivo, no en cada request.
+ * Aviso único cuando una lectura explícita sigue sin cupo. Las operaciones que
+ * gastan no usan este camino: si Redis no responde, se bloquean.
  */
 const disabledWarnings = new Set<string>()
 
@@ -96,10 +99,25 @@ function enforceMemoryQuota(params: RateLimitParams): RateLimitResult {
   return { limited: false }
 }
 
-function whenRedisUnavailable(params: RateLimitParams, openReason: string | null): RateLimitResult {
-  if (params.onRedisUnavailable === 'memory') return enforceMemoryQuota(params)
-  if (openReason) warnRateLimitDisabledOnce(openReason)
-  return { limited: false }
+function denyUnavailable(): RateLimitResult {
+  return { limited: true, retryAfterSeconds: 60, reason: 'unavailable' }
+}
+
+function whenRedisUnavailable(params: RateLimitParams, failureCode: string): RateLimitResult {
+  if (params.onRedisUnavailable === 'memory') {
+    if (failureCode !== 'redis_unconfigured') logRateLimitFailure(failureCode)
+    return enforceMemoryQuota(params)
+  }
+  if (params.onRedisUnavailable === 'allow') {
+    if (failureCode === 'redis_unconfigured') {
+      warnRateLimitDisabledOnce('falta config Redis REST (UPSTASH_REDIS_REST_URL/TOKEN)')
+    } else {
+      logRateLimitFailure(failureCode)
+    }
+    return { limited: false }
+  }
+  logRateLimitFailure(failureCode)
+  return denyUnavailable()
 }
 
 export function getChatRateLimitConfig(): RateLimitConfig {
@@ -163,7 +181,7 @@ export async function enforceSlidingWindowRateLimit(
 
   const redis = getRedisRestConfig()
   if (!redis) {
-    return whenRedisUnavailable(params, 'falta config Redis REST (UPSTASH_REDIS_REST_URL/TOKEN)')
+    return whenRedisUnavailable(params, 'redis_unconfigured')
   }
 
   try {
@@ -187,29 +205,35 @@ export async function enforceSlidingWindowRateLimit(
     })
 
     if (!response.ok) {
-      logRateLimitFailure('redis_http_error')
-      return whenRedisUnavailable(params, null)
+      return whenRedisUnavailable(params, 'redis_http_error')
     }
 
     const payload = (await response.json()) as RedisRestResponse
     if (payload.error) {
-      logRateLimitFailure('redis_command_error')
-      return whenRedisUnavailable(params, null)
+      return whenRedisUnavailable(params, 'redis_command_error')
     }
 
     const tuple = parseRedisTuple(payload.result)
     if (!tuple) {
-      logRateLimitFailure('redis_invalid_response')
-      return whenRedisUnavailable(params, null)
+      return whenRedisUnavailable(params, 'redis_invalid_response')
     }
 
     return tuple.allowed
       ? { limited: false }
       : { limited: true, retryAfterSeconds: tuple.retryAfterSeconds }
   } catch {
-    logRateLimitFailure('rate_limit_internal_error')
-    return whenRedisUnavailable(params, null)
+    return whenRedisUnavailable(params, 'rate_limit_internal_error')
   }
+}
+
+export function rateLimitUnavailableResponse(): Response {
+  return Response.json(
+    {
+      error: 'rate_limit_unavailable',
+      message: 'No se pudo verificar el cupo. Probá de nuevo en unos minutos.',
+    },
+    { status: 503, headers: { 'Retry-After': '60' } },
+  )
 }
 
 export function rateLimitResponse(retryAfterSeconds: number): Response {

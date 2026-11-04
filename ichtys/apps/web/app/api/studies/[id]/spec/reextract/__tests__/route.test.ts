@@ -73,6 +73,11 @@ vi.mock('../../../../../../../lib/security/rate-limit', () => ({
   enforceSlidingWindowRateLimit: mocks.enforceSlidingWindowRateLimit,
   getSpecReextractRateLimitConfig: mocks.getSpecReextractRateLimitConfig,
   rateLimitResponse: mocks.rateLimitResponse,
+  rateLimitUnavailableResponse: () =>
+    Response.json(
+      { error: 'rate_limit_unavailable', message: 'No se pudo verificar el cupo. Probá de nuevo en unos minutos.' },
+      { status: 503, headers: { 'Retry-After': '60' } },
+    ),
 }))
 
 import { POST } from '../route'
@@ -136,11 +141,24 @@ describe('POST /api/studies/[id]/spec/reextract — rate limit', () => {
     await callPost()
 
     expect(mocks.enforceSlidingWindowRateLimit).toHaveBeenCalledWith({
-      key: `spec-reextract:${USER_ID}:${STUDY_ID}`,
+      key: `spec-reextract:${ORG_ID}:${USER_ID}:${STUDY_ID}`,
       limit: 3,
       windowSeconds: 60,
-      onRedisUnavailable: 'memory',
     })
+  })
+
+  it('responde 503 y no llama al modelo si no se puede verificar el cupo', async () => {
+    mocks.enforceSlidingWindowRateLimit.mockResolvedValue({
+      limited: true,
+      retryAfterSeconds: 60,
+      reason: 'unavailable',
+    })
+
+    const res = await callPost('?force=1')
+
+    expect(res.status).toBe(503)
+    expect(mocks.reextractStudySpec).not.toHaveBeenCalled()
+    expect(mocks.getQuotaStatus).not.toHaveBeenCalled()
   })
 })
 

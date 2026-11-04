@@ -35,6 +35,11 @@ vi.mock('../../../../../lib/security/rate-limit', () => ({
   enforceSlidingWindowRateLimit: mocks.enforceSlidingWindowRateLimit,
   getUploadRateLimitConfig: mocks.getUploadRateLimitConfig,
   rateLimitResponse: mocks.rateLimitResponse,
+  rateLimitUnavailableResponse: () =>
+    Response.json(
+      { error: 'rate_limit_unavailable', message: 'No se pudo verificar el cupo. Probá de nuevo en unos minutos.' },
+      { status: 503, headers: { 'Retry-After': '60' } },
+    ),
 }))
 
 vi.mock('../../../../../lib/observability/logger', () => ({
@@ -140,6 +145,29 @@ function requestWithFile(file: File): Request {
   form.append('files', file)
   return new Request('http://localhost/api/studies/bulk-import', { method: 'POST', body: form })
 }
+
+describe('POST /api/studies/bulk-import — cupo', () => {
+  it('responde 503 y no crea estudios ni blobs si no se puede verificar el cupo', async () => {
+    mocks.auth.mockResolvedValue({
+      userId: 'user_1',
+      orgId: 'org_clerk',
+      orgRole: 'org:study_admin',
+    })
+    mocks.enforceSlidingWindowRateLimit.mockResolvedValueOnce({
+      limited: true,
+      retryAfterSeconds: 60,
+      reason: 'unavailable',
+    })
+
+    const res = await POST(bulkRequest())
+
+    expect(res.status).toBe(503)
+    expect(mocks.putPrivateDocumentPdf).not.toHaveBeenCalled()
+    expect(mocks.transaction).not.toHaveBeenCalled()
+    expect(mocks.insert).not.toHaveBeenCalled()
+    expect(mocks.after).not.toHaveBeenCalled()
+  })
+})
 
 describe('S5 — la importación masiva reutiliza la validación del PDF', () => {
   beforeEach(() => {

@@ -66,6 +66,13 @@ const mocks = vi.hoisted(() => {
           headers: { 'Retry-After': String(retryAfterSeconds) },
         }),
       ),
+    rateLimitUnavailableResponse: vi.fn(
+      () =>
+        Response.json(
+          { error: 'rate_limit_unavailable', message: 'No se pudo verificar el cupo. Probá de nuevo en unos minutos.' },
+          { status: 503, headers: { 'Retry-After': '60' } },
+        ),
+    ),
   }
 })
 
@@ -91,6 +98,7 @@ vi.mock('../../../../lib/chat/persistence', () => ({
 vi.mock('../../../../lib/security/rate-limit', () => ({
   enforceSlidingWindowRateLimit: mocks.enforceSlidingWindowRateLimit,
   rateLimitResponse: mocks.rateLimitResponse,
+  rateLimitUnavailableResponse: mocks.rateLimitUnavailableResponse,
   getChatRateLimitConfig: () => ({ limit: 30, windowSeconds: 60 }),
 }))
 
@@ -396,10 +404,25 @@ describe('POST /api/chat - rate limiting', () => {
     expect(res.status).toBe(429)
     expect(res.headers.get('Retry-After')).toBe('12')
     expect(mocks.enforceSlidingWindowRateLimit).toHaveBeenCalledWith({
-      key: `chat:${mocks.USER_ID}:${mocks.STUDY_ID}`,
+      key: `chat:${mocks.ORG_ID}:${mocks.USER_ID}:${mocks.STUDY_ID}`,
       limit: 30,
       windowSeconds: 60,
     })
+    expect(mocks.getOrCreateConversation).not.toHaveBeenCalled()
+    expect(mocks.generateAnswerForStudy).not.toHaveBeenCalled()
+  })
+
+  it('responde 503 y no llama al modelo si no se puede verificar el cupo', async () => {
+    mocks.validateStudyAccess.mockResolvedValueOnce(makeStudyAccessCtx())
+    mocks.enforceSlidingWindowRateLimit.mockResolvedValueOnce({
+      limited: true,
+      retryAfterSeconds: 60,
+      reason: 'unavailable',
+    })
+
+    const res = await POST(makeRequest({ studyId: mocks.STUDY_ID, question: 'test' }))
+
+    expect(res.status).toBe(503)
     expect(mocks.getOrCreateConversation).not.toHaveBeenCalled()
     expect(mocks.generateAnswerForStudy).not.toHaveBeenCalled()
   })

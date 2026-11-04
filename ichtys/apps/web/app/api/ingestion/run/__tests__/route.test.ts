@@ -54,6 +54,11 @@ vi.mock('../../../../../lib/security/rate-limit', () => ({
   enforceSlidingWindowRateLimit: mocks.enforceSlidingWindowRateLimit,
   getIngestionRateLimitConfig: mocks.getIngestionRateLimitConfig,
   rateLimitResponse: mocks.rateLimitResponse,
+  rateLimitUnavailableResponse: () =>
+    Response.json(
+      { error: 'rate_limit_unavailable', message: 'No se pudo verificar el cupo. Probá de nuevo en unos minutos.' },
+      { status: 503, headers: { 'Retry-After': '60' } },
+    ),
 }))
 
 import { POST } from '../route'
@@ -64,6 +69,7 @@ import { POST } from '../route'
 
 const DOC_VERSION_ID = crypto.randomUUID()
 const USER_ID = crypto.randomUUID()
+const ORG_ID = crypto.randomUUID()
 
 function ingestionRequest(): Request {
   return new Request('http://localhost/api/ingestion/run', {
@@ -77,7 +83,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.validateDocumentVersionAccess.mockResolvedValue({
     userId: USER_ID,
-    orgId: crypto.randomUUID(),
+    orgId: ORG_ID,
     studyId: crypto.randomUUID(),
     role: 'site_coordinator',
     document: { id: crypto.randomUUID() },
@@ -106,12 +112,25 @@ describe('POST /api/ingestion/run — rate limit', () => {
     await POST(ingestionRequest())
 
     expect(mocks.enforceSlidingWindowRateLimit).toHaveBeenCalledWith({
-      key: `ingestion:${USER_ID}:${DOC_VERSION_ID}`,
+      key: `ingestion:${ORG_ID}:${USER_ID}:${DOC_VERSION_ID}`,
       limit: 5,
       windowSeconds: 60,
-      onRedisUnavailable: 'memory',
     })
     expect(mocks.after).toHaveBeenCalledTimes(1)
+  })
+
+  it('responde 503 y no encola la ingesta si no se puede verificar el cupo', async () => {
+    mocks.enforceSlidingWindowRateLimit.mockResolvedValue({
+      limited: true,
+      retryAfterSeconds: 60,
+      reason: 'unavailable',
+    })
+
+    const res = await POST(ingestionRequest())
+
+    expect(res.status).toBe(503)
+    expect(mocks.after).not.toHaveBeenCalled()
+    expect(mocks.runIngestion).not.toHaveBeenCalled()
   })
 
   it('devuelve 202 y encola la ingesta dentro del tope', async () => {

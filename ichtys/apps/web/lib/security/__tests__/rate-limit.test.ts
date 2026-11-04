@@ -71,13 +71,16 @@ describe('rate limit helper', () => {
     expect(console.error).toHaveBeenCalledWith('[rate-limit]', { code: 'redis_command_error' })
   })
 
-  it('allows requests when Redis is not configured', async () => {
+  it('bloquea cuando Redis no está configurado', async () => {
     vi.stubEnv('UPSTASH_REDIS_REST_URL', '')
     vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', '')
+    vi.stubEnv('KV_REST_API_URL', '')
+    vi.stubEnv('KV_REST_API_TOKEN', '')
 
     await expect(
       enforceSlidingWindowRateLimit({ key: 'chat:user:study', limit: 30, windowSeconds: 60 }),
-    ).resolves.toEqual({ limited: false })
+    ).resolves.toEqual({ limited: true, retryAfterSeconds: 60, reason: 'unavailable' })
+    expect(console.error).toHaveBeenCalledWith('[rate-limit]', { code: 'redis_unconfigured' })
   })
 
   it('returns limited with retryAfterSeconds when Redis denies', async () => {
@@ -88,15 +91,61 @@ describe('rate limit helper', () => {
     ).resolves.toEqual({ limited: true, retryAfterSeconds: 17 })
   })
 
-  it('fails open on provider errors without exposing raw error details', async () => {
-    mockFetch({ error: 'connection string and token should not be logged' })
+  it('bloquea si Redis responde error, sin el detalle crudo', async () => {
+    const sentinel = 'connection string and token should not be logged'
+    mockFetch({ error: sentinel })
 
     await expect(
       enforceSlidingWindowRateLimit({ key: 'chat:user:study', limit: 30, windowSeconds: 60 }),
-    ).resolves.toEqual({ limited: false })
+    ).resolves.toEqual({ limited: true, retryAfterSeconds: 60, reason: 'unavailable' })
     expect(console.error).toHaveBeenCalledWith('[rate-limit]', {
       code: 'redis_command_error',
     })
+    expect(JSON.stringify(console.error.mock?.calls ?? [])).not.toContain(sentinel)
+  })
+
+  it('bloquea si Redis responde HTTP de error', async () => {
+    mockFetch({ error: 'upstream' }, false)
+
+    await expect(
+      enforceSlidingWindowRateLimit({ key: 'upload:user:org', limit: 10, windowSeconds: 60 }),
+    ).resolves.toEqual({ limited: true, retryAfterSeconds: 60, reason: 'unavailable' })
+    expect(console.error).toHaveBeenCalledWith('[rate-limit]', { code: 'redis_http_error' })
+  })
+
+  it('bloquea si Redis devuelve una tupla inválida', async () => {
+    mockFetch({ result: 'no-es-tupla' })
+
+    await expect(
+      enforceSlidingWindowRateLimit({ key: 'bulk:user:org', limit: 10, windowSeconds: 60 }),
+    ).resolves.toEqual({ limited: true, retryAfterSeconds: 60, reason: 'unavailable' })
+    expect(console.error).toHaveBeenCalledWith('[rate-limit]', { code: 'redis_invalid_response' })
+  })
+
+  it('bloquea si la llamada a Redis lanza', async () => {
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error('sk-ant-provider-raw-ficticio-NO-LOG')
+    }) as typeof fetch
+
+    await expect(
+      enforceSlidingWindowRateLimit({ key: 'stream:user:org', limit: 30, windowSeconds: 60 }),
+    ).resolves.toEqual({ limited: true, retryAfterSeconds: 60, reason: 'unavailable' })
+    expect(console.error).toHaveBeenCalledWith('[rate-limit]', { code: 'rate_limit_internal_error' })
+    expect(JSON.stringify(console.error.mock?.calls ?? [])).not.toContain('sk-ant-provider-raw-ficticio-NO-LOG')
+  })
+
+  it('en producción ignora RATE_LIMIT_ENABLED=false y bloquea sin Redis', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('RATE_LIMIT_ENABLED', 'false')
+    vi.stubEnv('UPSTASH_REDIS_REST_URL', '')
+    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', '')
+    vi.stubEnv('KV_REST_API_URL', '')
+    vi.stubEnv('KV_REST_API_TOKEN', '')
+
+    await expect(
+      enforceSlidingWindowRateLimit({ key: 'reextract:org:user', limit: 3, windowSeconds: 60 }),
+    ).resolves.toEqual({ limited: true, retryAfterSeconds: 60, reason: 'unavailable' })
+    expect(globalThis.fetch).toBe(ORIGINAL_FETCH)
   })
 
   it('builds 429 responses with JSON body and Retry-After', async () => {
@@ -163,7 +212,7 @@ describe('rate limit helper', () => {
   })
 
   describe('warning de fail-open (una vez por cold start)', () => {
-    it('avisa una sola vez cuando falta la config de Redis', async () => {
+    it('no anuncia fail-open cuando falta Redis: bloquea', async () => {
       resetRateLimitWarningsForTests()
       vi.stubEnv('RATE_LIMIT_ENABLED', '')
       vi.stubEnv('UPSTASH_REDIS_REST_URL', '')
@@ -172,14 +221,14 @@ describe('rate limit helper', () => {
       vi.stubEnv('KV_REST_API_TOKEN', '')
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
-      await enforceSlidingWindowRateLimit({ key: 'a', limit: 1, windowSeconds: 60 })
+      const first = await enforceSlidingWindowRateLimit({ key: 'a', limit: 1, windowSeconds: 60 })
       await enforceSlidingWindowRateLimit({ key: 'b', limit: 1, windowSeconds: 60 })
 
+      expect(first).toEqual({ limited: true, retryAfterSeconds: 60, reason: 'unavailable' })
       const avisos = warn.mock.calls
         .map((c) => String(c[0]))
         .filter((m) => m.includes('[rate-limit] DESHABILITADO'))
-      expect(avisos).toHaveLength(1)
-      expect(avisos[0]).toContain('Redis')
+      expect(avisos).toHaveLength(0)
       warn.mockRestore()
     })
 

@@ -9,6 +9,7 @@ import {
   enforceSlidingWindowRateLimit,
   getSpecReextractRateLimitConfig,
   rateLimitResponse,
+  rateLimitUnavailableResponse,
 } from '../../../../../../lib/security/rate-limit'
 
 export const runtime = 'nodejs'
@@ -49,12 +50,15 @@ export async function POST(
     // encadenar extracciones ilimitadas sobre la clave de la plataforma.
     const rlConfig = getSpecReextractRateLimitConfig()
     const rateLimit = await enforceSlidingWindowRateLimit({
-      key: `spec-reextract:${userId}:${studyId}`,
+      key: `spec-reextract:${orgId}:${userId}:${studyId}`,
       limit: rlConfig.limit,
       windowSeconds: rlConfig.windowSeconds,
-      onRedisUnavailable: 'memory',
     })
-    if (rateLimit.limited) return rateLimitResponse(rateLimit.retryAfterSeconds)
+    if (rateLimit.limited) {
+      return rateLimit.reason === 'unavailable'
+        ? rateLimitUnavailableResponse()
+        : rateLimitResponse(rateLimit.retryAfterSeconds)
+    }
 
     // Cupo mensual: la extracción siempre prefiere Anthropic (clave de la org o de la
     // plataforma). Si la org no tiene clave propia y la cuota está agotada, no se llama
