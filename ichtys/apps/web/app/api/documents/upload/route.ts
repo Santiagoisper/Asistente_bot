@@ -1,4 +1,4 @@
-import { handleApiError, validateStudyAccess } from '@ichtys/auth'
+import { AccessError, canManageDocuments, handleApiError, validateStudyAccess } from '@ichtys/auth'
 import { auditLogs, db, documents, documentVersions } from '@ichtys/db'
 import { putPrivateDocumentPdf } from './blob-storage'
 import {
@@ -99,7 +99,11 @@ export async function POST(req: Request): Promise<Response> {
       return new Response('Unsupported Media Type', { status: 415 })
     }
 
-    const { userId, orgId, study } = await validateStudyAccess(meta.data.studyId)
+    const access = await validateStudyAccess(meta.data.studyId)
+    if (!canManageDocuments(access.role)) {
+      throw new AccessError('Forbidden', 403)
+    }
+    const { userId, orgId, study } = access
 
     const uploadRlConfig = getUploadRateLimitConfig()
     const rateLimit = await enforceSlidingWindowRateLimit({

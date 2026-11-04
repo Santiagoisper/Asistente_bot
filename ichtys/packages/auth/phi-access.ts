@@ -41,7 +41,7 @@ export async function validatePhiStudyAccess(studyId: string): Promise<StudyAcce
     throw new AccessError('Study not found or access denied', 404)
   }
 
-  return { userId, orgId: org.id, study }
+  return { userId, orgId: org.id, study, role }
 }
 
 export interface SubjectAccessContext extends StudyAccessContext {
@@ -87,5 +87,5 @@ export async function validateSubjectAccess(subjectId: string): Promise<SubjectA
     throw new AccessError('Not Found', 404)
   }
 
-  return { userId, orgId: org.id, study, subject }
+  return { userId, orgId: org.id, study, subject, role }
 }

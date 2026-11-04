@@ -1,15 +1,19 @@
 import { auth } from '@clerk/nextjs/server'
 import { db, studies } from '@ichtys/db'
-import { handleApiError, resolveOrProvisionOrganization } from '@ichtys/auth'
+import { canManageDocuments, handleApiError, normalizeRole, resolveOrProvisionOrganization } from '@ichtys/auth'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../lib/api/body-limit'
 import { createStudyInput } from '../../../lib/api/input-schemas'
 
 export const runtime = 'nodejs'
 
 export async function POST(req: Request): Promise<Response> {
-  const { userId, orgId: clerkOrgId } = await auth()
+  const { userId, orgId: clerkOrgId, orgRole } = await auth()
   if (!userId || !clerkOrgId) {
     return new Response('Unauthorized', { status: 401 })
+  }
+  // Crear un estudio es gestión documental: monitor e investigador principal no escriben.
+  if (!canManageDocuments(normalizeRole(orgRole))) {
+    return new Response('Forbidden', { status: 403 })
   }
 
   // Tope de bytes ANTES de parsear (413, H7 vuelta 2). El auth ya corrió

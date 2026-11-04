@@ -6,9 +6,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   validateStudyAccess: vi.fn(),
-  handleApiError: vi
-    .fn<(err: unknown) => Response>()
-    .mockReturnValue(new Response('Internal Server Error', { status: 500 })),
+  handleApiError: vi.fn<(err: unknown) => Response>((err: unknown) => {
+    if (err instanceof Error && err.name === 'AccessError' && 'status' in err) {
+      const status = (err as { status: number }).status
+      if (status === 401 || status === 403 || status === 404) {
+        const body = status === 401 ? 'Unauthorized' : status === 403 ? 'Forbidden' : 'Not Found'
+        return new Response(body, { status })
+      }
+    }
+    return new Response('Internal Server Error', { status: 500 })
+  }),
   putPrivateDocumentPdf: vi.fn(),
   enforceSlidingWindowRateLimit: vi.fn(),
   getUploadRateLimitConfig: vi.fn().mockReturnValue({ limit: 10, windowSeconds: 60 }),
@@ -16,10 +23,23 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
 }))
 
-vi.mock('@ichtys/auth', () => ({
-  validateStudyAccess: mocks.validateStudyAccess,
-  handleApiError: mocks.handleApiError,
-}))
+vi.mock('@ichtys/auth', async () => {
+  const roles = await vi.importActual<typeof import('@ichtys/auth/roles')>('@ichtys/auth/roles')
+  return {
+    validateStudyAccess: mocks.validateStudyAccess,
+    handleApiError: mocks.handleApiError,
+    canManageDocuments: roles.canManageDocuments,
+    normalizeRole: roles.normalizeRole,
+    AccessError: class AccessError extends Error {
+      readonly status: 401 | 403 | 404
+      constructor(message: string, status: 401 | 403 | 404) {
+        super(message)
+        this.name = 'AccessError'
+        this.status = status
+      }
+    },
+  }
+})
 
 vi.mock('@ichtys/db', () => ({
   db: { transaction: (...args: [unknown]) => mocks.transaction(...args) },
@@ -105,6 +125,7 @@ beforeEach(() => {
     userId: 'user_test',
     orgId: ORG_ID,
     study: { id: STUDY_ID, name: 'Estudio' },
+    role: 'site_coordinator',
   })
 })
 
@@ -164,4 +185,30 @@ describe('POST /api/documents/upload — camino feliz', () => {
     expect(body.documentVersionId).toBe(version.id)
     expect(mocks.putPrivateDocumentPdf).toHaveBeenCalledTimes(1)
   })
+})
+
+describe('POST /api/documents/upload — gestión documental (S1)', () => {
+  it.each(['read_only_monitor', 'principal_investigator'])(
+    'rechaza a %s con 403 y no guarda el PDF',
+    async (role) => {
+      mockTransaction()
+      mocks.putPrivateDocumentPdf.mockResolvedValue({
+        url: 'https://s.private.blob/x/protocolo.pdf',
+        pathname: 'x/protocolo.pdf',
+      })
+      mocks.validateStudyAccess.mockResolvedValue({
+        userId: 'user_test',
+        orgId: ORG_ID,
+        study: { id: STUDY_ID, name: 'Estudio' },
+        role,
+      })
+
+      const res = await POST(uploadRequest())
+
+      expect(res.status).toBe(403)
+      expect(await res.text()).toBe('Forbidden')
+      expect(mocks.putPrivateDocumentPdf).not.toHaveBeenCalled()
+      expect(mocks.transaction).not.toHaveBeenCalled()
+    },
+  )
 })

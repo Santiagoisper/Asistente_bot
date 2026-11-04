@@ -1,5 +1,5 @@
 import { after } from 'next/server'
-import { handleApiError, validateDocumentVersionAccess } from '@ichtys/auth'
+import { AccessError, canManageDocuments, handleApiError, validateDocumentVersionAccess } from '@ichtys/auth'
 import { runIngestion } from '@ichtys/ingestion'
 import {
   enforceSlidingWindowRateLimit,
@@ -49,8 +49,11 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   try {
-    const { userId, orgId, studyId, document, documentVersion } =
-      await validateDocumentVersionAccess(parsed.data.documentVersionId)
+    const access = await validateDocumentVersionAccess(parsed.data.documentVersionId)
+    if (!canManageDocuments(access.role)) {
+      throw new AccessError('Forbidden', 403)
+    }
+    const { userId, orgId, studyId, document, documentVersion } = access
 
     // Tope de gasto: cada POST re-lanza la extracción de spec con Opus (~60-120 s) y el
     // cliente puede repetirlo. Sin esto era un bypass del tope de /spec/reextract.

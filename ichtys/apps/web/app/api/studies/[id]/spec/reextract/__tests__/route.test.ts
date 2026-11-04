@@ -6,9 +6,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   validateStudyAccess: vi.fn(),
-  handleApiError: vi
-    .fn<(err: unknown) => Response>()
-    .mockReturnValue(new Response('Internal Server Error', { status: 500 })),
+  handleApiError: vi.fn<(err: unknown) => Response>((err: unknown) => {
+    if (err instanceof Error && err.name === 'AccessError' && 'status' in err) {
+      const status = (err as { status: number }).status
+      if (status === 401 || status === 403 || status === 404) {
+        const body = status === 401 ? 'Unauthorized' : status === 403 ? 'Forbidden' : 'Not Found'
+        return new Response(body, { status })
+      }
+    }
+    return new Response('Internal Server Error', { status: 500 })
+  }),
   enforceSlidingWindowRateLimit: vi.fn(),
   getSpecReextractRateLimitConfig: vi.fn().mockReturnValue({ limit: 3, windowSeconds: 60 }),
   rateLimitResponse: vi.fn(
@@ -26,10 +33,22 @@ const mocks = vi.hoisted(() => ({
   reextractStudySpec: vi.fn(),
 }))
 
-vi.mock('@ichtys/auth', () => ({
-  validateStudyAccess: mocks.validateStudyAccess,
-  handleApiError: mocks.handleApiError,
-}))
+vi.mock('@ichtys/auth', async () => {
+  const roles = await vi.importActual<typeof import('@ichtys/auth/roles')>('@ichtys/auth/roles')
+  return {
+    validateStudyAccess: mocks.validateStudyAccess,
+    handleApiError: mocks.handleApiError,
+    canManageDocuments: roles.canManageDocuments,
+    AccessError: class AccessError extends Error {
+      readonly status: 401 | 403 | 404
+      constructor(message: string, status: 401 | 403 | 404) {
+        super(message)
+        this.name = 'AccessError'
+        this.status = status
+      }
+    },
+  }
+})
 
 vi.mock('@ichtys/db', () => ({
   getQuotaStatus: mocks.getQuotaStatus,
@@ -78,7 +97,11 @@ function callPost(query = ''): Promise<Response> {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.validateStudyAccess.mockResolvedValue({ orgId: ORG_ID, userId: USER_ID })
+  mocks.validateStudyAccess.mockResolvedValue({
+    orgId: ORG_ID,
+    userId: USER_ID,
+    role: 'site_coordinator',
+  })
   mocks.enforceSlidingWindowRateLimit.mockResolvedValue({ limited: false })
   mocks.getSpecReextractRateLimitConfig.mockReturnValue({ limit: 3, windowSeconds: 60 })
   mocks.getQuotaStatus.mockResolvedValue({ state: 'ok' })
@@ -170,4 +193,24 @@ describe('POST /api/studies/[id]/spec/reextract — cupo agotado', () => {
       userId: USER_ID,
     })
   })
+})
+
+describe('POST /api/studies/[id]/spec/reextract — gestión documental (S1)', () => {
+  it.each(['read_only_monitor', 'principal_investigator'])(
+    'rechaza a %s antes de gastar la extracción',
+    async (role) => {
+      mocks.validateStudyAccess.mockResolvedValue({
+        orgId: ORG_ID,
+        userId: USER_ID,
+        role,
+      })
+
+      const res = await callPost('?force=1')
+
+      expect(res.status).toBe(403)
+      expect(await res.text()).toBe('Forbidden')
+      expect(mocks.reextractStudySpec).not.toHaveBeenCalled()
+      expect(mocks.enforceSlidingWindowRateLimit).not.toHaveBeenCalled()
+    },
+  )
 })

@@ -1,4 +1,4 @@
-import { handleApiError, validateStudyAccess } from '@ichtys/auth'
+import { AccessError, canManageDocuments, handleApiError, validateStudyAccess } from '@ichtys/auth'
 import { canUsePlatformKey, getOrgLlmApiKeys, getOrgLlmKeySource, getQuotaStatus } from '@ichtys/db'
 import { getLatestSpecAttempt, isMeaningfulSpec, specRichness, studySpecSchema } from '@ichtys/ingestion'
 import {
@@ -38,7 +38,11 @@ export async function POST(
   const force = new URL(req.url).searchParams.get('force') === '1'
 
   try {
-    const { orgId, userId } = await validateStudyAccess(studyId)
+    const access = await validateStudyAccess(studyId)
+    if (!canManageDocuments(access.role)) {
+      throw new AccessError('Forbidden', 403)
+    }
+    const { orgId, userId } = access
 
     // Tope de gasto: cada corrida es una extracción con Opus sobre hasta 150 páginas
     // (maxDuration 300 s) y `?force=1` saltea el dedupe. Sin esto un usuario podía

@@ -1,6 +1,6 @@
 import { after } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { resolveOrProvisionOrganization } from '@ichtys/auth'
+import { canManageDocuments, normalizeRole, resolveOrProvisionOrganization } from '@ichtys/auth'
 import { auditLogs, db, documents, documentVersions, ingestionJobs, studies } from '@ichtys/db'
 import { runSingleIngestionJobById } from '@ichtys/ingestion/ingestion-jobs'
 import { putPrivateDocumentPdf } from '../../documents/upload/blob-storage'
@@ -54,8 +54,11 @@ export async function POST(req: Request): Promise<Response> {
   const requestId = getOrCreateRequestId(req)
   log(makeRecord({ requestId, level: 'info', event: 'api.request.started', endpoint: '/api/studies/bulk-import', method: 'POST' }))
 
-  const { userId, orgId: clerkOrgId } = await auth()
+  const { userId, orgId: clerkOrgId, orgRole } = await auth()
   if (!userId || !clerkOrgId) return new Response('Unauthorized', { status: 401 })
+  if (!canManageDocuments(normalizeRole(orgRole))) {
+    return new Response('Forbidden', { status: 403 })
+  }
 
   let form: FormData
   try {

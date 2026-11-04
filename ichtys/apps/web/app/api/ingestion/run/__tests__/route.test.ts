@@ -6,9 +6,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   validateDocumentVersionAccess: vi.fn(),
-  handleApiError: vi
-    .fn<(err: unknown) => Response>()
-    .mockReturnValue(new Response('Internal Server Error', { status: 500 })),
+  handleApiError: vi.fn<(err: unknown) => Response>((err: unknown) => {
+    if (err instanceof Error && err.name === 'AccessError' && 'status' in err) {
+      const status = (err as { status: number }).status
+      if (status === 401 || status === 403 || status === 404) {
+        const body = status === 401 ? 'Unauthorized' : status === 403 ? 'Forbidden' : 'Not Found'
+        return new Response(body, { status })
+      }
+    }
+    return new Response('Internal Server Error', { status: 500 })
+  }),
   runIngestion: vi.fn(),
   after: vi.fn(),
   enforceSlidingWindowRateLimit: vi.fn(),
@@ -24,10 +31,22 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('next/server', () => ({ after: mocks.after }))
 
-vi.mock('@ichtys/auth', () => ({
-  validateDocumentVersionAccess: mocks.validateDocumentVersionAccess,
-  handleApiError: mocks.handleApiError,
-}))
+vi.mock('@ichtys/auth', async () => {
+  const roles = await vi.importActual<typeof import('@ichtys/auth/roles')>('@ichtys/auth/roles')
+  return {
+    validateDocumentVersionAccess: mocks.validateDocumentVersionAccess,
+    handleApiError: mocks.handleApiError,
+    canManageDocuments: roles.canManageDocuments,
+    AccessError: class AccessError extends Error {
+      readonly status: 401 | 403 | 404
+      constructor(message: string, status: 401 | 403 | 404) {
+        super(message)
+        this.name = 'AccessError'
+        this.status = status
+      }
+    },
+  }
+})
 
 vi.mock('@ichtys/ingestion', () => ({ runIngestion: mocks.runIngestion }))
 
@@ -60,6 +79,7 @@ beforeEach(() => {
     userId: USER_ID,
     orgId: crypto.randomUUID(),
     studyId: crypto.randomUUID(),
+    role: 'site_coordinator',
     document: { id: crypto.randomUUID() },
     documentVersion: { id: DOC_VERSION_ID },
   })
@@ -99,4 +119,25 @@ describe('POST /api/ingestion/run — rate limit', () => {
     expect(res.status).toBe(202)
     expect(mocks.after).toHaveBeenCalledTimes(1)
   })
+
+  it.each(['read_only_monitor', 'principal_investigator'])(
+    'rechaza a %s antes de encolar la ingesta',
+    async (role) => {
+      mocks.validateDocumentVersionAccess.mockResolvedValue({
+        userId: USER_ID,
+        orgId: crypto.randomUUID(),
+        studyId: crypto.randomUUID(),
+        role,
+        document: { id: crypto.randomUUID() },
+        documentVersion: { id: DOC_VERSION_ID },
+      })
+
+      const res = await POST(ingestionRequest())
+
+      expect(res.status).toBe(403)
+      expect(await res.text()).toBe('Forbidden')
+      expect(mocks.after).not.toHaveBeenCalled()
+      expect(mocks.enforceSlidingWindowRateLimit).not.toHaveBeenCalled()
+    },
+  )
 })
