@@ -348,6 +348,113 @@ describe('extractStudySpec', () => {
     )
     expect(result.spec.visits[0]?.confidence).toBe('high')
   })
+
+  // -------------------------------------------------------------------------
+  // Regresión E5 (vuelta 4): un tope NUNCA tumba más que el ítem afectado.
+  // En 0f441f4 un procedimiento de 601 chars o 101 sourcePages en UNA visita
+  // hacían que studySpecSchema.parse (final de extractStudySpec) lanzara
+  // ZodError y se perdieran los CUATRO grupos.
+  // -------------------------------------------------------------------------
+
+  it('un procedimiento de 601 chars y 101 sourcePages no tumban la extracción (se recortan con advertencia)', async () => {
+    mockExtractionByPrompt()
+    const original = mocks.generateObject.getMockImplementation()!
+    mocks.generateObject.mockImplementation((args: { prompt: string }) => {
+      if (args.prompt.includes('schedule of activities')) {
+        return Promise.resolve({
+          object: {
+            visits: [
+              {
+                name: 'Visita 4',
+                label: 'Semana 12',
+                day: 85,
+                windowDays: 3,
+                procedures: ['HbA1c', `procedimiento-largo-${'x'.repeat(580)}`], // 601 chars
+                sourcePages: Array.from({ length: 101 }, (_, i) => i + 1),
+                confidence: 'high',
+              },
+              {
+                name: 'Visita 1',
+                label: 'Selección',
+                day: -35,
+                windowDays: null,
+                procedures: ['Consentimiento'],
+                sourcePages: [18],
+                confidence: 'high',
+              },
+            ],
+          },
+        })
+      }
+      return original(args)
+    })
+
+    const result = await extractStudySpec(makeProtocolPages())
+
+    // La extracción COMPLETA se guarda: criterios, endpoints e identificación
+    // intactos (antes: ZodError y nada).
+    expect(result.spec.inclusionCriteria).toHaveLength(1)
+    expect(result.spec.exclusionCriteria).toHaveLength(1)
+    expect(result.spec.endpoints).toHaveLength(1)
+    // La visita afectada sobrevive RECORTADA al tope, la válida intacta.
+    expect(result.spec.visits).toHaveLength(2)
+    expect(result.spec.visits[0]?.procedures[1]).toHaveLength(500)
+    expect(result.spec.visits[0]?.sourcePages).toHaveLength(100)
+    expect(result.spec.visits[1]?.procedures).toEqual(['Consentimiento'])
+    // Una advertencia por ítem recortado, con lo que se ajustó.
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining('procedimientos recortados'),
+      expect.stringContaining('sourcePages recortadas'),
+    ]))
+    expect(result.warnings.some((warning) => warning.includes('extraction_failed'))).toBe(false)
+  })
+
+  it('un criterio de 10.001 chars no tumba el grupo aunque el SDK lo rechace: se recupera la salida cruda', async () => {
+    mockExtractionByPrompt()
+    const original = mocks.generateObject.getMockImplementation()!
+    const longCriterion = {
+      number: '1',
+      text: 'Adultos mayores de 18 años '.repeat(371), // 27*371 = 10.017 chars > tope 10.000
+      sourcePages: [52],
+      confidence: 'high',
+    }
+    const validCriterion = {
+      number: '2',
+      text: 'HbA1c entre 7,5% y 10,0%',
+      sourcePages: [52],
+      confidence: 'high',
+    }
+    mocks.generateObject.mockImplementation(
+      (args: { prompt: string; schema: { safeParse: (value: unknown) => { success: boolean } } }) => {
+        if (args.prompt.includes('inclusion criteria')) {
+          const object = { inclusionCriteria: [longCriterion, validCriterion], exclusionCriteria: [] }
+          // El SDK real (ai 7) valida la salida contra el schema del grupo y
+          // lanza NoObjectGeneratedError con .text = JSON crudo del modelo.
+          if (!args.schema.safeParse(object).success) {
+            return Promise.reject(
+              Object.assign(new Error('No object generated: response did not match schema.'), {
+                text: JSON.stringify(object),
+              }),
+            )
+          }
+          return Promise.resolve({ object })
+        }
+        return original(args as { prompt: string })
+      },
+    )
+
+    const result = await extractStudySpec(makeProtocolPages())
+
+    // El grupo NO se pierde (antes: grupo vacío + "provider failure"):
+    // el criterio largo se recorta y el válido pasa intacto.
+    expect(result.spec.inclusionCriteria).toHaveLength(2)
+    expect(result.spec.inclusionCriteria[0]?.text).toHaveLength(10_000)
+    expect(result.spec.inclusionCriteria[1]?.text).toBe('HbA1c entre 7,5% y 10,0%')
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining('texto recortado'),
+    ]))
+    expect(result.warnings.some((w) => w.includes('provider failure'))).toBe(false)
+  })
 })
 
 // ---------------------------------------------------------------------------
