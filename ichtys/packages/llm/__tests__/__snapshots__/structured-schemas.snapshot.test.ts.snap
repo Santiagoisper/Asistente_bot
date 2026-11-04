@@ -10,6 +10,7 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
     },
     "citationIndices": {
       "items": {
+        "maximum": 9007199254740991,
         "minimum": 1,
         "type": "integer",
       },
@@ -80,6 +81,7 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
           "sourcePages": {
             "items": {
               "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
               "type": "integer",
             },
             "minItems": 1,
@@ -119,6 +121,7 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
           "sourcePages": {
             "items": {
               "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
               "type": "integer",
             },
             "minItems": 1,
@@ -176,6 +179,7 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
           "sourcePages": {
             "items": {
               "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
               "type": "integer",
             },
             "minItems": 1,
@@ -232,6 +236,7 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
         "sourcePages": {
           "items": {
             "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
             "type": "integer",
           },
           "type": "array",
@@ -268,6 +273,7 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
       "anyOf": [
         {
           "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
           "type": "integer",
         },
         {
@@ -286,6 +292,7 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
       "anyOf": [
         {
           "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
           "type": "integer",
         },
         {
@@ -344,6 +351,7 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
       "anyOf": [
         {
           "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
           "type": "integer",
         },
         {
@@ -371,6 +379,8 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
         "pageEnd": {
           "anyOf": [
             {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
               "type": "integer",
             },
             {
@@ -381,6 +391,8 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
         "pageStart": {
           "anyOf": [
             {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
               "type": "integer",
             },
             {
@@ -401,6 +413,8 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
         "pageEnd": {
           "anyOf": [
             {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
               "type": "integer",
             },
             {
@@ -411,6 +425,8 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
         "pageStart": {
           "anyOf": [
             {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
               "type": "integer",
             },
             {
@@ -431,6 +447,8 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
         "pageEnd": {
           "anyOf": [
             {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
               "type": "integer",
             },
             {
@@ -441,6 +459,8 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
         "pageStart": {
           "anyOf": [
             {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
               "type": "integer",
             },
             {
@@ -461,6 +481,8 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
         "pageEnd": {
           "anyOf": [
             {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
               "type": "integer",
             },
             {
@@ -471,6 +493,8 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
         "pageStart": {
           "anyOf": [
             {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
               "type": "integer",
             },
             {
@@ -539,6 +563,7 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
           "sourcePages": {
             "items": {
               "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
               "type": "integer",
             },
             "minItems": 1,

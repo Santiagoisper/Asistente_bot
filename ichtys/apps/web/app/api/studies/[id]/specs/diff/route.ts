@@ -34,7 +34,9 @@ export async function GET(req: Request, { params }: RouteParams) {
   })
   if (!parsed.success) {
     return NextResponse.json(
-      { error: 'Parámetros inválidos', details: parsed.error.flatten() },
+      // z.flattenError: .flatten() de ZodError quedó obsoleto en zod 4
+      // (ADR-8 §3); misma forma {formErrors, fieldErrors}.
+      { error: 'Parámetros inválidos', details: z.flattenError(parsed.error) },
       { status: 400 },
     )
   }
