@@ -1,0 +1,573 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) > jsonSchema de answer coincide con la instantánea 1`] = `
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "answer": {
+      "type": "string",
+    },
+    "citationIndices": {
+      "items": {
+        "minimum": 1,
+        "type": "integer",
+      },
+      "type": "array",
+    },
+    "confidence": {
+      "enum": [
+        "high",
+        "medium",
+        "low",
+        "insufficient_evidence",
+      ],
+      "type": "string",
+    },
+  },
+  "required": [
+    "answer",
+    "confidence",
+    "citationIndices",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) > jsonSchema de confidenceOnly coincide con la instantánea 1`] = `
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "confidence": {
+      "enum": [
+        "high",
+        "medium",
+        "low",
+        "insufficient_evidence",
+      ],
+      "type": "string",
+    },
+  },
+  "required": [
+    "confidence",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) > jsonSchema de eligibilityGroup coincide con la instantánea 1`] = `
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "exclusionCriteria": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "enum": [
+              "high",
+              "medium",
+              "low",
+            ],
+            "type": "string",
+          },
+          "number": {
+            "minLength": 1,
+            "type": "string",
+          },
+          "sourcePages": {
+            "items": {
+              "exclusiveMinimum": 0,
+              "type": "integer",
+            },
+            "minItems": 1,
+            "type": "array",
+          },
+          "text": {
+            "minLength": 1,
+            "type": "string",
+          },
+        },
+        "required": [
+          "number",
+          "text",
+          "sourcePages",
+          "confidence",
+        ],
+        "type": "object",
+      },
+      "type": "array",
+    },
+    "inclusionCriteria": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "enum": [
+              "high",
+              "medium",
+              "low",
+            ],
+            "type": "string",
+          },
+          "number": {
+            "minLength": 1,
+            "type": "string",
+          },
+          "sourcePages": {
+            "items": {
+              "exclusiveMinimum": 0,
+              "type": "integer",
+            },
+            "minItems": 1,
+            "type": "array",
+          },
+          "text": {
+            "minLength": 1,
+            "type": "string",
+          },
+        },
+        "required": [
+          "number",
+          "text",
+          "sourcePages",
+          "confidence",
+        ],
+        "type": "object",
+      },
+      "type": "array",
+    },
+  },
+  "required": [
+    "inclusionCriteria",
+    "exclusionCriteria",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) > jsonSchema de endpointsGroup coincide con la instantánea 1`] = `
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "endpoints": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "enum": [
+              "high",
+              "medium",
+              "low",
+            ],
+            "type": "string",
+          },
+          "endpoint": {
+            "minLength": 1,
+            "type": "string",
+          },
+          "objective": {
+            "minLength": 1,
+            "type": "string",
+          },
+          "sourcePages": {
+            "items": {
+              "exclusiveMinimum": 0,
+              "type": "integer",
+            },
+            "minItems": 1,
+            "type": "array",
+          },
+          "type": {
+            "enum": [
+              "primary",
+              "secondary",
+              "exploratory",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "type",
+          "objective",
+          "endpoint",
+          "sourcePages",
+          "confidence",
+        ],
+        "type": "object",
+      },
+      "type": "array",
+    },
+  },
+  "required": [
+    "endpoints",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) > jsonSchema de identificationGroup coincide con la instantánea 1`] = `
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "identification": {
+      "additionalProperties": false,
+      "properties": {
+        "phase": {
+          "type": [
+            "string",
+            "null",
+          ],
+        },
+        "protocolCode": {
+          "type": [
+            "string",
+            "null",
+          ],
+        },
+        "sourcePages": {
+          "items": {
+            "exclusiveMinimum": 0,
+            "type": "integer",
+          },
+          "type": "array",
+        },
+        "title": {
+          "type": [
+            "string",
+            "null",
+          ],
+        },
+      },
+      "required": [
+        "protocolCode",
+        "title",
+        "phase",
+        "sourcePages",
+      ],
+      "type": "object",
+    },
+  },
+  "required": [
+    "identification",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) > jsonSchema de llmFacts coincide con la instantánea 1`] = `
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "ageYears": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer",
+        },
+        {
+          "type": "null",
+        },
+      ],
+    },
+    "conditions": {
+      "default": [],
+      "items": {
+        "type": "string",
+      },
+      "type": "array",
+    },
+    "diastolic": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer",
+        },
+        {
+          "type": "null",
+        },
+      ],
+    },
+    "labs": {
+      "default": [],
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "minLength": 1,
+            "type": "string",
+          },
+          "unit": {
+            "type": "string",
+          },
+          "value": {
+            "type": "number",
+          },
+        },
+        "required": [
+          "name",
+          "value",
+        ],
+        "type": "object",
+      },
+      "type": "array",
+    },
+    "medications": {
+      "default": [],
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "dose": {
+            "type": "string",
+          },
+          "frequency": {
+            "type": "string",
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string",
+          },
+        },
+        "required": [
+          "name",
+        ],
+        "type": "object",
+      },
+      "type": "array",
+    },
+    "systolic": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer",
+        },
+        {
+          "type": "null",
+        },
+      ],
+    },
+  },
+  "type": "object",
+}
+`;
+
+exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) > jsonSchema de sectionMap coincide con la instantánea 1`] = `
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "detectedLanguage": {
+      "description": "ISO 639-1 code, e.g. en, es, fr, de, it, pt, ja",
+      "type": "string",
+    },
+    "eligibility": {
+      "additionalProperties": false,
+      "properties": {
+        "pageEnd": {
+          "anyOf": [
+            {
+              "type": "integer",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+        "pageStart": {
+          "anyOf": [
+            {
+              "type": "integer",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+      },
+      "required": [
+        "pageStart",
+        "pageEnd",
+      ],
+      "type": "object",
+    },
+    "endpoints": {
+      "additionalProperties": false,
+      "properties": {
+        "pageEnd": {
+          "anyOf": [
+            {
+              "type": "integer",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+        "pageStart": {
+          "anyOf": [
+            {
+              "type": "integer",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+      },
+      "required": [
+        "pageStart",
+        "pageEnd",
+      ],
+      "type": "object",
+    },
+    "identification": {
+      "additionalProperties": false,
+      "properties": {
+        "pageEnd": {
+          "anyOf": [
+            {
+              "type": "integer",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+        "pageStart": {
+          "anyOf": [
+            {
+              "type": "integer",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+      },
+      "required": [
+        "pageStart",
+        "pageEnd",
+      ],
+      "type": "object",
+    },
+    "visits": {
+      "additionalProperties": false,
+      "properties": {
+        "pageEnd": {
+          "anyOf": [
+            {
+              "type": "integer",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+        "pageStart": {
+          "anyOf": [
+            {
+              "type": "integer",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+      },
+      "required": [
+        "pageStart",
+        "pageEnd",
+      ],
+      "type": "object",
+    },
+  },
+  "required": [
+    "eligibility",
+    "endpoints",
+    "visits",
+    "identification",
+    "detectedLanguage",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) > jsonSchema de visitsGroup coincide con la instantánea 1`] = `
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "visits": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "enum": [
+              "high",
+              "medium",
+              "low",
+            ],
+            "type": "string",
+          },
+          "day": {
+            "type": [
+              "number",
+              "null",
+            ],
+          },
+          "label": {
+            "type": [
+              "string",
+              "null",
+            ],
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string",
+          },
+          "procedures": {
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "sourcePages": {
+            "items": {
+              "exclusiveMinimum": 0,
+              "type": "integer",
+            },
+            "minItems": 1,
+            "type": "array",
+          },
+          "windowDays": {
+            "type": [
+              "number",
+              "null",
+            ],
+          },
+        },
+        "required": [
+          "name",
+          "label",
+          "day",
+          "windowDays",
+          "procedures",
+          "sourcePages",
+          "confidence",
+        ],
+        "type": "object",
+      },
+      "type": "array",
+    },
+  },
+  "required": [
+    "visits",
+  ],
+  "type": "object",
+}
+`;

@@ -159,7 +159,8 @@ async function generateSpecObject<T>(params: {
 // Localizador semántico de secciones
 // ─────────────────────────────────────────────────────────────────────────────
 
-const sectionMapSchema = z.object({
+// Exportado para la instantánea de JSON Schema (ADR-8 M4).
+export const sectionMapSchema = z.object({
   eligibility: z.object({
     pageStart: z.number().int().nullable(),
     pageEnd: z.number().int().nullable(),
@@ -431,16 +432,19 @@ CRITICAL RULES:
 // Schema groups
 // ─────────────────────────────────────────────────────────────────────────────
 
-const eligibilityGroupSchema = z.object({
+// Exportado para la instantánea de JSON Schema (ADR-8 M4).
+export const eligibilityGroupSchema = z.object({
   inclusionCriteria: z.array(eligibilityCriterionSchema),
   exclusionCriteria: z.array(eligibilityCriterionSchema),
 })
 
-const endpointsGroupSchema = z.object({
+// Exportado para la instantánea de JSON Schema (ADR-8 M4).
+export const endpointsGroupSchema = z.object({
   endpoints: z.array(studyEndpointSchema),
 })
 
-const visitsGroupSchema = z.object({
+// Exportado para la instantánea de JSON Schema (ADR-8 M4).
+export const visitsGroupSchema = z.object({
   visits: z.array(z.object({
     name: z.string().min(1),
     label: z.string().nullable(),
@@ -452,7 +456,8 @@ const visitsGroupSchema = z.object({
   })),
 })
 
-const identificationGroupSchema = z.object({
+// Exportado para la instantánea de JSON Schema (ADR-8 M4).
+export const identificationGroupSchema = z.object({
   identification: studyIdentificationSchema,
 })
 
