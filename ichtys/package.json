@@ -47,7 +47,7 @@
       "browserslist@<4.28.7": ">=4.28.7",
       "source-map-js@<1.2.2": ">=1.2.2",
       "baseline-browser-mapping@<2.11.0": ">=2.11.0",
-      "zod@<4.6.6": ">=4.6.6"
+      "zod@<4.6.6": "4.6.7"
     }
   },
   "devDependencies": {
