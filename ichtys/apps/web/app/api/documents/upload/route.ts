@@ -8,28 +8,9 @@ import {
 } from '../../../../lib/security/rate-limit'
 import { getOrCreateRequestId, log, makeRecord } from '../../../../lib/observability/logger'
 import { uploadMetaInput as uploadMeta } from '../../../../lib/api/input-schemas'
+import { validatePdfUpload } from '../../../../lib/documents/pdf-upload-validation'
 
 export const runtime = 'nodejs'
-
-/**
- * PRD target for PDF upload size (50MB). This route still receives bytes
- * server-side; a direct-to-blob upload flow can be layered on top later
- * without changing the business validation.
- */
-const MAX_SERVER_UPLOAD_BYTES = 50 * 1024 * 1024
-const MAX_PDF_BYTES = MAX_SERVER_UPLOAD_BYTES
-
-/**
- * file.type es declarado por el cliente y falsificable. La firma binaria
- * "%PDF-" al inicio del archivo es la evidencia real de que es un PDF.
- */
-const PDF_MAGIC_BYTES = '%PDF-'
-
-async function hasPdfMagicBytes(file: File): Promise<boolean> {
-  const head = new Uint8Array(await file.slice(0, PDF_MAGIC_BYTES.length).arrayBuffer())
-  if (head.length < PDF_MAGIC_BYTES.length) return false
-  return new TextDecoder('ascii').decode(head) === PDF_MAGIC_BYTES
-}
 
 function getOptionalString(form: FormData, key: string): string | undefined {
   const value = form.get(key)
@@ -87,15 +68,11 @@ export async function POST(req: Request): Promise<Response> {
       return new Response('Bad Request', { status: 400 })
     }
 
-    if (file.type !== 'application/pdf') {
-      return new Response('Unsupported Media Type', { status: 415 })
-    }
-
-    if (file.size > MAX_PDF_BYTES) {
+    const pdfVerdict = await validatePdfUpload(file)
+    if (pdfVerdict === 'too_large') {
       return new Response('Payload Too Large', { status: 413 })
     }
-
-    if (!(await hasPdfMagicBytes(file))) {
+    if (pdfVerdict !== 'ok') {
       return new Response('Unsupported Media Type', { status: 415 })
     }
 

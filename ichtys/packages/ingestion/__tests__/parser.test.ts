@@ -62,6 +62,44 @@ describe('parsePdf', () => {
 
     await expect(parsePdf(new Uint8Array([0x00]))).rejects.toThrow(PdfParseError)
   })
+
+  it('rejects a PDF that renders more pages than the safety cap', async () => {
+    mockPdfParse.mockImplementation(
+      async (_buf: unknown, opts: { pagerender?: (page: unknown) => Promise<string> }) => {
+        const page = { getTextContent: async () => ({ items: [{ str: 'linea ficticia' }] }) }
+        for (let i = 0; i < 1000; i++) await opts.pagerender?.(page)
+        return { numpages: 1000, text: 'linea ficticia' }
+      },
+    )
+
+    await expect(parsePdf(Buffer.from('%PDF-1.4'))).rejects.toMatchObject({
+      name: 'PdfParseError',
+      code: 'pdf_complexity_limit',
+    })
+  })
+
+  it('rejects a PDF whose text extraction exceeds the time cap', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'))
+    try {
+      mockPdfParse.mockImplementation(
+        async (_buf: unknown, opts: { pagerender?: (page: unknown) => Promise<string> }) => {
+          const page = { getTextContent: async () => ({ items: [{ str: 'linea ficticia' }] }) }
+          await opts.pagerender?.(page)
+          vi.setSystemTime(new Date('2026-01-01T00:02:00.000Z'))
+          await opts.pagerender?.(page)
+          return { numpages: 2, text: 'linea ficticia' }
+        },
+      )
+
+      await expect(parsePdf(Buffer.from('%PDF-1.4'))).rejects.toMatchObject({
+        name: 'PdfParseError',
+        code: 'pdf_complexity_limit',
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('cropPdfPages', () => {

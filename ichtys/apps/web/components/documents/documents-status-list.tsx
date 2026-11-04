@@ -30,6 +30,7 @@ const INGESTION_ERROR_LABELS: Record<string, string> = {
   embedding_internal_error: 'Error interno al indexar el documento.',
   pdf_text_extraction_failed: 'No se pudo extraer texto del PDF.',
   pdf_contains_no_extractable_text: 'El PDF no tiene texto seleccionable (puede ser escaneado).',
+  pdf_complexity_limit: 'El PDF supera el tope de páginas o de tiempo de lectura.',
   blob_download_failed: 'No se pudo leer el archivo almacenado. Volvé a subirlo.',
   stuck_timeout: 'El procesamiento quedó colgado. Usá Reprocesar.',
   ingestion_internal_error: 'Error interno de ingesta.',

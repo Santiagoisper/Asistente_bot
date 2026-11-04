@@ -66,6 +66,7 @@ export type IngestionErrorCode =
   | 'embedding_rate_limited'
   | 'pdf_text_extraction_failed'
   | 'pdf_contains_no_extractable_text'
+  | 'pdf_complexity_limit'
   | 'spec_extraction_failed'
   | 'ingestion_internal_error'
 

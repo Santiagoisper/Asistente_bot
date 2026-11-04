@@ -24,6 +24,12 @@ export interface ParsedDocument {
 export type PdfParseErrorCode =
   | 'pdf_text_extraction_failed'
   | 'pdf_contains_no_extractable_text'
+  | 'pdf_complexity_limit'
+
+/** Protocolos reales superan las 200 páginas. 300 corta un PDF hostil sin rechazar un protocolo largo. */
+const MAX_PDF_PAGES = 300
+/** Tope de CPU del pagerender. pdf-parse llama este hook en serie, página por página. */
+const MAX_PDF_PARSE_MS = 30_000
 
 export class PdfParseError extends Error {
   constructor(
@@ -64,11 +70,18 @@ export async function parsePdf(data: Buffer | Uint8Array): Promise<ParsedDocumen
     const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data)
     const pages: ParsedPage[] = []
     let pageCounter = 0
+    const startedAt = Date.now()
 
     await pdfParse(buffer, {
       // pagerender is called sequentially for each page (1..numpages).
       // Capture per-page text via closure; return value is appended to result.text.
       pagerender: (pageData: { getTextContent: (opts?: object) => Promise<{ items: unknown[] }> }) => {
+        if (pageCounter >= MAX_PDF_PAGES || Date.now() - startedAt > MAX_PDF_PARSE_MS) {
+          throw new PdfParseError(
+            'pdf_complexity_limit',
+            'PDF exceeds the page or extraction-time limit',
+          )
+        }
         const currentPage = ++pageCounter
         return pageData
           .getTextContent({ normalizeWhitespace: false, disableCombineTextItems: false })

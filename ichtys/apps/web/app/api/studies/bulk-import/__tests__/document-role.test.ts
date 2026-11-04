@@ -101,3 +101,45 @@ describe('POST /api/studies/bulk-import — gestión documental (S1)', () => {
     expect(mocks.after).not.toHaveBeenCalled()
   })
 })
+
+function requestWithFile(file: File): Request {
+  const form = new FormData()
+  form.append('files', file)
+  return new Request('http://localhost/api/studies/bulk-import', { method: 'POST', body: form })
+}
+
+describe('S5 — la importación masiva reutiliza la validación del PDF', () => {
+  beforeEach(() => {
+    mocks.auth.mockResolvedValue({
+      userId: 'user_1',
+      orgId: 'org_clerk',
+      orgRole: 'org:site_coordinator',
+    })
+  })
+
+  it('no guarda un archivo application/pdf sin firma %PDF-', async () => {
+    const file = new File([new TextEncoder().encode('esto no es un pdf')], 'protocolo-ficticio.pdf', {
+      type: 'application/pdf',
+    })
+
+    const res = await POST(requestWithFile(file))
+    const body = (await res.json()) as { items: Array<{ status: string; error: string | null }> }
+
+    expect(res.status).toBe(202)
+    expect(body.items[0]?.status).toBe('error')
+    expect(body.items[0]?.error).toMatch(/PDF/)
+    expect(mocks.putPrivateDocumentPdf).not.toHaveBeenCalled()
+    expect(mocks.transaction).not.toHaveBeenCalled()
+  })
+
+  it('no acepta un .pdf cuyo MIME no es application/pdf', async () => {
+    const bytes = new TextEncoder().encode('%PDF-1.4 protocolo ficticio')
+    const file = new File([bytes], 'notas.pdf', { type: 'text/plain' })
+
+    const res = await POST(requestWithFile(file))
+    const body = (await res.json()) as { items: Array<{ status: string }> }
+
+    expect(body.items[0]?.status).toBe('error')
+    expect(mocks.putPrivateDocumentPdf).not.toHaveBeenCalled()
+  })
+})

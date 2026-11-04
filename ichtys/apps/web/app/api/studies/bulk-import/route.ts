@@ -10,11 +10,11 @@ import {
   rateLimitResponse,
 } from '../../../../lib/security/rate-limit'
 import { getOrCreateRequestId, log, makeRecord } from '../../../../lib/observability/logger'
+import { validatePdfUpload } from '../../../../lib/documents/pdf-upload-validation'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
-const MAX_PDF_BYTES = 50 * 1024 * 1024
 const MAX_FILES_PER_BATCH = 25
 
 function studyNameFromFileName(fileName: string): string {
@@ -97,9 +97,12 @@ export async function POST(req: Request): Promise<Response> {
   for (const file of files) {
     const fileName = file.name.trim().length > 0 ? file.name : 'document.pdf'
 
-    const isPdf =
-      file.type === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')
-    if (!isPdf) {
+    const pdfVerdict = await validatePdfUpload(file)
+    if (pdfVerdict !== 'ok') {
+      const errorMessage =
+        pdfVerdict === 'too_large'
+          ? 'El archivo supera el máximo de 50 MB.'
+          : 'Solo se procesan archivos PDF.'
       const [errJob] = await db
         .insert(ingestionJobs)
         .values({
@@ -108,7 +111,7 @@ export async function POST(req: Request): Promise<Response> {
           userId,
           fileName,
           status: 'error',
-          errorMessage: 'Solo se procesan archivos PDF.',
+          errorMessage,
           completedAt: new Date(),
         })
         .returning({ id: ingestionJobs.id })
@@ -119,31 +122,7 @@ export async function POST(req: Request): Promise<Response> {
         documentId: null,
         documentVersionId: null,
         status: 'error',
-        error: 'Solo se procesan archivos PDF.',
-      })
-      continue
-    }
-    if (file.size > MAX_PDF_BYTES) {
-      const [errJob] = await db
-        .insert(ingestionJobs)
-        .values({
-          organizationId: org.id,
-          batchId,
-          userId,
-          fileName,
-          status: 'error',
-          errorMessage: 'El archivo supera el máximo de 50 MB.',
-          completedAt: new Date(),
-        })
-        .returning({ id: ingestionJobs.id })
-      results.push({
-        jobId: errJob?.id ?? null,
-        fileName,
-        studyId: null,
-        documentId: null,
-        documentVersionId: null,
-        status: 'error',
-        error: 'El archivo supera el máximo de 50 MB.',
+        error: errorMessage,
       })
       continue
     }
