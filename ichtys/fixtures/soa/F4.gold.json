@@ -1,0 +1,1972 @@
+{
+  "fixture": "F4",
+  "seed": 1004,
+  "generatorVersion": "1.0.0",
+  "document": {
+    "pages": 8,
+    "sopPages": [
+      6,
+      7
+    ],
+    "falseHitPages": [
+      2,
+      3,
+      4
+    ]
+  },
+  "tables": [
+    {
+      "key": "T1",
+      "title": "Cronograma breve",
+      "branch": null,
+      "phase": "única",
+      "pages": [
+        6,
+        7
+      ],
+      "notePages": [
+        8
+      ],
+      "outcome": "complete",
+      "reasons": []
+    }
+  ],
+  "visits": [
+    {
+      "key": "Q0",
+      "tableKey": "T1",
+      "printedId": "V0",
+      "label": "Selección",
+      "timing": {
+        "kind": "scheduled",
+        "value": 0,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": null,
+        "after": 7,
+        "unit": "day"
+      },
+      "type": "screening",
+      "attributes": {
+        "fasting": true,
+        "onSite": true,
+        "armOnly": null
+      },
+      "page": 6,
+      "bbox": [
+        172.0,
+        722.0,
+        241.67,
+        742.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          172.0,
+          722.0,
+          241.67,
+          742.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "Q1",
+      "tableKey": "T1",
+      "printedId": "V1",
+      "label": "Día 1",
+      "timing": {
+        "kind": "scheduled",
+        "value": 1,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 2,
+        "after": 2,
+        "unit": "day"
+      },
+      "type": "hybrid",
+      "attributes": {
+        "fasting": true,
+        "onSite": true,
+        "armOnly": null
+      },
+      "page": 6,
+      "bbox": [
+        241.67,
+        722.0,
+        311.33,
+        742.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          241.67,
+          722.0,
+          311.33,
+          742.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "Q2",
+      "tableKey": "T1",
+      "printedId": "V2",
+      "label": "Día 15",
+      "timing": {
+        "kind": "scheduled",
+        "value": 15,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 3,
+        "after": 3,
+        "unit": "day"
+      },
+      "type": "hybrid",
+      "attributes": {
+        "fasting": false,
+        "onSite": true,
+        "armOnly": null
+      },
+      "page": 6,
+      "bbox": [
+        311.33,
+        722.0,
+        381.0,
+        742.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          311.33,
+          722.0,
+          381.0,
+          742.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "Q3",
+      "tableKey": "T1",
+      "printedId": "V3",
+      "label": "Día 29",
+      "timing": {
+        "kind": "scheduled",
+        "value": 29,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 3,
+        "after": 7,
+        "unit": "day"
+      },
+      "type": "hybrid",
+      "attributes": {
+        "fasting": false,
+        "onSite": true,
+        "armOnly": null
+      },
+      "page": 6,
+      "bbox": [
+        381.0,
+        722.0,
+        450.67,
+        742.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          381.0,
+          722.0,
+          450.67,
+          742.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "Q4",
+      "tableKey": "T1",
+      "printedId": "V4",
+      "label": "Día 57",
+      "timing": {
+        "kind": "scheduled",
+        "value": 57,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 7,
+        "after": 7,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": false,
+        "onSite": true,
+        "armOnly": null
+      },
+      "page": 6,
+      "bbox": [
+        450.67,
+        722.0,
+        520.33,
+        742.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          450.67,
+          722.0,
+          520.33,
+          742.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "Q5",
+      "tableKey": "T1",
+      "printedId": "V5",
+      "label": "Fin",
+      "timing": {
+        "kind": "scheduled",
+        "value": 85,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": null,
+      "type": "end_of_study",
+      "attributes": {
+        "fasting": false,
+        "onSite": true,
+        "armOnly": null
+      },
+      "page": 6,
+      "bbox": [
+        520.33,
+        722.0,
+        590.0,
+        742.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          520.33,
+          722.0,
+          590.0,
+          742.0
+        ]
+      },
+      "confidence": 1
+    }
+  ],
+  "procedures": [
+    {
+      "key": "F01",
+      "label": "Consentimiento informado",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 6,
+      "bbox": [
+        22,
+        683.0,
+        172,
+        699.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          22,
+          683.0,
+          172,
+          699.0
+        ]
+      }
+    },
+    {
+      "key": "F02",
+      "label": "Criterios de inclusión/exclusión",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 6,
+      "bbox": [
+        22,
+        667.0,
+        172,
+        683.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          22,
+          667.0,
+          172,
+          683.0
+        ]
+      }
+    },
+    {
+      "key": "F03",
+      "label": "Datos demográficos",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 6,
+      "bbox": [
+        22,
+        651.0,
+        172,
+        667.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          22,
+          651.0,
+          172,
+          667.0
+        ]
+      }
+    },
+    {
+      "key": "F04",
+      "label": "Antecedentes",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 6,
+      "bbox": [
+        22,
+        635.0,
+        172,
+        651.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          22,
+          635.0,
+          172,
+          651.0
+        ]
+      }
+    },
+    {
+      "key": "F05",
+      "label": "Medicación concomitante",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 6,
+      "bbox": [
+        22,
+        619.0,
+        172,
+        635.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          22,
+          619.0,
+          172,
+          635.0
+        ]
+      }
+    },
+    {
+      "key": "F06",
+      "label": "Eventos adversos",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 6,
+      "bbox": [
+        22,
+        603.0,
+        172,
+        619.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          22,
+          603.0,
+          172,
+          619.0
+        ]
+      }
+    },
+    {
+      "key": "F07",
+      "label": "Signos vitales",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [
+        "vitales"
+      ],
+      "page": 6,
+      "bbox": [
+        22,
+        587.0,
+        172,
+        603.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          22,
+          587.0,
+          172,
+          603.0
+        ]
+      }
+    },
+    {
+      "key": "F08",
+      "label": "Peso",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 6,
+      "bbox": [
+        22,
+        571.0,
+        172,
+        587.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          22,
+          571.0,
+          172,
+          587.0
+        ]
+      }
+    },
+    {
+      "key": "F09",
+      "label": "Talla",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 7,
+      "bbox": [
+        22,
+        683.0,
+        172,
+        699.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          22,
+          683.0,
+          172,
+          699.0
+        ]
+      }
+    },
+    {
+      "key": "F10",
+      "label": "Examen físico completo",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 7,
+      "bbox": [
+        22,
+        667.0,
+        172,
+        683.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          22,
+          667.0,
+          172,
+          683.0
+        ]
+      }
+    },
+    {
+      "key": "F11",
+      "label": "Examen físico dirigido",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 7,
+      "bbox": [
+        22,
+        651.0,
+        172,
+        667.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          22,
+          651.0,
+          172,
+          667.0
+        ]
+      }
+    },
+    {
+      "key": "F12",
+      "label": "ECG de 12 derivaciones",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [
+        "electrocardiograma",
+        "ecg"
+      ],
+      "page": 7,
+      "bbox": [
+        22,
+        635.0,
+        172,
+        651.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          22,
+          635.0,
+          172,
+          651.0
+        ]
+      }
+    },
+    {
+      "key": "F13",
+      "label": "Prueba de embarazo en orina",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 7,
+      "bbox": [
+        22,
+        619.0,
+        172,
+        635.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          22,
+          619.0,
+          172,
+          635.0
+        ]
+      }
+    },
+    {
+      "key": "F14",
+      "label": "Prueba de embarazo en suero",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 7,
+      "bbox": [
+        22,
+        603.0,
+        172,
+        619.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          22,
+          603.0,
+          172,
+          619.0
+        ]
+      }
+    },
+    {
+      "key": "F15",
+      "label": "Dispensación de producto",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 7,
+      "bbox": [
+        22,
+        587.0,
+        172,
+        603.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          22,
+          587.0,
+          172,
+          603.0
+        ]
+      }
+    }
+  ],
+  "procedureAliases": [
+    {
+      "alias": "vitales",
+      "procedureKey": "F07"
+    },
+    {
+      "alias": "electrocardiograma",
+      "procedureKey": "F12"
+    },
+    {
+      "alias": "ecg",
+      "procedureKey": "F12"
+    }
+  ],
+  "cells": [
+    {
+      "visitKey": "Q0",
+      "procedureKey": "F01",
+      "mark": "x",
+      "noteRefs": [
+        "1"
+      ],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        172.0,
+        683.0,
+        241.67,
+        699.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          172.0,
+          683.0,
+          241.67,
+          699.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q2",
+      "procedureKey": "F01",
+      "mark": "x",
+      "noteRefs": [
+        "2"
+      ],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        311.33,
+        683.0,
+        381.0,
+        699.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          311.33,
+          683.0,
+          381.0,
+          699.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q4",
+      "procedureKey": "F01",
+      "mark": "x",
+      "noteRefs": [
+        "3"
+      ],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        450.67,
+        683.0,
+        520.33,
+        699.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          450.67,
+          683.0,
+          520.33,
+          699.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q1",
+      "procedureKey": "F02",
+      "mark": "x",
+      "noteRefs": [
+        "4"
+      ],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        241.67,
+        667.0,
+        311.33,
+        683.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          241.67,
+          667.0,
+          311.33,
+          683.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q3",
+      "procedureKey": "F02",
+      "mark": "x",
+      "noteRefs": [
+        "5"
+      ],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        381.0,
+        667.0,
+        450.67,
+        683.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          381.0,
+          667.0,
+          450.67,
+          683.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q5",
+      "procedureKey": "F02",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        520.33,
+        667.0,
+        590.0,
+        683.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          520.33,
+          667.0,
+          590.0,
+          683.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q0",
+      "procedureKey": "F03",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        172.0,
+        651.0,
+        241.67,
+        667.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          172.0,
+          651.0,
+          241.67,
+          667.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q2",
+      "procedureKey": "F03",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        311.33,
+        651.0,
+        381.0,
+        667.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          311.33,
+          651.0,
+          381.0,
+          667.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q4",
+      "procedureKey": "F03",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        450.67,
+        651.0,
+        520.33,
+        667.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          450.67,
+          651.0,
+          520.33,
+          667.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q1",
+      "procedureKey": "F04",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        241.67,
+        635.0,
+        311.33,
+        651.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          241.67,
+          635.0,
+          311.33,
+          651.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q3",
+      "procedureKey": "F04",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        381.0,
+        635.0,
+        450.67,
+        651.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          381.0,
+          635.0,
+          450.67,
+          651.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q5",
+      "procedureKey": "F04",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        520.33,
+        635.0,
+        590.0,
+        651.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          520.33,
+          635.0,
+          590.0,
+          651.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q0",
+      "procedureKey": "F05",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        172.0,
+        619.0,
+        241.67,
+        635.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          172.0,
+          619.0,
+          241.67,
+          635.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q2",
+      "procedureKey": "F05",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        311.33,
+        619.0,
+        381.0,
+        635.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          311.33,
+          619.0,
+          381.0,
+          635.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q4",
+      "procedureKey": "F05",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        450.67,
+        619.0,
+        520.33,
+        635.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          450.67,
+          619.0,
+          520.33,
+          635.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q1",
+      "procedureKey": "F06",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        241.67,
+        603.0,
+        311.33,
+        619.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          241.67,
+          603.0,
+          311.33,
+          619.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q3",
+      "procedureKey": "F06",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        381.0,
+        603.0,
+        450.67,
+        619.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          381.0,
+          603.0,
+          450.67,
+          619.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q5",
+      "procedureKey": "F06",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        520.33,
+        603.0,
+        590.0,
+        619.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          520.33,
+          603.0,
+          590.0,
+          619.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q0",
+      "procedureKey": "F07",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        172.0,
+        587.0,
+        241.67,
+        603.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          172.0,
+          587.0,
+          241.67,
+          603.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q2",
+      "procedureKey": "F07",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        311.33,
+        587.0,
+        381.0,
+        603.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          311.33,
+          587.0,
+          381.0,
+          603.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q4",
+      "procedureKey": "F07",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        450.67,
+        587.0,
+        520.33,
+        603.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          450.67,
+          587.0,
+          520.33,
+          603.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q1",
+      "procedureKey": "F08",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        241.67,
+        571.0,
+        311.33,
+        587.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          241.67,
+          571.0,
+          311.33,
+          587.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q3",
+      "procedureKey": "F08",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        381.0,
+        571.0,
+        450.67,
+        587.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          381.0,
+          571.0,
+          450.67,
+          587.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q5",
+      "procedureKey": "F08",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 6,
+      "bbox": [
+        520.33,
+        571.0,
+        590.0,
+        587.0
+      ],
+      "source": {
+        "page": 6,
+        "bbox": [
+          520.33,
+          571.0,
+          590.0,
+          587.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q0",
+      "procedureKey": "F09",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 7,
+      "bbox": [
+        172.0,
+        683.0,
+        241.67,
+        699.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          172.0,
+          683.0,
+          241.67,
+          699.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q2",
+      "procedureKey": "F09",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 7,
+      "bbox": [
+        311.33,
+        683.0,
+        381.0,
+        699.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          311.33,
+          683.0,
+          381.0,
+          699.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q4",
+      "procedureKey": "F09",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 7,
+      "bbox": [
+        450.67,
+        683.0,
+        520.33,
+        699.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          450.67,
+          683.0,
+          520.33,
+          699.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q1",
+      "procedureKey": "F10",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 7,
+      "bbox": [
+        241.67,
+        667.0,
+        311.33,
+        683.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          241.67,
+          667.0,
+          311.33,
+          683.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q3",
+      "procedureKey": "F10",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 7,
+      "bbox": [
+        381.0,
+        667.0,
+        450.67,
+        683.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          381.0,
+          667.0,
+          450.67,
+          683.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q5",
+      "procedureKey": "F10",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 7,
+      "bbox": [
+        520.33,
+        667.0,
+        590.0,
+        683.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          520.33,
+          667.0,
+          590.0,
+          683.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q0",
+      "procedureKey": "F11",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 7,
+      "bbox": [
+        172.0,
+        651.0,
+        241.67,
+        667.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          172.0,
+          651.0,
+          241.67,
+          667.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q2",
+      "procedureKey": "F11",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 7,
+      "bbox": [
+        311.33,
+        651.0,
+        381.0,
+        667.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          311.33,
+          651.0,
+          381.0,
+          667.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q4",
+      "procedureKey": "F11",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 7,
+      "bbox": [
+        450.67,
+        651.0,
+        520.33,
+        667.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          450.67,
+          651.0,
+          520.33,
+          667.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q1",
+      "procedureKey": "F12",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 7,
+      "bbox": [
+        241.67,
+        635.0,
+        311.33,
+        651.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          241.67,
+          635.0,
+          311.33,
+          651.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q3",
+      "procedureKey": "F12",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 7,
+      "bbox": [
+        381.0,
+        635.0,
+        450.67,
+        651.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          381.0,
+          635.0,
+          450.67,
+          651.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q5",
+      "procedureKey": "F12",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 7,
+      "bbox": [
+        520.33,
+        635.0,
+        590.0,
+        651.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          520.33,
+          635.0,
+          590.0,
+          651.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q0",
+      "procedureKey": "F13",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 7,
+      "bbox": [
+        172.0,
+        619.0,
+        241.67,
+        635.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          172.0,
+          619.0,
+          241.67,
+          635.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q2",
+      "procedureKey": "F13",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 7,
+      "bbox": [
+        311.33,
+        619.0,
+        381.0,
+        635.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          311.33,
+          619.0,
+          381.0,
+          635.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q4",
+      "procedureKey": "F13",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 7,
+      "bbox": [
+        450.67,
+        619.0,
+        520.33,
+        635.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          450.67,
+          619.0,
+          520.33,
+          635.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q1",
+      "procedureKey": "F14",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 7,
+      "bbox": [
+        241.67,
+        603.0,
+        311.33,
+        619.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          241.67,
+          603.0,
+          311.33,
+          619.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q3",
+      "procedureKey": "F14",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 7,
+      "bbox": [
+        381.0,
+        603.0,
+        450.67,
+        619.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          381.0,
+          603.0,
+          450.67,
+          619.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q5",
+      "procedureKey": "F14",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 7,
+      "bbox": [
+        520.33,
+        603.0,
+        590.0,
+        619.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          520.33,
+          603.0,
+          590.0,
+          619.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q0",
+      "procedureKey": "F15",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 7,
+      "bbox": [
+        172.0,
+        587.0,
+        241.67,
+        603.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          172.0,
+          587.0,
+          241.67,
+          603.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q2",
+      "procedureKey": "F15",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 7,
+      "bbox": [
+        311.33,
+        587.0,
+        381.0,
+        603.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          311.33,
+          587.0,
+          381.0,
+          603.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "Q4",
+      "procedureKey": "F15",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 7,
+      "bbox": [
+        450.67,
+        587.0,
+        520.33,
+        603.0
+      ],
+      "source": {
+        "page": 7,
+        "bbox": [
+          450.67,
+          587.0,
+          520.33,
+          603.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    }
+  ],
+  "notes": [
+    {
+      "ref": "1",
+      "tableKey": "T1",
+      "text": "El analito X1 se considera alto si es < 5.",
+      "page": 8,
+      "conditions": [
+        {
+          "kind": "population",
+          "expr": "Analito X1 alto si es < 5",
+          "sourceRef": "",
+          "page": 8,
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "ref": "2",
+      "tableKey": "T1",
+      "text": "Solo en participantes del brazo B",
+      "page": 8,
+      "conditions": [
+        {
+          "kind": "arm",
+          "expr": "Solo en participantes del brazo B",
+          "sourceRef": "",
+          "page": 8,
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "ref": "3",
+      "tableKey": "T1",
+      "text": "Solo en mujeres con capacidad de concebir",
+      "page": 8,
+      "conditions": [
+        {
+          "kind": "population",
+          "expr": "Solo en mujeres con capacidad de concebir",
+          "sourceRef": "",
+          "page": 8,
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "ref": "4",
+      "tableKey": "T1",
+      "text": "Antes de la dosis",
+      "page": 8,
+      "conditions": [
+        {
+          "kind": "dose_timing",
+          "expr": "Antes de la dosis",
+          "sourceRef": "",
+          "page": 8,
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "ref": "5",
+      "tableKey": "T1",
+      "text": "Entre 1 y 2 horas después de la dosis",
+      "page": 8,
+      "conditions": [
+        {
+          "kind": "dose_timing",
+          "expr": "Entre 1 y 2 horas después de la dosis",
+          "sourceRef": "",
+          "page": 8,
+          "confidence": 1
+        }
+      ]
+    }
+  ],
+  "outOfTableRules": [
+    {
+      "text": "Las visitas híbridas son V1 y V2.",
+      "page": 2,
+      "conditions": [
+        {
+          "kind": "event",
+          "expr": "híbridas V1 V2",
+          "sourceRef": "",
+          "page": 2,
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "text": "El analito X1 se considera alto si es > 5.",
+      "page": 2,
+      "conditions": [
+        {
+          "kind": "population",
+          "expr": "Analito X1 alto si es > 5",
+          "sourceRef": "",
+          "page": 2,
+          "confidence": 1
+        }
+      ]
+    }
+  ],
+  "inconsistencies": [
+    {
+      "kind": "hybrid_set_mismatch",
+      "description": "La prosa dice que las visitas híbridas son V1 y V2. La grilla también marca V3.",
+      "pages": [
+        6
+      ],
+      "status": "open"
+    },
+    {
+      "kind": "reversed_operator",
+      "description": "Una nota dice que el analito X1 es alto si es < 5. La prosa dice si es > 5.",
+      "pages": [
+        6
+      ],
+      "status": "open"
+    }
+  ],
+  "difficulty": {
+    "splitTokens": 0,
+    "mergedCells": 0,
+    "shadedColumns": 1,
+    "unnumberedColumns": 0,
+    "rotatedPages": 0,
+    "glyphLoss": false
+  }
+}

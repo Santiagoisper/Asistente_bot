@@ -1,0 +1,6854 @@
+{
+  "fixture": "F5",
+  "seed": 1005,
+  "generatorVersion": "1.0.0",
+  "document": {
+    "pages": 40,
+    "sopPages": [
+      15,
+      16,
+      17,
+      18,
+      19,
+      20
+    ],
+    "falseHitPages": [
+      2,
+      3,
+      4
+    ]
+  },
+  "tables": [
+    {
+      "key": "T1",
+      "title": "Main assessment grid",
+      "branch": null,
+      "phase": "treatment",
+      "pages": [
+        15,
+        16,
+        17,
+        18
+      ],
+      "notePages": [
+        21
+      ],
+      "outcome": "complete",
+      "reasons": []
+    },
+    {
+      "key": "T2",
+      "title": "Pharmacokinetic grid",
+      "branch": null,
+      "phase": "pk",
+      "pages": [
+        19,
+        20
+      ],
+      "notePages": [],
+      "outcome": "complete",
+      "reasons": []
+    }
+  ],
+  "visits": [
+    {
+      "key": "E1-00",
+      "tableKey": "T1",
+      "printedId": "SCR",
+      "label": "Screening",
+      "timing": {
+        "kind": "scheduled",
+        "value": -14,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": null,
+        "after": 7,
+        "unit": "day"
+      },
+      "type": "screening",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 15,
+      "bbox": [
+        162.0,
+        542.0,
+        212.67,
+        562.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          162.0,
+          542.0,
+          212.67,
+          562.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "E1-01",
+      "tableKey": "T1",
+      "printedId": "D1",
+      "label": "Day 1",
+      "timing": {
+        "kind": "scheduled",
+        "value": 1,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 2,
+        "after": 2,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 15,
+      "bbox": [
+        212.67,
+        542.0,
+        263.33,
+        562.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          212.67,
+          542.0,
+          263.33,
+          562.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "E1-02",
+      "tableKey": "T1",
+      "printedId": "W2",
+      "label": "Week 2",
+      "timing": {
+        "kind": "scheduled",
+        "value": 2,
+        "unit": "week",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 2,
+        "after": 2,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 15,
+      "bbox": [
+        263.33,
+        542.0,
+        314.0,
+        562.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          263.33,
+          542.0,
+          314.0,
+          562.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "E1-03",
+      "tableKey": "T1",
+      "printedId": "W4",
+      "label": "Week 4",
+      "timing": {
+        "kind": "scheduled",
+        "value": 4,
+        "unit": "week",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 3,
+        "after": 3,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 15,
+      "bbox": [
+        314.0,
+        542.0,
+        364.67,
+        562.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          314.0,
+          542.0,
+          364.67,
+          562.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "E1-04",
+      "tableKey": "T1",
+      "printedId": "W6",
+      "label": "Week 6",
+      "timing": {
+        "kind": "scheduled",
+        "value": 6,
+        "unit": "week",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 3,
+        "after": 3,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 15,
+      "bbox": [
+        364.67,
+        542.0,
+        415.33,
+        562.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          364.67,
+          542.0,
+          415.33,
+          562.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "E1-05",
+      "tableKey": "T1",
+      "printedId": "W8",
+      "label": "Week 8",
+      "timing": {
+        "kind": "scheduled",
+        "value": 8,
+        "unit": "week",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 3,
+        "after": 3,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 15,
+      "bbox": [
+        415.33,
+        542.0,
+        466.0,
+        562.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          415.33,
+          542.0,
+          466.0,
+          562.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "E1-06",
+      "tableKey": "T1",
+      "printedId": "W12",
+      "label": "Week 12",
+      "timing": {
+        "kind": "scheduled",
+        "value": 12,
+        "unit": "week",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 7,
+        "after": 7,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 15,
+      "bbox": [
+        466.0,
+        542.0,
+        516.67,
+        562.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          466.0,
+          542.0,
+          516.67,
+          562.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "E1-07",
+      "tableKey": "T1",
+      "printedId": "W16",
+      "label": "Week 16",
+      "timing": {
+        "kind": "scheduled",
+        "value": 16,
+        "unit": "week",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 7,
+        "after": 7,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 15,
+      "bbox": [
+        516.67,
+        542.0,
+        567.33,
+        562.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          516.67,
+          542.0,
+          567.33,
+          562.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "E1-08",
+      "tableKey": "T1",
+      "printedId": "W20",
+      "label": "Week 20",
+      "timing": {
+        "kind": "scheduled",
+        "value": 20,
+        "unit": "week",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 7,
+        "after": 7,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 15,
+      "bbox": [
+        567.33,
+        542.0,
+        618.0,
+        562.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          567.33,
+          542.0,
+          618.0,
+          562.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "E1-09",
+      "tableKey": "T1",
+      "printedId": "W24",
+      "label": "Week 24",
+      "timing": {
+        "kind": "scheduled",
+        "value": 24,
+        "unit": "week",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 7,
+        "after": 7,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 15,
+      "bbox": [
+        618.0,
+        542.0,
+        668.67,
+        562.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          618.0,
+          542.0,
+          668.67,
+          562.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "E1-10",
+      "tableKey": "T1",
+      "printedId": "ET",
+      "label": "Early termination",
+      "timing": {
+        "kind": "event",
+        "value": null,
+        "unit": null,
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": null,
+      "type": "early_termination",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 15,
+      "bbox": [
+        668.67,
+        542.0,
+        719.33,
+        562.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          668.67,
+          542.0,
+          719.33,
+          562.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "E1-11",
+      "tableKey": "T1",
+      "printedId": "FU",
+      "label": "Follow-up",
+      "timing": {
+        "kind": "scheduled",
+        "value": 28,
+        "unit": "week",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 7,
+        "after": 7,
+        "unit": "day"
+      },
+      "type": "follow_up",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 15,
+      "bbox": [
+        719.33,
+        542.0,
+        770.0,
+        562.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          719.33,
+          542.0,
+          770.0,
+          562.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "E2-00",
+      "tableKey": "T2",
+      "printedId": "D1",
+      "label": "Day 1",
+      "timing": {
+        "kind": "scheduled",
+        "value": 1,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 0,
+        "after": 1,
+        "unit": "day"
+      },
+      "type": "pk_only",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 19,
+      "bbox": [
+        162.0,
+        530.0,
+        238.0,
+        550.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          162.0,
+          530.0,
+          238.0,
+          550.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "E2-01",
+      "tableKey": "T2",
+      "printedId": "W2",
+      "label": "Week 2",
+      "timing": {
+        "kind": "scheduled",
+        "value": 2,
+        "unit": "week",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 1,
+        "after": 1,
+        "unit": "day"
+      },
+      "type": "pk_only",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 19,
+      "bbox": [
+        238.0,
+        530.0,
+        314.0,
+        550.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          238.0,
+          530.0,
+          314.0,
+          550.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "E2-02",
+      "tableKey": "T2",
+      "printedId": "W4",
+      "label": "Week 4",
+      "timing": {
+        "kind": "scheduled",
+        "value": 4,
+        "unit": "week",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 1,
+        "after": 1,
+        "unit": "day"
+      },
+      "type": "pk_only",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 19,
+      "bbox": [
+        314.0,
+        530.0,
+        390.0,
+        550.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          314.0,
+          530.0,
+          390.0,
+          550.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "E2-03",
+      "tableKey": "T2",
+      "printedId": "W8",
+      "label": "Week 8",
+      "timing": {
+        "kind": "scheduled",
+        "value": 8,
+        "unit": "week",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 2,
+        "after": 2,
+        "unit": "day"
+      },
+      "type": "pk_only",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 19,
+      "bbox": [
+        390.0,
+        530.0,
+        466.0,
+        550.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          390.0,
+          530.0,
+          466.0,
+          550.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "E2-04",
+      "tableKey": "T2",
+      "printedId": "W12",
+      "label": "Week 12",
+      "timing": {
+        "kind": "scheduled",
+        "value": 12,
+        "unit": "week",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 3,
+        "after": 3,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 19,
+      "bbox": [
+        466.0,
+        530.0,
+        542.0,
+        550.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          466.0,
+          530.0,
+          542.0,
+          550.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "E2-05",
+      "tableKey": "T2",
+      "printedId": "W24",
+      "label": "Week 24",
+      "timing": {
+        "kind": "scheduled",
+        "value": 24,
+        "unit": "week",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 7,
+        "after": 7,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 19,
+      "bbox": [
+        542.0,
+        530.0,
+        618.0,
+        550.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          542.0,
+          530.0,
+          618.0,
+          550.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "E2-06",
+      "tableKey": "T2",
+      "printedId": "ET",
+      "label": "Early termination",
+      "timing": {
+        "kind": "event",
+        "value": null,
+        "unit": null,
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": null,
+      "type": "early_termination",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 19,
+      "bbox": [
+        618.0,
+        530.0,
+        694.0,
+        550.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          618.0,
+          530.0,
+          694.0,
+          550.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "E2-07",
+      "tableKey": "T2",
+      "printedId": "FU",
+      "label": "Follow-up",
+      "timing": {
+        "kind": "scheduled",
+        "value": 28,
+        "unit": "week",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 7,
+        "after": 7,
+        "unit": "day"
+      },
+      "type": "follow_up",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 19,
+      "bbox": [
+        694.0,
+        530.0,
+        770.0,
+        550.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          694.0,
+          530.0,
+          770.0,
+          550.0
+        ]
+      },
+      "confidence": 1
+    }
+  ],
+  "procedures": [
+    {
+      "key": "G01",
+      "label": "Informed consent",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 15,
+      "bbox": [
+        22,
+        503.0,
+        162,
+        519.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          22,
+          503.0,
+          162,
+          519.0
+        ]
+      }
+    },
+    {
+      "key": "G02",
+      "label": "Inclusion/exclusion criteria",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 15,
+      "bbox": [
+        22,
+        487.0,
+        162,
+        503.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          22,
+          487.0,
+          162,
+          503.0
+        ]
+      }
+    },
+    {
+      "key": "G03",
+      "label": "Demographics",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 15,
+      "bbox": [
+        22,
+        471.0,
+        162,
+        487.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          22,
+          471.0,
+          162,
+          487.0
+        ]
+      }
+    },
+    {
+      "key": "G04",
+      "label": "Medical history",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 15,
+      "bbox": [
+        22,
+        455.0,
+        162,
+        471.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          22,
+          455.0,
+          162,
+          471.0
+        ]
+      }
+    },
+    {
+      "key": "G05",
+      "label": "Concomitant medications",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 15,
+      "bbox": [
+        22,
+        439.0,
+        162,
+        455.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          22,
+          439.0,
+          162,
+          455.0
+        ]
+      }
+    },
+    {
+      "key": "G06",
+      "label": "Adverse events",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 15,
+      "bbox": [
+        22,
+        423.0,
+        162,
+        439.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          22,
+          423.0,
+          162,
+          439.0
+        ]
+      }
+    },
+    {
+      "key": "G07",
+      "label": "Vital signs",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [
+        "vitals"
+      ],
+      "page": 15,
+      "bbox": [
+        22,
+        407.0,
+        162,
+        423.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          22,
+          407.0,
+          162,
+          423.0
+        ]
+      }
+    },
+    {
+      "key": "G08",
+      "label": "Weight",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 16,
+      "bbox": [
+        22,
+        503.0,
+        162,
+        519.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          22,
+          503.0,
+          162,
+          519.0
+        ]
+      }
+    },
+    {
+      "key": "G09",
+      "label": "Height",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 16,
+      "bbox": [
+        22,
+        487.0,
+        162,
+        503.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          22,
+          487.0,
+          162,
+          503.0
+        ]
+      }
+    },
+    {
+      "key": "G10",
+      "label": "Complete physical exam",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 16,
+      "bbox": [
+        22,
+        471.0,
+        162,
+        487.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          22,
+          471.0,
+          162,
+          487.0
+        ]
+      }
+    },
+    {
+      "key": "G11",
+      "label": "Directed physical exam",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 16,
+      "bbox": [
+        22,
+        455.0,
+        162,
+        471.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          22,
+          455.0,
+          162,
+          471.0
+        ]
+      }
+    },
+    {
+      "key": "G12",
+      "label": "12-lead ECG",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [
+        "electrocardiogram"
+      ],
+      "page": 16,
+      "bbox": [
+        22,
+        439.0,
+        162,
+        455.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          22,
+          439.0,
+          162,
+          455.0
+        ]
+      }
+    },
+    {
+      "key": "G13",
+      "label": "Urine pregnancy test",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 16,
+      "bbox": [
+        22,
+        423.0,
+        162,
+        439.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          22,
+          423.0,
+          162,
+          439.0
+        ]
+      }
+    },
+    {
+      "key": "G14",
+      "label": "Serum pregnancy test",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 17,
+      "bbox": [
+        22,
+        503.0,
+        162,
+        519.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          22,
+          503.0,
+          162,
+          519.0
+        ]
+      }
+    },
+    {
+      "key": "G15",
+      "label": "Study product dispensation",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 17,
+      "bbox": [
+        22,
+        487.0,
+        162,
+        503.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          22,
+          487.0,
+          162,
+          503.0
+        ]
+      }
+    },
+    {
+      "key": "G16",
+      "label": "Study product return",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 17,
+      "bbox": [
+        22,
+        471.0,
+        162,
+        487.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          22,
+          471.0,
+          162,
+          487.0
+        ]
+      }
+    },
+    {
+      "key": "G17",
+      "label": "Adherence",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 17,
+      "bbox": [
+        22,
+        455.0,
+        162,
+        471.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          22,
+          455.0,
+          162,
+          471.0
+        ]
+      }
+    },
+    {
+      "key": "G18",
+      "label": "Randomization system registration",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 17,
+      "bbox": [
+        22,
+        439.0,
+        162,
+        455.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          22,
+          439.0,
+          162,
+          455.0
+        ]
+      }
+    },
+    {
+      "key": "G19",
+      "label": "Laboratory panel A",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 17,
+      "bbox": [
+        22,
+        423.0,
+        162,
+        439.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          22,
+          423.0,
+          162,
+          439.0
+        ]
+      }
+    },
+    {
+      "key": "G20",
+      "label": "Laboratory panel B",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 18,
+      "bbox": [
+        22,
+        503.0,
+        162,
+        519.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          22,
+          503.0,
+          162,
+          519.0
+        ]
+      }
+    },
+    {
+      "key": "G21",
+      "label": "Analyte X1",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 18,
+      "bbox": [
+        22,
+        487.0,
+        162,
+        503.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          22,
+          487.0,
+          162,
+          503.0
+        ]
+      }
+    },
+    {
+      "key": "G22",
+      "label": "PRO questionnaire PRO-1",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 18,
+      "bbox": [
+        22,
+        471.0,
+        162,
+        487.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          22,
+          471.0,
+          162,
+          487.0
+        ]
+      }
+    },
+    {
+      "key": "G23",
+      "label": "PK sample",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 18,
+      "bbox": [
+        22,
+        455.0,
+        162,
+        471.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          22,
+          455.0,
+          162,
+          471.0
+        ]
+      }
+    },
+    {
+      "key": "G24",
+      "label": "Immunogenicity sample",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 18,
+      "bbox": [
+        22,
+        439.0,
+        162,
+        455.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          22,
+          439.0,
+          162,
+          455.0
+        ]
+      }
+    },
+    {
+      "key": "G25",
+      "label": "Clinical scale C-1",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 18,
+      "bbox": [
+        22,
+        423.0,
+        162,
+        439.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          22,
+          423.0,
+          162,
+          439.0
+        ]
+      }
+    }
+  ],
+  "procedureAliases": [
+    {
+      "alias": "vitals",
+      "procedureKey": "G07"
+    },
+    {
+      "alias": "electrocardiogram",
+      "procedureKey": "G12"
+    }
+  ],
+  "cells": [
+    {
+      "visitKey": "E1-00",
+      "procedureKey": "G01",
+      "mark": "x",
+      "noteRefs": [
+        "a"
+      ],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        162.0,
+        503.0,
+        212.67,
+        519.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          162.0,
+          503.0,
+          212.67,
+          519.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-01",
+      "procedureKey": "G01",
+      "mark": "x",
+      "noteRefs": [
+        "b"
+      ],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        212.67,
+        503.0,
+        263.33,
+        519.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          212.67,
+          503.0,
+          263.33,
+          519.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-02",
+      "procedureKey": "G01",
+      "mark": "x",
+      "noteRefs": [
+        "c"
+      ],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        263.33,
+        503.0,
+        314.0,
+        519.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          263.33,
+          503.0,
+          314.0,
+          519.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-07",
+      "procedureKey": "G01",
+      "mark": "x",
+      "noteRefs": [
+        "d"
+      ],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        516.67,
+        503.0,
+        567.33,
+        519.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          516.67,
+          503.0,
+          567.33,
+          519.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-08",
+      "procedureKey": "G01",
+      "mark": "x",
+      "noteRefs": [
+        "e"
+      ],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        567.33,
+        503.0,
+        618.0,
+        519.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          567.33,
+          503.0,
+          618.0,
+          519.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-09",
+      "procedureKey": "G01",
+      "mark": "x",
+      "noteRefs": [
+        "f"
+      ],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        618.0,
+        503.0,
+        668.67,
+        519.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          618.0,
+          503.0,
+          668.67,
+          519.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-04",
+      "procedureKey": "G02",
+      "mark": "x",
+      "noteRefs": [
+        "g"
+      ],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        364.67,
+        487.0,
+        415.33,
+        503.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          364.67,
+          487.0,
+          415.33,
+          503.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-05",
+      "procedureKey": "G02",
+      "mark": "x",
+      "noteRefs": [
+        "h"
+      ],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        415.33,
+        487.0,
+        466.0,
+        503.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          415.33,
+          487.0,
+          466.0,
+          503.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-06",
+      "procedureKey": "G02",
+      "mark": "x",
+      "noteRefs": [
+        "†"
+      ],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        466.0,
+        487.0,
+        516.67,
+        503.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          466.0,
+          487.0,
+          516.67,
+          503.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-11",
+      "procedureKey": "G02",
+      "mark": "x",
+      "noteRefs": [
+        "‡"
+      ],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        719.33,
+        487.0,
+        770.0,
+        503.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          719.33,
+          487.0,
+          770.0,
+          503.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-01",
+      "procedureKey": "G03",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        212.67,
+        471.0,
+        263.33,
+        487.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          212.67,
+          471.0,
+          263.33,
+          487.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-02",
+      "procedureKey": "G03",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        263.33,
+        471.0,
+        314.0,
+        487.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          263.33,
+          471.0,
+          314.0,
+          487.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-03",
+      "procedureKey": "G03",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        314.0,
+        471.0,
+        364.67,
+        487.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          314.0,
+          471.0,
+          364.67,
+          487.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-08",
+      "procedureKey": "G03",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        567.33,
+        471.0,
+        618.0,
+        487.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          567.33,
+          471.0,
+          618.0,
+          487.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-09",
+      "procedureKey": "G03",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        618.0,
+        471.0,
+        668.67,
+        487.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          618.0,
+          471.0,
+          668.67,
+          487.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-10",
+      "procedureKey": "G03",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        668.67,
+        471.0,
+        719.33,
+        487.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          668.67,
+          471.0,
+          719.33,
+          487.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-00",
+      "procedureKey": "G04",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        162.0,
+        455.0,
+        212.67,
+        471.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          162.0,
+          455.0,
+          212.67,
+          471.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-05",
+      "procedureKey": "G04",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        415.33,
+        455.0,
+        466.0,
+        471.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          415.33,
+          455.0,
+          466.0,
+          471.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-06",
+      "procedureKey": "G04",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        466.0,
+        455.0,
+        516.67,
+        471.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          466.0,
+          455.0,
+          516.67,
+          471.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-07",
+      "procedureKey": "G04",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        516.67,
+        455.0,
+        567.33,
+        471.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          516.67,
+          455.0,
+          567.33,
+          471.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-02",
+      "procedureKey": "G05",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        263.33,
+        439.0,
+        314.0,
+        455.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          263.33,
+          439.0,
+          314.0,
+          455.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-03",
+      "procedureKey": "G05",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        314.0,
+        439.0,
+        364.67,
+        455.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          314.0,
+          439.0,
+          364.67,
+          455.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-04",
+      "procedureKey": "G05",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        364.67,
+        439.0,
+        415.33,
+        455.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          364.67,
+          439.0,
+          415.33,
+          455.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-09",
+      "procedureKey": "G05",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        618.0,
+        439.0,
+        668.67,
+        455.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          618.0,
+          439.0,
+          668.67,
+          455.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-10",
+      "procedureKey": "G05",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        668.67,
+        439.0,
+        719.33,
+        455.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          668.67,
+          439.0,
+          719.33,
+          455.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-11",
+      "procedureKey": "G05",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        719.33,
+        439.0,
+        770.0,
+        455.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          719.33,
+          439.0,
+          770.0,
+          455.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-00",
+      "procedureKey": "G06",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        162.0,
+        423.0,
+        212.67,
+        439.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          162.0,
+          423.0,
+          212.67,
+          439.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-01",
+      "procedureKey": "G06",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        212.67,
+        423.0,
+        263.33,
+        439.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          212.67,
+          423.0,
+          263.33,
+          439.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-06",
+      "procedureKey": "G06",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        466.0,
+        423.0,
+        516.67,
+        439.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          466.0,
+          423.0,
+          516.67,
+          439.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-07",
+      "procedureKey": "G06",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        516.67,
+        423.0,
+        567.33,
+        439.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          516.67,
+          423.0,
+          567.33,
+          439.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-08",
+      "procedureKey": "G06",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        567.33,
+        423.0,
+        618.0,
+        439.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          567.33,
+          423.0,
+          618.0,
+          439.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-11",
+      "procedureKey": "G06",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        719.33,
+        423.0,
+        770.0,
+        439.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          719.33,
+          423.0,
+          770.0,
+          439.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-03",
+      "procedureKey": "G07",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        314.0,
+        407.0,
+        364.67,
+        423.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          314.0,
+          407.0,
+          364.67,
+          423.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-04",
+      "procedureKey": "G07",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        364.67,
+        407.0,
+        415.33,
+        423.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          364.67,
+          407.0,
+          415.33,
+          423.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-05",
+      "procedureKey": "G07",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        415.33,
+        407.0,
+        466.0,
+        423.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          415.33,
+          407.0,
+          466.0,
+          423.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-10",
+      "procedureKey": "G07",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        668.67,
+        407.0,
+        719.33,
+        423.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          668.67,
+          407.0,
+          719.33,
+          423.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-11",
+      "procedureKey": "G07",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 15,
+      "bbox": [
+        719.33,
+        407.0,
+        770.0,
+        423.0
+      ],
+      "source": {
+        "page": 15,
+        "bbox": [
+          719.33,
+          407.0,
+          770.0,
+          423.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-00",
+      "procedureKey": "G08",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        162.0,
+        503.0,
+        212.67,
+        519.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          162.0,
+          503.0,
+          212.67,
+          519.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-01",
+      "procedureKey": "G08",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        212.67,
+        503.0,
+        263.33,
+        519.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          212.67,
+          503.0,
+          263.33,
+          519.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-02",
+      "procedureKey": "G08",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        263.33,
+        503.0,
+        314.0,
+        519.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          263.33,
+          503.0,
+          314.0,
+          519.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-07",
+      "procedureKey": "G08",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        516.67,
+        503.0,
+        567.33,
+        519.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          516.67,
+          503.0,
+          567.33,
+          519.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-08",
+      "procedureKey": "G08",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        567.33,
+        503.0,
+        618.0,
+        519.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          567.33,
+          503.0,
+          618.0,
+          519.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-09",
+      "procedureKey": "G08",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        618.0,
+        503.0,
+        668.67,
+        519.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          618.0,
+          503.0,
+          668.67,
+          519.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-04",
+      "procedureKey": "G09",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        364.67,
+        487.0,
+        415.33,
+        503.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          364.67,
+          487.0,
+          415.33,
+          503.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-05",
+      "procedureKey": "G09",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        415.33,
+        487.0,
+        466.0,
+        503.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          415.33,
+          487.0,
+          466.0,
+          503.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-06",
+      "procedureKey": "G09",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        466.0,
+        487.0,
+        516.67,
+        503.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          466.0,
+          487.0,
+          516.67,
+          503.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-11",
+      "procedureKey": "G09",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        719.33,
+        487.0,
+        770.0,
+        503.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          719.33,
+          487.0,
+          770.0,
+          503.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-01",
+      "procedureKey": "G10",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        212.67,
+        471.0,
+        263.33,
+        487.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          212.67,
+          471.0,
+          263.33,
+          487.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-02",
+      "procedureKey": "G10",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        263.33,
+        471.0,
+        314.0,
+        487.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          263.33,
+          471.0,
+          314.0,
+          487.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-03",
+      "procedureKey": "G10",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        314.0,
+        471.0,
+        364.67,
+        487.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          314.0,
+          471.0,
+          364.67,
+          487.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-08",
+      "procedureKey": "G10",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        567.33,
+        471.0,
+        618.0,
+        487.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          567.33,
+          471.0,
+          618.0,
+          487.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-09",
+      "procedureKey": "G10",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        618.0,
+        471.0,
+        668.67,
+        487.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          618.0,
+          471.0,
+          668.67,
+          487.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-10",
+      "procedureKey": "G10",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        668.67,
+        471.0,
+        719.33,
+        487.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          668.67,
+          471.0,
+          719.33,
+          487.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-00",
+      "procedureKey": "G11",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        162.0,
+        455.0,
+        212.67,
+        471.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          162.0,
+          455.0,
+          212.67,
+          471.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-05",
+      "procedureKey": "G11",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        415.33,
+        455.0,
+        466.0,
+        471.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          415.33,
+          455.0,
+          466.0,
+          471.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-06",
+      "procedureKey": "G11",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        466.0,
+        455.0,
+        516.67,
+        471.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          466.0,
+          455.0,
+          516.67,
+          471.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-07",
+      "procedureKey": "G11",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        516.67,
+        455.0,
+        567.33,
+        471.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          516.67,
+          455.0,
+          567.33,
+          471.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-02",
+      "procedureKey": "G12",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        263.33,
+        439.0,
+        314.0,
+        455.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          263.33,
+          439.0,
+          314.0,
+          455.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-03",
+      "procedureKey": "G12",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        314.0,
+        439.0,
+        364.67,
+        455.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          314.0,
+          439.0,
+          364.67,
+          455.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-04",
+      "procedureKey": "G12",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        364.67,
+        439.0,
+        415.33,
+        455.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          364.67,
+          439.0,
+          415.33,
+          455.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-09",
+      "procedureKey": "G12",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        618.0,
+        439.0,
+        668.67,
+        455.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          618.0,
+          439.0,
+          668.67,
+          455.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-10",
+      "procedureKey": "G12",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        668.67,
+        439.0,
+        719.33,
+        455.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          668.67,
+          439.0,
+          719.33,
+          455.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-11",
+      "procedureKey": "G12",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        719.33,
+        439.0,
+        770.0,
+        455.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          719.33,
+          439.0,
+          770.0,
+          455.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-00",
+      "procedureKey": "G13",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        162.0,
+        423.0,
+        212.67,
+        439.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          162.0,
+          423.0,
+          212.67,
+          439.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-01",
+      "procedureKey": "G13",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        212.67,
+        423.0,
+        263.33,
+        439.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          212.67,
+          423.0,
+          263.33,
+          439.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-06",
+      "procedureKey": "G13",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        466.0,
+        423.0,
+        516.67,
+        439.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          466.0,
+          423.0,
+          516.67,
+          439.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-07",
+      "procedureKey": "G13",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        516.67,
+        423.0,
+        567.33,
+        439.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          516.67,
+          423.0,
+          567.33,
+          439.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-08",
+      "procedureKey": "G13",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 16,
+      "bbox": [
+        567.33,
+        423.0,
+        618.0,
+        439.0
+      ],
+      "source": {
+        "page": 16,
+        "bbox": [
+          567.33,
+          423.0,
+          618.0,
+          439.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-03",
+      "procedureKey": "G14",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        314.0,
+        503.0,
+        364.67,
+        519.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          314.0,
+          503.0,
+          364.67,
+          519.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-04",
+      "procedureKey": "G14",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        364.67,
+        503.0,
+        415.33,
+        519.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          364.67,
+          503.0,
+          415.33,
+          519.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-05",
+      "procedureKey": "G14",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        415.33,
+        503.0,
+        466.0,
+        519.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          415.33,
+          503.0,
+          466.0,
+          519.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-10",
+      "procedureKey": "G14",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        668.67,
+        503.0,
+        719.33,
+        519.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          668.67,
+          503.0,
+          719.33,
+          519.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-11",
+      "procedureKey": "G14",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        719.33,
+        503.0,
+        770.0,
+        519.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          719.33,
+          503.0,
+          770.0,
+          519.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-00",
+      "procedureKey": "G15",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        162.0,
+        487.0,
+        212.67,
+        503.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          162.0,
+          487.0,
+          212.67,
+          503.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-01",
+      "procedureKey": "G15",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        212.67,
+        487.0,
+        263.33,
+        503.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          212.67,
+          487.0,
+          263.33,
+          503.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-02",
+      "procedureKey": "G15",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        263.33,
+        487.0,
+        314.0,
+        503.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          263.33,
+          487.0,
+          314.0,
+          503.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-07",
+      "procedureKey": "G15",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        516.67,
+        487.0,
+        567.33,
+        503.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          516.67,
+          487.0,
+          567.33,
+          503.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-08",
+      "procedureKey": "G15",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        567.33,
+        487.0,
+        618.0,
+        503.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          567.33,
+          487.0,
+          618.0,
+          503.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-09",
+      "procedureKey": "G15",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        618.0,
+        487.0,
+        668.67,
+        503.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          618.0,
+          487.0,
+          668.67,
+          503.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-04",
+      "procedureKey": "G16",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        364.67,
+        471.0,
+        415.33,
+        487.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          364.67,
+          471.0,
+          415.33,
+          487.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-05",
+      "procedureKey": "G16",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        415.33,
+        471.0,
+        466.0,
+        487.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          415.33,
+          471.0,
+          466.0,
+          487.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-06",
+      "procedureKey": "G16",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        466.0,
+        471.0,
+        516.67,
+        487.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          466.0,
+          471.0,
+          516.67,
+          487.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-11",
+      "procedureKey": "G16",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        719.33,
+        471.0,
+        770.0,
+        487.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          719.33,
+          471.0,
+          770.0,
+          487.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-01",
+      "procedureKey": "G17",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        212.67,
+        455.0,
+        263.33,
+        471.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          212.67,
+          455.0,
+          263.33,
+          471.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-02",
+      "procedureKey": "G17",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        263.33,
+        455.0,
+        314.0,
+        471.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          263.33,
+          455.0,
+          314.0,
+          471.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-03",
+      "procedureKey": "G17",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        314.0,
+        455.0,
+        364.67,
+        471.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          314.0,
+          455.0,
+          364.67,
+          471.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-08",
+      "procedureKey": "G17",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        567.33,
+        455.0,
+        618.0,
+        471.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          567.33,
+          455.0,
+          618.0,
+          471.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-09",
+      "procedureKey": "G17",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        618.0,
+        455.0,
+        668.67,
+        471.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          618.0,
+          455.0,
+          668.67,
+          471.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-10",
+      "procedureKey": "G17",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        668.67,
+        455.0,
+        719.33,
+        471.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          668.67,
+          455.0,
+          719.33,
+          471.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-00",
+      "procedureKey": "G18",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        162.0,
+        439.0,
+        212.67,
+        455.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          162.0,
+          439.0,
+          212.67,
+          455.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-05",
+      "procedureKey": "G18",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        415.33,
+        439.0,
+        466.0,
+        455.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          415.33,
+          439.0,
+          466.0,
+          455.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-06",
+      "procedureKey": "G18",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        466.0,
+        439.0,
+        516.67,
+        455.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          466.0,
+          439.0,
+          516.67,
+          455.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-07",
+      "procedureKey": "G18",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        516.67,
+        439.0,
+        567.33,
+        455.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          516.67,
+          439.0,
+          567.33,
+          455.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-02",
+      "procedureKey": "G19",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        263.33,
+        423.0,
+        314.0,
+        439.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          263.33,
+          423.0,
+          314.0,
+          439.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-03",
+      "procedureKey": "G19",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        314.0,
+        423.0,
+        364.67,
+        439.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          314.0,
+          423.0,
+          364.67,
+          439.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-04",
+      "procedureKey": "G19",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        364.67,
+        423.0,
+        415.33,
+        439.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          364.67,
+          423.0,
+          415.33,
+          439.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-09",
+      "procedureKey": "G19",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        618.0,
+        423.0,
+        668.67,
+        439.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          618.0,
+          423.0,
+          668.67,
+          439.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-10",
+      "procedureKey": "G19",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        668.67,
+        423.0,
+        719.33,
+        439.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          668.67,
+          423.0,
+          719.33,
+          439.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-11",
+      "procedureKey": "G19",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 17,
+      "bbox": [
+        719.33,
+        423.0,
+        770.0,
+        439.0
+      ],
+      "source": {
+        "page": 17,
+        "bbox": [
+          719.33,
+          423.0,
+          770.0,
+          439.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-00",
+      "procedureKey": "G20",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        162.0,
+        503.0,
+        212.67,
+        519.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          162.0,
+          503.0,
+          212.67,
+          519.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-01",
+      "procedureKey": "G20",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        212.67,
+        503.0,
+        263.33,
+        519.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          212.67,
+          503.0,
+          263.33,
+          519.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-06",
+      "procedureKey": "G20",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        466.0,
+        503.0,
+        516.67,
+        519.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          466.0,
+          503.0,
+          516.67,
+          519.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-07",
+      "procedureKey": "G20",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        516.67,
+        503.0,
+        567.33,
+        519.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          516.67,
+          503.0,
+          567.33,
+          519.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-08",
+      "procedureKey": "G20",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        567.33,
+        503.0,
+        618.0,
+        519.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          567.33,
+          503.0,
+          618.0,
+          519.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-03",
+      "procedureKey": "G21",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        314.0,
+        487.0,
+        364.67,
+        503.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          314.0,
+          487.0,
+          364.67,
+          503.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-04",
+      "procedureKey": "G21",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        364.67,
+        487.0,
+        415.33,
+        503.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          364.67,
+          487.0,
+          415.33,
+          503.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-05",
+      "procedureKey": "G21",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        415.33,
+        487.0,
+        466.0,
+        503.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          415.33,
+          487.0,
+          466.0,
+          503.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-10",
+      "procedureKey": "G21",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        668.67,
+        487.0,
+        719.33,
+        503.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          668.67,
+          487.0,
+          719.33,
+          503.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-11",
+      "procedureKey": "G21",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        719.33,
+        487.0,
+        770.0,
+        503.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          719.33,
+          487.0,
+          770.0,
+          503.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-00",
+      "procedureKey": "G22",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        162.0,
+        471.0,
+        212.67,
+        487.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          162.0,
+          471.0,
+          212.67,
+          487.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-01",
+      "procedureKey": "G22",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        212.67,
+        471.0,
+        263.33,
+        487.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          212.67,
+          471.0,
+          263.33,
+          487.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-02",
+      "procedureKey": "G22",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        263.33,
+        471.0,
+        314.0,
+        487.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          263.33,
+          471.0,
+          314.0,
+          487.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-07",
+      "procedureKey": "G22",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        516.67,
+        471.0,
+        567.33,
+        487.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          516.67,
+          471.0,
+          567.33,
+          487.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-08",
+      "procedureKey": "G22",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        567.33,
+        471.0,
+        618.0,
+        487.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          567.33,
+          471.0,
+          618.0,
+          487.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-09",
+      "procedureKey": "G22",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        618.0,
+        471.0,
+        668.67,
+        487.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          618.0,
+          471.0,
+          668.67,
+          487.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-04",
+      "procedureKey": "G23",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        364.67,
+        455.0,
+        415.33,
+        471.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          364.67,
+          455.0,
+          415.33,
+          471.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-05",
+      "procedureKey": "G23",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        415.33,
+        455.0,
+        466.0,
+        471.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          415.33,
+          455.0,
+          466.0,
+          471.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-06",
+      "procedureKey": "G23",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        466.0,
+        455.0,
+        516.67,
+        471.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          466.0,
+          455.0,
+          516.67,
+          471.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-11",
+      "procedureKey": "G23",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        719.33,
+        455.0,
+        770.0,
+        471.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          719.33,
+          455.0,
+          770.0,
+          471.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-01",
+      "procedureKey": "G24",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        212.67,
+        439.0,
+        263.33,
+        455.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          212.67,
+          439.0,
+          263.33,
+          455.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-02",
+      "procedureKey": "G24",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        263.33,
+        439.0,
+        314.0,
+        455.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          263.33,
+          439.0,
+          314.0,
+          455.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-03",
+      "procedureKey": "G24",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        314.0,
+        439.0,
+        364.67,
+        455.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          314.0,
+          439.0,
+          364.67,
+          455.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-08",
+      "procedureKey": "G24",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        567.33,
+        439.0,
+        618.0,
+        455.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          567.33,
+          439.0,
+          618.0,
+          455.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-09",
+      "procedureKey": "G24",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        618.0,
+        439.0,
+        668.67,
+        455.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          618.0,
+          439.0,
+          668.67,
+          455.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-10",
+      "procedureKey": "G24",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        668.67,
+        439.0,
+        719.33,
+        455.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          668.67,
+          439.0,
+          719.33,
+          455.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-00",
+      "procedureKey": "G25",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        162.0,
+        423.0,
+        212.67,
+        439.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          162.0,
+          423.0,
+          212.67,
+          439.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-05",
+      "procedureKey": "G25",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        415.33,
+        423.0,
+        466.0,
+        439.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          415.33,
+          423.0,
+          466.0,
+          439.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-06",
+      "procedureKey": "G25",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        466.0,
+        423.0,
+        516.67,
+        439.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          466.0,
+          423.0,
+          516.67,
+          439.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E1-07",
+      "procedureKey": "G25",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 18,
+      "bbox": [
+        516.67,
+        423.0,
+        567.33,
+        439.0
+      ],
+      "source": {
+        "page": 18,
+        "bbox": [
+          516.67,
+          423.0,
+          567.33,
+          439.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-00",
+      "procedureKey": "G01",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        162.0,
+        491.0,
+        238.0,
+        507.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          162.0,
+          491.0,
+          238.0,
+          507.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-01",
+      "procedureKey": "G01",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        238.0,
+        491.0,
+        314.0,
+        507.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          238.0,
+          491.0,
+          314.0,
+          507.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-02",
+      "procedureKey": "G01",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        314.0,
+        491.0,
+        390.0,
+        507.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          314.0,
+          491.0,
+          390.0,
+          507.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-07",
+      "procedureKey": "G01",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        694.0,
+        491.0,
+        770.0,
+        507.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          694.0,
+          491.0,
+          770.0,
+          507.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-04",
+      "procedureKey": "G02",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        466.0,
+        475.0,
+        542.0,
+        491.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          466.0,
+          475.0,
+          542.0,
+          491.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-05",
+      "procedureKey": "G02",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        542.0,
+        475.0,
+        618.0,
+        491.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          542.0,
+          475.0,
+          618.0,
+          491.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-06",
+      "procedureKey": "G02",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        618.0,
+        475.0,
+        694.0,
+        491.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          618.0,
+          475.0,
+          694.0,
+          491.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-01",
+      "procedureKey": "G03",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        238.0,
+        459.0,
+        314.0,
+        475.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          238.0,
+          459.0,
+          314.0,
+          475.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-02",
+      "procedureKey": "G03",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        314.0,
+        459.0,
+        390.0,
+        475.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          314.0,
+          459.0,
+          390.0,
+          475.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-03",
+      "procedureKey": "G03",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        390.0,
+        459.0,
+        466.0,
+        475.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          390.0,
+          459.0,
+          466.0,
+          475.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-00",
+      "procedureKey": "G04",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        162.0,
+        443.0,
+        238.0,
+        459.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          162.0,
+          443.0,
+          238.0,
+          459.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-05",
+      "procedureKey": "G04",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        542.0,
+        443.0,
+        618.0,
+        459.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          542.0,
+          443.0,
+          618.0,
+          459.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-06",
+      "procedureKey": "G04",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        618.0,
+        443.0,
+        694.0,
+        459.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          618.0,
+          443.0,
+          694.0,
+          459.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-07",
+      "procedureKey": "G04",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        694.0,
+        443.0,
+        770.0,
+        459.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          694.0,
+          443.0,
+          770.0,
+          459.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-02",
+      "procedureKey": "G05",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        314.0,
+        427.0,
+        390.0,
+        443.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          314.0,
+          427.0,
+          390.0,
+          443.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-03",
+      "procedureKey": "G05",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        390.0,
+        427.0,
+        466.0,
+        443.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          390.0,
+          427.0,
+          466.0,
+          443.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-04",
+      "procedureKey": "G05",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        466.0,
+        427.0,
+        542.0,
+        443.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          466.0,
+          427.0,
+          542.0,
+          443.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-00",
+      "procedureKey": "G06",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        162.0,
+        411.0,
+        238.0,
+        427.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          162.0,
+          411.0,
+          238.0,
+          427.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-01",
+      "procedureKey": "G06",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        238.0,
+        411.0,
+        314.0,
+        427.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          238.0,
+          411.0,
+          314.0,
+          427.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-06",
+      "procedureKey": "G06",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        618.0,
+        411.0,
+        694.0,
+        427.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          618.0,
+          411.0,
+          694.0,
+          427.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-07",
+      "procedureKey": "G06",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        694.0,
+        411.0,
+        770.0,
+        427.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          694.0,
+          411.0,
+          770.0,
+          427.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-03",
+      "procedureKey": "G07",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        390.0,
+        395.0,
+        466.0,
+        411.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          390.0,
+          395.0,
+          466.0,
+          411.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-04",
+      "procedureKey": "G07",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        466.0,
+        395.0,
+        542.0,
+        411.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          466.0,
+          395.0,
+          542.0,
+          411.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-05",
+      "procedureKey": "G07",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        542.0,
+        395.0,
+        618.0,
+        411.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          542.0,
+          395.0,
+          618.0,
+          411.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-00",
+      "procedureKey": "G08",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        162.0,
+        379.0,
+        238.0,
+        395.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          162.0,
+          379.0,
+          238.0,
+          395.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-01",
+      "procedureKey": "G08",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        238.0,
+        379.0,
+        314.0,
+        395.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          238.0,
+          379.0,
+          314.0,
+          395.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-02",
+      "procedureKey": "G08",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        314.0,
+        379.0,
+        390.0,
+        395.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          314.0,
+          379.0,
+          390.0,
+          395.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-07",
+      "procedureKey": "G08",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        694.0,
+        379.0,
+        770.0,
+        395.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          694.0,
+          379.0,
+          770.0,
+          395.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-04",
+      "procedureKey": "G09",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        466.0,
+        363.0,
+        542.0,
+        379.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          466.0,
+          363.0,
+          542.0,
+          379.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-05",
+      "procedureKey": "G09",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        542.0,
+        363.0,
+        618.0,
+        379.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          542.0,
+          363.0,
+          618.0,
+          379.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-06",
+      "procedureKey": "G09",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        618.0,
+        363.0,
+        694.0,
+        379.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          618.0,
+          363.0,
+          694.0,
+          379.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-01",
+      "procedureKey": "G10",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        238.0,
+        347.0,
+        314.0,
+        363.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          238.0,
+          347.0,
+          314.0,
+          363.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-02",
+      "procedureKey": "G10",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        314.0,
+        347.0,
+        390.0,
+        363.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          314.0,
+          347.0,
+          390.0,
+          363.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-03",
+      "procedureKey": "G10",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 19,
+      "bbox": [
+        390.0,
+        347.0,
+        466.0,
+        363.0
+      ],
+      "source": {
+        "page": 19,
+        "bbox": [
+          390.0,
+          347.0,
+          466.0,
+          363.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-00",
+      "procedureKey": "G11",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        162.0,
+        491.0,
+        238.0,
+        507.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          162.0,
+          491.0,
+          238.0,
+          507.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-05",
+      "procedureKey": "G11",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        542.0,
+        491.0,
+        618.0,
+        507.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          542.0,
+          491.0,
+          618.0,
+          507.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-06",
+      "procedureKey": "G11",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        618.0,
+        491.0,
+        694.0,
+        507.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          618.0,
+          491.0,
+          694.0,
+          507.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-07",
+      "procedureKey": "G11",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        694.0,
+        491.0,
+        770.0,
+        507.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          694.0,
+          491.0,
+          770.0,
+          507.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-02",
+      "procedureKey": "G12",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        314.0,
+        475.0,
+        390.0,
+        491.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          314.0,
+          475.0,
+          390.0,
+          491.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-03",
+      "procedureKey": "G12",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        390.0,
+        475.0,
+        466.0,
+        491.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          390.0,
+          475.0,
+          466.0,
+          491.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-04",
+      "procedureKey": "G12",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        466.0,
+        475.0,
+        542.0,
+        491.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          466.0,
+          475.0,
+          542.0,
+          491.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-00",
+      "procedureKey": "G13",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        162.0,
+        459.0,
+        238.0,
+        475.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          162.0,
+          459.0,
+          238.0,
+          475.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-01",
+      "procedureKey": "G13",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        238.0,
+        459.0,
+        314.0,
+        475.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          238.0,
+          459.0,
+          314.0,
+          475.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-06",
+      "procedureKey": "G13",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        618.0,
+        459.0,
+        694.0,
+        475.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          618.0,
+          459.0,
+          694.0,
+          475.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-07",
+      "procedureKey": "G13",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        694.0,
+        459.0,
+        770.0,
+        475.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          694.0,
+          459.0,
+          770.0,
+          475.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-03",
+      "procedureKey": "G14",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        390.0,
+        443.0,
+        466.0,
+        459.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          390.0,
+          443.0,
+          466.0,
+          459.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-04",
+      "procedureKey": "G14",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        466.0,
+        443.0,
+        542.0,
+        459.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          466.0,
+          443.0,
+          542.0,
+          459.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-05",
+      "procedureKey": "G14",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        542.0,
+        443.0,
+        618.0,
+        459.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          542.0,
+          443.0,
+          618.0,
+          459.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-00",
+      "procedureKey": "G15",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        162.0,
+        427.0,
+        238.0,
+        443.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          162.0,
+          427.0,
+          238.0,
+          443.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-01",
+      "procedureKey": "G15",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        238.0,
+        427.0,
+        314.0,
+        443.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          238.0,
+          427.0,
+          314.0,
+          443.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-02",
+      "procedureKey": "G15",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        314.0,
+        427.0,
+        390.0,
+        443.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          314.0,
+          427.0,
+          390.0,
+          443.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-07",
+      "procedureKey": "G15",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        694.0,
+        427.0,
+        770.0,
+        443.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          694.0,
+          427.0,
+          770.0,
+          443.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-04",
+      "procedureKey": "G16",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        466.0,
+        411.0,
+        542.0,
+        427.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          466.0,
+          411.0,
+          542.0,
+          427.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-05",
+      "procedureKey": "G16",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        542.0,
+        411.0,
+        618.0,
+        427.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          542.0,
+          411.0,
+          618.0,
+          427.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-06",
+      "procedureKey": "G16",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        618.0,
+        411.0,
+        694.0,
+        427.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          618.0,
+          411.0,
+          694.0,
+          427.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-01",
+      "procedureKey": "G17",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        238.0,
+        395.0,
+        314.0,
+        411.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          238.0,
+          395.0,
+          314.0,
+          411.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-02",
+      "procedureKey": "G17",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        314.0,
+        395.0,
+        390.0,
+        411.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          314.0,
+          395.0,
+          390.0,
+          411.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-03",
+      "procedureKey": "G17",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        390.0,
+        395.0,
+        466.0,
+        411.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          390.0,
+          395.0,
+          466.0,
+          411.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-00",
+      "procedureKey": "G18",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        162.0,
+        379.0,
+        238.0,
+        395.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          162.0,
+          379.0,
+          238.0,
+          395.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-05",
+      "procedureKey": "G18",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        542.0,
+        379.0,
+        618.0,
+        395.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          542.0,
+          379.0,
+          618.0,
+          395.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-06",
+      "procedureKey": "G18",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        618.0,
+        379.0,
+        694.0,
+        395.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          618.0,
+          379.0,
+          694.0,
+          395.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-07",
+      "procedureKey": "G18",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        694.0,
+        379.0,
+        770.0,
+        395.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          694.0,
+          379.0,
+          770.0,
+          395.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-02",
+      "procedureKey": "G19",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        314.0,
+        363.0,
+        390.0,
+        379.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          314.0,
+          363.0,
+          390.0,
+          379.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-03",
+      "procedureKey": "G19",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        390.0,
+        363.0,
+        466.0,
+        379.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          390.0,
+          363.0,
+          466.0,
+          379.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-04",
+      "procedureKey": "G19",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        466.0,
+        363.0,
+        542.0,
+        379.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          466.0,
+          363.0,
+          542.0,
+          379.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-00",
+      "procedureKey": "G20",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        162.0,
+        347.0,
+        238.0,
+        363.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          162.0,
+          347.0,
+          238.0,
+          363.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-01",
+      "procedureKey": "G20",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        238.0,
+        347.0,
+        314.0,
+        363.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          238.0,
+          347.0,
+          314.0,
+          363.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-06",
+      "procedureKey": "G20",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        618.0,
+        347.0,
+        694.0,
+        363.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          618.0,
+          347.0,
+          694.0,
+          363.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "E2-07",
+      "procedureKey": "G20",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 20,
+      "bbox": [
+        694.0,
+        347.0,
+        770.0,
+        363.0
+      ],
+      "source": {
+        "page": 20,
+        "bbox": [
+          694.0,
+          347.0,
+          770.0,
+          363.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    }
+  ],
+  "notes": [
+    {
+      "ref": "a",
+      "tableKey": "T1",
+      "text": "The grid applies the rule after W16.",
+      "page": 21,
+      "conditions": [
+        {
+          "kind": "arm",
+          "expr": "Arm A participants only",
+          "sourceRef": "",
+          "page": 21,
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "ref": "b",
+      "tableKey": "T1",
+      "text": "Arm B participants only",
+      "page": 21,
+      "conditions": [
+        {
+          "kind": "arm",
+          "expr": "Arm B participants only",
+          "sourceRef": "",
+          "page": 21,
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "ref": "c",
+      "tableKey": "T1",
+      "text": "Women of childbearing potential only",
+      "page": 21,
+      "conditions": [
+        {
+          "kind": "population",
+          "expr": "Women of childbearing potential only",
+          "sourceRef": "",
+          "page": 21,
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "ref": "d",
+      "tableKey": "T1",
+      "text": "Before the dose",
+      "page": 21,
+      "conditions": [
+        {
+          "kind": "dose_timing",
+          "expr": "Before the dose",
+          "sourceRef": "",
+          "page": 21,
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "ref": "e",
+      "tableKey": "T1",
+      "text": "Between 1 and 2 hours after the dose",
+      "page": 21,
+      "conditions": [
+        {
+          "kind": "dose_timing",
+          "expr": "Between 1 and 2 hours after the dose",
+          "sourceRef": "",
+          "page": 21,
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "ref": "f",
+      "tableKey": "T1",
+      "text": "The result must be available before D1",
+      "page": 21,
+      "conditions": [
+        {
+          "kind": "population",
+          "expr": "The result must be available before D1",
+          "sourceRef": "",
+          "page": 21,
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "ref": "g",
+      "tableKey": "T1",
+      "text": "Only with optional consent K",
+      "page": 21,
+      "conditions": [
+        {
+          "kind": "population",
+          "expr": "Only with optional consent K",
+          "sourceRef": "",
+          "page": 21,
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "ref": "h",
+      "tableKey": "T1",
+      "text": "Only if a finding is present at the baseline visit",
+      "page": 21,
+      "conditions": [
+        {
+          "kind": "population",
+          "expr": "Only if a finding is present at the baseline visit",
+          "sourceRef": "",
+          "page": 21,
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "ref": "†",
+      "tableKey": "T1",
+      "text": "Procedure window: −4/+2 weeks",
+      "page": 21,
+      "conditions": [
+        {
+          "kind": "population",
+          "expr": "Procedure window: −4/+2 weeks",
+          "sourceRef": "",
+          "page": 21,
+          "confidence": 1
+        }
+      ]
+    },
+    {
+      "ref": "‡",
+      "tableKey": "T1",
+      "text": "Fasting for at least 8 h",
+      "page": 21,
+      "conditions": [
+        {
+          "kind": "fasting",
+          "expr": "Fasting for at least 8 h",
+          "sourceRef": "",
+          "page": 21,
+          "confidence": 1
+        }
+      ]
+    }
+  ],
+  "outOfTableRules": [
+    {
+      "text": "The prose says the rule applies after W12.",
+      "page": 2,
+      "conditions": [
+        {
+          "kind": "order",
+          "expr": "after W12",
+          "sourceRef": "",
+          "page": 2,
+          "confidence": 1
+        }
+      ]
+    }
+  ],
+  "inconsistencies": [
+    {
+      "kind": "merged_window_covers_anchor",
+      "description": "Table 1 merges the ±2 d window across D1 and W2. Table 2 gives D1 its own window.",
+      "pages": [
+        15
+      ],
+      "status": "open"
+    },
+    {
+      "kind": "followup_mark_missing_at_end",
+      "description": "Adverse events is marked at FU and missing at ET.",
+      "pages": [
+        15
+      ],
+      "status": "open"
+    },
+    {
+      "kind": "prose_vs_table_limit",
+      "description": "The prose says after W12. A footnote says after W16.",
+      "pages": [
+        15
+      ],
+      "status": "open"
+    }
+  ],
+  "difficulty": {
+    "splitTokens": 0,
+    "mergedCells": 16,
+    "shadedColumns": 2,
+    "unnumberedColumns": 0,
+    "rotatedPages": 1,
+    "glyphLoss": false
+  }
+}
