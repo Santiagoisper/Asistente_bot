@@ -44,3 +44,6 @@ export const MAX_ID_CHARS = 64
 /** Issues de Zod incluidos en una respuesta de error (H7 vuelta 3: la
  *  respuesta del PATCH de spec llegó a 18 MB devolviendo todos). */
 export const MAX_ISSUES_IN_RESPONSE = 10
+
+/** Nombre declarado del documento al subirlo (multipart, R4-2 vuelta 4). */
+export const MAX_UPLOAD_NAME_CHARS = 200

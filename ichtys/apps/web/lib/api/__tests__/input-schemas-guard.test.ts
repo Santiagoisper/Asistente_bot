@@ -21,6 +21,7 @@ import {
   patchSchema,
   specDiffQueryInput,
   triggerInput,
+  uploadMetaInput,
 } from '../input-schemas'
 import {
   createEvolutionSchema,
@@ -37,6 +38,7 @@ const EXTERNAL_SCHEMAS = {
   patchSchema,
   createStudyInput,
   specDiffQueryInput,
+  uploadMetaInput,
   createSubjectSchema,
   createEvolutionSchema,
   labOcrExtractSchema,

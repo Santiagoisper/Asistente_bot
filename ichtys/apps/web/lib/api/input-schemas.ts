@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { MAX_API_KEY_CHARS, MAX_ID_CHARS, MAX_QUESTION_CHARS } from './limits'
+import { MAX_API_KEY_CHARS, MAX_ID_CHARS, MAX_QUESTION_CHARS, MAX_UPLOAD_NAME_CHARS } from './limits'
 
 /**
  * input-schemas.ts — contratos de TODOS los cuerpos y queries HTTP externos
@@ -80,4 +80,21 @@ export const createStudyInput = z.object({
 export const specDiffQueryInput = z.object({
   v1: z.string().uuid('v1 debe ser un UUID válido').max(MAX_ID_CHARS),
   v2: z.string().uuid('v2 debe ser un UUID válido').max(MAX_ID_CHARS),
+})
+
+// POST /api/documents/upload — meta del multipart. El enum incluye 'soa'
+// (documentType COMPLETO de subida, a diferencia del de chat/RAG). Vivió como
+// constante local de la ruta hasta la vuelta 4 (R4-2): acá lo recorre el
+// guardián, y name lleva tope.
+export const uploadMetaInput = z.object({
+  studyId: z.string().uuid().max(MAX_ID_CHARS),
+  name: z.string().min(1).max(MAX_UPLOAD_NAME_CHARS).optional(),
+  documentType: z.enum([
+    'protocol',
+    'investigator_brochure',
+    'lab_manual',
+    'pharmacy_manual',
+    'soa',
+    'other',
+  ]),
 })
