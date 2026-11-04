@@ -491,6 +491,10 @@ export async function answerEngine(input: AnswerEngineInput): Promise<AnswerResu
           // Paso 1 (A7): kit nuevo con modo de salida IGUAL al medido — jsonTool,
           // no output_format nativo (se quita en el paso 2).
           providerOptions: { anthropic: { structuredOutputMode: 'jsonTool' } },
+          // ai@4 inyectaba temperature 0 en toda llamada (prepareCallSettings);
+          // ai@7 no tiene default y el proveedor usaría 1.0. El paso 1 es
+          // "solo el kit, mismo comportamiento": 0 explícito (R1, B3).
+          temperature: 0,
           instructions: SYSTEM_PROMPT,
           prompt: buildUserPrompt(question, context, conversationHistory),
         })
@@ -789,6 +793,10 @@ export async function* answerEngineStream(
           instructions: STREAM_ANSWER_SYSTEM_PROMPT,
           prompt: userPrompt,
           abortSignal: signal,
+          // Igual que el camino no-streaming (R1, B3): ai@4 mandaba 0 por
+          // defecto, ai@7 no — 0 explícito para conservar el comportamiento
+          // medido en el paso 1.
+          temperature: 0,
           onError: ({ error }) => {
             streamError = error
           },

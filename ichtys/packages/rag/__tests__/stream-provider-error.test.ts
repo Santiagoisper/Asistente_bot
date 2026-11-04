@@ -219,6 +219,19 @@ describe('answerEngineStream — falla del proveedor ≠ evidencia insuficiente 
     expect(evalEvent?.outputTokens).toBe(2)
   })
 
+  it('streamText con temperature 0 — ai@4 lo inyectaba por defecto, ai@7 no (R1, B3)', async () => {
+    async function* healthy(): AsyncGenerator<string> { yield 'HbA1c entre 7,0 % y 10,0 % [1]' }
+    mocks.streamText.mockReturnValue({ textStream: healthy() })
+
+    await collectStream(makeInput())
+
+    // En ai@4.3.19 prepareCallSettings inyectaba temperature 0; ai@7 no tiene
+    // default. El paso 1 conserva el comportamiento medido: 0 explícito.
+    expect(mocks.streamText).toHaveBeenCalledWith(
+      expect.objectContaining({ temperature: 0 })
+    )
+  })
+
   it('kit ai 7: AICallError (statusCode 500) vía onError + stream vacío sigue siendo provider_unavailable, nunca insufficient_evidence (A7)', async () => {
     mocks.resolveProviderChain.mockReturnValue(['anthropic'])
     // Forma del error que levanta el kit nuevo: AICallError con statusCode y

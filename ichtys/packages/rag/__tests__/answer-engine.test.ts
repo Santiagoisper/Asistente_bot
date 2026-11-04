@@ -484,6 +484,22 @@ describe('answerEngine — prompt-injection guard', () => {
     expect(SYSTEM_PROMPT).toMatch(/ignore.*instruction/i)
   })
 
+  it('calls the LLM with temperature 0 — ai@4 lo inyectaba por defecto, ai@7 no (R1, B3)', async () => {
+    const chunk = makeChunk({ similarityScore: 0.90 })
+    mocks.generateObject.mockResolvedValueOnce(
+      makeLLMResponse({ confidence: 'high', citationIndices: [1] })
+    )
+
+    await answerEngine(makeInput([chunk]))
+
+    // En ai@4.3.19 prepareCallSettings inyectaba temperature 0 en TODA
+    // llamada; ai@7 no tiene default (Anthropic usaría 1.0). El paso 1
+    // conserva el comportamiento medido: 0 explícito.
+    expect(mocks.generateObject).toHaveBeenCalledWith(
+      expect.objectContaining({ temperature: 0 })
+    )
+  })
+
   it('system prompt instructs the LLM to respond in the same language as the question', () => {
     expect(SYSTEM_PROMPT).toMatch(/same language as the question/i)
   })
