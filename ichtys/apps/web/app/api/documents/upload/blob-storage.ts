@@ -42,9 +42,9 @@ async function putPrivateBlobProduction(
       url: blob.url,
       pathname: blob.pathname,
     }
-  } catch (err) {
-    console.error('[blob-storage] Production blob upload failed:', err)
-    throw err
+  } catch {
+    console.error('[blob-storage] Production blob upload failed', { code: 'blob_upload_failed' })
+    throw new Error('blob_upload_failed')
   }
 }
 

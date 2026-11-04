@@ -37,12 +37,33 @@ export async function runSingleIngestionJobById(jobId: string, orgId: string): P
   await runSingleIngestionJob(job)
 }
 
+/**
+ * Lista cerrada de lo que este worker puede persistir. Sale de los códigos
+ * propios de ingesta, embeddings, lectura de blob y del índice. Cualquier
+ * otro valor, aunque tenga forma de código, se guarda como unknown_error.
+ */
+const KNOWN_INGESTION_FAILURE_CODES = new Set<string>([
+  'blob_download_failed',
+  'blob_not_found',
+  'blob_private_read_failed',
+  'embedding_config_missing',
+  'embedding_dimension_mismatch',
+  'embedding_internal_error',
+  'embedding_provider_error',
+  'embedding_rate_limited',
+  'ingestion_internal_error',
+  'pdf_complexity_limit',
+  'pdf_contains_no_extractable_text',
+  'pdf_text_extraction_failed',
+  'spec_extraction_failed',
+])
+
 function ingestionFailureCode(err: unknown): string {
   if (err && typeof err === 'object' && 'code' in err) {
     const code = (err as { code: unknown }).code
-    if (typeof code === 'string' && /^[a-z0-9_]{1,64}$/.test(code)) return code
+    if (typeof code === 'string' && KNOWN_INGESTION_FAILURE_CODES.has(code)) return code
   }
-  return 'ingestion_failed'
+  return 'unknown_error'
 }
 
 async function runSingleIngestionJob(
