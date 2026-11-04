@@ -165,8 +165,8 @@ export function createLanguageModel(
     }
     case 'openai': {
       const openai = createOpenAI({ apiKey })
-      // Paso 1 (A7): en ai 7 el provider ya no es callable directo — se elige
-      // la API (chat; antes responses/completion) explícitamente.
+      // Paso 1 (A7): .chat() explícito para seguir en Chat Completions — el
+      // default del provider pasó a la Responses API en el SDK 5.0.
       return openai.chat(modelId)
     }
     case 'google': {
@@ -182,7 +182,8 @@ export function createLanguageModel(
         apiKey,
         baseURL: 'https://openrouter.ai/api/v1',
       })
-      // Paso 1 (A7): ídem openai — .chat explícito en ai 7.
+      // Paso 1 (A7): .chat() explícito — mismo motivo que openai (Chat
+      // Completions, no la Responses API del default nuevo).
       return openrouter.chat(modelId)
     }
   }
