@@ -266,13 +266,13 @@ export async function generateAndPersistConversationTitle(params: {
       const { text: titleText, usage: titleUsage } = await generateText({
         model,
         abortSignal: signal,
-        system:
+        instructions:
           'You generate ultra-short conversation titles. Return ONLY the title: 6 words or fewer, no punctuation, no quotes, no explanation. Title should summarize what the user is asking about. Always write the title in Spanish, even when the question is in another language.',
         prompt: contextLine,
-        maxTokens: 20,
+        maxOutputTokens: 20,
         temperature: 0.3,
       })
-      reportUsage({ inputTokens: titleUsage?.promptTokens ?? 0, outputTokens: titleUsage?.completionTokens ?? 0 })
+      reportUsage({ inputTokens: titleUsage?.inputTokens ?? 0, outputTokens: titleUsage?.outputTokens ?? 0 })
       return titleText
     },
   )

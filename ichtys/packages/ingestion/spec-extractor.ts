@@ -115,21 +115,25 @@ async function generateSpecObject<T>(params: {
         model,
         abortSignal: signal,
         schema: params.schema,
-        system: params.system,
+        // Paso 1 (A7): mismo modo de salida que el medido (jsonTool) y
+        // temperature explícita — ai 7 ya no manda 0 por defecto.
+        providerOptions: { anthropic: { structuredOutputMode: 'jsonTool' } },
+        temperature: 0,
+        instructions: params.system,
         ...(params.pdf
           ? {
               messages: [{
                 role: 'user' as const,
                 content: [
-                  { type: 'file' as const, data: params.pdf, mimeType: 'application/pdf' },
+                  { type: 'file' as const, data: params.pdf, mediaType: 'application/pdf' },
                   { type: 'text' as const, text: params.prompt },
                 ],
               }],
             }
           : { prompt: params.prompt }),
-        maxTokens: params.maxTokens,
+        maxOutputTokens: params.maxTokens,
       })
-      reportUsage({ inputTokens: response.usage?.promptTokens ?? 0, outputTokens: response.usage?.completionTokens ?? 0 })
+      reportUsage({ inputTokens: response.usage?.inputTokens ?? 0, outputTokens: response.usage?.outputTokens ?? 0 })
       return response.object as T
     },
   )

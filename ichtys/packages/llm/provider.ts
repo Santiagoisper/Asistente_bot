@@ -165,7 +165,9 @@ export function createLanguageModel(
     }
     case 'openai': {
       const openai = createOpenAI({ apiKey })
-      return openai(modelId)
+      // Paso 1 (A7): en ai 7 el provider ya no es callable directo — se elige
+      // la API (chat; antes responses/completion) explícitamente.
+      return openai.chat(modelId)
     }
     case 'google': {
       const google = createGoogleGenerativeAI({ apiKey })
@@ -180,7 +182,8 @@ export function createLanguageModel(
         apiKey,
         baseURL: 'https://openrouter.ai/api/v1',
       })
-      return openrouter(modelId)
+      // Paso 1 (A7): ídem openai — .chat explícito en ai 7.
+      return openrouter.chat(modelId)
     }
   }
 }
