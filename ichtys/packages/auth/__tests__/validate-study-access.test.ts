@@ -1231,7 +1231,17 @@ describe('document upload registry', () => {
     mockBlobUpload(fixture)
     mockUploadTransaction(fixture)
 
-    const response = await documentUploadPost(createUploadRequest(form))
+    // Esta prueba mira el org de las filas. Sin Redis el cupo cierra la subida;
+    // en test se apaga explícito. El 503 vive en la prueba de la ruta.
+    const previousRateLimit = process.env.RATE_LIMIT_ENABLED
+    process.env.RATE_LIMIT_ENABLED = 'false'
+    let response: Response
+    try {
+      response = await documentUploadPost(createUploadRequest(form))
+    } finally {
+      if (previousRateLimit === undefined) delete process.env.RATE_LIMIT_ENABLED
+      else process.env.RATE_LIMIT_ENABLED = previousRateLimit
+    }
     const body: unknown = await response.json()
 
     expect(response.status).toBe(202)
