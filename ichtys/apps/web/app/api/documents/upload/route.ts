@@ -88,6 +88,8 @@ export async function POST(req: Request): Promise<Response> {
       key: `upload:${orgId}:${userId}`,
       limit: uploadRlConfig.limit,
       windowSeconds: uploadRlConfig.windowSeconds,
+      orgKey: `upload-org:${orgId}`,
+      orgLimit: uploadRlConfig.orgLimit,
     })
     if (rateLimit.limited) {
       if (rateLimit.reason === 'unavailable') {

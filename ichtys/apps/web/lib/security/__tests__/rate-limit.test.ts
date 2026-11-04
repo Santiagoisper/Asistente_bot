@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clientIpRateLimitKey,
   enforceSlidingWindowRateLimit,
+  getBulkRateLimitConfig,
   getChatRateLimitConfig,
   getCitationsRateLimitConfig,
   getHistoryRateLimitConfig,
@@ -135,6 +136,51 @@ describe('rate limit helper', () => {
     expect(JSON.stringify(errorSpy.mock.calls)).not.toContain('sk-ant-provider-raw-ficticio-NO-LOG')
   })
 
+  it('dos usuarios de la misma org suman contra el mismo cupo', async () => {
+    const hits = new Map<string, number>()
+    globalThis.fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as unknown[]
+      const keyCount = Number(body[2])
+      const keys = body.slice(3, 3 + keyCount).map(String)
+      const actorLimit = Number(body[3 + keyCount + 2])
+      const orgLimit = keyCount > 1 ? Number(body[3 + keyCount + 3]) : undefined
+      const actorCount = hits.get(keys[0] ?? '') ?? 0
+      const orgCount = keys[1] ? (hits.get(keys[1]) ?? 0) : 0
+      const blocked = actorCount >= actorLimit || (orgLimit !== undefined && orgCount >= orgLimit)
+      if (!blocked) {
+        for (const key of keys) hits.set(key, (hits.get(key) ?? 0) + 1)
+      }
+      return new Response(JSON.stringify({ result: blocked ? [0, 17] : [1, 0] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }) as typeof fetch
+
+    const orgKey = 'chat-org:org-ficticia'
+    const base = { limit: 5, orgKey, orgLimit: 2, windowSeconds: 60 }
+    await expect(enforceSlidingWindowRateLimit({
+      ...base,
+      key: 'chat:org-ficticia:user-a:study-ficticio',
+    })).resolves.toEqual({ limited: false })
+    await expect(enforceSlidingWindowRateLimit({
+      ...base,
+      key: 'chat:org-ficticia:user-b:study-ficticio',
+    })).resolves.toEqual({ limited: false })
+    const third = await enforceSlidingWindowRateLimit({
+      ...base,
+      key: 'chat:org-ficticia:user-a:otro-estudio',
+    })
+
+    expect(third).toEqual({ limited: true, retryAfterSeconds: 17 })
+    expect(globalThis.fetch).toHaveBeenCalledTimes(3)
+    const firstBody = JSON.parse(String(vi.mocked(globalThis.fetch).mock.calls[0]?.[1]?.body)) as unknown[]
+    expect(firstBody[2]).toBe('2')
+    expect(firstBody[3]).toBe('rl:chat:org-ficticia:user-a:study-ficticio')
+    expect(firstBody[4]).toBe('rl:chat-org:org-ficticia')
+    expect(firstBody[7]).toBe('5')
+    expect(firstBody[8]).toBe('2')
+  })
+
   it('en producción ignora RATE_LIMIT_ENABLED=false y bloquea sin Redis', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     vi.stubEnv('RATE_LIMIT_ENABLED', 'false')
@@ -253,22 +299,38 @@ describe('rate limit helper', () => {
   describe('configurable limits', () => {
     it('getChatRateLimitConfig returns default 30 when env var not set', () => {
       vi.stubEnv('RATE_LIMIT_CHAT_PER_MINUTE', '')
-      expect(getChatRateLimitConfig()).toEqual({ limit: 30, windowSeconds: 60 })
+      expect(getChatRateLimitConfig()).toEqual({ limit: 30, orgLimit: 120, windowSeconds: 60 })
     })
 
     it('getChatRateLimitConfig reads env var', () => {
       vi.stubEnv('RATE_LIMIT_CHAT_PER_MINUTE', '50')
-      expect(getChatRateLimitConfig()).toEqual({ limit: 50, windowSeconds: 60 })
+      expect(getChatRateLimitConfig()).toEqual({ limit: 50, orgLimit: 120, windowSeconds: 60 })
+    })
+
+    it('el cupo de la organización se lee de su propia variable', () => {
+      vi.stubEnv('RATE_LIMIT_CHAT_ORG_PER_MINUTE', '80')
+      expect(getChatRateLimitConfig().orgLimit).toBe(80)
+      vi.stubEnv('RATE_LIMIT_CHAT_ORG_PER_MINUTE', '0')
+      expect(getChatRateLimitConfig().orgLimit).toBe(120)
     })
 
     it('getUploadRateLimitConfig returns default 10', () => {
       vi.stubEnv('RATE_LIMIT_UPLOAD_PER_MINUTE', '')
-      expect(getUploadRateLimitConfig()).toEqual({ limit: 10, windowSeconds: 60 })
+      expect(getUploadRateLimitConfig()).toEqual({ limit: 10, orgLimit: 40, windowSeconds: 60 })
     })
 
     it('getUploadRateLimitConfig reads env var', () => {
       vi.stubEnv('RATE_LIMIT_UPLOAD_PER_MINUTE', '5')
-      expect(getUploadRateLimitConfig()).toEqual({ limit: 5, windowSeconds: 60 })
+      expect(getUploadRateLimitConfig()).toEqual({ limit: 5, orgLimit: 40, windowSeconds: 60 })
+    })
+
+    it('getBulkRateLimitConfig tiene cupo propio de actor y de organización', () => {
+      vi.stubEnv('RATE_LIMIT_BULK_PER_MINUTE', '')
+      vi.stubEnv('RATE_LIMIT_BULK_ORG_PER_MINUTE', '')
+      expect(getBulkRateLimitConfig()).toEqual({ limit: 10, orgLimit: 40, windowSeconds: 60 })
+      vi.stubEnv('RATE_LIMIT_BULK_PER_MINUTE', '4')
+      vi.stubEnv('RATE_LIMIT_BULK_ORG_PER_MINUTE', '15')
+      expect(getBulkRateLimitConfig()).toEqual({ limit: 4, orgLimit: 15, windowSeconds: 60 })
     })
 
     it('getHistoryRateLimitConfig returns default 100', () => {
@@ -278,22 +340,22 @@ describe('rate limit helper', () => {
 
     it('getIngestionRateLimitConfig returns default 5', () => {
       vi.stubEnv('RATE_LIMIT_INGESTION_PER_MINUTE', '')
-      expect(getIngestionRateLimitConfig()).toEqual({ limit: 5, windowSeconds: 60 })
+      expect(getIngestionRateLimitConfig()).toEqual({ limit: 5, orgLimit: 20, windowSeconds: 60 })
     })
 
     it('getIngestionRateLimitConfig reads env var', () => {
       vi.stubEnv('RATE_LIMIT_INGESTION_PER_MINUTE', '2')
-      expect(getIngestionRateLimitConfig()).toEqual({ limit: 2, windowSeconds: 60 })
+      expect(getIngestionRateLimitConfig()).toEqual({ limit: 2, orgLimit: 20, windowSeconds: 60 })
     })
 
     it('getSpecReextractRateLimitConfig returns default 3', () => {
       vi.stubEnv('RATE_LIMIT_SPEC_REEXTRACT_PER_MINUTE', '')
-      expect(getSpecReextractRateLimitConfig()).toEqual({ limit: 3, windowSeconds: 60 })
+      expect(getSpecReextractRateLimitConfig()).toEqual({ limit: 3, orgLimit: 12, windowSeconds: 60 })
     })
 
     it('getSpecReextractRateLimitConfig reads env var', () => {
       vi.stubEnv('RATE_LIMIT_SPEC_REEXTRACT_PER_MINUTE', '1')
-      expect(getSpecReextractRateLimitConfig()).toEqual({ limit: 1, windowSeconds: 60 })
+      expect(getSpecReextractRateLimitConfig()).toEqual({ limit: 1, orgLimit: 12, windowSeconds: 60 })
     })
 
     it('getCitationsRateLimitConfig returns default 100', () => {

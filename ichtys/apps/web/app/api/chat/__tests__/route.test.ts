@@ -99,7 +99,7 @@ vi.mock('../../../../lib/security/rate-limit', () => ({
   enforceSlidingWindowRateLimit: mocks.enforceSlidingWindowRateLimit,
   rateLimitResponse: mocks.rateLimitResponse,
   rateLimitUnavailableResponse: mocks.rateLimitUnavailableResponse,
-  getChatRateLimitConfig: () => ({ limit: 30, windowSeconds: 60 }),
+  getChatRateLimitConfig: () => ({ limit: 30, orgLimit: 120, windowSeconds: 60 }),
 }))
 
 // ---------------------------------------------------------------------------
@@ -407,6 +407,8 @@ describe('POST /api/chat - rate limiting', () => {
       key: `chat:${mocks.ORG_ID}:${mocks.USER_ID}:${mocks.STUDY_ID}`,
       limit: 30,
       windowSeconds: 60,
+      orgKey: `chat-org:${mocks.ORG_ID}`,
+      orgLimit: 120,
     })
     expect(mocks.getOrCreateConversation).not.toHaveBeenCalled()
     expect(mocks.generateAnswerForStudy).not.toHaveBeenCalled()

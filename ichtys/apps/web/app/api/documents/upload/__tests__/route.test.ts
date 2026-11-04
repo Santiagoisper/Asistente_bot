@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   }),
   putPrivateDocumentPdf: vi.fn(),
   enforceSlidingWindowRateLimit: vi.fn(),
-  getUploadRateLimitConfig: vi.fn().mockReturnValue({ limit: 10, windowSeconds: 60 }),
+  getUploadRateLimitConfig: vi.fn().mockReturnValue({ limit: 10, orgLimit: 40, windowSeconds: 60 }),
   rateLimitResponse: vi.fn(),
   transaction: vi.fn(),
 }))
@@ -124,7 +124,7 @@ function mockTransaction() {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.getUploadRateLimitConfig.mockReturnValue({ limit: 10, windowSeconds: 60 })
+  mocks.getUploadRateLimitConfig.mockReturnValue({ limit: 10, orgLimit: 40, windowSeconds: 60 })
   mocks.enforceSlidingWindowRateLimit.mockResolvedValue({ limited: false })
   mocks.validateStudyAccess.mockResolvedValue({
     userId: 'user_test',

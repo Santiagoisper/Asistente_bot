@@ -6,7 +6,7 @@ import { runSingleIngestionJobById } from '@ichtys/ingestion/ingestion-jobs'
 import { putPrivateDocumentPdf } from '../../documents/upload/blob-storage'
 import {
   enforceSlidingWindowRateLimit,
-  getUploadRateLimitConfig,
+  getBulkRateLimitConfig,
   rateLimitResponse,
   rateLimitUnavailableResponse,
 } from '../../../../lib/security/rate-limit'
@@ -103,11 +103,13 @@ export async function POST(req: Request): Promise<Response> {
     return new Response('Forbidden', { status: 403 })
   }
 
-  const uploadRlConfig = getUploadRateLimitConfig()
+  const bulkRlConfig = getBulkRateLimitConfig()
   const rateLimit = await enforceSlidingWindowRateLimit({
     key: `bulk-import:${clerkOrgId}:${userId}`,
-    limit: uploadRlConfig.limit,
-    windowSeconds: uploadRlConfig.windowSeconds,
+    limit: bulkRlConfig.limit,
+    windowSeconds: bulkRlConfig.windowSeconds,
+    orgKey: `bulk-import-org:${clerkOrgId}`,
+    orgLimit: bulkRlConfig.orgLimit,
   })
   if (rateLimit.limited) {
     return rateLimit.reason === 'unavailable'

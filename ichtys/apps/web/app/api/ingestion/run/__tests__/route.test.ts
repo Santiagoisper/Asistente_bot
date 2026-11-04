@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
   runIngestion: vi.fn(),
   after: vi.fn(),
   enforceSlidingWindowRateLimit: vi.fn(),
-  getIngestionRateLimitConfig: vi.fn().mockReturnValue({ limit: 5, windowSeconds: 60 }),
+  getIngestionRateLimitConfig: vi.fn().mockReturnValue({ limit: 5, orgLimit: 20, windowSeconds: 60 }),
   rateLimitResponse: vi.fn(
     (retryAfterSeconds: number) =>
       new Response(JSON.stringify({ error: 'rate_limited' }), {
@@ -90,7 +90,7 @@ beforeEach(() => {
     documentVersion: { id: DOC_VERSION_ID },
   })
   mocks.enforceSlidingWindowRateLimit.mockResolvedValue({ limited: false })
-  mocks.getIngestionRateLimitConfig.mockReturnValue({ limit: 5, windowSeconds: 60 })
+  mocks.getIngestionRateLimitConfig.mockReturnValue({ limit: 5, orgLimit: 20, windowSeconds: 60 })
 })
 
 // ---------------------------------------------------------------------------
@@ -115,6 +115,8 @@ describe('POST /api/ingestion/run — rate limit', () => {
       key: `ingestion:${ORG_ID}:${USER_ID}:${DOC_VERSION_ID}`,
       limit: 5,
       windowSeconds: 60,
+      orgKey: `ingestion-org:${ORG_ID}`,
+      orgLimit: 20,
     })
     expect(mocks.after).toHaveBeenCalledTimes(1)
   })

@@ -53,6 +53,8 @@ export async function POST(
       key: `spec-reextract:${orgId}:${userId}:${studyId}`,
       limit: rlConfig.limit,
       windowSeconds: rlConfig.windowSeconds,
+      orgKey: `spec-reextract-org:${orgId}`,
+      orgLimit: rlConfig.orgLimit,
     })
     if (rateLimit.limited) {
       return rateLimit.reason === 'unavailable'

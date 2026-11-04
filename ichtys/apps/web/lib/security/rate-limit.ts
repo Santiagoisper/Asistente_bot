@@ -6,10 +6,14 @@ export type RateLimitParams = {
   key: string
   limit: number
   windowSeconds: number
+  /** Cupo compartido por organización. Si viene, orgLimit tiene que ser un entero positivo. */
+  orgKey?: string
+  orgLimit?: number
   /**
    * `deny` (default): si falta Redis o falla, la operación se bloquea.
    * `allow`: solo lecturas. Sin Redis, el request sigue.
    * `memory`: ráfaga dentro de este proceso. No reemplaza el cupo compartido.
+   * El modo memory no descuenta el cupo de la organización: las rutas caras no lo usan.
    */
   onRedisUnavailable?: 'deny' | 'allow' | 'memory'
 }
@@ -17,6 +21,8 @@ export type RateLimitParams = {
 export interface RateLimitConfig {
   limit: number
   windowSeconds: number
+  /** Ausente en lecturas. En operaciones caras es el tope agregado de la organización. */
+  orgLimit?: number
 }
 
 type RedisRestResponse = {
@@ -25,24 +31,46 @@ type RedisRestResponse = {
 }
 
 const SLIDING_WINDOW_SCRIPT = `
-local key = KEYS[1]
 local now = tonumber(ARGV[1])
 local window = tonumber(ARGV[2])
 local limit = tonumber(ARGV[3])
-redis.call("ZREMRANGEBYSCORE", key, 0, now - window)
-local count = redis.call("ZCARD", key)
-if count >= limit then
+local org_limit = tonumber(ARGV[4])
+
+local function retry_after(key)
   local oldest = redis.call("ZRANGE", key, 0, 0, "WITHSCORES")
   local retry = math.ceil(window / 1000)
   if oldest[2] then
     retry = math.max(1, math.ceil((tonumber(oldest[2]) + window - now) / 1000))
   end
-  return {0, retry}
+  return retry
 end
-local seq = redis.call("INCR", key .. ":seq")
-redis.call("ZADD", key, now, tostring(now) .. "-" .. tostring(seq))
-redis.call("PEXPIRE", key, window)
-redis.call("PEXPIRE", key .. ":seq", window)
+
+local function count_hits(key)
+  redis.call("ZREMRANGEBYSCORE", key, 0, now - window)
+  return redis.call("ZCARD", key)
+end
+
+local function add_hit(key)
+  local seq = redis.call("INCR", key .. ":seq")
+  redis.call("ZADD", key, now, tostring(now) .. "-" .. tostring(seq))
+  redis.call("PEXPIRE", key, window)
+  redis.call("PEXPIRE", key .. ":seq", window)
+end
+
+local actor = KEYS[1]
+if count_hits(actor) >= limit then
+  return {0, retry_after(actor)}
+end
+
+local org = KEYS[2]
+if org and org_limit and count_hits(org) >= org_limit then
+  return {0, retry_after(org)}
+end
+
+add_hit(actor)
+if org and org_limit then
+  add_hit(org)
+end
 return {1, 0}
 `
 
@@ -120,9 +148,23 @@ function whenRedisUnavailable(params: RateLimitParams, failureCode: string): Rat
   return denyUnavailable()
 }
 
+/**
+ * Cupos por minuto. Cada operación cara tiene el tope del actor y, aparte,
+ * el de la organización: lo comparten todos los usuarios de esa org y se
+ * descuenta en la misma operación. Si la org ya llegó, el actor no se
+ * descuenta. Historial y citas no tienen cupo de organización. answer-test
+ * se cuenta solo por IP.
+ *
+ * chat/stream: actor 30 (RATE_LIMIT_CHAT_PER_MINUTE), org 120 (RATE_LIMIT_CHAT_ORG_PER_MINUTE)
+ * upload: actor 10 (RATE_LIMIT_UPLOAD_PER_MINUTE), org 40 (RATE_LIMIT_UPLOAD_ORG_PER_MINUTE)
+ * bulk-import: actor 10 (RATE_LIMIT_BULK_PER_MINUTE), org 40 (RATE_LIMIT_BULK_ORG_PER_MINUTE)
+ * ingestion: actor 5 (RATE_LIMIT_INGESTION_PER_MINUTE), org 20 (RATE_LIMIT_INGESTION_ORG_PER_MINUTE)
+ * spec reextract: actor 3 (RATE_LIMIT_SPEC_REEXTRACT_PER_MINUTE), org 12 (RATE_LIMIT_SPEC_REEXTRACT_ORG_PER_MINUTE)
+ */
 export function getChatRateLimitConfig(): RateLimitConfig {
   return {
     limit: parsePositiveInt(process.env.RATE_LIMIT_CHAT_PER_MINUTE, 30),
+    orgLimit: parsePositiveInt(process.env.RATE_LIMIT_CHAT_ORG_PER_MINUTE, 120),
     windowSeconds: 60,
   }
 }
@@ -130,6 +172,15 @@ export function getChatRateLimitConfig(): RateLimitConfig {
 export function getUploadRateLimitConfig(): RateLimitConfig {
   return {
     limit: parsePositiveInt(process.env.RATE_LIMIT_UPLOAD_PER_MINUTE, 10),
+    orgLimit: parsePositiveInt(process.env.RATE_LIMIT_UPLOAD_ORG_PER_MINUTE, 40),
+    windowSeconds: 60,
+  }
+}
+
+export function getBulkRateLimitConfig(): RateLimitConfig {
+  return {
+    limit: parsePositiveInt(process.env.RATE_LIMIT_BULK_PER_MINUTE, 10),
+    orgLimit: parsePositiveInt(process.env.RATE_LIMIT_BULK_ORG_PER_MINUTE, 40),
     windowSeconds: 60,
   }
 }
@@ -141,6 +192,7 @@ export function getUploadRateLimitConfig(): RateLimitConfig {
 export function getIngestionRateLimitConfig(): RateLimitConfig {
   return {
     limit: parsePositiveInt(process.env.RATE_LIMIT_INGESTION_PER_MINUTE, 5),
+    orgLimit: parsePositiveInt(process.env.RATE_LIMIT_INGESTION_ORG_PER_MINUTE, 20),
     windowSeconds: 60,
   }
 }
@@ -153,6 +205,7 @@ export function getIngestionRateLimitConfig(): RateLimitConfig {
 export function getSpecReextractRateLimitConfig(): RateLimitConfig {
   return {
     limit: parsePositiveInt(process.env.RATE_LIMIT_SPEC_REEXTRACT_PER_MINUTE, 3),
+    orgLimit: parsePositiveInt(process.env.RATE_LIMIT_SPEC_REEXTRACT_ORG_PER_MINUTE, 12),
     windowSeconds: 60,
   }
 }
@@ -179,6 +232,12 @@ export async function enforceSlidingWindowRateLimit(
     return { limited: false }
   }
 
+  const orgKey = params.orgKey?.trim() ?? ''
+  if (orgKey.length > 0 && (!Number.isInteger(params.orgLimit) || (params.orgLimit ?? 0) <= 0)) {
+    logRateLimitFailure('org_limit_missing')
+    return denyUnavailable()
+  }
+
   const redis = getRedisRestConfig()
   if (!redis) {
     return whenRedisUnavailable(params, 'redis_unconfigured')
@@ -187,6 +246,12 @@ export async function enforceSlidingWindowRateLimit(
   try {
     const now = Date.now()
     const windowMs = params.windowSeconds * 1000
+    const keys = [`rl:${params.key}`]
+    const args = [String(now), String(windowMs), String(params.limit)]
+    if (orgKey.length > 0) {
+      keys.push(`rl:${orgKey}`)
+      args.push(String(params.orgLimit))
+    }
     const response = await fetch(redis.url, {
       method: 'POST',
       headers: {
@@ -196,11 +261,9 @@ export async function enforceSlidingWindowRateLimit(
       body: JSON.stringify([
         'EVAL',
         SLIDING_WINDOW_SCRIPT,
-        '1',
-        `rl:${params.key}`,
-        String(now),
-        String(windowMs),
-        String(params.limit),
+        String(keys.length),
+        ...keys,
+        ...args,
       ]),
     })
 

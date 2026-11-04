@@ -63,6 +63,8 @@ export async function POST(req: Request): Promise<Response> {
       key: `ingestion:${orgId}:${userId}:${documentVersion.id}`,
       limit: rlConfig.limit,
       windowSeconds: rlConfig.windowSeconds,
+      orgKey: `ingestion-org:${orgId}`,
+      orgLimit: rlConfig.orgLimit,
     })
     if (rateLimit.limited) {
       return rateLimit.reason === 'unavailable'

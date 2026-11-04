@@ -82,7 +82,7 @@ vi.mock('../../../../../lib/chat/persistence', () => ({
 
 vi.mock('../../../../../lib/security/rate-limit', () => ({
   enforceSlidingWindowRateLimit: mocks.enforceSlidingWindowRateLimit,
-  getChatRateLimitConfig: () => ({ limit: 30, windowSeconds: 60 }),
+  getChatRateLimitConfig: () => ({ limit: 30, orgLimit: 120, windowSeconds: 60 }),
   rateLimitResponse: () => new Response('Too Many Requests', { status: 429 }),
   rateLimitUnavailableResponse: () =>
     Response.json(

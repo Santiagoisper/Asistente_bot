@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
     return new Response('Internal Server Error', { status: 500 })
   }),
   enforceSlidingWindowRateLimit: vi.fn(),
-  getSpecReextractRateLimitConfig: vi.fn().mockReturnValue({ limit: 3, windowSeconds: 60 }),
+  getSpecReextractRateLimitConfig: vi.fn().mockReturnValue({ limit: 3, orgLimit: 12, windowSeconds: 60 }),
   rateLimitResponse: vi.fn(
     (retryAfterSeconds: number) =>
       new Response(JSON.stringify({ error: 'rate_limited' }), {
@@ -108,7 +108,7 @@ beforeEach(() => {
     role: 'site_coordinator',
   })
   mocks.enforceSlidingWindowRateLimit.mockResolvedValue({ limited: false })
-  mocks.getSpecReextractRateLimitConfig.mockReturnValue({ limit: 3, windowSeconds: 60 })
+  mocks.getSpecReextractRateLimitConfig.mockReturnValue({ limit: 3, orgLimit: 12, windowSeconds: 60 })
   mocks.getQuotaStatus.mockResolvedValue({ state: 'ok' })
   mocks.getOrgLlmApiKeys.mockResolvedValue({})
   mocks.getOrgLlmKeySource.mockReturnValue('platform')
@@ -144,6 +144,8 @@ describe('POST /api/studies/[id]/spec/reextract — rate limit', () => {
       key: `spec-reextract:${ORG_ID}:${USER_ID}:${STUDY_ID}`,
       limit: 3,
       windowSeconds: 60,
+      orgKey: `spec-reextract-org:${ORG_ID}`,
+      orgLimit: 12,
     })
   })
 

@@ -109,6 +109,8 @@ export async function POST(req: Request): Promise<Response> {
     key: `chat:${orgId}:${userId}:${studyId}`,
     limit: chatRlConfig.limit,
     windowSeconds: chatRlConfig.windowSeconds,
+    orgKey: `chat-org:${orgId}`,
+    orgLimit: chatRlConfig.orgLimit,
   })
   if (rateLimit.limited) {
     if (rateLimit.reason === 'unavailable') {
