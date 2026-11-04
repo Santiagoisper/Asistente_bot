@@ -67,7 +67,13 @@ describe('parsePdf', () => {
     mockPdfParse.mockImplementation(
       async (_buf: unknown, opts: { pagerender?: (page: unknown) => Promise<string> }) => {
         const page = { getTextContent: async () => ({ items: [{ str: 'linea ficticia' }] }) }
-        for (let i = 0; i < 1000; i++) await opts.pagerender?.(page)
+        for (let i = 0; i < 1000; i++) {
+          try {
+            await opts.pagerender?.(page)
+          } catch {
+            // pdf-parse@1.1.4 hace .catch(() => '') por página.
+          }
+        }
         return { numpages: 1000, text: 'linea ficticia' }
       },
     )
@@ -85,9 +91,17 @@ describe('parsePdf', () => {
       mockPdfParse.mockImplementation(
         async (_buf: unknown, opts: { pagerender?: (page: unknown) => Promise<string> }) => {
           const page = { getTextContent: async () => ({ items: [{ str: 'linea ficticia' }] }) }
-          await opts.pagerender?.(page)
+          try {
+            await opts.pagerender?.(page)
+          } catch {
+            // El mismo contrato que pdf-parse: el error de la página no sube.
+          }
           vi.setSystemTime(new Date('2026-01-01T00:02:00.000Z'))
-          await opts.pagerender?.(page)
+          try {
+            await opts.pagerender?.(page)
+          } catch {
+            // tragado
+          }
           return { numpages: 2, text: 'linea ficticia' }
         },
       )
@@ -112,12 +126,11 @@ describe('parsePdf', () => {
           }
           const pending = opts.pagerender?.(page) ?? Promise.resolve('')
           const settled = pending.then(
-            () => ({ failed: false as const }),
-            (err: unknown) => ({ failed: true as const, err }),
+            () => undefined,
+            () => undefined,
           )
           await vi.advanceTimersByTimeAsync(30_000)
-          const outcome = await settled
-          if (outcome.failed) throw outcome.err
+          await settled
           return { numpages: 1, text: '' }
         },
       )
@@ -136,7 +149,11 @@ describe('parsePdf', () => {
     mockPdfParse.mockImplementation(
       async (_buf: unknown, opts: { pagerender?: (page: unknown) => Promise<string> }) => {
         const page = { getTextContent: async () => ({ items: [{ str: huge }] }) }
-        await opts.pagerender?.(page)
+        try {
+          await opts.pagerender?.(page)
+        } catch {
+          // pdf-parse traga el tope de texto si se lanza dentro de la página.
+        }
         return { numpages: 1, text: huge }
       },
     )
