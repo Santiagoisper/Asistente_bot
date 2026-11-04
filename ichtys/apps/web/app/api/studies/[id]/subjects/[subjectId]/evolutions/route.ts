@@ -9,6 +9,7 @@ import {
 } from '../../../../../../../lib/subjects/phi-fields'
 import { createEvolutionSchema } from '../../../../../../../lib/subjects/schemas'
 import { refreshPatientProfileFromEvolution } from '../../../../../../../lib/subjects/patient-profile-service'
+import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../../lib/api/body-limit'
 
 export const runtime = 'nodejs'
 
@@ -67,10 +68,22 @@ export async function POST(
 ): Promise<Response> {
   const { subjectId } = await params
 
+  // Auth primero: subjectId viene de params, no del body (vuelta 2 del
+  // delta zod). Tope de bytes antes del parse (413, H7).
+  let access: Awaited<ReturnType<typeof validateSubjectAccess>>
+  try {
+    access = await validateSubjectAccess(subjectId)
+  } catch (err) {
+    return handleApiError(err)
+  }
+
   let body: unknown
   try {
-    body = await req.json()
-  } catch {
+    body = await readJsonBody(req)
+  } catch (err) {
+    if (err instanceof JsonBodyTooLargeError) {
+      return new Response('Payload Too Large', { status: 413 })
+    }
     return new Response('Bad Request', { status: 400 })
   }
 
@@ -80,7 +93,7 @@ export async function POST(
   }
 
   try {
-    const { orgId, userId, study, subject } = await validateSubjectAccess(subjectId)
+    const { orgId, userId, study, subject } = access
 
     const piiWarnings = detectPossiblePii(parsed.data.content)
     const contentEncrypted = encryptClinicalContent(parsed.data.content)

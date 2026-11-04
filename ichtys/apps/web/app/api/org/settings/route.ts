@@ -27,6 +27,8 @@ import {
 } from '@ichtys/llm'
 import { resolveLlmApiKey } from '@ichtys/db'
 import { isProviderChoiceSupported, mergeOrgKeys } from '../../../../lib/settings/provider-guard'
+import { JsonBodyTooLargeError, readJsonBody } from '../../../../lib/api/body-limit'
+import { MAX_API_KEY_CHARS } from '../../../../lib/api/limits'
 
 export const runtime = 'nodejs'
 
@@ -57,11 +59,11 @@ const patchSchema = z.object({
   topK: z.number().int().min(1).max(20).optional(),
   llmApiKeys: z
     .object({
-      anthropic: z.string().min(8).nullable().optional(),
-      openai: z.string().min(8).nullable().optional(),
-      google: z.string().min(8).nullable().optional(),
-      groq: z.string().min(8).nullable().optional(),
-      openrouter: z.string().min(8).nullable().optional(),
+      anthropic: z.string().min(8).max(MAX_API_KEY_CHARS).nullable().optional(),
+      openai: z.string().min(8).max(MAX_API_KEY_CHARS).nullable().optional(),
+      google: z.string().min(8).max(MAX_API_KEY_CHARS).nullable().optional(),
+      groq: z.string().min(8).max(MAX_API_KEY_CHARS).nullable().optional(),
+      openrouter: z.string().min(8).max(MAX_API_KEY_CHARS).nullable().optional(),
     })
     .optional(),
 })
@@ -112,7 +114,19 @@ export async function PATCH(req: Request): Promise<Response> {
       throw new AccessError('Insufficient role', 403)
     }
 
-    const body = patchSchema.parse(await req.json())
+    // Tope de bytes ANTES de parsear (413, H7 vuelta 2). El auth ya corrió
+    // más arriba; un JSON inválido ahora responde 400 en vez de caer al 500
+    // genérico.
+    let raw: unknown
+    try {
+      raw = await readJsonBody(req)
+    } catch (err) {
+      if (err instanceof JsonBodyTooLargeError) {
+        return Response.json({ error: 'Request body too large' }, { status: 413 })
+      }
+      return Response.json({ error: 'Invalid request body' }, { status: 400 })
+    }
+    const body = patchSchema.parse(raw)
 
     const ragPatch: Partial<{
       llmProvider: OrgLlmProvider

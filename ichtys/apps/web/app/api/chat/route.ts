@@ -17,6 +17,8 @@ import {
   rateLimitResponse,
 } from '../../../lib/security/rate-limit'
 import { getOrCreateRequestId, log, makeRecord } from '../../../lib/observability/logger'
+import { JsonBodyTooLargeError, readJsonBody } from '../../../lib/api/body-limit'
+import { MAX_QUESTION_CHARS } from '../../../lib/api/limits'
 
 /**
  * POST /api/chat — grounded answer engine with full chat persistence.
@@ -67,7 +69,7 @@ const documentTypeEnum = z.enum([
 const chatInput = z
   .object({
     studyId: z.string().uuid(),
-    question: z.string().min(1),
+    question: z.string().min(1).max(MAX_QUESTION_CHARS),
     conversationId: z.string().uuid().optional(),
     documentType: documentTypeEnum.optional(),
     topK: z.number().int().positive().max(20).optional(),
@@ -92,11 +94,16 @@ export async function POST(req: Request): Promise<Response> {
     }
   }
 
-  // 2. Parse body.
+  // 2. Parse body — tope de bytes ANTES de parsear (413, H7 vuelta 2). El
+  //    studyId viene del body, así que el auth no puede adelantarse: el corte
+  //    por bytes es la barrera barata de esta ruta.
   let body: unknown
   try {
-    body = await req.json()
-  } catch {
+    body = await readJsonBody(req)
+  } catch (err) {
+    if (err instanceof JsonBodyTooLargeError) {
+      return new Response('Payload Too Large', { status: 413 })
+    }
     return new Response('Bad Request', { status: 400 })
   }
 

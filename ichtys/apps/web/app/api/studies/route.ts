@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { auth } from '@clerk/nextjs/server'
 import { db, studies } from '@ichtys/db'
 import { handleApiError, resolveOrProvisionOrganization } from '@ichtys/auth'
+import { JsonBodyTooLargeError, readJsonBody } from '../../../lib/api/body-limit'
 
 export const runtime = 'nodejs'
 
@@ -16,10 +17,15 @@ export async function POST(req: Request): Promise<Response> {
     return new Response('Unauthorized', { status: 401 })
   }
 
+  // Tope de bytes ANTES de parsear (413, H7 vuelta 2). El auth ya corrió
+  // más arriba.
   let body: unknown
   try {
-    body = await req.json()
-  } catch {
+    body = await readJsonBody(req)
+  } catch (err) {
+    if (err instanceof JsonBodyTooLargeError) {
+      return new Response('Payload Too Large', { status: 413 })
+    }
     return new Response('Bad Request', { status: 400 })
   }
 

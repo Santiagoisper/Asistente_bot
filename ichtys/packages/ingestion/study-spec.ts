@@ -19,6 +19,19 @@ import { z } from 'zod'
 export const specConfidence = ['high', 'medium', 'low'] as const
 export type SpecConfidence = (typeof specConfidence)[number]
 
+// Cotas de entrada externa (vuelta 2 del delta zod, H7): este schema también
+// parsea el PATCH /api/studies/[id]/spec/[specId] — sin .max, un arreglo
+// enorme de elementos inválidos acumula un issue por elemento aunque zod sea
+// 4.6.7. Los protocolos reales (ICH M11) tienen decenas de items, no miles:
+// 2000 es un margen holgado. Constantes aquí porque un package no puede
+// importar de apps/web (los topes de web viven en apps/web/lib/api/limits.ts).
+/** Elementos máximos por arreglo del spec (criterios, endpoints, visitas). */
+export const MAX_SPEC_ITEMS = 2_000
+/** Procedimientos máximos por visita del SoA. */
+export const MAX_SPEC_VISIT_PROCEDURES = 200
+/** Advertencias de extracción máximas guardadas junto al spec. */
+export const MAX_SPEC_EXTRACTION_WARNINGS = 200
+
 const provenanceFields = {
   /** Páginas del documento fuente que respaldan este item (1-based). */
   sourcePages: z.array(z.number().int().positive()).min(1),
@@ -60,7 +73,7 @@ export const studyVisitSchema = z.object({
   /** Ventana permitida en días (± N) si está definida. */
   windowDays: z.number().int().nonnegative().nullable(),
   /** Procedimientos de la visita según el SoA. */
-  procedures: z.array(z.string().min(1)),
+  procedures: z.array(z.string().min(1)).max(MAX_SPEC_VISIT_PROCEDURES),
   ...provenanceFields,
 })
 export type StudyVisit = z.infer<typeof studyVisitSchema>
@@ -76,10 +89,10 @@ export type StudyIdentification = z.infer<typeof studyIdentificationSchema>
 
 export const studySpecSchema = z.object({
   identification: studyIdentificationSchema,
-  inclusionCriteria: z.array(eligibilityCriterionSchema),
-  exclusionCriteria: z.array(eligibilityCriterionSchema),
-  endpoints: z.array(studyEndpointSchema),
-  visits: z.array(studyVisitSchema),
+  inclusionCriteria: z.array(eligibilityCriterionSchema).max(MAX_SPEC_ITEMS),
+  exclusionCriteria: z.array(eligibilityCriterionSchema).max(MAX_SPEC_ITEMS),
+  endpoints: z.array(studyEndpointSchema).max(MAX_SPEC_ITEMS),
+  visits: z.array(studyVisitSchema).max(MAX_SPEC_ITEMS),
   /** Fuente de las visitas incorporadas desde una guía SoA separada. */
   visitsSource: z.object({
     documentVersionId: z.string().min(1),
@@ -88,7 +101,7 @@ export const studySpecSchema = z.object({
   /** Indica que la extracción no produjo un spec utilizable y permite ofrecer reintento. */
   extractionFailed: z.boolean().optional(),
   /** Advertencias de la extracción, guardadas junto al spec para conservar trazabilidad. */
-  extractionWarnings: z.array(z.string()).optional(),
+  extractionWarnings: z.array(z.string()).max(MAX_SPEC_EXTRACTION_WARNINGS).optional(),
 })
 export type StudySpec = z.infer<typeof studySpecSchema>
 

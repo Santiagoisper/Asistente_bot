@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { AccessError, validateStudyAccess } from '@ichtys/auth'
 import { and, db, eq, studySpecs } from '@ichtys/db'
 import { studySpecSchema } from '@ichtys/ingestion'
+import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../lib/api/body-limit'
+import { MAX_SPEC_BODY_BYTES } from '../../../../../../lib/api/limits'
 
 interface RouteParams {
   params: Promise<{ id: string; specId: string }>
@@ -27,10 +29,16 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   try {
     const { orgId } = await validateStudyAccess(studyId, 'study_admin')
 
+    // Tope de bytes ANTES de parsear (413, H7 vuelta 2). Límite amplio (2 MiB):
+    // el spec completo editado puede pesar más que un cuerpo típico; el fan-out
+    // zod ya lo corta el .max de los arreglos del studySpecSchema.
     let body: unknown
     try {
-      body = await req.json()
-    } catch {
+      body = await readJsonBody(req, { limitBytes: MAX_SPEC_BODY_BYTES })
+    } catch (err) {
+      if (err instanceof JsonBodyTooLargeError) {
+        return NextResponse.json({ error: 'Payload Too Large' }, { status: 413 })
+      }
       return NextResponse.json({ error: 'Bad Request' }, { status: 400 })
     }
 

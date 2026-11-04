@@ -13,6 +13,7 @@ import {
   PhiConfigError,
 } from '../../../../../lib/subjects/phi-fields'
 import { createSubjectSchema } from '../../../../../lib/subjects/schemas'
+import { JsonBodyTooLargeError, readJsonBody } from '../../../../../lib/api/body-limit'
 
 export const runtime = 'nodejs'
 
@@ -64,10 +65,22 @@ export async function POST(
 ): Promise<Response> {
   const { id: studyId } = await params
 
+  // Auth primero: studyId viene de params, no del body (vuelta 2 del delta
+  // zod). Tope de bytes antes del parse (413, H7).
+  let access: Awaited<ReturnType<typeof validatePhiStudyAccess>>
+  try {
+    access = await validatePhiStudyAccess(studyId)
+  } catch (err) {
+    return handleApiError(err)
+  }
+
   let body: unknown
   try {
-    body = await req.json()
-  } catch {
+    body = await readJsonBody(req)
+  } catch (err) {
+    if (err instanceof JsonBodyTooLargeError) {
+      return new Response('Payload Too Large', { status: 413 })
+    }
     return new Response('Bad Request', { status: 400 })
   }
 
@@ -77,7 +90,7 @@ export async function POST(
   }
 
   try {
-    const { orgId, userId, study } = await validatePhiStudyAccess(studyId)
+    const { orgId, userId, study } = access
 
     const subjectCode = parsed.data.subjectCode.trim().toUpperCase()
 
