@@ -77,5 +77,13 @@ describe('generateAndPersistConversationTitle — idioma del título', () => {
 
     expect(title).toBe('Criterios de IMC del estudio')
     expect(dbUpdateMock).toHaveBeenCalled()
+
+    // R2 (B3): el 4.º camino de recordUsage — el consumo del título llega con
+    // inputTokens > 0 mapeado del usage de ai 7 (antes promptTokens→0).
+    expect(recordUsageMock).toHaveBeenCalledTimes(1)
+    expect(recordUsageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'chat_title', inputTokens: 3, outputTokens: 4 }),
+    )
+    expect(recordUsageMock.mock.calls[0]?.[0]?.inputTokens).toBeGreaterThan(0)
   })
 })
