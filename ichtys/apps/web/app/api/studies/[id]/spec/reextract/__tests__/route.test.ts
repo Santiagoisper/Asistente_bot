@@ -215,3 +215,53 @@ describe('POST /api/studies/[id]/spec/reextract — gestión documental (S1)', (
     },
   )
 })
+
+const PROVIDER_SENTINEL = 'sk-ant-provider-raw-ficticio-NO-LOG'
+
+function flattenLogValue(value: unknown): string {
+  if (value instanceof Error) return `${value.name} ${value.message} ${value.stack ?? ''}`
+  if (Array.isArray(value)) return value.map(flattenLogValue).join(' ')
+  if (value && typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
+function loggedText(spy: { mock: { calls: unknown[][] } }): string {
+  return spy.mock.calls.map((args) => args.map(flattenLogValue).join(' ')).join('\n')
+}
+
+describe('POST /api/studies/[id]/spec/reextract — S8 mensaje crudo', () => {
+  it('la respuesta y el log no repiten el mensaje del proveedor', async () => {
+    mocks.reextractStudySpec.mockRejectedValue(new Error(PROVIDER_SENTINEL))
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      const res = await callPost('?force=1')
+      const body = (await res.json()) as { error: string }
+      const logged = loggedText(spy)
+
+      expect(res.status).toBe(422)
+      expect(JSON.stringify(body)).not.toContain(PROVIDER_SENTINEL)
+      expect(body.error).toBe('No se pudo reextraer el protocolo. Probá de nuevo en unos minutos.')
+      expect(logged).not.toContain(PROVIDER_SENTINEL)
+      expect(logged).toContain('reextract_failed')
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('el lookup de cupo no registra el error crudo', async () => {
+    mocks.getQuotaStatus.mockRejectedValue(new Error(PROVIDER_SENTINEL))
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      const res = await callPost()
+      const logged = loggedText(spy)
+
+      expect(res.status).toBe(402)
+      expect(logged).not.toContain(PROVIDER_SENTINEL)
+      expect(logged).toContain('quota_lookup_failed')
+    } finally {
+      spy.mockRestore()
+    }
+  })
+})

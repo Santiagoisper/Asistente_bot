@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   insert: vi.fn(),
   transaction: vi.fn(),
   after: vi.fn(),
+  runSingleIngestionJobById: vi.fn(),
 }))
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: mocks.auth }))
@@ -54,7 +55,7 @@ vi.mock('@ichtys/db', () => ({
 }))
 
 vi.mock('@ichtys/ingestion/ingestion-jobs', () => ({
-  runSingleIngestionJobById: vi.fn(),
+  runSingleIngestionJobById: mocks.runSingleIngestionJobById,
 }))
 
 import { POST } from '../route'
@@ -141,5 +142,75 @@ describe('S5 — la importación masiva reutiliza la validación del PDF', () =>
 
     expect(body.items[0]?.status).toBe('error')
     expect(mocks.putPrivateDocumentPdf).not.toHaveBeenCalled()
+  })
+})
+
+const PROVIDER_SENTINEL = 'sk-ant-provider-raw-ficticio-NO-LOG'
+
+function flattenLogValue(value: unknown): string {
+  if (value instanceof Error) return `${value.name} ${value.message} ${value.stack ?? ''}`
+  if (Array.isArray(value)) return value.map(flattenLogValue).join(' ')
+  if (value && typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
+function loggedText(spy: { mock: { calls: unknown[][] } }): string {
+  return spy.mock.calls.map((args) => args.map(flattenLogValue).join(' ')).join('\n')
+}
+
+function validPdfRequest(): Request {
+  const bytes = new TextEncoder().encode('%PDF-1.4 protocolo ficticio')
+  const file = new File([bytes], 'protocolo-ficticio.pdf', { type: 'application/pdf' })
+  return requestWithFile(file)
+}
+
+describe('POST /api/studies/bulk-import — S8 mensaje crudo', () => {
+  beforeEach(() => {
+    mocks.auth.mockResolvedValue({
+      userId: 'user_ficticio',
+      orgId: 'org_clerk_ficticia',
+      orgRole: 'org:site_coordinator',
+    })
+  })
+
+  it('un ítem que no se registra no deja el error crudo en el log', async () => {
+    mocks.transaction.mockRejectedValueOnce(new Error(PROVIDER_SENTINEL))
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      const res = await POST(validPdfRequest())
+      const body = (await res.json()) as { items: Array<{ status: string; error: string | null }> }
+      const logged = loggedText(spy)
+
+      expect(res.status).toBe(202)
+      expect(body.items[0]?.status).toBe('error')
+      expect(body.items[0]?.error).not.toContain(PROVIDER_SENTINEL)
+      expect(logged).not.toContain(PROVIDER_SENTINEL)
+      expect(logged).toContain('bulk_item_failed')
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('el fallo del job en background no deja el error crudo en el log', async () => {
+    const jobs: Array<Promise<unknown>> = []
+    mocks.after.mockImplementation((fn: () => Promise<void>) => {
+      jobs.push(Promise.resolve().then(fn))
+    })
+    mocks.runSingleIngestionJobById.mockRejectedValue(new Error(PROVIDER_SENTINEL))
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      const res = await POST(validPdfRequest())
+      await Promise.all(jobs)
+      const logged = loggedText(spy)
+
+      expect(res.status).toBe(202)
+      expect(logged).not.toContain(PROVIDER_SENTINEL)
+      expect(logged).toContain('bulk_job_failed')
+    } finally {
+      spy.mockRestore()
+      mocks.after.mockReset()
+    }
   })
 })

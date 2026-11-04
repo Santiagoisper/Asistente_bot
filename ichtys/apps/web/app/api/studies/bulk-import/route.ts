@@ -214,8 +214,8 @@ export async function POST(req: Request): Promise<Response> {
         status: 'queued',
         error: null,
       })
-    } catch (err) {
-      console.error('[bulk-import] item failed:', err)
+    } catch {
+      console.error('[bulk-import] item failed', { code: 'bulk_item_failed' })
       const [errJob] = await db
         .insert(ingestionJobs)
         .values({
@@ -249,8 +249,8 @@ export async function POST(req: Request): Promise<Response> {
       after(async () => {
         try {
           await runSingleIngestionJobById(jobId, org.id)
-        } catch (err) {
-          console.error(`[bulk-import] job ${jobId} error:`, err)
+        } catch {
+          console.error('[bulk-import] job error', { code: 'bulk_job_failed', jobId })
         }
       })
     }

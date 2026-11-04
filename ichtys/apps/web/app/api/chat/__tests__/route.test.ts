@@ -613,3 +613,81 @@ describe('POST /api/chat — response shape', () => {
     expect(body).toHaveProperty('assistantMessageId')
   })
 })
+
+// ---------------------------------------------------------------------------
+// S8 — el fallo del proveedor no deja el mensaje crudo
+// ---------------------------------------------------------------------------
+
+const PROVIDER_SENTINEL = 'sk-ant-provider-raw-ficticio-NO-LOG'
+
+function flattenLogValue(value: unknown): string {
+  if (value instanceof Error) return `${value.name} ${value.message} ${value.stack ?? ''}`
+  if (Array.isArray(value)) return value.map(flattenLogValue).join(' ')
+  if (value && typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
+function loggedText(spy: { mock: { calls: unknown[][] } }): string {
+  return spy.mock.calls.map((args) => args.map(flattenLogValue).join(' ')).join('\n')
+}
+
+describe('POST /api/chat — S8 mensaje crudo del proveedor', () => {
+  it('no guarda el mensaje del proveedor en el log ni en la auditoría', async () => {
+    mocks.validateStudyAccess.mockResolvedValueOnce(makeStudyAccessCtx())
+    mocks.getOrCreateConversation.mockResolvedValueOnce(mocks.CONV_ID)
+    mocks.loadConversationHistory.mockResolvedValueOnce([])
+    mocks.persistUserMessage.mockResolvedValueOnce(mocks.USER_MSG_ID)
+    mocks.generateAnswerForStudy.mockRejectedValueOnce(new Error(PROVIDER_SENTINEL))
+    mocks.writeAuditLog.mockResolvedValue(undefined)
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      const res = await POST(makeRequest({ studyId: mocks.STUDY_ID, question: 'criterio ficticio' }))
+      const text = await res.text()
+      const audit = JSON.stringify(mocks.writeAuditLog.mock.calls)
+
+      expect(res.status).toBe(500)
+      expect(text).toBe('Internal Server Error')
+      expect(text).not.toContain(PROVIDER_SENTINEL)
+      expect(loggedText(spy)).not.toContain(PROVIDER_SENTINEL)
+      expect(loggedText(spy)).toContain('answer_failed')
+      expect(audit).not.toContain(PROVIDER_SENTINEL)
+      expect(audit).toContain('answer_failed')
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('en desarrollo no escribe el mensaje crudo del fallo interno', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    mocks.validateStudyAccess.mockResolvedValueOnce(makeStudyAccessCtx())
+    mocks.getOrCreateConversation.mockResolvedValueOnce(mocks.CONV_ID)
+    mocks.loadConversationHistory.mockResolvedValueOnce([])
+    mocks.persistUserMessage.mockRejectedValueOnce(new Error(PROVIDER_SENTINEL))
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { readFile, unlink } = await import('node:fs/promises')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const logPath = join(tmpdir(), 'ichtys-rag-scores.log')
+    await unlink(logPath).catch(() => {})
+
+    try {
+      const res = await POST(makeRequest({ studyId: mocks.STUDY_ID, question: 'criterio ficticio' }))
+      let fileText = ''
+      try {
+        fileText = await readFile(logPath, 'utf8')
+      } catch {
+        fileText = ''
+      }
+
+      expect(res.status).toBe(500)
+      expect(loggedText(spy)).not.toContain(PROVIDER_SENTINEL)
+      expect(loggedText(spy)).toContain('chat_internal_error')
+      expect(fileText).not.toContain(PROVIDER_SENTINEL)
+    } finally {
+      spy.mockRestore()
+      vi.unstubAllEnvs()
+      await unlink(logPath).catch(() => {})
+    }
+  })
+})

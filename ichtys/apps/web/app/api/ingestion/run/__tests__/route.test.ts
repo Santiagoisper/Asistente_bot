@@ -142,3 +142,40 @@ describe('POST /api/ingestion/run — rate limit', () => {
     },
   )
 })
+
+const PROVIDER_SENTINEL = 'sk-ant-provider-raw-ficticio-NO-LOG'
+
+function flattenLogValue(value: unknown): string {
+  if (value instanceof Error) return `${value.name} ${value.message} ${value.stack ?? ''}`
+  if (Array.isArray(value)) return value.map(flattenLogValue).join(' ')
+  if (value && typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
+function loggedText(spy: { mock: { calls: unknown[][] } }): string {
+  return spy.mock.calls.map((args) => args.map(flattenLogValue).join(' ')).join('\n')
+}
+
+describe('POST /api/ingestion/run — S8 mensaje crudo', () => {
+  it('el fallo de la ingesta en background no registra el error crudo', async () => {
+    let pending: Promise<unknown> = Promise.resolve()
+    mocks.after.mockImplementation((fn: () => Promise<void>) => {
+      pending = Promise.resolve().then(fn)
+    })
+    mocks.runIngestion.mockRejectedValue(new Error(PROVIDER_SENTINEL))
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      const res = await POST(ingestionRequest())
+      await pending
+      const logged = loggedText(spy)
+
+      expect(res.status).toBe(202)
+      expect(logged).not.toContain(PROVIDER_SENTINEL)
+      expect(logged).toContain('ingestion_failed')
+    } finally {
+      spy.mockRestore()
+      mocks.after.mockReset()
+    }
+  })
+})

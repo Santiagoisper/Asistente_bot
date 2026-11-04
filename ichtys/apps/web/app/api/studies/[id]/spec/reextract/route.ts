@@ -15,14 +15,14 @@ export const runtime = 'nodejs'
 export const maxDuration = 300
 
 function formatReextractError(err: unknown): string {
-  const msg = err instanceof Error ? err.message : String(err)
+  const msg = err instanceof Error ? err.message : ''
   if (/invalid x-api-key|authentication|401|403/i.test(msg)) {
     return 'El servicio de IA rechazó la credencial de la plataforma. Avisale al administrador.'
   }
   if (/usage limits|rate limit|429|quota/i.test(msg)) {
     return 'El servicio de IA está saturado o sin cupo en este momento. Probá de nuevo en unos minutos.'
   }
-  return msg
+  return 'No se pudo reextraer el protocolo. Probá de nuevo en unos minutos.'
 }
 
 /**
@@ -68,8 +68,8 @@ export async function POST(
       ])
       orgKeys = keys
       platformKeyBlocked = !canUsePlatformKey(quotaStatus)
-    } catch (err) {
-      console.error('[spec/reextract] quota lookup failed — failing closed', err)
+    } catch {
+      console.error('[spec/reextract] quota lookup failed — failing closed', { code: 'quota_lookup_failed' })
     }
     if (platformKeyBlocked && getOrgLlmKeySource('anthropic', orgKeys) === 'platform') {
       return Response.json(
@@ -128,7 +128,7 @@ export async function POST(
         message: `Spec v${result.version} guardado (${result.richness} ítems). Actualizá la página para verlo.`,
       })
     } catch (err) {
-      console.error(`[spec/reextract] failed study=${studyId}:`, err)
+      console.error('[spec/reextract] failed', { code: 'reextract_failed', studyId })
       return Response.json(
         { error: formatReextractError(err) },
         { status: 422 },

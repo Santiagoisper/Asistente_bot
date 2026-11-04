@@ -78,8 +78,8 @@ export async function POST(req: Request): Promise<Response> {
           documentId: document.id,
           documentVersionId: documentVersion.id,
         })
-      } catch (err) {
-        console.error('[ingestion/run] after() error:', err)
+      } catch {
+        console.error('[ingestion/run] after() error', { code: 'ingestion_failed' })
       }
     })
 
