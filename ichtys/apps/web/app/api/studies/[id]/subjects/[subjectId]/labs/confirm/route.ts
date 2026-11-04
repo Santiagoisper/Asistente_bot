@@ -12,7 +12,7 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string; subjectId: string }> },
 ): Promise<Response> {
-  const { subjectId } = await params
+  const { id: routeStudyId, subjectId } = await params
 
   // Auth primero: subjectId viene de params, no del body — el acceso se
   // valida antes de leer el cuerpo (vuelta 2 del delta zod, requisito del
@@ -20,7 +20,7 @@ export async function POST(
   // JSON.parse y del safeParse (H7).
   let access: Awaited<ReturnType<typeof validateSubjectAccess>>
   try {
-    access = await validateSubjectAccess(subjectId)
+    access = await validateSubjectAccess(subjectId, routeStudyId)
   } catch (err) {
     return handleApiError(err)
   }

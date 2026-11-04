@@ -154,3 +154,16 @@ describe('OQ-P04 — audit profile.view sin PHI en metadata', () => {
     expect(payload).not.toContain('Metformina')
   })
 })
+
+describe('S4 — profile compara el estudio de la URL', () => {
+  it('pasa el id de la URL antes de leer el perfil', async () => {
+    const otherStudyId = crypto.randomUUID()
+    mocks.validateSubjectAccess.mockResolvedValue(subjectContext())
+
+    await GET(new Request('http://localhost/api/profile'), {
+      params: Promise.resolve({ id: otherStudyId, subjectId: mocks.SUBJECT_ID }),
+    })
+
+    expect(mocks.validateSubjectAccess).toHaveBeenCalledWith(mocks.SUBJECT_ID, otherStudyId)
+  })
+})

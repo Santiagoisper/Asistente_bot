@@ -10,10 +10,10 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string; subjectId: string }> },
 ): Promise<Response> {
-  const { subjectId } = await params
+  const { id: routeStudyId, subjectId } = await params
 
   try {
-    const { orgId, userId, study, subject } = await validateSubjectAccess(subjectId)
+    const { orgId, userId, study, subject } = await validateSubjectAccess(subjectId, routeStudyId)
 
     const profile = await loadPatientProfile({
       orgId,

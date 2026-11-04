@@ -49,9 +49,12 @@ export interface SubjectAccessContext extends StudyAccessContext {
 }
 
 /**
- * Valida que el sujeto pertenece a org + study activos.
+ * Valida que el sujeto pertenece a la org activa y, si se pasa, al estudio de la URL.
  */
-export async function validateSubjectAccess(subjectId: string): Promise<SubjectAccessContext> {
+export async function validateSubjectAccess(
+  subjectId: string,
+  expectedStudyId?: string,
+): Promise<SubjectAccessContext> {
   const { userId, orgId: clerkOrgId, orgRole } = await auth()
 
   if (!userId || !clerkOrgId) {
@@ -76,6 +79,11 @@ export async function validateSubjectAccess(subjectId: string): Promise<SubjectA
   })
 
   if (!subject) {
+    throw new AccessError('Not Found', 404)
+  }
+
+  // El [id] de la URL tiene que ser el estudio del sujeto antes de leer, escribir o auditar.
+  if (expectedStudyId && subject.studyId !== expectedStudyId) {
     throw new AccessError('Not Found', 404)
   }
 

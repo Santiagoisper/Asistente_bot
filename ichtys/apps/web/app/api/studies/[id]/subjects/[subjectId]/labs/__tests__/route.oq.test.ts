@@ -245,3 +245,34 @@ describe('OQ-L04/L05 — audit sin PHI', () => {
     expect(auditCall.metadata).toBeUndefined()
   })
 })
+
+describe('S4 — labs comparan el estudio de la URL', () => {
+  it('extract, confirm y reject pasan el id de la URL', async () => {
+    const otherStudyId = crypto.randomUUID()
+    mocks.validateSubjectAccess.mockResolvedValue(subjectContext())
+    const params = {
+      params: Promise.resolve({ id: otherStudyId, subjectId: mocks.SUBJECT_ID }),
+    }
+
+    await extractPost(
+      new Request('http://localhost/api/labs/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: 'HbA1c 8.2 por ciento, resultado ficticio.' }),
+      }),
+      params,
+    )
+    await confirmPost(
+      new Request('http://localhost/api/labs/confirm', { method: 'POST' }),
+      { params: Promise.resolve({ id: otherStudyId, subjectId: mocks.SUBJECT_ID }) },
+    )
+    await rejectPost(
+      new Request('http://localhost/api/labs/reject', { method: 'POST' }),
+      { params: Promise.resolve({ id: otherStudyId, subjectId: mocks.SUBJECT_ID }) },
+    )
+
+    expect(mocks.validateSubjectAccess).toHaveBeenNthCalledWith(1, mocks.SUBJECT_ID, otherStudyId)
+    expect(mocks.validateSubjectAccess).toHaveBeenNthCalledWith(2, mocks.SUBJECT_ID, otherStudyId)
+    expect(mocks.validateSubjectAccess).toHaveBeenNthCalledWith(3, mocks.SUBJECT_ID, otherStudyId)
+  })
+})
