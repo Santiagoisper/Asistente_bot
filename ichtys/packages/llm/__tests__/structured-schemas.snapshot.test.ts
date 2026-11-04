@@ -15,6 +15,10 @@ import {
 } from '../../ingestion/spec-extractor'
 import { llmFactsSchema } from '../../../apps/web/lib/subjects/patient-profile-service'
 import { labObservationSchema } from '../../clinical/profile-schema'
+// Esquema y tope REALES de la ruta labs/confirm (Architect, vuelta 3): el M9
+// no usa una copia local — si alguien cambia el tope, este test lo sigue.
+import { labOcrConfirmSchema } from '../../../apps/web/lib/subjects/schemas'
+import { MAX_LAB_ITEMS } from '../../../apps/web/lib/api/limits'
 
 /**
  * Instantáneas del JSON Schema que recibe el modelo en las llamadas
@@ -190,11 +194,6 @@ describe('colecciones enormes no agotan memoria (ADR-8 M9, GHSA-mrhx-c7xc-m3w5)'
   // Rojo en zod 3: medido con 3.25.76 (heap 512 MB), el caso CON cota da
   // 400.001 issues en 605 ms — .max no corta antes, valida todo y suma el
   // too_big. Verde en 4.6.7: 1 issue, 0 ms.
-  //
-  // 500 = MAX_LAB_ITEMS de apps/web/lib/api/limits.ts (espejo local: este
-  // package no puede importar de apps/web).
-  const MAX_LAB_ITEMS = 500
-
   const invalidLabs = Array.from({ length: 200_000 }, () => ({
     name: '', // min(1) falla en cada elemento
     value: 'no-es-número', // falla el tipo en cada elemento
@@ -208,15 +207,15 @@ describe('colecciones enormes no agotan memoria (ADR-8 M9, GHSA-mrhx-c7xc-m3w5)'
     expect(result.error.issues.length).toBeGreaterThan(200_000)
   })
 
-  it('CON cota: zod 4 corta ANTES de recorrer — un único too_big, tiempo acotado', { timeout: 60_000 }, () => {
-    const bounded = z.array(labObservationSchema).max(MAX_LAB_ITEMS)
+  it(`CON cota — el esquema REAL de labs/confirm (.max(${MAX_LAB_ITEMS})): un único too_big, tiempo acotado`, { timeout: 60_000 }, () => {
     const startedAt = Date.now()
-    const result = bounded.safeParse(invalidLabs)
+    const result = labOcrConfirmSchema.safeParse({ labs: invalidLabs })
     expect(result.success).toBe(false)
     if (result.success) return
     const issues = result.error.issues
     expect(issues).toHaveLength(1)
     expect(issues[0]?.code).toBe('too_big')
+    expect(issues[0]?.path.join('.')).toBe('labs')
     expect(Date.now() - startedAt).toBeLessThan(10_000)
   })
 })
