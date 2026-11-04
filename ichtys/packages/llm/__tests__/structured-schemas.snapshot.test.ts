@@ -178,14 +178,45 @@ describe('veredictos de validación sin cambio (ADR-8 M7)', () => {
 })
 
 describe('colecciones enormes no agotan memoria (ADR-8 M9, GHSA-mrhx-c7xc-m3w5)', () => {
-  it('arreglo de 10⁵ elementos con un esquema de la app valida en tiempo acotado', { timeout: 60_000 }, () => {
-    const big = Array.from({ length: 100_000 }, (_, i) => ({
-      name: `lab-${i}`,
-      value: i * 0.1,
-    }))
+  // H7 (vuelta 2): zod 4.6.7 cierra el OOM, pero SIN .max un arreglo de
+  // elementos INVÁLIDOS sigue acumulando un issue por elemento — el DoS
+  // sigue vivo. Este es el rojo-verde real que reemplaza a la prueba vieja
+  // de 10⁵ elementos VÁLIDOS (que también pasaba con zod 3 y no demostraba
+  // nada): 200k elementos inválidos contra el esquema SIN cota (acumula
+  // ~400k issues — así se ve el problema que motivó las cotas) y contra el
+  // esquema CON .max (zod 4 corta ANTES de recorrer: un único too_big,
+  // tiempo ~0).
+  //
+  // Rojo en zod 3: medido con 3.25.76 (heap 512 MB), el caso CON cota da
+  // 400.001 issues en 605 ms — .max no corta antes, valida todo y suma el
+  // too_big. Verde en 4.6.7: 1 issue, 0 ms.
+  //
+  // 500 = MAX_LAB_ITEMS de apps/web/lib/api/limits.ts (espejo local: este
+  // package no puede importar de apps/web).
+  const MAX_LAB_ITEMS = 500
+
+  const invalidLabs = Array.from({ length: 200_000 }, () => ({
+    name: '', // min(1) falla en cada elemento
+    value: 'no-es-número', // falla el tipo en cada elemento
+  }))
+
+  it('SIN cota: 200k inválidos acumulan issues por elemento (el DoS que motivó las cotas)', () => {
+    const unbounded = z.array(labObservationSchema)
+    const result = unbounded.safeParse(invalidLabs)
+    expect(result.success).toBe(false)
+    if (result.success) return
+    expect(result.error.issues.length).toBeGreaterThan(200_000)
+  })
+
+  it('CON cota: zod 4 corta ANTES de recorrer — un único too_big, tiempo acotado', { timeout: 60_000 }, () => {
+    const bounded = z.array(labObservationSchema).max(MAX_LAB_ITEMS)
     const startedAt = Date.now()
-    const result = z.array(labObservationSchema).safeParse(big)
-    expect(result.success).toBe(true)
-    expect(Date.now() - startedAt).toBeLessThan(60_000)
+    const result = bounded.safeParse(invalidLabs)
+    expect(result.success).toBe(false)
+    if (result.success) return
+    const issues = result.error.issues
+    expect(issues).toHaveLength(1)
+    expect(issues[0]?.code).toBe('too_big')
+    expect(Date.now() - startedAt).toBeLessThan(10_000)
   })
 })
