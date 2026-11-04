@@ -17,6 +17,46 @@ export const runtime = 'nodejs'
 export const maxDuration = 300
 
 const MAX_FILES_PER_BATCH = 25
+const MAX_PDF_FILE_BYTES = 50 * 1024 * 1024
+/** Suma de los archivos permitidos más el overhead del multipart. No se lee el cuerpo por encima. */
+const MAX_BULK_BODY_BYTES = MAX_FILES_PER_BATCH * MAX_PDF_FILE_BYTES + 1024 * 1024
+
+function declaredBodyTooLarge(req: Request): boolean {
+  const raw = req.headers.get('content-length')
+  if (raw === null) return false
+  const size = Number(raw)
+  return !Number.isFinite(size) || size < 0 || size > MAX_BULK_BODY_BYTES
+}
+
+async function formDataWithinCap(req: Request): Promise<FormData | 'too_large'> {
+  if (declaredBodyTooLarge(req)) return 'too_large'
+  if (req.headers.get('content-length') !== null || req.body === null) {
+    return req.formData()
+  }
+
+  const reader = req.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    if (!value) continue
+    total += value.byteLength
+    if (total > MAX_BULK_BODY_BYTES) {
+      await reader.cancel()
+      return 'too_large'
+    }
+    chunks.push(value)
+  }
+
+  const body = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    body.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return new Request(req.url, { method: 'POST', headers: req.headers, body }).formData()
+}
 
 function studyNameFromFileName(fileName: string): string {
   const base = fileName.replace(/\.pdf$/i, '').trim()
@@ -76,7 +116,9 @@ export async function POST(req: Request): Promise<Response> {
 
   let form: FormData
   try {
-    form = await req.formData()
+    const loaded = await formDataWithinCap(req)
+    if (loaded === 'too_large') return new Response('Payload Too Large', { status: 413 })
+    form = loaded
   } catch {
     return new Response('Bad Request', { status: 400 })
   }

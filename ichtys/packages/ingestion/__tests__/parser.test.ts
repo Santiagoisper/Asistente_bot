@@ -100,6 +100,52 @@ describe('parsePdf', () => {
       vi.useRealTimers()
     }
   })
+
+  it('rechaza una página cuyo getTextContent no termina dentro del tope', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'))
+    try {
+      mockPdfParse.mockImplementation(
+        async (_buf: unknown, opts: { pagerender?: (page: unknown) => Promise<string> }) => {
+          const page = {
+            getTextContent: () => new Promise<{ items: unknown[] }>(() => undefined),
+          }
+          const pending = opts.pagerender?.(page) ?? Promise.resolve('')
+          const settled = pending.then(
+            () => ({ failed: false as const }),
+            (err: unknown) => ({ failed: true as const, err }),
+          )
+          await vi.advanceTimersByTimeAsync(30_000)
+          const outcome = await settled
+          if (outcome.failed) throw outcome.err
+          return { numpages: 1, text: '' }
+        },
+      )
+
+      await expect(parsePdf(Buffer.from('%PDF-1.4'))).rejects.toMatchObject({
+        name: 'PdfParseError',
+        code: 'pdf_complexity_limit',
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  }, 3_000)
+
+  it('rechaza una página que expande más texto del tope', async () => {
+    const huge = 'A'.repeat(120_000)
+    mockPdfParse.mockImplementation(
+      async (_buf: unknown, opts: { pagerender?: (page: unknown) => Promise<string> }) => {
+        const page = { getTextContent: async () => ({ items: [{ str: huge }] }) }
+        await opts.pagerender?.(page)
+        return { numpages: 1, text: huge }
+      },
+    )
+
+    await expect(parsePdf(Buffer.from('%PDF-1.4'))).rejects.toMatchObject({
+      name: 'PdfParseError',
+      code: 'pdf_complexity_limit',
+    })
+  })
 })
 
 describe('cropPdfPages', () => {

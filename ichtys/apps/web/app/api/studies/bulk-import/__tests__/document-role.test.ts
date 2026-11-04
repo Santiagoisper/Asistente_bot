@@ -169,6 +169,33 @@ describe('POST /api/studies/bulk-import — cupo', () => {
   })
 })
 
+describe('S5 — tamaño total del lote antes de leer el cuerpo', () => {
+  it('rechaza un Content-Length enorme sin leer el formulario ni crear recursos', async () => {
+    mocks.auth.mockResolvedValue({
+      userId: 'user_1',
+      orgId: 'org_clerk',
+      orgRole: 'org:study_admin',
+    })
+    const req = new Request('http://localhost/api/studies/bulk-import', {
+      method: 'POST',
+      headers: {
+        'content-type': 'multipart/form-data; boundary=----ficticio',
+        'content-length': String(2 * 1024 * 1024 * 1024),
+      },
+      body: '------ficticio--\r\n',
+    })
+    const formData = vi.spyOn(req, 'formData')
+
+    const res = await POST(req)
+
+    expect(res.status).toBe(413)
+    expect(formData).not.toHaveBeenCalled()
+    expect(mocks.putPrivateDocumentPdf).not.toHaveBeenCalled()
+    expect(mocks.transaction).not.toHaveBeenCalled()
+    expect(mocks.insert).not.toHaveBeenCalled()
+  })
+})
+
 describe('S5 — la importación masiva reutiliza la validación del PDF', () => {
   beforeEach(() => {
     mocks.auth.mockResolvedValue({
