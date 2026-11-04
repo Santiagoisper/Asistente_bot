@@ -14,6 +14,7 @@ import {
 } from '../rate-limit'
 
 const ORIGINAL_FETCH = globalThis.fetch
+let errorSpy: ReturnType<typeof vi.spyOn>
 
 function mockFetch(result: unknown, ok = true): void {
   globalThis.fetch = vi.fn(async () =>
@@ -28,7 +29,7 @@ describe('rate limit helper', () => {
   beforeEach(() => {
     vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://redis.example.com')
     vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'test-token')
-    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
   })
 
   afterEach(() => {
@@ -101,7 +102,7 @@ describe('rate limit helper', () => {
     expect(console.error).toHaveBeenCalledWith('[rate-limit]', {
       code: 'redis_command_error',
     })
-    expect(JSON.stringify(console.error.mock?.calls ?? [])).not.toContain(sentinel)
+    expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(sentinel)
   })
 
   it('bloquea si Redis responde HTTP de error', async () => {
@@ -131,7 +132,7 @@ describe('rate limit helper', () => {
       enforceSlidingWindowRateLimit({ key: 'stream:user:org', limit: 30, windowSeconds: 60 }),
     ).resolves.toEqual({ limited: true, retryAfterSeconds: 60, reason: 'unavailable' })
     expect(console.error).toHaveBeenCalledWith('[rate-limit]', { code: 'rate_limit_internal_error' })
-    expect(JSON.stringify(console.error.mock?.calls ?? [])).not.toContain('sk-ant-provider-raw-ficticio-NO-LOG')
+    expect(JSON.stringify(errorSpy.mock.calls)).not.toContain('sk-ant-provider-raw-ficticio-NO-LOG')
   })
 
   it('en producción ignora RATE_LIMIT_ENABLED=false y bloquea sin Redis', async () => {
