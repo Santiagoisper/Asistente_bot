@@ -19,14 +19,24 @@ vi.mock('@ichtys/llm', () => ({
   runWithLlmFallback: vi.fn(
     async (
       _opts: unknown,
-      run: (model: unknown, provider: string, reportUsage: (u: unknown) => void) => Promise<unknown>,
+      run: (
+        model: unknown,
+        provider: string,
+        reportUsage: (u: { inputTokens: number; outputTokens: number }) => void,
+      ) => Promise<unknown>,
     ) => {
-      const result = await run(mocks.mockModel, 'anthropic', () => {})
+      // Paso 1 (A7): acumulador real, como el fallback de producción — el
+      // total que reporta el runner es el que llega a recordUsage.
+      const usage = { inputTokens: 0, outputTokens: 0 }
+      const result = await run(mocks.mockModel, 'anthropic', (u) => {
+        usage.inputTokens += u.inputTokens
+        usage.outputTokens += u.outputTokens
+      })
       return {
         result,
         provider: 'anthropic',
         modelId: 'claude-sonnet-4-6',
-        usage: { inputTokens: 0, outputTokens: 0 },
+        usage,
         keySource: 'platform',
       }
     },
@@ -82,10 +92,14 @@ const EMPTY_GROUPS = {
 /** Configura generateObject para responder según el contenido del prompt. */
 function mockExtractionByPrompt() {
   mocks.generateObject.mockImplementation(({ prompt }: { prompt: string }) => {
+    // Paso 1 (A7): usage con el shape de ai 7 — cada llamada "gasta" 10/20
+    // tokens, para poder afirmar que el consumo llega a recordUsage.
+    const usage = { inputTokens: 10, outputTokens: 20 }
     // Semantic locator call — returns page ranges based on which sections are present.
     if (prompt.startsWith('COMPACT PAGE MAP:')) {
       const hasEndpoints = prompt.includes('[P44]')
       return Promise.resolve({
+        usage,
         object: {
           identification: { pageStart: 1, pageEnd: 2 },
           eligibility: { pageStart: 52, pageEnd: 59 },
@@ -96,10 +110,11 @@ function mockExtractionByPrompt() {
       })
     }
     if (prompt.includes('protocol identification')) {
-      return Promise.resolve({ object: EMPTY_GROUPS.identification })
+      return Promise.resolve({ usage, object: EMPTY_GROUPS.identification })
     }
     if (prompt.includes('inclusion criteria')) {
       return Promise.resolve({
+        usage,
         object: {
           inclusionCriteria: [
             { number: '1', text: 'Adultos mayores de 18 años', sourcePages: [52], confidence: 'high' },
@@ -112,6 +127,7 @@ function mockExtractionByPrompt() {
     }
     if (prompt.includes('objectives and their') && prompt.includes('endpoints')) {
       return Promise.resolve({
+        usage,
         object: {
           endpoints: [
             { type: 'primary', objective: 'demostrar superioridad', endpoint: 'cambio en HbA1c', sourcePages: [44], confidence: 'high' },
@@ -121,6 +137,7 @@ function mockExtractionByPrompt() {
     }
     if (prompt.includes('schedule of activities')) {
       return Promise.resolve({
+        usage,
         object: {
           visits: [
             { name: 'Visita 4', label: 'Semana 12', day: 85, windowDays: 3, procedures: ['HbA1c', 'muestra PK'], sourcePages: [19], confidence: 'high' },
@@ -169,16 +186,40 @@ describe('extractStudySpec', () => {
     expect(mocks.generateObject).toHaveBeenCalledTimes(5)
   })
 
+  it('registra el consumo con inputTokens > 0 cuando hay usageCtx — mapeo ai 7 (A7)', async () => {
+    mockExtractionByPrompt()
+
+    await extractStudySpec(makeProtocolPages(), [], {
+      orgId: 'org-1',
+      studyId: 'study-1',
+      userId: 'user-1',
+    })
+
+    // El registro es POR llamada LLM (comportamiento de base): 1 locator + 4
+    // grupos = 5 registros, cada uno con los 10/20 tokens de su llamada.
+    expect(mocks.recordUsage).toHaveBeenCalledTimes(5)
+    let totalInput = 0
+    for (const call of mocks.recordUsage.mock.calls) {
+      const arg = call[0] as { kind: string; inputTokens: number; outputTokens: number }
+      expect(arg.kind).toBe('spec_extraction')
+      expect(arg.inputTokens).toBe(10)
+      expect(arg.inputTokens).toBeGreaterThan(0)
+      expect(arg.outputTokens).toBe(20)
+      totalInput += arg.inputTokens
+    }
+    expect(totalInput).toBe(50)
+  })
+
   it('sends only the located section pages to each group prompt', async () => {
     mockExtractionByPrompt()
 
     await extractStudySpec(makeProtocolPages())
 
-    const calls = mocks.generateObject.mock.calls as Array<[{ prompt: string; system: string }]>
+    const calls = mocks.generateObject.mock.calls as Array<[{ prompt: string; instructions: string }]>
     const eligibilityCall = calls.find(([arg]) => arg.prompt.includes('inclusion criteria'))?.[0]
     if (!eligibilityCall) throw new Error('eligibility extraction call not found')
 
-    expect(eligibilityCall.system).toBe(SPEC_EXTRACTION_SYSTEM_PROMPT)
+    expect(eligibilityCall.instructions).toBe(SPEC_EXTRACTION_SYSTEM_PROMPT)
     expect(eligibilityCall.prompt).toContain('[PAGE 52]')
     expect(eligibilityCall.prompt).toContain('[PAGE 53]')
     // La sección de elegibilidad no debe incluir el SoA ni la introducción.

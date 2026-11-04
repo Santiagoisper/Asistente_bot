@@ -37,15 +37,23 @@ describe('generateAndPersistConversationTitle — idioma del título', () => {
     vi.clearAllMocks()
     generateTextMock.mockResolvedValue({
       text: 'Criterios de IMC del estudio',
-      usage: { promptTokens: 3, completionTokens: 4 },
+      // Paso 1 (A7): usage con el shape de ai 7 (inputTokens/outputTokens).
+      usage: { inputTokens: 3, outputTokens: 4 },
     })
     runWithLlmFallbackMock.mockImplementation(async (_cfg, runner) => {
-      const result = await runner({} as never, 'anthropic', vi.fn(), undefined as never)
+      // Paso 1 (A7): acumulador real — el total que reporta el runner es el
+      // que llega a recordUsage (antes estaba hardcodeado).
+      const usage = { inputTokens: 0, outputTokens: 0 }
+      const reportUsage = (u: { inputTokens: number; outputTokens: number }) => {
+        usage.inputTokens += u.inputTokens
+        usage.outputTokens += u.outputTokens
+      }
+      const result = await runner({} as never, 'anthropic', reportUsage, undefined as never)
       return {
         result,
         provider: 'anthropic',
         modelId: 'claude-haiku-4-5',
-        usage: { inputTokens: 3, outputTokens: 4 },
+        usage,
         keySource: 'org',
       }
     })
@@ -63,8 +71,9 @@ describe('generateAndPersistConversationTitle — idioma del título', () => {
       userId: 'user-1',
     })
 
-    const system = generateTextMock.mock.calls[0]?.[0]?.system as string
-    expect(system).toMatch(/español|spanish/i)
+    // Paso 1 (A7): el prompt de sistema viaja como `instructions` (ai 7).
+    const instructions = generateTextMock.mock.calls[0]?.[0]?.instructions as string
+    expect(instructions).toMatch(/español|spanish/i)
 
     expect(title).toBe('Criterios de IMC del estudio')
     expect(dbUpdateMock).toHaveBeenCalled()
