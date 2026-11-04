@@ -15,7 +15,7 @@
     "test:leakage": "vitest run --dir tests/leakage"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^1.0.6",
+    "@ai-sdk/anthropic": "4.0.96",
     "@clerk/nextjs": "^7.9.10",
     "@ichtys/auth": "workspace:*",
     "@ichtys/clinical": "workspace:*",
@@ -26,7 +26,7 @@
     "@ichtys/rag": "workspace:*",
     "@ichtys/ui": "workspace:*",
     "@vercel/blob": "^2.8.0",
-    "ai": "^4.0.30",
+    "ai": "7.0.162",
     "next": "^16.4.2",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
