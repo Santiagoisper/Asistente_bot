@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { db, studies } from '@ichtys/db'
-import { canManageDocuments, handleApiError, normalizeRole, resolveOrProvisionOrganization } from '@ichtys/auth'
+import { canAdministerStudy, handleApiError, normalizeRole, resolveOrProvisionOrganization } from '@ichtys/auth'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../lib/api/body-limit'
 import { createStudyInput } from '../../../lib/api/input-schemas'
 
@@ -11,8 +11,8 @@ export async function POST(req: Request): Promise<Response> {
   if (!userId || !clerkOrgId) {
     return new Response('Unauthorized', { status: 401 })
   }
-  // Crear un estudio es gestión documental: monitor e investigador principal no escriben.
-  if (!canManageDocuments(normalizeRole(orgRole))) {
+  // Crear un estudio es administrar el estudio: el coordinador sube documentos, no abre estudios.
+  if (!canAdministerStudy(normalizeRole(orgRole))) {
     return new Response('Forbidden', { status: 403 })
   }
 

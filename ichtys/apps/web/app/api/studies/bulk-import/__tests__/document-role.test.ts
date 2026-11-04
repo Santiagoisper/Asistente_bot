@@ -19,6 +19,7 @@ vi.mock('@ichtys/auth', async () => {
   const roles = await vi.importActual<typeof import('@ichtys/auth/roles')>('@ichtys/auth/roles')
   return {
     canManageDocuments: roles.canManageDocuments,
+    canAdministerStudy: roles.canAdministerStudy,
     normalizeRole: roles.normalizeRole,
     resolveOrProvisionOrganization: mocks.resolveOrProvisionOrganization,
   }
@@ -101,6 +102,37 @@ describe('POST /api/studies/bulk-import — gestión documental (S1)', () => {
     expect(mocks.transaction).not.toHaveBeenCalled()
     expect(mocks.after).not.toHaveBeenCalled()
   })
+
+  it('rechaza a un coordinador de sede antes de crear estudios o guardar PDFs', async () => {
+    mocks.auth.mockResolvedValue({
+      userId: 'user_1',
+      orgId: 'org_clerk',
+      orgRole: 'org:site_coordinator',
+    })
+
+    const res = await POST(bulkRequest())
+
+    expect(res.status).toBe(403)
+    expect(await res.text()).toBe('Forbidden')
+    expect(mocks.putPrivateDocumentPdf).not.toHaveBeenCalled()
+    expect(mocks.insert).not.toHaveBeenCalled()
+    expect(mocks.transaction).not.toHaveBeenCalled()
+    expect(mocks.after).not.toHaveBeenCalled()
+  })
+
+  it('deja importar el lote a un administrador del estudio', async () => {
+    mocks.auth.mockResolvedValue({
+      userId: 'user_1',
+      orgId: 'org_clerk',
+      orgRole: 'org:study_admin',
+    })
+
+    const res = await POST(bulkRequest())
+
+    expect(res.status).toBe(202)
+    expect(mocks.putPrivateDocumentPdf).toHaveBeenCalledTimes(1)
+    expect(mocks.transaction).toHaveBeenCalledTimes(1)
+  })
 })
 
 function requestWithFile(file: File): Request {
@@ -114,7 +146,7 @@ describe('S5 — la importación masiva reutiliza la validación del PDF', () =>
     mocks.auth.mockResolvedValue({
       userId: 'user_1',
       orgId: 'org_clerk',
-      orgRole: 'org:site_coordinator',
+      orgRole: 'org:study_admin',
     })
   })
 
@@ -169,7 +201,7 @@ describe('POST /api/studies/bulk-import — S8 mensaje crudo', () => {
     mocks.auth.mockResolvedValue({
       userId: 'user_ficticio',
       orgId: 'org_clerk_ficticia',
-      orgRole: 'org:site_coordinator',
+      orgRole: 'org:study_admin',
     })
   })
 

@@ -12,6 +12,7 @@ vi.mock('@ichtys/auth', async () => {
   const roles = await vi.importActual<typeof import('@ichtys/auth/roles')>('@ichtys/auth/roles')
   return {
     canManageDocuments: roles.canManageDocuments,
+    canAdministerStudy: roles.canAdministerStudy,
     normalizeRole: roles.normalizeRole,
     resolveOrProvisionOrganization: mocks.resolveOrProvisionOrganization,
     handleApiError: () => new Response('Internal Server Error', { status: 500 }),
@@ -62,11 +63,25 @@ describe('POST /api/studies — gestión documental (S1)', () => {
     expect(mocks.insert).not.toHaveBeenCalled()
   })
 
-  it('deja crear el estudio a un coordinador de sede', async () => {
+  it('rechaza a un coordinador de sede antes de crear el estudio', async () => {
     mocks.auth.mockResolvedValue({
       userId: 'user_1',
       orgId: 'org_clerk',
       orgRole: 'org:site_coordinator',
+    })
+
+    const res = await POST(createRequest())
+
+    expect(res.status).toBe(403)
+    expect(await res.text()).toBe('Forbidden')
+    expect(mocks.insert).not.toHaveBeenCalled()
+  })
+
+  it('deja crear el estudio a un administrador del estudio', async () => {
+    mocks.auth.mockResolvedValue({
+      userId: 'user_1',
+      orgId: 'org_clerk',
+      orgRole: 'org:study_admin',
     })
 
     const res = await POST(createRequest())

@@ -1,6 +1,6 @@
 import { after } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { canManageDocuments, normalizeRole, resolveOrProvisionOrganization } from '@ichtys/auth'
+import { canAdministerStudy, normalizeRole, resolveOrProvisionOrganization } from '@ichtys/auth'
 import { auditLogs, db, documents, documentVersions, ingestionJobs, studies } from '@ichtys/db'
 import { runSingleIngestionJobById } from '@ichtys/ingestion/ingestion-jobs'
 import { putPrivateDocumentPdf } from '../../documents/upload/blob-storage'
@@ -56,7 +56,8 @@ export async function POST(req: Request): Promise<Response> {
 
   const { userId, orgId: clerkOrgId, orgRole } = await auth()
   if (!userId || !clerkOrgId) return new Response('Unauthorized', { status: 401 })
-  if (!canManageDocuments(normalizeRole(orgRole))) {
+  // El lote crea estudios: hace falta administrar el estudio, no solo subir documentos.
+  if (!canAdministerStudy(normalizeRole(orgRole))) {
     return new Response('Forbidden', { status: 403 })
   }
 
