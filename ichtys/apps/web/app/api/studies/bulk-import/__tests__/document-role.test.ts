@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   putPrivateDocumentPdf: vi.fn(),
   enforceSlidingWindowRateLimit: vi.fn(),
   getUploadRateLimitConfig: vi.fn().mockReturnValue({ limit: 10, windowSeconds: 60 }),
+  getBulkRateLimitConfig: vi.fn().mockReturnValue({ limit: 10, orgLimit: 40, windowSeconds: 60 }),
   rateLimitResponse: vi.fn(),
   insert: vi.fn(),
   transaction: vi.fn(),
@@ -34,6 +35,7 @@ vi.mock('../../../documents/upload/blob-storage', () => ({
 vi.mock('../../../../../lib/security/rate-limit', () => ({
   enforceSlidingWindowRateLimit: mocks.enforceSlidingWindowRateLimit,
   getUploadRateLimitConfig: mocks.getUploadRateLimitConfig,
+  getBulkRateLimitConfig: mocks.getBulkRateLimitConfig,
   rateLimitResponse: mocks.rateLimitResponse,
   rateLimitUnavailableResponse: () =>
     Response.json(
@@ -77,6 +79,7 @@ function bulkRequest(): Request {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.getUploadRateLimitConfig.mockReturnValue({ limit: 10, windowSeconds: 60 })
+  mocks.getBulkRateLimitConfig.mockReturnValue({ limit: 10, orgLimit: 40, windowSeconds: 60 })
   mocks.enforceSlidingWindowRateLimit.mockResolvedValue({ limited: false })
   mocks.resolveOrProvisionOrganization.mockResolvedValue({ id: 'org-interna' })
   mocks.putPrivateDocumentPdf.mockResolvedValue({
@@ -194,6 +197,76 @@ describe('S5 — tamaño total del lote antes de leer el cuerpo', () => {
     expect(mocks.transaction).not.toHaveBeenCalled()
     expect(mocks.insert).not.toHaveBeenCalled()
   })
+
+  it('lee los 8000 bytes reales aunque el Content-Length diga 1', async () => {
+    mocks.auth.mockResolvedValue({
+      userId: 'user_1',
+      orgId: 'org_clerk',
+      orgRole: 'org:study_admin',
+    })
+    const fileBytes = new Uint8Array(8000).fill(0x41)
+    const head = new TextEncoder().encode(
+      '------ficticio\r\nContent-Disposition: form-data; name="files"; filename="protocolo-ficticio.pdf"\r\nContent-Type: application/pdf\r\n\r\n',
+    )
+    const tail = new TextEncoder().encode('\r\n------ficticio--\r\n')
+    const body = new Uint8Array(head.length + fileBytes.length + tail.length)
+    body.set(head, 0)
+    body.set(fileBytes, head.length)
+    body.set(tail, head.length + fileBytes.length)
+    const req = new Request('http://localhost/api/studies/bulk-import', {
+      method: 'POST',
+      headers: {
+        'content-type': 'multipart/form-data; boundary=----ficticio',
+        'content-length': '1',
+      },
+      body,
+    })
+
+    const res = await POST(req)
+    const payload = await res.json() as { items?: Array<{ fileName?: string }> }
+
+    expect(res.status).toBe(202)
+    expect(payload.items?.[0]?.fileName).toBe('protocolo-ficticio.pdf')
+    expect(mocks.putPrivateDocumentPdf).not.toHaveBeenCalled()
+  })
+
+  it('aborta un cuerpo real por encima de 100 MB aunque el Content-Length diga 1', async () => {
+    mocks.auth.mockResolvedValue({
+      userId: 'user_1',
+      orgId: 'org_clerk',
+      orgRole: 'org:study_admin',
+    })
+    const chunk = new Uint8Array(1024 * 1024)
+    let sent = 0
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (sent >= 101 * 1024 * 1024) {
+          controller.close()
+          return
+        }
+        controller.enqueue(chunk)
+        sent += chunk.byteLength
+      },
+    })
+    const req = new Request('http://localhost/api/studies/bulk-import', {
+      method: 'POST',
+      headers: {
+        'content-type': 'multipart/form-data; boundary=----ficticio',
+        'content-length': '1',
+      },
+      body,
+      duplex: 'half',
+    } as RequestInit)
+    const formData = vi.spyOn(req, 'formData')
+
+    const res = await POST(req)
+
+    expect(res.status).toBe(413)
+    expect(formData).not.toHaveBeenCalled()
+    expect(mocks.putPrivateDocumentPdf).not.toHaveBeenCalled()
+    expect(mocks.transaction).not.toHaveBeenCalled()
+    expect(mocks.insert).not.toHaveBeenCalled()
+  }, 30_000)
 })
 
 describe('S5 — la importación masiva reutiliza la validación del PDF', () => {

@@ -18,21 +18,20 @@ export const maxDuration = 300
 
 const MAX_FILES_PER_BATCH = 25
 const MAX_PDF_FILE_BYTES = 50 * 1024 * 1024
-/** Suma de los archivos permitidos más el overhead del multipart. No se lee el cuerpo por encima. */
-const MAX_BULK_BODY_BYTES = MAX_FILES_PER_BATCH * MAX_PDF_FILE_BYTES + 1024 * 1024
+/** Tope del cuerpo medido en bytes reales. El Content-Length no alcanza: se puede falsificar. */
+const MAX_BULK_BODY_BYTES = 100 * 1024 * 1024
 
 function declaredBodyTooLarge(req: Request): boolean {
   const raw = req.headers.get('content-length')
   if (raw === null) return false
+  if (!/^\d+$/.test(raw)) return true
   const size = Number(raw)
-  return !Number.isFinite(size) || size < 0 || size > MAX_BULK_BODY_BYTES
+  return !Number.isSafeInteger(size) || size > MAX_BULK_BODY_BYTES
 }
 
 async function formDataWithinCap(req: Request): Promise<FormData | 'too_large'> {
   if (declaredBodyTooLarge(req)) return 'too_large'
-  if (req.headers.get('content-length') !== null || req.body === null) {
-    return req.formData()
-  }
+  if (req.body === null) return req.formData()
 
   const reader = req.body.getReader()
   const chunks: Uint8Array[] = []
@@ -40,13 +39,13 @@ async function formDataWithinCap(req: Request): Promise<FormData | 'too_large'> 
   for (;;) {
     const { done, value } = await reader.read()
     if (done) break
-    if (!value) continue
-    total += value.byteLength
-    if (total > MAX_BULK_BODY_BYTES) {
-      await reader.cancel()
+    if (!value || value.byteLength === 0) continue
+    if (total + value.byteLength > MAX_BULK_BODY_BYTES) {
+      await reader.cancel().catch(() => undefined)
       return 'too_large'
     }
     chunks.push(value)
+    total += value.byteLength
   }
 
   const body = new Uint8Array(total)
@@ -55,7 +54,9 @@ async function formDataWithinCap(req: Request): Promise<FormData | 'too_large'> 
     body.set(chunk, offset)
     offset += chunk.byteLength
   }
-  return new Request(req.url, { method: 'POST', headers: req.headers, body }).formData()
+  const headers = new Headers(req.headers)
+  headers.set('content-length', String(total))
+  return new Request(req.url, { method: 'POST', headers, body }).formData()
 }
 
 function studyNameFromFileName(fileName: string): string {
