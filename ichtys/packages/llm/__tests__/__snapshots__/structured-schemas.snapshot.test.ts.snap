@@ -564,25 +564,40 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
             "type": "string",
           },
           "day": {
-            "type": [
-              "number",
-              "null",
+            "anyOf": [
+              {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer",
+              },
+              {
+                "type": "null",
+              },
             ],
           },
           "label": {
-            "type": [
-              "string",
-              "null",
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string",
+              },
+              {
+                "type": "null",
+              },
             ],
           },
           "name": {
+            "maxLength": 200,
             "minLength": 1,
             "type": "string",
           },
           "procedures": {
             "items": {
+              "maxLength": 500,
+              "minLength": 1,
               "type": "string",
             },
+            "maxItems": 200,
             "type": "array",
           },
           "sourcePages": {
@@ -591,13 +606,20 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
               "maximum": 9007199254740991,
               "type": "integer",
             },
+            "maxItems": 100,
             "minItems": 1,
             "type": "array",
           },
           "windowDays": {
-            "type": [
-              "number",
-              "null",
+            "anyOf": [
+              {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer",
+              },
+              {
+                "type": "null",
+              },
             ],
           },
         },
@@ -612,6 +634,7 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
         ],
         "type": "object",
       },
+      "maxItems": 2000,
       "type": "array",
     },
   },

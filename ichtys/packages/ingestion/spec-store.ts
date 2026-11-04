@@ -1,6 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm'
 import { db, studySpecs, type StudySpecRow } from '@ichtys/db'
 import { studySpecSchema, type StudySpec } from './study-spec'
+import { normalizeStudySpec } from './spec-normalizer'
 import type { ApprovedSpecExample } from './spec-extractor'
 import { SEED_SPEC_EXAMPLE } from './seed-spec-example'
 
@@ -61,7 +62,18 @@ export interface SavedStudySpec {
 }
 
 export async function saveStudySpec(params: SaveStudySpecParams): Promise<SavedStudySpec> {
-  const spec = studySpecSchema.parse(params.spec)
+  // Vuelta 4 (regresión E5): mismo criterio que el extractor — normalizar
+  // ANTES del .parse. El spec llega de la salida del modelo (o del pipeline,
+  // que junta TODAS las advertencias de extracción); un tope jamás puede
+  // tumbar el guardado completo. Sobre un spec válido es idempotente.
+  const normalizationWarnings: string[] = []
+  const spec = normalizeStudySpec(params.spec, normalizationWarnings)
+  if (normalizationWarnings.length > 0) {
+    console.warn(
+      `[spec-store:save] spec normalizado para studyId=${params.studyId} ` +
+        `(${normalizationWarnings.length} ajustes; primero: ${normalizationWarnings[0]})`,
+    )
+  }
 
   // Fetch recent versions: need latest version number + any approved spec.
   // Limit to 20 — realistic max for clinical trial protocol versions; ordered

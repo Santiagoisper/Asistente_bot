@@ -8,9 +8,17 @@ import {
   eligibilityCriterionSchema,
   studyEndpointSchema,
   studyIdentificationSchema,
-  studySpecSchema,
+  studyVisitSchema,
+  MAX_SPEC_ITEMS,
   type StudySpec,
 } from './study-spec'
+import {
+  normalizeEligibilityGroup,
+  normalizeEndpointsGroup,
+  normalizeIdentification,
+  normalizeStudySpec,
+  normalizeVisitsGroup,
+} from './spec-normalizer'
 
 /**
  * spec-extractor.ts — extractor universal de study specs.
@@ -443,17 +451,12 @@ export const endpointsGroupSchema = z.object({
   endpoints: z.array(studyEndpointSchema),
 })
 
-// Exportado para la instantánea de JSON Schema (ADR-8 M4).
+// Exportado para la instantánea de JSON Schema (ADR-8 M4). Reutiliza los
+// campos con tope de studyVisitSchema (vuelta 4): el JSON Schema que viaja al
+// proveedor informa las cotas y el extractor normaliza la salida ANTES del
+// parse final, así un ítem largo no tumba el grupo (regresión E5).
 export const visitsGroupSchema = z.object({
-  visits: z.array(z.object({
-    name: z.string().min(1),
-    label: z.string().nullable(),
-    day: z.number().nullable(),
-    windowDays: z.number().nullable(),
-    procedures: z.array(z.string()),
-    sourcePages: z.array(z.number().int().positive()).min(1),
-    confidence: z.enum(['high', 'medium', 'low']),
-  })),
+  visits: z.array(studyVisitSchema).max(MAX_SPEC_ITEMS),
 })
 
 // Exportado para la instantánea de JSON Schema (ADR-8 M4).
@@ -613,6 +616,43 @@ function safeProviderError(error: unknown): { name: string; code: string; status
   }
 }
 
+/**
+ * Recupera la salida CRUDA del modelo de un error de validación del AI SDK
+ * (regresión E5, vuelta 4): generateObject valida la respuesta contra el
+ * schema del grupo y lanza NoObjectGeneratedError / InvalidToolInputError
+ * cuando algo excede una cota. Esos errores llevan el JSON original en
+ * `.text` / `.toolInput` (string) o el objeto en `.cause.value`. Con la
+ * salida cruda podemos normalizar por ítem y conservar el resto del grupo
+ * en vez de perderlo entero.
+ */
+function recoverModelOutput(error: unknown, keys: readonly string[]): unknown | null {
+  const err = error as { text?: unknown; toolInput?: unknown; cause?: unknown } | null
+  const candidates: unknown[] = []
+  for (const raw of [err?.text, err?.toolInput]) {
+    if (typeof raw === 'string' && raw.trim() !== '') {
+      try {
+        candidates.push(JSON.parse(raw))
+      } catch {
+        // No era JSON — seguimos con el siguiente candidato.
+      }
+    }
+  }
+  const cause = err?.cause as { value?: unknown } | undefined
+  if (cause && typeof cause === 'object' && cause.value !== undefined) candidates.push(cause.value)
+
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'object' || candidate === null) continue
+    const record = candidate as Record<string, unknown>
+    for (const key of keys) {
+      const value = record[key]
+      // Grupo vacío tras la recuperación = perder el grupo en silencio:
+      // mejor dejar que el flujo de error lo informe.
+      if (Array.isArray(value) ? value.length > 0 : value !== undefined) return candidate
+    }
+  }
+  return null
+}
+
 function recordProviderFailure(stage: string, error: unknown): string {
   const details = safeProviderError(error)
   console.warn(
@@ -690,6 +730,27 @@ export async function extractStudySpec(
     const fewShot = buildFewShotContext(fewShotExamples, group)
     const sectionPages = pagesInRange(pages, range)
     const context = buildSectionContext(sectionPages)
+
+    // Regla de la vuelta 4 (regresión E5): la salida del modelo se normaliza
+    // SIEMPRE antes de tocar las cotas — un tope nunca tumba más que el ítem
+    // afectado. Idempotente sobre una salida que ya valida (0 advertencias).
+    const postProcess = (raw: unknown): T => {
+      if (group === 'visits') {
+        const normalized = normalizeVisitsGroup(raw, warnings)
+        return validateExtractedVisits(normalized, sectionPages, warnings) as unknown as T
+      }
+      if (group === 'eligibility') {
+        return normalizeEligibilityGroup(raw, warnings) as unknown as T
+      }
+      return normalizeEndpointsGroup(raw, warnings) as unknown as T
+    }
+    const groupKeys =
+      group === 'eligibility'
+        ? ['inclusionCriteria', 'exclusionCriteria']
+        : group === 'endpoints'
+          ? ['endpoints']
+          : ['visits']
+
     let visualPdf: Uint8Array | undefined
     if (options.protocolPdf && (group === 'visits' || group === 'eligibility')) {
       try {
@@ -716,10 +777,16 @@ export async function extractStudySpec(
         range.pageEnd,
       )
       extractionModelUsed = extracted.modelId
-      return group === 'visits'
-        ? validateExtractedVisits(extracted.data as { visits: StudySpec['visits'] }, sectionPages, warnings) as T
-        : extracted.data
+      return postProcess(extracted.data)
     } catch (err) {
+      // El SDK valida la salida contra el schema del grupo: si algo excede
+      // una cota, el error lleva la salida cruda del modelo. Se recupera y
+      // se normaliza por ítem — el grupo NO se pierde entero.
+      const recovered = recoverModelOutput(err, groupKeys)
+      if (recovered !== null) {
+        warnings.push(`${group}: salida del modelo fuera de cotas — recuperada y normalizada por ítem`)
+        return postProcess(recovered)
+      }
       let extractionError = err
       if (visualPdf) {
         warnings.push(`${group}: visual PDF extraction failed; text fallback used`)
@@ -734,10 +801,13 @@ export async function extractStudySpec(
             usageCtx,
           )
           extractionModelUsed = extracted.modelId
-          return group === 'visits'
-            ? validateExtractedVisits(extracted.data as { visits: StudySpec['visits'] }, sectionPages, warnings) as T
-            : extracted.data
+          return postProcess(extracted.data)
         } catch (fallbackErr) {
+          const recoveredFallback = recoverModelOutput(fallbackErr, groupKeys)
+          if (recoveredFallback !== null) {
+            warnings.push(`${group}: salida del modelo fuera de cotas — recuperada y normalizada por ítem`)
+            return postProcess(recoveredFallback)
+          }
           extractionError = fallbackErr
         }
       }
@@ -764,8 +834,16 @@ export async function extractStudySpec(
         usageCtx,
       )
       extractionModelUsed = extracted.modelId
-      return extracted.data
+      return { identification: normalizeIdentification(extracted.data.identification, warnings) }
     } catch (err) {
+      const recovered = recoverModelOutput(err, ['identification'])
+      if (recovered !== null && typeof recovered === 'object') {
+        const identification = (recovered as { identification?: unknown }).identification
+        if (identification !== undefined) {
+          warnings.push('identification: salida del modelo fuera de cotas — recuperada y normalizada')
+          return { identification: normalizeIdentification(identification, warnings) }
+        }
+      }
       warnings.push(`identification: ${recordProviderFailure('identification', err)}`)
       return {
         identification: { protocolCode: null, title: null, phase: null, sourcePages: [] },
@@ -785,13 +863,17 @@ export async function extractStudySpec(
     runGroup('visits', visitsGroupSchema, { visits: [] }),
   ])
 
-  const spec = studySpecSchema.parse({
+  // Defensa final (vuelta 4): TODO lo que llega ya pasó por los
+  // normalizadores de grupo, pero normalizeStudySpec garantiza que el
+  // contrato no pueda fallar por cotas — ni hoy (ítem largo) ni si un grupo
+  // nuevo olvidara normalizar. Idempotente sobre datos ya válidos.
+  const spec = normalizeStudySpec({
     identification: identification.identification,
     inclusionCriteria: eligibility.inclusionCriteria,
     exclusionCriteria: eligibility.exclusionCriteria,
     endpoints: endpoints.endpoints,
     visits: visits.visits,
-  })
+  }, warnings)
 
   return { spec, warnings, extractionModel: extractionModelUsed, detectedLanguage }
 }
