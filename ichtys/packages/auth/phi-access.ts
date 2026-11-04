@@ -49,11 +49,12 @@ export interface SubjectAccessContext extends StudyAccessContext {
 }
 
 /**
- * Valida que el sujeto pertenece a la org activa y, si se pasa, al estudio de la URL.
+ * Valida que el sujeto pertenece a la org activa y al estudio de la URL.
+ * `expectedStudyId` es obligatorio: sin él no se lee el sujeto.
  */
 export async function validateSubjectAccess(
   subjectId: string,
-  expectedStudyId?: string,
+  expectedStudyId: string,
 ): Promise<SubjectAccessContext> {
   const { userId, orgId: clerkOrgId, orgRole } = await auth()
 
@@ -64,6 +65,10 @@ export async function validateSubjectAccess(
   const role = normalizeRole(orgRole)
   if (!canAccessPhiData(role)) {
     throw new AccessError('Forbidden', 403)
+  }
+
+  if (!expectedStudyId) {
+    throw new AccessError('Not Found', 404)
   }
 
   const org = await db.query.organizations.findFirst({
@@ -83,7 +88,7 @@ export async function validateSubjectAccess(
   }
 
   // El [id] de la URL tiene que ser el estudio del sujeto antes de leer, escribir o auditar.
-  if (expectedStudyId && subject.studyId !== expectedStudyId) {
+  if (subject.studyId !== expectedStudyId) {
     throw new AccessError('Not Found', 404)
   }
 

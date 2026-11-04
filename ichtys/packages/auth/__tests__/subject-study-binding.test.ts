@@ -70,4 +70,12 @@ describe('validateSubjectAccess — el estudio de la URL (S4)', () => {
     expect(access.subject.id).toBe(SUBJECT_ID)
     expect(access.study.id).toBe(STUDY_B)
   })
+
+  it('sin el estudio de la URL no abre el sujeto', async () => {
+    await expect(validateSubjectAccess(SUBJECT_ID, undefined as unknown as string)).rejects.toMatchObject({
+      status: 404,
+    })
+    expect(mocks.studiesFindFirst).not.toHaveBeenCalled()
+    expect(mocks.subjectsFindFirst).not.toHaveBeenCalled()
+  })
 })
