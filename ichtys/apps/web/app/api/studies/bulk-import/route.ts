@@ -152,7 +152,7 @@ export async function POST(req: Request): Promise<Response> {
     if (pdfVerdict !== 'ok') {
       const errorMessage =
         pdfVerdict === 'too_large'
-          ? 'El archivo supera el máximo de 50 MB.'
+          ? `El archivo supera el máximo de ${MAX_PDF_FILE_BYTES / (1024 * 1024)} MB.`
           : 'Solo se procesan archivos PDF.'
       const [errJob] = await db
         .insert(ingestionJobs)
