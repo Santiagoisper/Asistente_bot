@@ -37,3 +37,10 @@ export const MAX_LAB_UNIT_CHARS = 50
 
 /** API keys de proveedor LLM cargadas por la org (sk-… ≈ 100-200 chars). */
 export const MAX_API_KEY_CHARS = 512
+
+/** Identificadores (uuid) recibidos en body o query — un uuid son 36 chars. */
+export const MAX_ID_CHARS = 64
+
+/** Issues de Zod incluidos en una respuesta de error (H7 vuelta 3: la
+ *  respuesta del PATCH de spec llegó a 18 MB devolviendo todos). */
+export const MAX_ISSUES_IN_RESPONSE = 10

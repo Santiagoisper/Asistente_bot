@@ -28,7 +28,7 @@ import {
 import { resolveLlmApiKey } from '@ichtys/db'
 import { isProviderChoiceSupported, mergeOrgKeys } from '../../../../lib/settings/provider-guard'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../lib/api/body-limit'
-import { MAX_API_KEY_CHARS } from '../../../../lib/api/limits'
+import { patchSchema } from '../../../../lib/api/input-schemas'
 
 export const runtime = 'nodejs'
 
@@ -52,21 +52,6 @@ async function resolveOrgContext() {
 
   return { userId, orgId: org.id, role: normalizeRole(orgRole) }
 }
-
-const patchSchema = z.object({
-  llmProvider: z.enum(['anthropic', 'openai', 'google', 'groq', 'auto']).optional(),
-  similarityThreshold: z.number().min(0.05).max(0.95).optional(),
-  topK: z.number().int().min(1).max(20).optional(),
-  llmApiKeys: z
-    .object({
-      anthropic: z.string().min(8).max(MAX_API_KEY_CHARS).nullable().optional(),
-      openai: z.string().min(8).max(MAX_API_KEY_CHARS).nullable().optional(),
-      google: z.string().min(8).max(MAX_API_KEY_CHARS).nullable().optional(),
-      groq: z.string().min(8).max(MAX_API_KEY_CHARS).nullable().optional(),
-      openrouter: z.string().min(8).max(MAX_API_KEY_CHARS).nullable().optional(),
-    })
-    .optional(),
-})
 
 /**
  * GET /api/org/settings — configuración RAG/LLM + estado de keys (enmascaradas).

@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import { handleApiError, validateStudyAccess } from '@ichtys/auth'
 import {
   generateAnswerForStudy,
@@ -10,7 +9,7 @@ import {
   rateLimitResponse,
 } from '../../../../lib/security/rate-limit'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../lib/api/body-limit'
-import { MAX_QUESTION_CHARS } from '../../../../lib/api/limits'
+import { answerTestInput } from '../../../../lib/api/input-schemas'
 
 /**
  * POST /api/rag/answer-test — INTERNAL TESTING ENDPOINT
@@ -28,25 +27,6 @@ export const runtime = 'nodejs'
 
 // Org-identifier fields that must never come from the client.
 const FORBIDDEN_ORG_FIELDS = ['orgId', 'organizationId', 'organization_id'] as const
-
-// Mirrors packages/db/schema/enums.ts — defined locally to avoid loading the
-// DB client (which requires DATABASE_URL) during module resolution in tests.
-const documentTypeEnum = z.enum([
-  'protocol',
-  'investigator_brochure',
-  'lab_manual',
-  'pharmacy_manual',
-  'other',
-])
-
-const answerTestInput = z
-  .object({
-    studyId: z.string().uuid(),
-    question: z.string().min(1).max(MAX_QUESTION_CHARS),
-    documentType: documentTypeEnum.optional(),
-    topK: z.number().int().positive().max(20).optional(),
-  })
-  .strict()
 
 function hasOrgField(body: unknown): boolean {
   if (typeof body !== 'object' || body === null) return false

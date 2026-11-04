@@ -1,15 +1,10 @@
-import { z } from 'zod'
 import { auth } from '@clerk/nextjs/server'
 import { db, studies } from '@ichtys/db'
 import { handleApiError, resolveOrProvisionOrganization } from '@ichtys/auth'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../lib/api/body-limit'
+import { createStudyInput } from '../../../lib/api/input-schemas'
 
 export const runtime = 'nodejs'
-
-const createStudyInput = z.object({
-  name: z.string().min(1).max(200),
-  protocolNumber: z.string().max(100).optional(),
-})
 
 export async function POST(req: Request): Promise<Response> {
   const { userId, orgId: clerkOrgId } = await auth()

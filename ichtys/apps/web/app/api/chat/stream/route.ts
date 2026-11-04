@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import { handleApiError, validateStudyAccess } from '@ichtys/auth'
 import { retrieveRelevantChunks, answerEngineStream } from '@ichtys/rag'
 import {
@@ -26,7 +25,7 @@ import {
 } from '../../../../lib/security/rate-limit'
 import { getOrCreateRequestId, log, makeRecord } from '../../../../lib/observability/logger'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../lib/api/body-limit'
-import { MAX_QUESTION_CHARS } from '../../../../lib/api/limits'
+import { chatInput } from '../../../../lib/api/input-schemas'
 import { expandShortQueryForRetrieval } from '../../../../lib/rag/query-expander'
 import { getSpecContextChunks } from '../../../../lib/rag/spec-context'
 import { detectTerminologyIntent } from '../../../../lib/rag/terminology-intent'
@@ -52,24 +51,6 @@ import type { Evidence } from '@ichtys/rag'
 export const runtime = 'nodejs'
 
 const FORBIDDEN_ORG_FIELDS = ['orgId', 'organizationId', 'organization_id'] as const
-
-const documentTypeEnum = z.enum([
-  'protocol',
-  'investigator_brochure',
-  'lab_manual',
-  'pharmacy_manual',
-  'other',
-])
-
-const chatStreamInput = z
-  .object({
-    studyId: z.string().uuid(),
-    question: z.string().min(1).max(MAX_QUESTION_CHARS),
-    conversationId: z.string().uuid().optional(),
-    documentType: documentTypeEnum.optional(),
-    topK: z.number().int().positive().max(20).optional(),
-  })
-  .strict()
 
 function hasOrgField(body: unknown): boolean {
   if (typeof body !== 'object' || body === null) return false
@@ -106,7 +87,7 @@ export async function POST(req: Request): Promise<Response> {
   if (hasOrgField(body)) return new Response('Bad Request', { status: 400 })
 
   // 3. Validate input.
-  const parsed = chatStreamInput.safeParse(body)
+  const parsed = chatInput.safeParse(body)
   if (!parsed.success) return new Response('Bad Request', { status: 400 })
 
   const { studyId, question, conversationId: inputConversationId, documentType, topK } = parsed.data

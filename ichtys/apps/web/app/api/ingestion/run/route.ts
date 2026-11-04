@@ -1,5 +1,4 @@
 import { after } from 'next/server'
-import { z } from 'zod'
 import { handleApiError, validateDocumentVersionAccess } from '@ichtys/auth'
 import { runIngestion } from '@ichtys/ingestion'
 import {
@@ -8,17 +7,12 @@ import {
   rateLimitResponse,
 } from '../../../../lib/security/rate-limit'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../lib/api/body-limit'
+import { triggerInput } from '../../../../lib/api/input-schemas'
 
 export const runtime = 'nodejs'
 // Ingestion + spec extraction para un protocolo de 200+ páginas toma ~60-120s.
 // Vercel Pro soporta hasta 300s. El after() callback hereda este maxDuration.
 export const maxDuration = 300
-
-const triggerInput = z
-  .object({
-    documentVersionId: z.string().uuid(),
-  })
-  .strict()
 
 /**
  * POST /api/ingestion/run — dispara ingestion para un document version.

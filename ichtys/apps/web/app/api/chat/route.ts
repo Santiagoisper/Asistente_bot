@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import { handleApiError, validateStudyAccess } from '@ichtys/auth'
 import {
   AnswerOrchestratorError,
@@ -18,7 +17,7 @@ import {
 } from '../../../lib/security/rate-limit'
 import { getOrCreateRequestId, log, makeRecord } from '../../../lib/observability/logger'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../lib/api/body-limit'
-import { MAX_QUESTION_CHARS } from '../../../lib/api/limits'
+import { chatInput } from '../../../lib/api/input-schemas'
 
 /**
  * POST /api/chat — grounded answer engine with full chat persistence.
@@ -56,25 +55,6 @@ async function devLogError(step: string, err: unknown): Promise<void> {
 }
 
 const FORBIDDEN_ORG_FIELDS = ['orgId', 'organizationId', 'organization_id'] as const
-
-// Defined locally to avoid loading the DB client during test module resolution.
-const documentTypeEnum = z.enum([
-  'protocol',
-  'investigator_brochure',
-  'lab_manual',
-  'pharmacy_manual',
-  'other',
-])
-
-const chatInput = z
-  .object({
-    studyId: z.string().uuid(),
-    question: z.string().min(1).max(MAX_QUESTION_CHARS),
-    conversationId: z.string().uuid().optional(),
-    documentType: documentTypeEnum.optional(),
-    topK: z.number().int().positive().max(20).optional(),
-  })
-  .strict()
 
 function hasOrgField(body: unknown): boolean {
   if (typeof body !== 'object' || body === null) return false
