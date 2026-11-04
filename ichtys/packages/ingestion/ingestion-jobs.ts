@@ -37,6 +37,14 @@ export async function runSingleIngestionJobById(jobId: string, orgId: string): P
   await runSingleIngestionJob(job)
 }
 
+function ingestionFailureCode(err: unknown): string {
+  if (err && typeof err === 'object' && 'code' in err) {
+    const code = (err as { code: unknown }).code
+    if (typeof code === 'string' && /^[a-z0-9_]{1,64}$/.test(code)) return code
+  }
+  return 'ingestion_failed'
+}
+
 async function runSingleIngestionJob(
   job: typeof ingestionJobs.$inferSelect,
 ): Promise<void> {
@@ -78,8 +86,12 @@ async function runSingleIngestionJob(
         .where(eq(ingestionJobs.id, job.id))
       return
     } catch (err) {
-      lastError = err instanceof Error ? err.message : 'Ingestion failed'
-      console.error(`[ingestion-jobs] attempt ${attempt + 1} failed for job ${job.id}:`, err)
+      lastError = ingestionFailureCode(err)
+      console.error('[ingestion-jobs] attempt failed', {
+        code: lastError,
+        attempt: attempt + 1,
+        jobId: job.id,
+      })
     }
   }
 

@@ -159,8 +159,8 @@ async function downloadBlob(blobUrl: string): Promise<Uint8Array> {
       const localPath = blobUrl.replace('file://', '')
       console.log(`[DEV-MOCK Blob] Reading from local path: ${localPath}`)
       return await readFile(localPath)
-    } catch (err) {
-      console.warn('[DEV-MOCK Blob] Local read failed:', err)
+    } catch {
+      console.warn('[DEV-MOCK Blob] Local read failed', { code: 'blob_download_failed' })
       throw new IngestionPipelineError('blob_download_failed', 'Dev blob not found on local filesystem')
     }
   }
@@ -168,8 +168,8 @@ async function downloadBlob(blobUrl: string): Promise<Uint8Array> {
   try {
     const { stream } = await openStoredBlob(blobUrl)
     return await readStream(stream)
-  } catch (err) {
-    console.warn('[ingestion] stored blob read failed:', err instanceof Error ? err.message : err)
+  } catch {
+    console.warn('[ingestion] stored blob read failed', { code: 'blob_download_failed' })
     throw new IngestionPipelineError('blob_download_failed', 'Failed to read stored blob')
   }
 }
@@ -597,7 +597,10 @@ export async function runIngestion(input: RunIngestionInput): Promise<IngestionR
     }
   } catch (err) {
     const errorMessage = sanitizeIngestionError(err)
-    console.error(`[ingestion] FAILED documentVersionId=${parsedInput.documentVersionId} errorCode=${errorMessage}`, err)
+    console.error('[ingestion] FAILED', {
+      documentVersionId: parsedInput.documentVersionId,
+      code: errorMessage,
+    })
     await markError(parsedInput, errorMessage)
 
     return {

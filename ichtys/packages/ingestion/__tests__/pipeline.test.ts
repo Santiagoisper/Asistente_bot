@@ -245,6 +245,14 @@ function createBlobStream(): ReadableStream<Uint8Array> {
   })
 }
 
+function flattenLogs(spy: { mock: { calls: unknown[][] } }): string {
+  return spy.mock.calls.map((args) => args.map((value) => {
+    if (value instanceof Error) return `${value.name} ${value.message} ${value.stack ?? ''}`
+    if (value && typeof value === 'object') return JSON.stringify(value)
+    return String(value)
+  }).join(' ')).join('\n')
+}
+
 function operationValues<T>(operation: DbOperation): T | null {
   return operation.values && typeof operation.values === 'object' ? (operation.values as T) : null
 }
@@ -342,13 +350,20 @@ describe('runIngestion', () => {
     mocks.documentVersionsFindFirst.mockResolvedValue(fixture.documentVersion)
     mocks.documentsFindFirst.mockResolvedValue(fixture.document)
     mocks.parsePdf.mockRejectedValue(new Error('raw parser stack'))
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
 
+    try {
     const result = await runIngestion(fixture.input)
 
     expect(result).toMatchObject({
       status: 'error',
       errorMessage: 'ingestion_internal_error',
     })
+    expect(flattenLogs(spy)).not.toContain('raw parser stack')
+    expect(flattenLogs(spy)).toContain('ingestion_internal_error')
+    } finally {
+      spy.mockRestore()
+    }
     expect(
       mocks.operations.some((operation) => {
         const values = operationValues<{ status?: string; errorMessage?: string }>(operation)
@@ -359,6 +374,29 @@ describe('runIngestion', () => {
         )
       }),
     ).toBe(true)
+  })
+
+  it('no registra el mensaje crudo si falla la lectura del blob', async () => {
+    const sentinel = 'sk-ant-provider-raw-ficticio-NO-LOG'
+    const fixture = createFixture()
+    mocks.documentVersionsFindFirst.mockResolvedValue(fixture.documentVersion)
+    mocks.documentsFindFirst.mockResolvedValue(fixture.document)
+    mocks.get.mockResolvedValue(null)
+    mocks.fetchMock.mockRejectedValue(new Error(sentinel))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      const result = await runIngestion(fixture.input)
+      const logged = `${flattenLogs(warn)}\n${flattenLogs(error)}`
+
+      expect(result).toMatchObject({ status: 'error', errorMessage: 'blob_download_failed' })
+      expect(logged).not.toContain(sentinel)
+      expect(logged).toContain('blob_download_failed')
+    } finally {
+      warn.mockRestore()
+      error.mockRestore()
+    }
   })
 
   it('marks error with a sanitized message if embedding indexing fails and does not mark ready', async () => {
