@@ -3,6 +3,7 @@ import { AccessError, validateStudyAccess } from '@ichtys/auth'
 import { and, db, eq, studySpecs } from '@ichtys/db'
 import { studySpecSchema } from '@ichtys/ingestion'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../lib/api/body-limit'
+import { zodIssuesForResponse } from '../../../../../../lib/api/zod-issues'
 import { MAX_SPEC_BODY_BYTES } from '../../../../../../lib/api/limits'
 
 interface RouteParams {
@@ -29,6 +30,26 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   try {
     const { orgId } = await validateStudyAccess(studyId, 'study_admin')
 
+    // Verify spec belongs to this tenant + study and is still draft — ANTES de
+    // leer el cuerpo (Sicario vuelta 3): no se parsea nada para un specId
+    // inexistente o no editable.
+    const target = await db.query.studySpecs.findFirst({
+      where: and(
+        eq(studySpecs.id, specId),
+        eq(studySpecs.organizationId, orgId),
+        eq(studySpecs.studyId, studyId),
+      ),
+    })
+
+    if (!target) throw new AccessError('Spec not found', 404)
+
+    if (target.status !== 'draft') {
+      return NextResponse.json(
+        { error: 'Only draft specs can be edited' },
+        { status: 400 },
+      )
+    }
+
     // Tope de bytes ANTES de parsear (413, H7 vuelta 2). Límite amplio (2 MiB):
     // el spec completo editado puede pesar más que un cuerpo típico; el fan-out
     // zod ya lo corta el .max de los arreglos del studySpecSchema.
@@ -44,26 +65,11 @@ export async function PATCH(req: Request, { params }: RouteParams) {
 
     const parsed = studySpecSchema.safeParse((body as Record<string, unknown>)?.spec)
     if (!parsed.success) {
+      // Respuesta acotada (H7 vuelta 3): a lo sumo 10 issues con código y
+      // ruta — nunca el arreglo entero (llegó a 18 MB con 120k sourcePages
+      // inválidos) ni texto recibido.
       return NextResponse.json(
-        { error: 'Invalid spec', issues: parsed.error.issues },
-        { status: 400 },
-      )
-    }
-
-    // Verify spec belongs to this tenant + study and is still draft
-    const target = await db.query.studySpecs.findFirst({
-      where: and(
-        eq(studySpecs.id, specId),
-        eq(studySpecs.organizationId, orgId),
-        eq(studySpecs.studyId, studyId),
-      ),
-    })
-
-    if (!target) throw new AccessError('Spec not found', 404)
-
-    if (target.status !== 'draft') {
-      return NextResponse.json(
-        { error: 'Only draft specs can be edited' },
+        { error: 'Invalid spec', ...zodIssuesForResponse(parsed.error) },
         { status: 400 },
       )
     }
