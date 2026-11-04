@@ -139,6 +139,7 @@ describe('POST /api/studies/[id]/spec/reextract — rate limit', () => {
       key: `spec-reextract:${USER_ID}:${STUDY_ID}`,
       limit: 3,
       windowSeconds: 60,
+      onRedisUnavailable: 'memory',
     })
   })
 })

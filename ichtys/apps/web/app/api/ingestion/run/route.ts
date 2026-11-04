@@ -62,6 +62,7 @@ export async function POST(req: Request): Promise<Response> {
       key: `ingestion:${userId}:${documentVersion.id}`,
       limit: rlConfig.limit,
       windowSeconds: rlConfig.windowSeconds,
+      onRedisUnavailable: 'memory',
     })
     if (rateLimit.limited) return rateLimitResponse(rateLimit.retryAfterSeconds)
 

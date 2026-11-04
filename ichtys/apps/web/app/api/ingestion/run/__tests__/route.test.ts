@@ -109,6 +109,7 @@ describe('POST /api/ingestion/run — rate limit', () => {
       key: `ingestion:${USER_ID}:${DOC_VERSION_ID}`,
       limit: 5,
       windowSeconds: 60,
+      onRedisUnavailable: 'memory',
     })
     expect(mocks.after).toHaveBeenCalledTimes(1)
   })

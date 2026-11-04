@@ -52,6 +52,7 @@ export async function POST(
       key: `spec-reextract:${userId}:${studyId}`,
       limit: rlConfig.limit,
       windowSeconds: rlConfig.windowSeconds,
+      onRedisUnavailable: 'memory',
     })
     if (rateLimit.limited) return rateLimitResponse(rateLimit.retryAfterSeconds)
 

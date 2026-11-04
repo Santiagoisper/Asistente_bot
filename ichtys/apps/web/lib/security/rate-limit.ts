@@ -6,6 +6,11 @@ export type RateLimitParams = {
   key: string
   limit: number
   windowSeconds: number
+  /**
+   * `allow` (default): si falta Redis, el request sigue. Chat y subida usan esto.
+   * `memory`: operación cara. Sin Redis, o si Redis falla, cuenta en este proceso.
+   */
+  onRedisUnavailable?: 'allow' | 'memory'
 }
 
 export interface RateLimitConfig {
@@ -65,6 +70,36 @@ function warnRateLimitDisabledOnce(reason: string): void {
 /** Solo para tests: permite volver a observar el warning dentro del mismo proceso. */
 export function resetRateLimitWarningsForTests(): void {
   disabledWarnings.clear()
+}
+
+const memoryHits = new Map<string, number[]>()
+
+/** Solo para tests: aísla la cuota en memoria entre casos. */
+export function resetMemoryRateLimitForTests(): void {
+  memoryHits.clear()
+}
+
+function enforceMemoryQuota(params: RateLimitParams): RateLimitResult {
+  const now = Date.now()
+  const windowMs = params.windowSeconds * 1000
+  const hits = (memoryHits.get(params.key) ?? []).filter((ts) => now - ts < windowMs)
+  if (hits.length >= params.limit) {
+    const oldest = hits[0] ?? now
+    memoryHits.set(params.key, hits)
+    return {
+      limited: true,
+      retryAfterSeconds: Math.max(1, Math.ceil((oldest + windowMs - now) / 1000)),
+    }
+  }
+  hits.push(now)
+  memoryHits.set(params.key, hits)
+  return { limited: false }
+}
+
+function whenRedisUnavailable(params: RateLimitParams, openReason: string | null): RateLimitResult {
+  if (params.onRedisUnavailable === 'memory') return enforceMemoryQuota(params)
+  if (openReason) warnRateLimitDisabledOnce(openReason)
+  return { limited: false }
 }
 
 export function getChatRateLimitConfig(): RateLimitConfig {
@@ -128,8 +163,7 @@ export async function enforceSlidingWindowRateLimit(
 
   const redis = getRedisRestConfig()
   if (!redis) {
-    warnRateLimitDisabledOnce('falta config Redis REST (UPSTASH_REDIS_REST_URL/TOKEN)')
-    return { limited: false }
+    return whenRedisUnavailable(params, 'falta config Redis REST (UPSTASH_REDIS_REST_URL/TOKEN)')
   }
 
   try {
@@ -154,19 +188,19 @@ export async function enforceSlidingWindowRateLimit(
 
     if (!response.ok) {
       logRateLimitFailure('redis_http_error')
-      return { limited: false }
+      return whenRedisUnavailable(params, null)
     }
 
     const payload = (await response.json()) as RedisRestResponse
     if (payload.error) {
       logRateLimitFailure('redis_command_error')
-      return { limited: false }
+      return whenRedisUnavailable(params, null)
     }
 
     const tuple = parseRedisTuple(payload.result)
     if (!tuple) {
       logRateLimitFailure('redis_invalid_response')
-      return { limited: false }
+      return whenRedisUnavailable(params, null)
     }
 
     return tuple.allowed
@@ -174,7 +208,7 @@ export async function enforceSlidingWindowRateLimit(
       : { limited: true, retryAfterSeconds: tuple.retryAfterSeconds }
   } catch {
     logRateLimitFailure('rate_limit_internal_error')
-    return { limited: false }
+    return whenRedisUnavailable(params, null)
   }
 }
 

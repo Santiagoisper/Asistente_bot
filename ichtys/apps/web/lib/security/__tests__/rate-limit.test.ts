@@ -37,6 +37,40 @@ describe('rate limit helper', () => {
     globalThis.fetch = ORIGINAL_FETCH
   })
 
+  it('cierra la cuota en memoria cuando falta Redis en una operación cara', async () => {
+    vi.stubEnv('UPSTASH_REDIS_REST_URL', '')
+    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', '')
+    vi.stubEnv('KV_REST_API_URL', '')
+    vi.stubEnv('KV_REST_API_TOKEN', '')
+    vi.stubEnv('RATE_LIMIT_ENABLED', '')
+    const params = {
+      key: 'spec-reextract:user-ficticio:study-ficticio',
+      limit: 2,
+      windowSeconds: 60,
+      onRedisUnavailable: 'memory' as const,
+    }
+
+    await expect(enforceSlidingWindowRateLimit(params)).resolves.toEqual({ limited: false })
+    await expect(enforceSlidingWindowRateLimit(params)).resolves.toEqual({ limited: false })
+    const denied = await enforceSlidingWindowRateLimit(params)
+    expect(denied.limited).toBe(true)
+  })
+
+  it('usa la cuota en memoria si Redis falla en una operación cara', async () => {
+    mockFetch({ error: 'redis down' })
+    const params = {
+      key: 'ingestion:user-ficticio:doc-ficticio',
+      limit: 1,
+      windowSeconds: 60,
+      onRedisUnavailable: 'memory' as const,
+    }
+
+    await expect(enforceSlidingWindowRateLimit(params)).resolves.toEqual({ limited: false })
+    const denied = await enforceSlidingWindowRateLimit(params)
+    expect(denied.limited).toBe(true)
+    expect(console.error).toHaveBeenCalledWith('[rate-limit]', { code: 'redis_command_error' })
+  })
+
   it('allows requests when Redis is not configured', async () => {
     vi.stubEnv('UPSTASH_REDIS_REST_URL', '')
     vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', '')
@@ -100,6 +134,21 @@ describe('rate limit helper', () => {
     it('is disabled when set to "false"', () => {
       vi.stubEnv('RATE_LIMIT_ENABLED', 'false')
       expect(isRateLimitEnabled()).toBe(false)
+    })
+
+    it('no cuenta en memoria cuando RATE_LIMIT_ENABLED=false', async () => {
+      vi.stubEnv('RATE_LIMIT_ENABLED', 'false')
+      vi.stubEnv('UPSTASH_REDIS_REST_URL', '')
+      vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', '')
+      const params = {
+        key: 'spec-reextract:dev-local',
+        limit: 1,
+        windowSeconds: 60,
+        onRedisUnavailable: 'memory' as const,
+      }
+
+      await expect(enforceSlidingWindowRateLimit(params)).resolves.toEqual({ limited: false })
+      await expect(enforceSlidingWindowRateLimit(params)).resolves.toEqual({ limited: false })
     })
 
     it('bypasses rate limiting when RATE_LIMIT_ENABLED=false regardless of Redis', async () => {
