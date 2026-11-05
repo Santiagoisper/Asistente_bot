@@ -199,6 +199,64 @@ describe('calificador de cronogramas', () => {
     expect(report.cellsByTable).toHaveLength(2)
   })
 
+  it('empareja la semana 12 del gold con el día 85 del candidato', () => {
+    const source = gold()
+    const rescue = source.visits?.find((visit) => visit.key === 'C')
+    rescue!.printedId = 'S12'
+    const candidate = clone(source)
+    const found = candidate.visits?.find((visit) => visit.key === 'C')
+    found!.timing = timing(85, 'day')
+    found!.printedId = 'Dia 85'
+    const report = scoreSchedule(source, candidate)
+    expect(report.visits).toEqual({ tp: 3, fp: 0, fn: 0 })
+    expect(report.printedIds.inexact).toBe(1)
+  })
+
+  it('alinea tablas por páginas aunque el candidato las llame distinto', () => {
+    const source = gold()
+    const candidate = clone(source)
+    candidate.tables = [
+      { key: 'A', pages: [2], outcome: 'complete', reasons: [] },
+      { key: 'B', pages: [3], outcome: 'complete', reasons: [] },
+    ]
+    for (const visit of candidate.visits ?? []) {
+      visit.tableKey = visit.tableKey === 'T1' ? 'A' : 'B'
+    }
+    for (const note of candidate.notes ?? []) {
+      note.tableKey = note.tableKey === 'T1' ? 'A' : 'B'
+    }
+    const report = scoreSchedule(source, candidate)
+    expect(report.visits).toEqual({ tp: 3, fp: 0, fn: 0 })
+    expect(report.notes).toEqual({ tp: 2, fp: 0, fn: 0 })
+    expect(report.failedTables).toEqual({ tp: 0, fp: 0, fn: 0 })
+  })
+
+  it('mide el tipo aparte: una visita híbrida mal clasificada sigue emparejando', () => {
+    const source = gold()
+    const candidate = clone(source)
+    const visit = candidate.visits?.find((item) => item.key === 'A')
+    visit!.type = 'hybrid'
+    const report = scoreSchedule(source, candidate)
+    expect(report.visits).toEqual({ tp: 3, fp: 0, fn: 0 })
+    expect(report.types).toEqual({ tp: 2, fp: 1, fn: 1 })
+  })
+
+  it('empareja un evento sin tiempo por el id impreso, no por el tipo', () => {
+    const source = gold()
+    source.visits?.push({
+      key: 'E', tableKey: 'T1', printedId: 'VDT', label: 'Discontinuación',
+      timing: timing(null, null, 'event'), window: null, type: 'early_termination',
+      attributes: { fasting: null, onSite: null, armOnly: null },
+    })
+    const candidate = clone(source)
+    const event = candidate.visits?.find((visit) => visit.key === 'E')
+    event!.printedId = 'vdt'
+    event!.type = 'standard'
+    const report = scoreSchedule(source, candidate)
+    expect(report.visits).toEqual({ tp: 4, fp: 0, fn: 0 })
+    expect(report.types).toEqual({ tp: 3, fp: 1, fn: 1 })
+  })
+
   it('adapta la salida plana del extractor actual y la califica', () => {
     const source: ScheduleDoc = {
       tables: [{ key: 'T1', pages: [6, 7], outcome: 'complete' }],

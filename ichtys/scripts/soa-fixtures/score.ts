@@ -1,10 +1,11 @@
 /**
  * Calificador del cronograma (ADR-10 §6 y ADR-10-fixtures §7).
  *
- * Visitas: (tableKey, timing.value, timing.unit, type). Empate → printedId
- * normalizado. No usa posición. Procedimientos: etiqueta normalizada, alias
- * del gold, o similitud ≥ 0,85. Salida: solo contadores. `--private` no
- * imprime etiquetas ni texto.
+ * Visitas: (tabla alineada, día canónico). Semana = valor × 7, tolerancia ±1.
+ * Sin tiempo: printedId normalizado dentro de la tabla. El tipo no entra en
+ * la identidad; se mide en `types`. Procedimientos: etiqueta normalizada,
+ * alias del gold, o similitud ≥ 0,85. Salida: solo contadores. `--private`
+ * no imprime etiquetas ni texto.
  */
 import { readFileSync } from 'node:fs'
 
@@ -223,38 +224,104 @@ function foldConditions(into: Record<string, Counts>, gold: Condition[] | undefi
   })
 }
 
-function visitIdentity(visit: VisitRec): string {
-  const value = visit.timing?.value ?? null
-  const unit = visit.timing?.unit ?? null
-  return `${visit.tableKey ?? ''}|${value === null ? 'null' : String(value)}|${unit ?? 'null'}|${visit.type}`
-}
-
 function normId(printedId: string | null | undefined): string {
   if (printedId == null) return ''
   return normalizeLabel(printedId)
 }
 
+/** Día de estudio. Una semana son 7 días. Sin valor o sin unidad no hay día. */
+export function canonicalDay(visit: VisitRec): number | null {
+  const value = visit.timing?.value
+  const unit = visit.timing?.unit
+  if (value == null || unit == null || !Number.isFinite(value)) return null
+  if (unit === 'week') return value * 7
+  if (unit === 'day') return value
+  return null
+}
+
+export function alignTables(gold: TableRec[], candidate: TableRec[]): Map<string, string> {
+  const ranked: Array<{ gold: string; candidate: string; overlap: number }> = []
+  for (const left of gold) {
+    const pages = new Set(left.pages ?? [])
+    for (const right of candidate) {
+      const overlap = (right.pages ?? []).filter((page) => pages.has(page)).length
+      if (overlap > 0) ranked.push({ gold: left.key, candidate: right.key, overlap })
+    }
+  }
+  ranked.sort((a, b) => b.overlap - a.overlap || a.gold.localeCompare(b.gold) || a.candidate.localeCompare(b.candidate))
+  const usedGold = new Set<string>()
+  const usedCandidate = new Set<string>()
+  const map = new Map<string, string>()
+  for (const pair of ranked) {
+    if (usedGold.has(pair.gold) || usedCandidate.has(pair.candidate)) continue
+    usedGold.add(pair.gold)
+    usedCandidate.add(pair.candidate)
+    map.set(pair.candidate, pair.gold)
+  }
+  return map
+}
+
+function remapKey(tableMap: Map<string, string>, key: string | null | undefined): string | null | undefined {
+  if (key == null) return key
+  return tableMap.get(key) ?? key
+}
+
+function withAlignedTables(candidate: ScheduleDoc, tableMap: Map<string, string>): ScheduleDoc {
+  return {
+    ...candidate,
+    tables: (candidate.tables ?? []).map((table) => ({ ...table, key: remapKey(tableMap, table.key) ?? table.key })),
+    visits: (candidate.visits ?? []).map((visit) => ({ ...visit, tableKey: remapKey(tableMap, visit.tableKey) ?? null })),
+    notes: (candidate.notes ?? []).map((note) => ({ ...note, tableKey: remapKey(tableMap, note.tableKey) ?? note.tableKey })),
+  }
+}
+
 function matchVisits(gold: VisitRec[], candidate: VisitRec[]) {
+  const usedGold = new Set<string>()
+  const usedCandidate = new Set<string>()
+  const pairs: Array<{ gold: VisitRec; candidate: VisitRec }> = []
+  const ranked: Array<{ gold: VisitRec; candidate: VisitRec; delta: number; idMatch: number }> = []
+  for (const left of gold) {
+    const leftDay = canonicalDay(left)
+    if (leftDay == null) continue
+    for (const right of candidate) {
+      const rightDay = canonicalDay(right)
+      if (rightDay == null || (left.tableKey ?? '') !== (right.tableKey ?? '')) continue
+      const delta = Math.abs(leftDay - rightDay)
+      if (delta > 1) continue
+      const sameId = normId(left.printedId) !== '' && normId(left.printedId) === normId(right.printedId)
+      ranked.push({ gold: left, candidate: right, delta, idMatch: sameId ? 1 : 0 })
+    }
+  }
+  ranked.sort((a, b) => a.delta - b.delta || b.idMatch - a.idMatch || a.gold.key.localeCompare(b.gold.key) || a.candidate.key.localeCompare(b.candidate.key))
+  for (const pair of ranked) {
+    if (usedGold.has(pair.gold.key) || usedCandidate.has(pair.candidate.key)) continue
+    usedGold.add(pair.gold.key)
+    usedCandidate.add(pair.candidate.key)
+    pairs.push({ gold: pair.gold, candidate: pair.candidate })
+  }
+
   const pools = new Map<string, VisitRec[]>()
   for (const visit of gold) {
-    const list = pools.get(visitIdentity(visit)) ?? []
+    if (canonicalDay(visit) != null || usedGold.has(visit.key)) continue
+    const key = `${visit.tableKey ?? ''}|${normId(visit.printedId)}`
+    const list = pools.get(key) ?? []
     list.push(visit)
-    pools.set(visitIdentity(visit), list)
+    pools.set(key, list)
   }
-  const pairs: Array<{ gold: VisitRec; candidate: VisitRec }> = []
-  const unmatchedCand: VisitRec[] = []
   for (const visit of candidate) {
-    const pool = pools.get(visitIdentity(visit))
-    if (!pool || pool.length === 0) {
-      unmatchedCand.push(visit)
-      continue
-    }
-    const wanted = normId(visit.printedId)
-    let index = pool.findIndex((item) => normId(item.printedId) === wanted)
-    if (index < 0) index = 0
-    pairs.push({ gold: pool.splice(index, 1)[0]!, candidate: visit })
+    if (canonicalDay(visit) != null || usedCandidate.has(visit.key)) continue
+    const pool = pools.get(`${visit.tableKey ?? ''}|${normId(visit.printedId)}`)
+    if (!pool || pool.length === 0) continue
+    const match = pool.shift()!
+    usedGold.add(match.key)
+    usedCandidate.add(visit.key)
+    pairs.push({ gold: match, candidate: visit })
   }
-  return { pairs, unmatchedGold: [...pools.values()].flat(), unmatchedCand }
+  return {
+    pairs,
+    unmatchedGold: gold.filter((visit) => !usedGold.has(visit.key)),
+    unmatchedCand: candidate.filter((visit) => !usedCandidate.has(visit.key)),
+  }
 }
 
 function matchProcedures(gold: ProcedureRec[], candidate: ProcedureRec[], aliasList: Array<{ alias: string; procedureKey: string }>) {
@@ -312,8 +379,9 @@ function take(bag: Map<string, number>, key: string): boolean {
 }
 
 export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreReport {
+  const aligned = withAlignedTables(candidate, alignTables(gold.tables ?? [], candidate.tables ?? []))
   const goldVisits = gold.visits ?? []
-  const candVisits = candidate.visits ?? []
+  const candVisits = aligned.visits ?? []
   const visitMatch = matchVisits(goldVisits, candVisits)
   const visits: Counts = {
     tp: visitMatch.pairs.length,
@@ -341,7 +409,11 @@ export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreR
       windows.fp += 1
       windows.fn += 1
     }
-    types.tp += 1
+    if (pair.gold.type === pair.candidate.type) types.tp += 1
+    else {
+      types.fp += 1
+      types.fn += 1
+    }
     for (const field of ['fasting', 'onSite', 'armOnly'] as const) {
       if (attr(pair.gold, field) === attr(pair.candidate, field)) attributes.tp += 1
       else {
@@ -357,7 +429,7 @@ export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreR
     if (!known || !known.has(id)) printedIds.invented += 1
   }
 
-  const procMatch = matchProcedures(gold.procedures ?? [], candidate.procedures ?? [], gold.procedureAliases ?? [])
+  const procMatch = matchProcedures(gold.procedures ?? [], aligned.procedures ?? [], gold.procedureAliases ?? [])
   const goldVisitByKey = new Map(goldVisits.map((visit) => [visit.key, visit]))
   const visitGoldOfCand = new Map(visitMatch.pairs.map((pair) => [pair.candidate.key, pair.gold.key]))
   const procGoldOfCand = new Map(procMatch.pairs.map((pair) => [pair.candidate.key, pair.gold.key]))
@@ -386,7 +458,7 @@ export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreR
     const key = `${visit.key}|${cell.procedureKey}|${cell.mark}`
     goldBags.set(key, (goldBags.get(key) ?? 0) + 1)
   }
-  for (const cell of candidate.cells ?? []) {
+  for (const cell of aligned.cells ?? []) {
     const goldVisitKey = visitGoldOfCand.get(cell.visitKey)
     const goldProcKey = procGoldOfCand.get(cell.procedureKey)
     const visit = goldVisitKey ? goldVisitByKey.get(goldVisitKey) : undefined
@@ -420,7 +492,7 @@ export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreR
     }
     remember(noteBag, cell.visitKey, cell.procedureKey, cell.noteRefs)
   }
-  for (const cell of candidate.cells ?? []) {
+  for (const cell of aligned.cells ?? []) {
     const goldVisitKey = visitGoldOfCand.get(cell.visitKey)
     const goldProcKey = procGoldOfCand.get(cell.procedureKey)
     if (!goldVisitKey || !goldProcKey) {
@@ -438,7 +510,7 @@ export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreR
   const conditions: Record<string, Counts> = {}
   for (const kind of CONDITION_KINDS) conditions[kind] = emptyCounts()
   const candByCell = new Map<string, CellRec[]>()
-  for (const cell of candidate.cells ?? []) {
+  for (const cell of aligned.cells ?? []) {
     const goldVisitKey = visitGoldOfCand.get(cell.visitKey)
     const goldProcKey = procGoldOfCand.get(cell.procedureKey)
     if (!goldVisitKey || !goldProcKey) {
@@ -464,7 +536,7 @@ export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreR
   for (const procedure of procMatch.unmatchedGold) foldConditions(conditions, procedure.conditions, [])
   for (const procedure of procMatch.unmatchedCand) foldConditions(conditions, [], procedure.conditions)
 
-  const candNotes = new Map((candidate.notes ?? []).map((note) => [`${note.tableKey}|${note.ref.trim()}`, note]))
+  const candNotes = new Map((aligned.notes ?? []).map((note) => [`${note.tableKey}|${note.ref.trim()}`, note]))
   const usedNotes = new Set<string>()
   for (const note of gold.notes ?? []) {
     const key = `${note.tableKey}|${note.ref.trim()}`
@@ -472,13 +544,13 @@ export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreR
     if (other) usedNotes.add(key)
     foldConditions(conditions, note.conditions, other?.conditions ?? [])
   }
-  for (const note of candidate.notes ?? []) {
+  for (const note of aligned.notes ?? []) {
     const key = `${note.tableKey}|${note.ref.trim()}`
     if (!usedNotes.has(key)) foldConditions(conditions, [], note.conditions)
   }
 
   const rulesG = gold.outOfTableRules ?? []
-  const rulesC = candidate.outOfTableRules ?? []
+  const rulesC = aligned.outOfTableRules ?? []
   const ranked: Array<{ gi: number; ci: number; score: number }> = []
   rulesG.forEach((rule, gi) => {
     rulesC.forEach((other, ci) => {
@@ -501,7 +573,7 @@ export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreR
   const inconsistencies = emptyCounts()
   const goldKinds = new Map<string, number>()
   for (const item of gold.inconsistencies ?? []) goldKinds.set(item.kind, (goldKinds.get(item.kind) ?? 0) + 1)
-  for (const item of candidate.inconsistencies ?? []) {
+  for (const item of aligned.inconsistencies ?? []) {
     if (take(goldKinds, item.kind)) inconsistencies.tp += 1
     else inconsistencies.fp += 1
   }
@@ -517,20 +589,20 @@ export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreR
   for (const table of gold.tables ?? []) {
     const goldCount = goldVisits.filter((visit) => visit.tableKey === table.key).length
     const unread = goldCount > 0 && (matchedByTable.get(table.key) ?? 0) === 0
-    const markedFailed = (candidate.tables ?? []).some((item) => item.key === table.key && item.outcome === 'failed')
+    const markedFailed = (aligned.tables ?? []).some((item) => item.key === table.key && item.outcome === 'failed')
     if (unread && markedFailed) failedTables.tp += 1
     else if (unread && !markedFailed) failedTables.fn += 1
     else if (!unread && markedFailed) failedTables.fp += 1
   }
-  for (const table of candidate.tables ?? []) {
+  for (const table of aligned.tables ?? []) {
     if (!goldTableKeys.has(table.key) && table.outcome === 'failed') failedTables.fp += 1
   }
 
   return {
     visits, printedIds, windows, types, attributes, cells, cellsByTable, cellsByVisitType,
     prnCells, notes, conditions, inconsistencies, failedTables,
-    costUsd: candidate.meta?.costUsd ?? null,
-    latencyS: candidate.meta?.latencyS ?? null,
+    costUsd: aligned.meta?.costUsd ?? null,
+    latencyS: aligned.meta?.latencyS ?? null,
   }
 }
 
