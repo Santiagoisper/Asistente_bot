@@ -24,9 +24,8 @@ export function GcpBadge() {
   const pathname = usePathname()
   if (pathname.startsWith('/demo')) return null
   return (
-    <span className="hidden items-center gap-1.5 rounded-full border border-alphi-teal/40 bg-alphi-teal/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-alphi-teal/90 lg:inline-flex">
-      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-alphi-teal" />
-      GCP Compliant
+    <span className="hidden rounded-full border border-alphi-border px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide text-alphi-muted lg:inline-flex">
+      NO VERIFICADO
     </span>
   )
 }
