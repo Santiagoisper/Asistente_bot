@@ -56,18 +56,18 @@ export function toISODate(date: Date): string {
 }
 
 function canonicalDay(visit: VisitDef): number | null {
-  if (visit.timing.kind === 'event' || visit.timing.value == null || visit.timing.unit == null) return null
+  if (visit.timing.kind === 'event' || visit.timing.value === null || visit.timing.unit === null) return null
   return visit.timing.unit === 'week' ? visit.timing.value * 7 : visit.timing.value
 }
 
 function occurrenceDays(visit: VisitDef): number[] {
   const base = canonicalDay(visit)
-  if (base == null) return []
+  if (base === null) return []
   const recurrence = visit.timing.recurrence
-  if (visit.timing.kind !== 'recurrent' || recurrence == null) return [base]
+  if (visit.timing.kind !== 'recurrent' || recurrence === null) return [base]
   const step = recurrence.every * 7
   if (step <= 0) return [base]
-  const until = recurrence.untilWeek == null ? base : recurrence.untilWeek * 7
+  const until = recurrence.untilWeek === null ? base : recurrence.untilWeek * 7
   const days: number[] = []
   for (let day = base; day <= until; day += step) days.push(day)
   return days.length > 0 ? days : [base]
@@ -87,7 +87,7 @@ function statusFor(window: WindowSpec, target: Date, today: Date): Pick<VisitPla
 
 function planAt(target: Date, window: WindowSpec | null, today: Date): VisitPlan {
   const daysUntilTarget = diffDays(today, target)
-  if (window == null) {
+  if (window === null) {
     return { target, opens: null, closes: null, daysUntilTarget, daysUntilClose: null, status: 'sin_fecha' }
   }
   return { target, daysUntilTarget, ...statusFor(window, target, today) }
@@ -95,12 +95,12 @@ function planAt(target: Date, window: WindowSpec | null, today: Date): VisitPlan
 
 export function planVisit(visit: VisitDef, anchor: Date, today: Date): VisitPlan {
   const days = occurrenceDays(visit)
-  if (days.length === 0 || visit.window == null) {
+  if (days.length === 0 || visit.window === null) {
     return { target: null, opens: null, closes: null, daysUntilTarget: null, daysUntilClose: null, status: 'sin_fecha' }
   }
   const todayDay = startOfDay(today)
   const plans = days.map((offset) => planAt(addDays(anchor, offset), visit.window, todayDay))
-  const open = plans.find((plan) => plan.closes != null && diffDays(todayDay, plan.closes) >= 0)
+  const open = plans.find((plan) => plan.closes !== null && diffDays(todayDay, plan.closes) >= 0)
   return open ?? plans[plans.length - 1]!
 }
 
@@ -115,7 +115,7 @@ export function weekAgenda(patients: PatientDef[], visits: VisitDef[], today: Da
       const anchor = addDays(todayDay, patient.anchorOffsetDays)
       for (const visit of visits) {
         const plan = planVisit(visit, anchor, todayDay)
-        if (plan.target != null && diffDays(plan.target, date) === 0) {
+        if (plan.target !== null && diffDays(plan.target, date) === 0) {
           items.push({ patientCode: patient.code, visitKey: visit.key, status: plan.status, target: plan.target })
         }
       }

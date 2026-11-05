@@ -410,7 +410,7 @@ export function CabinaApp() {
                 <ToneChip tone={item.state === 'vigente' ? 'green' : 'amber'} label={item.state === 'vigente' ? 'Vigente' : 'Revisar'} />
                 <span>
                   {item.label}
-                  {item.page != null ? <span className="ml-1 inline-block rounded-md bg-[#E2F0F4] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#0A4455]">p. {item.page}</span> : null}
+                  {item.page !== null ? <span className="ml-1 inline-block rounded-md bg-[#E2F0F4] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#0A4455]">p. {item.page}</span> : null}
                 </span>
               </li>
             ))}
@@ -444,7 +444,7 @@ export function CabinaApp() {
         {reply ? (
           <p className="mt-2 text-sm" role="status">
             {reply.text}
-            {reply.page != null ? ` [${reply.page}]` : ''}
+            {reply.page !== null ? ` [${reply.page}]` : ''}
           </p>
         ) : null}
       </form>
@@ -751,12 +751,12 @@ function windowText(visit: VisitDef): string {
 }
 
 function describePlan(plan: VisitPlan, today: Date): string {
-  if (plan.status === 'sin_fecha' || plan.target == null) {
+  if (plan.status === 'sin_fecha' || plan.target === null) {
     return 'Esta visita depende de un evento. El protocolo no le fija fecha.'
   }
   const untilTarget = plan.daysUntilTarget ?? 0
   const targetText = untilTarget === 0 ? 'La fecha objetivo es hoy.' : untilTarget > 0 ? `Faltan ${untilTarget} días para la fecha objetivo.` : `La fecha objetivo fue hace ${Math.abs(untilTarget)} días.`
-  if (plan.opens == null || plan.daysUntilClose == null) return targetText
+  if (plan.opens === null || plan.daysUntilClose === null) return targetText
   const untilOpen = diffDays(today, plan.opens)
   if (untilOpen > 0) return `${targetText} La ventana abre en ${untilOpen} días.`
   if (plan.daysUntilClose < 0) return `${targetText} La ventana cerró hace ${Math.abs(plan.daysUntilClose)} días.`

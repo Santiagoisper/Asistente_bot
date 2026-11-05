@@ -20,7 +20,7 @@ export function visitsOnDay(patients: PatientDef[], visits: VisitDef[], today: D
     const anchor = addDays(todayDay, patient.anchorOffsetDays)
     for (const visit of visits) {
       const plan = planVisit(visit, anchor, todayDay)
-      if (plan.target != null && diffDays(plan.target, targetDay) === 0) {
+      if (plan.target !== null && diffDays(plan.target, targetDay) === 0) {
         items.push({ patientCode: patient.code, visitKey: visit.key, status: plan.status, target: plan.target })
       }
     }
@@ -35,7 +35,7 @@ export function closingWindows(patients: PatientDef[], visits: VisitDef[], today
     const anchor = addDays(todayDay, patient.anchorOffsetDays)
     for (const visit of visits) {
       const plan = planVisit(visit, anchor, todayDay)
-      if (plan.status === 'sin_fecha' || plan.daysUntilClose == null) continue
+      if (plan.status === 'sin_fecha' || plan.daysUntilClose === null) continue
       if (plan.daysUntilClose < 0 || plan.daysUntilClose > CLOSING_DAYS) continue
       rows.push({
         patientCode: patient.code,

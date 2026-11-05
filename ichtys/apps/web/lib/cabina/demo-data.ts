@@ -601,7 +601,7 @@ function compile(source: Row[]): { procedures: ProcedureDef[]; cells: CellDef[] 
       action: row.action ?? null,
       consultDraft: row.consultDraft,
     })
-    if (row.page == null || row.quote == null) continue
+    if (row.page === undefined || row.quote === undefined) continue
     for (const visitKey of row.visitKeys) {
       const low = row.lowOn?.includes(visitKey) ?? false
       const certainty: Certainty = low ? 'low' : 'high'
