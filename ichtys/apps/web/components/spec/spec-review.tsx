@@ -6,6 +6,12 @@ import type { StudySpec, StudyEndpoint, StudyVisit } from '@ichtys/ingestion'
 import type { MedicalAnnotation } from '@ichtys/rag/medical-annotator'
 import type { AnnotatedCriterion } from '../../app/(app)/studies/[id]/spec/page'
 import type { SpecDiff, CriterionDiff, EndpointDiff, VisitDiff } from '../../lib/spec-diff'
+import {
+  VisitWindowFields,
+  VisitWindowText,
+  visitWindowFromDraft,
+  windowDraftFromVisit,
+} from './visit-window-fields'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -584,8 +590,21 @@ type VisitDraft = {
   name: string
   label: string
   day: string
-  windowDays: string
+  windowBefore: string
+  windowAfter: string
   procedures: string // CSV string; split on save
+}
+
+function visitDraftFrom(visit: StudyVisit): VisitDraft {
+  const window = windowDraftFromVisit(visit)
+  return {
+    name: visit.name,
+    label: visit.label ?? '',
+    day: visit.day !== null && visit.day !== undefined ? String(visit.day) : '',
+    windowBefore: window.before,
+    windowAfter: window.after,
+    procedures: visit.procedures.join(', '),
+  }
 }
 
 function VisitRow({
@@ -601,24 +620,12 @@ function VisitRow({
 }) {
   const [hovered, setHovered]   = useState(false)
   const [editing, setEditing]   = useState(false)
-  const [draft, setDraft]       = useState<VisitDraft>({
-    name: visit.name,
-    label: visit.label ?? '',
-    day: visit.day !== null && visit.day !== undefined ? String(visit.day) : '',
-    windowDays: visit.windowDays !== null && visit.windowDays !== undefined ? String(visit.windowDays) : '',
-    procedures: visit.procedures.join(', '),
-  })
+  const [draft, setDraft]       = useState<VisitDraft>(() => visitDraftFrom(visit))
   const [saving, setSaving]     = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
   function handleEditStart() {
-    setDraft({
-      name: visit.name,
-      label: visit.label ?? '',
-      day: visit.day !== null && visit.day !== undefined ? String(visit.day) : '',
-      windowDays: visit.windowDays !== null && visit.windowDays !== undefined ? String(visit.windowDays) : '',
-      procedures: visit.procedures.join(', '),
-    })
+    setDraft(visitDraftFrom(visit))
     setSaveError(null)
     setEditing(true)
   }
@@ -630,23 +637,25 @@ function VisitRow({
 
   async function handleSave() {
     if (!draft.name.trim()) return
+    const window = visitWindowFromDraft(draft.windowBefore, draft.windowAfter)
+    if (!window.ok) {
+      setSaveError(window.error)
+      return
+    }
     const updated: Partial<StudyVisit> = {
       name: draft.name.trim(),
       label: draft.label.trim() || null,
       day: draft.day.trim() !== '' ? parseInt(draft.day, 10) : null,
-      windowDays: draft.windowDays.trim() !== '' ? parseInt(draft.windowDays, 10) : null,
+      windowBefore: window.windowBefore,
+      windowAfter: window.windowAfter,
+      windowDays: window.windowDays,
       procedures: draft.procedures
         .split(',')
         .map((p) => p.trim())
         .filter(Boolean),
     }
-    // Validate day/windowDays are integers if provided
     if (updated.day !== null && isNaN(updated.day as number)) {
       setSaveError('El día debe ser un número entero.')
-      return
-    }
-    if (updated.windowDays !== null && (isNaN(updated.windowDays as number) || (updated.windowDays as number) < 0)) {
-      setSaveError('La ventana debe ser un entero ≥ 0.')
       return
     }
     setSaving(true)
@@ -700,18 +709,12 @@ function VisitRow({
                 className="w-full rounded-md border border-alphi-border bg-white px-3 py-1.5 font-mono text-sm text-alphi-navy focus:border-alphi-teal focus:outline-none"
               />
             </div>
-            <div>
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-alphi-muted">Ventana (días ±)</p>
-              <input
-                type="number"
-                min={0}
-                value={draft.windowDays}
-                onChange={(e) => setDraft((d) => ({ ...d, windowDays: e.target.value }))}
-                disabled={saving}
-                placeholder="Ej: 3"
-                className="w-full rounded-md border border-alphi-border bg-white px-3 py-1.5 font-mono text-sm text-alphi-navy focus:border-alphi-teal focus:outline-none"
-              />
-            </div>
+            <VisitWindowFields
+              before={draft.windowBefore}
+              after={draft.windowAfter}
+              disabled={saving}
+              onChange={(next) => setDraft((d) => ({ ...d, windowBefore: next.before, windowAfter: next.after }))}
+            />
             <div className="col-span-2">
               <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-alphi-muted">
                 Procedimientos <span className="font-normal normal-case">(separados por coma)</span>
@@ -778,7 +781,7 @@ function VisitRow({
         {visit.day !== null && visit.day !== undefined ? visit.day : <span className="text-alphi-border">—</span>}
       </td>
       <td className="px-4 py-3 align-top font-mono text-alphi-muted">
-        {visit.windowDays !== null && visit.windowDays !== undefined ? `±${visit.windowDays}d` : <span className="text-alphi-border">—</span>}
+        <VisitWindowText visit={visit} />
       </td>
       <td className="px-4 py-3 align-top">
         {visit.procedures.length > 0 ? (
@@ -829,7 +832,7 @@ function VisitsTable({
             <th className="px-4 py-2.5 text-xs font-semibold text-alphi-muted uppercase tracking-wide">Visita</th>
             <th className="px-4 py-2.5 text-xs font-semibold text-alphi-muted uppercase tracking-wide">Etiqueta</th>
             <th className="px-4 py-2.5 text-xs font-semibold text-alphi-muted uppercase tracking-wide">Día</th>
-            <th className="px-4 py-2.5 text-xs font-semibold text-alphi-muted uppercase tracking-wide">Ventana</th>
+            <th className="px-4 py-2.5 text-xs font-semibold text-alphi-muted uppercase tracking-wide">Ventana (días)</th>
             <th className="px-4 py-2.5 text-xs font-semibold text-alphi-muted uppercase tracking-wide">Procedimientos</th>
           </tr>
         </thead>
@@ -1408,7 +1411,7 @@ export default function SpecReview({
     [localSpec, studyId, specId],
   )
 
-  /** Persists a visit field edit (name, label, day, windowDays, procedures). */
+  /** Persists a visit field edit (name, label, day, windowBefore, windowAfter, procedures). */
   const saveVisit = useCallback(
     async (index: number, updated: Partial<StudyVisit>) => {
       const updatedSpec: StudySpec = {

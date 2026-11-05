@@ -16,7 +16,8 @@
     "./spec-store": "./spec-store.ts",
     "./ingestion-jobs": "./ingestion-jobs.ts",
     "./reextract-spec": "./reextract-spec.ts",
-    "./blob-read": "./blob-read.ts"
+    "./blob-read": "./blob-read.ts",
+    "./visit-window-format": "./visit-window-format.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -25,6 +26,7 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.96",
+    "@ichtys/clinical": "workspace:*",
     "@ichtys/db": "workspace:*",
     "@ichtys/llm": "workspace:*",
     "@vercel/blob": "^2.8.0",

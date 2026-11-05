@@ -3,6 +3,7 @@ import { AccessError, validateStudyAccess } from '@ichtys/auth'
 import { and, db, eq, studySpecs } from '@ichtys/db'
 import { studySpecSchema } from '@ichtys/ingestion'
 import type { StudySpec } from '@ichtys/ingestion'
+import { formatVisitWindow } from '@ichtys/ingestion/visit-window-format'
 import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   Header, Footer, PageNumber, AlignmentType, HeadingLevel,
@@ -124,7 +125,7 @@ function buildDocx(spec: StudySpec, specVersion: number, specStatus: string): Do
         headerCell('Visita',     visitCols[0]),
         headerCell('Etiqueta',   visitCols[1]),
         headerCell('Día',        visitCols[2]),
-        headerCell('Ventana',    visitCols[3]),
+        headerCell('Ventana (días)', visitCols[3]),
         headerCell('Procedimientos', visitCols[4]),
       ],
     }),
@@ -134,7 +135,7 @@ function buildDocx(spec: StudySpec, specVersion: number, specStatus: string): Do
           bodyCell(v.name,                                               visitCols[0]),
           bodyCell(v.label ?? '—',                                       visitCols[1]),
           bodyCell(v.day !== null && v.day !== undefined ? String(v.day) : '—', visitCols[2], true),
-          bodyCell(v.windowDays !== null && v.windowDays !== undefined ? `±${v.windowDays}d` : '—', visitCols[3], true),
+          bodyCell(formatVisitWindow(v), visitCols[3], true),
           bodyCell(v.procedures.join(', ') || '—',                       visitCols[4]),
         ],
       }),
@@ -269,7 +270,7 @@ function buildDocx(spec: StudySpec, specVersion: number, specStatus: string): Do
 // HTML/PDF generation
 // ---------------------------------------------------------------------------
 
-function buildHtml(spec: StudySpec, specVersion: number, specStatus: string): string {
+export function buildHtml(spec: StudySpec, specVersion: number, specStatus: string): string {
   const protocol = spec.identification.protocolCode ?? 'Sin código'
   const title    = spec.identification.title    ?? 'Sin título'
   const phase    = spec.identification.phase    ?? '—'
@@ -299,7 +300,7 @@ function buildHtml(spec: StudySpec, specVersion: number, specStatus: string): st
         <td><strong>${esc(v.name)}</strong></td>
         <td>${v.label ? esc(v.label) : '—'}</td>
         <td class="mono">${v.day !== null && v.day !== undefined ? v.day : '—'}</td>
-        <td class="mono">${v.windowDays !== null && v.windowDays !== undefined ? `±${v.windowDays}d` : '—'}</td>
+        <td class="mono">${formatVisitWindow(v)}</td>
         <td>${v.procedures.length ? v.procedures.map(esc).map((p) => `<span class="proc">${p}</span>`).join(' ') : '—'}</td>
       </tr>`)
     .join('')
@@ -403,7 +404,7 @@ function buildHtml(spec: StudySpec, specVersion: number, specStatus: string): st
       <th>Visita</th>
       <th style="width:100px">Etiqueta</th>
       <th style="width:52px">Día</th>
-      <th style="width:64px">Ventana</th>
+      <th style="width:64px">Ventana (días)</th>
       <th>Procedimientos</th>
     </tr>
   </thead>

@@ -52,9 +52,11 @@ vi.mock('@ichtys/db', () => ({
 import {
   buildSectionContext,
   extractStudySpec,
+  GROUP_INSTRUCTIONS,
   samplePageTextForMap,
   SPEC_EXTRACTION_SYSTEM_PROMPT,
 } from '../spec-extractor'
+import { formatVisitWindow } from '../visit-window-format'
 import { studySpecSchema } from '../study-spec'
 import type { ParsedPage } from '../parser'
 
@@ -184,6 +186,48 @@ describe('extractStudySpec', () => {
     expect(result.spec.visits[0]?.windowDays).toBe(3)
     // 1 semantic-locator call + 4 extraction group calls
     expect(mocks.generateObject).toHaveBeenCalledTimes(5)
+  })
+
+  it('T7: Día 21 (−2/+3) guarda before 2, after 3 y el máximo en windowDays', async () => {
+    mockExtractionByPrompt()
+    const original = mocks.generateObject.getMockImplementation()!
+    mocks.generateObject.mockImplementation((args: { prompt: string }) => {
+      if (args.prompt.includes('schedule of activities')) {
+        return Promise.resolve({
+          object: {
+            visits: [
+              {
+                name: 'Día 21',
+                label: 'Día 21 (−2/+3)',
+                day: 21,
+                windowDays: null,
+                windowBefore: 2,
+                windowAfter: 3,
+                procedures: ['Signos vitales'],
+                sourcePages: [4],
+                confidence: 'high',
+              },
+            ],
+          },
+        })
+      }
+      return original(args)
+    })
+
+    const result = await extractStudySpec(makeProtocolPages())
+    const visit = result.spec.visits[0]
+    expect(visit?.windowBefore).toBe(2)
+    expect(visit?.windowAfter).toBe(3)
+    expect(visit?.windowDays).toBe(3)
+    expect(visit?.label).toContain('−2/+3')
+    expect(formatVisitWindow(visit!)).toBe('\u22122/+3 d')
+  })
+
+  it('la instrucción traduce ±1 semana a 7 y ±1 mes a 30, y deja el texto en label', () => {
+    expect(GROUP_INSTRUCTIONS.visits).toContain('windowBefore 2, windowAfter 3')
+    expect(GROUP_INSTRUCTIONS.visits).toContain('windowBefore 7, windowAfter 7')
+    expect(GROUP_INSTRUCTIONS.visits).toContain('windowBefore 30, windowAfter 30')
+    expect(GROUP_INSTRUCTIONS.visits).toContain('append the original window text to label')
   })
 
   it('registra el consumo con inputTokens > 0 cuando hay usageCtx — mapeo ai 7 (A7)', async () => {

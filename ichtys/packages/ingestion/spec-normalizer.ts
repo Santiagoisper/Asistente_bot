@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { compatWindowDays } from '@ichtys/clinical'
 import {
   eligibilityCriterionSchema,
   studyEndpointSchema,
@@ -98,6 +99,12 @@ function repairItem<T>(
 }
 
 /** Número entero o null (para day/windowDays, que son nullable). */
+
+function readWindowSide(value: unknown): { value: number | null; invalid: boolean } {
+  if (value === null || value === undefined) return { value: null, invalid: false }
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) return { value, invalid: false }
+  return { value: null, invalid: true }
+}
 function integerOrNull(value: unknown): number | null {
   return Number.isInteger(value) ? (value as number) : null
 }
@@ -162,14 +169,16 @@ export function normalizeVisit(raw: unknown, label: string, warnings: string[]):
     // se reparan a null (mismo criterio que validateExtractedVisits), no
     // descartan la visita.
     const day = item.day === null || item.day === undefined ? null : integerOrNull(item.day)
-    const rawWindow = item.windowDays
-    const rawWindowNumber = typeof rawWindow === 'number' ? rawWindow : null
-    const windowDays =
-      rawWindow === null || rawWindow === undefined
-        ? null
-        : rawWindowNumber !== null && Number.isInteger(rawWindowNumber) && rawWindowNumber >= 0
-          ? rawWindowNumber
-          : null
+    const before = readWindowSide(item.windowBefore)
+    const after = readWindowSide(item.windowAfter)
+    const legacy = readWindowSide(item.windowDays)
+    const windowBefore = before.value
+    const windowAfter = after.value
+    const windowDays = compatWindowDays({
+      windowDays: legacy.value,
+      windowBefore,
+      windowAfter,
+    })
     const procedures = Array.isArray(item.procedures)
       ? item.procedures
           .filter((procedure): procedure is string => typeof procedure === 'string' && procedure.trim() !== '')
@@ -186,7 +195,7 @@ export function normalizeVisit(raw: unknown, label: string, warnings: string[]):
       adjustments.push(`label recortado a ${MAX_SPEC_VISIT_LABEL_CHARS} chars`)
     }
     if (item.day !== undefined && item.day !== null && day === null) adjustments.push('has a non-integer study day → null')
-    if (rawWindow !== undefined && rawWindow !== null && windowDays === null) {
+    if (before.invalid || after.invalid || legacy.invalid) {
       adjustments.push('has an invalid visit window → null')
     }
     const rawProcedures = (item.procedures as unknown[] | undefined) ?? []
@@ -204,7 +213,17 @@ export function normalizeVisit(raw: unknown, label: string, warnings: string[]):
       adjustments.push(`sourcePages recortadas a ${sourcePages.length}`)
     }
     return {
-      value: { name: visitName, label: visitLabel, day, windowDays, procedures, sourcePages, confidence: item.confidence },
+      value: {
+        name: visitName,
+        label: visitLabel,
+        day,
+        windowDays,
+        windowBefore,
+        windowAfter,
+        procedures,
+        sourcePages,
+        confidence: item.confidence,
+      },
       adjustments,
     }
   }, warnings)

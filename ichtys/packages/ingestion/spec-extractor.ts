@@ -1,14 +1,15 @@
 import { generateObject } from 'ai'
 import { z } from 'zod'
 import { recordUsage } from '@ichtys/db'
+import { compatWindowDays } from '@ichtys/clinical'
 import { runWithLlmFallback, type LlmProviderPreference, type OrgLlmApiKeys } from '@ichtys/llm'
 import type { ParsedPage } from './parser'
 import { cropPdfPages } from './parser'
 import {
   eligibilityCriterionSchema,
+  extractedVisitSchema,
   studyEndpointSchema,
   studyIdentificationSchema,
-  studyVisitSchema,
   MAX_SPEC_ITEMS,
   type StudySpec,
 } from './study-spec'
@@ -456,7 +457,7 @@ export const endpointsGroupSchema = z.object({
 // proveedor informa las cotas y el extractor normaliza la salida ANTES del
 // parse final, así un ítem largo no tumba el grupo (regresión E5).
 export const visitsGroupSchema = z.object({
-  visits: z.array(studyVisitSchema).max(MAX_SPEC_ITEMS),
+  visits: z.array(extractedVisitSchema).max(MAX_SPEC_ITEMS),
 })
 
 // Exportado para la instantánea de JSON Schema (ADR-8 M4).
@@ -468,7 +469,7 @@ export const identificationGroupSchema = z.object({
 // Group instructions (language-agnostic, sponsor-agnostic)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const GROUP_INSTRUCTIONS = {
+export const GROUP_INSTRUCTIONS = {
   eligibility: `Extract ALL inclusion criteria and ALL exclusion criteria from these protocol pages.
 - One row per atomic criterion — never merge a parent with its sub-parts.
 - Keep numbering exactly as printed for top-level items (e.g., "3", "10a", "IC-5", "(i)", "(ii)", "E7").
@@ -492,7 +493,13 @@ const GROUP_INSTRUCTIONS = {
 - Visit name: exactly as printed ("Visit 4", "V6", "Screening", "Visita de aleatorización", "Visite 3").
 - Time label: temporal label if present ("Week 12", "Semana 12", "Semaine 4", "Tag 1").
 - Day: nominal study day as integer (negative for screening, 0 or 1 for Day 1, etc.).
-- Window: allowed visit window in days (e.g., ±3 → windowDays: 3). null if not stated.
+- Window: two required fields, windowBefore and windowAfter, in days. null if the protocol does not state a window.
+  • "−2/+3 días" or "-2/+3 days" → windowBefore 2, windowAfter 3.
+  • "±3 días" or "±3 days" → windowBefore 3, windowAfter 3.
+  • "±1 semana" or "±1 week" → windowBefore 7, windowAfter 7.
+  • "±1 mes" or "±1 month" → windowBefore 30, windowAfter 30, and append the original window text to label.
+  • If no window is stated, windowBefore and windowAfter are null.
+  • Also set windowDays to the greater of the two sides when both are numbers, or null if both are null. That field is compatibility data.
 - Procedures: list of all procedures performed at this visit as listed in the SoA.
 - If the SoA spans multiple pages, extract all visits from all pages in the provided context.`,
 
@@ -537,6 +544,12 @@ function visitDefect(index: number, code: string): string {
   return `visits: ${code} index=${index}`
 }
 
+function readWindowSide(value: number | null | undefined): { value: number | null; invalid: boolean } {
+  if (value === null || value === undefined) return { value: null, invalid: false }
+  if (!Number.isInteger(value) || value < 0) return { value: null, invalid: true }
+  return { value, invalid: false }
+}
+
 function validateExtractedVisits(
   result: { visits: StudySpec['visits'] },
   pages: ParsedPage[],
@@ -569,9 +582,12 @@ function validateExtractedVisits(
       invalid.add(index)
       warnings.push(visitDefect(index, 'non_integer_day'))
     }
-    if (visit.windowDays !== null && (!Number.isInteger(visit.windowDays) || visit.windowDays < 0)) {
-      invalid.add(index)
-      warnings.push(visitDefect(index, 'invalid_visit_window'))
+    for (const side of [visit.windowDays, visit.windowBefore, visit.windowAfter]) {
+      if (readWindowSide(side).invalid) {
+        invalid.add(index)
+        warnings.push(visitDefect(index, 'invalid_visit_window'))
+        break
+      }
     }
   }
 
@@ -597,16 +613,20 @@ function validateExtractedVisits(
   }
 
   return {
-    visits: visits.map((visit, index) => ({
-      ...visit,
-      day: visit.day === null || Number.isInteger(visit.day) ? visit.day : null,
-      windowDays:
-        visit.windowDays === null || (Number.isInteger(visit.windowDays) && visit.windowDays >= 0)
-          ? visit.windowDays
-          : null,
-      procedures: visit.procedures.map((procedure) => procedure.trim()).filter(Boolean),
-      confidence: invalid.has(index) ? 'low' as const : visit.confidence,
-    })),
+    visits: visits.map((visit, index) => {
+      const windowBefore = readWindowSide(visit.windowBefore).value
+      const windowAfter = readWindowSide(visit.windowAfter).value
+      const legacy = readWindowSide(visit.windowDays).value
+      return {
+        ...visit,
+        day: visit.day === null || Number.isInteger(visit.day) ? visit.day : null,
+        windowBefore,
+        windowAfter,
+        windowDays: compatWindowDays({ windowDays: legacy, windowBefore, windowAfter }),
+        procedures: visit.procedures.map((procedure) => procedure.trim()).filter(Boolean),
+        confidence: invalid.has(index) ? 'low' as const : visit.confidence,
+      }
+    }),
   }
 }
 

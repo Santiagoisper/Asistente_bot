@@ -89,8 +89,15 @@ export const studyVisitSchema = z.object({
   label: z.string().max(MAX_SPEC_VISIT_LABEL_CHARS).nullable(),
   /** Día nominal del estudio si está definido (puede ser negativo en selección). */
   day: z.number().int().nullable(),
-  /** Ventana permitida en días (± N) si está definida. */
+  /**
+   * Ventana legada, simétrica, en días. Se sigue leyendo solo para specs
+   * viejas: el código nuevo pasa por `normalizeVisitWindow`.
+   */
   windowDays: z.number().int().nonnegative().nullable(),
+  /** Días antes del día nominal. null si el protocolo no la trae. */
+  windowBefore: z.number().int().nonnegative().nullable().default(null),
+  /** Días después del día nominal. null si el protocolo no la trae. */
+  windowAfter: z.number().int().nonnegative().nullable().default(null),
   /** Procedimientos de la visita según el SoA. */
   procedures: z
     .array(z.string().min(1).max(MAX_SPEC_PROCEDURE_CHARS))
@@ -98,6 +105,19 @@ export const studyVisitSchema = z.object({
   ...provenanceFields,
 })
 export type StudyVisit = z.infer<typeof studyVisitSchema>
+
+/**
+ * Esquema que viaja al modelo (ADR-7 §2.2). `windowBefore` y `windowAfter`
+ * son nullable requeridos, no opcionales: un `.optional()` o un default
+ * los saca del `required` del JSON Schema y, con más de 10 opcionales,
+ * `@ai-sdk/anthropic` 4.x abandona la salida estructurada nativa.
+ * El esquema guardado (`studyVisitSchema`) sí tiene default, para que una
+ * spec vieja siga parseando.
+ */
+export const extractedVisitSchema = studyVisitSchema.extend({
+  windowBefore: z.number().int().nonnegative().nullable(),
+  windowAfter: z.number().int().nonnegative().nullable(),
+})
 
 /** Identificación del protocolo (portada / sinopsis). */
 export const studyIdentificationSchema = z.object({

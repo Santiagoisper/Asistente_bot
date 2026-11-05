@@ -610,6 +610,30 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
             "minItems": 1,
             "type": "array",
           },
+          "windowAfter": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer",
+              },
+              {
+                "type": "null",
+              },
+            ],
+          },
+          "windowBefore": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer",
+              },
+              {
+                "type": "null",
+              },
+            ],
+          },
           "windowDays": {
             "anyOf": [
               {
@@ -628,6 +652,8 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
           "label",
           "day",
           "windowDays",
+          "windowBefore",
+          "windowAfter",
           "procedures",
           "sourcePages",
           "confidence",

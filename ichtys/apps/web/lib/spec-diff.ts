@@ -12,6 +12,7 @@ import type {
   StudyEndpoint,
   StudyVisit,
 } from '@ichtys/ingestion'
+import { normalizeVisitWindow } from '@ichtys/clinical'
 
 // ---------------------------------------------------------------------------
 // Tipos de diff
@@ -286,10 +287,13 @@ function diffVisits(
     } else if (!n) {
       diffType = 'removed'
     } else {
+      const oldWindow = normalizeVisitWindow(o)
+      const newWindow = normalizeVisitWindow(n)
       const propsChanged =
         o.label !== n.label ||
         o.day !== n.day ||
-        o.windowDays !== n.windowDays
+        oldWindow.before !== newWindow.before ||
+        oldWindow.after !== newWindow.after
 
       const procDiffs = diffProcedures(o.procedures, n.procedures)
       const procsChanged = procDiffs.some((p) => p.diffType !== 'unchanged')

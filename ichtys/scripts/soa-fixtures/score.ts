@@ -8,6 +8,9 @@
  * sin modelo. Salida: solo contadores. `--private` no imprime etiquetas ni texto.
  */
 import { readFileSync } from 'node:fs'
+// El runner de fixtures no resuelve paquetes del workspace. El CLI corre
+// con node --experimental-strip-types, que exige la extensión .ts.
+import { normalizeVisitWindow } from '../../packages/clinical/visit-window.ts'
 
 export const SIMILARITY_THRESHOLD = 0.85
 
@@ -212,6 +215,8 @@ interface LegacyVisit {
   label?: string | null
   day: number | null
   windowDays: number | null
+  windowBefore?: number | null
+  windowAfter?: number | null
   procedures: string[]
   sourcePages?: number[]
 }
@@ -806,6 +811,7 @@ export function adaptLegacyVisits(spec: { visits?: LegacyVisit[] }, gold: Schedu
     const hits = tables.filter((table) => (table.pages ?? []).some((page) => pages.has(page)))
     const tableKey = hits.length === 1 ? hits[0]!.key : tables.length === 1 ? tables[0]!.key : null
     const key = `LV${index + 1}`
+    const sides = normalizeVisitWindow(visit)
     visits.push({
       key,
       tableKey,
@@ -814,7 +820,10 @@ export function adaptLegacyVisits(spec: { visits?: LegacyVisit[] }, gold: Schedu
       timing: visit.day === null
         ? { kind: 'event', value: null, unit: null, anchor: null, recurrence: null }
         : { kind: 'scheduled', value: visit.day, unit: 'day', anchor: null, recurrence: null },
-      window: visit.windowDays === null ? null : { before: visit.windowDays, after: visit.windowDays, unit: 'day' },
+      window:
+        sides.before === null || sides.after === null
+          ? null
+          : { before: sides.before, after: sides.after, unit: 'day' as const },
       type: inferLegacyVisitType(visit.name, visit.label),
       attributes: { fasting: null, onSite: null, armOnly: null },
     })

@@ -123,6 +123,8 @@ export const SEED_SPEC_EXAMPLE: ApprovedSpecExample = {
         label: 'Semana -4',
         day: -28,
         windowDays: 3,
+        windowBefore: null,
+        windowAfter: null,
         procedures: [
           'Consentimiento informado',
           'Historia clínica y examen físico completo',
@@ -141,6 +143,8 @@ export const SEED_SPEC_EXAMPLE: ApprovedSpecExample = {
         label: 'Semana 0',
         day: 1,
         windowDays: 0,
+        windowBefore: null,
+        windowAfter: null,
         procedures: [
           'Confirmación de criterios de elegibilidad',
           'Aleatorización y dispensación del fármaco en estudio',
@@ -157,6 +161,8 @@ export const SEED_SPEC_EXAMPLE: ApprovedSpecExample = {
         label: 'Semana 4',
         day: 29,
         windowDays: 3,
+        windowBefore: null,
+        windowAfter: null,
         procedures: [
           'Signos vitales',
           'Examen físico dirigido',
@@ -174,6 +180,8 @@ export const SEED_SPEC_EXAMPLE: ApprovedSpecExample = {
         label: 'Semana 24',
         day: 169,
         windowDays: 7,
+        windowBefore: null,
+        windowAfter: null,
         procedures: [
           'Signos vitales',
           'Examen físico completo',
@@ -191,6 +199,8 @@ export const SEED_SPEC_EXAMPLE: ApprovedSpecExample = {
         label: 'Semana 28',
         day: 197,
         windowDays: 7,
+        windowBefore: null,
+        windowAfter: null,
         procedures: [
           'Signos vitales',
           'Examen físico',
