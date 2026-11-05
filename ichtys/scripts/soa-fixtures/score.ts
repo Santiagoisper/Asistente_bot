@@ -8,9 +8,9 @@
  * sin modelo. Salida: solo contadores. `--private` no imprime etiquetas ni texto.
  */
 import { readFileSync } from 'node:fs'
-// El runner de fixtures no resuelve paquetes del workspace. Es el mismo
-// normalizador de @ichtys/clinical, no una copia.
-import { normalizeVisitWindow } from '../../packages/clinical/visit-window'
+// El runner de fixtures no resuelve paquetes del workspace. El CLI corre
+// con node --experimental-strip-types, que exige la extensión .ts.
+import { normalizeVisitWindow } from '../../packages/clinical/visit-window.ts'
 
 export const SIMILARITY_THRESHOLD = 0.85
 
