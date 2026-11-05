@@ -12,6 +12,8 @@ const VISIT: StudySpec['visits'][number] = {
   label: 'Semana 4',
   day: 28,
   windowDays: 2,
+  windowBefore: null,
+  windowAfter: null,
   procedures: ['PK'],
   sourcePages: [3],
   confidence: 'high',

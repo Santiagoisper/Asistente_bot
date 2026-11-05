@@ -130,6 +130,8 @@ describe('veredictos de validación sin cambio (ADR-8 M7)', () => {
           label: 'Día -14',
           day: -14,
           windowDays: 3,
+          windowBefore: null,
+          windowAfter: null,
           procedures: ['Consentimiento', 'Analítica de laboratorio'],
           sourcePages: [13],
           confidence: 'high',

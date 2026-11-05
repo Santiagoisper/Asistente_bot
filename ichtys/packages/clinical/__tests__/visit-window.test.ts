@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeVisitWindow, visitWindowInputFromSpec } from '../visit-window'
+import { compatWindowDays, computeVisitWindow, visitWindowInputFromSpec } from '../visit-window'
 
 const VALID = { anchorDate: '2025-10-01', targetDay: 21, toleranceBefore: 2, toleranceAfter: 2 }
 
@@ -136,5 +136,17 @@ describe('visitWindowInputFromSpec', () => {
   it('sin día o sin ventana no arma entrada', () => {
     expect(visitWindowInputFromSpec({ day: null, windowDays: 3 }, '2025-10-01')).toBeNull()
     expect(visitWindowInputFromSpec({ day: 21, windowDays: null }, '2025-10-01')).toBeNull()
+  })
+})
+
+describe('compatWindowDays', () => {
+  it('conserva el legado cuando las cotas nuevas son null', () => {
+    expect(compatWindowDays({ windowDays: 3, windowBefore: null, windowAfter: null })).toBe(3)
+    expect(compatWindowDays({ windowDays: null, windowBefore: null, windowAfter: null })).toBeNull()
+  })
+
+  it('en una ventana asimétrica guarda el máximo, para una vuelta atrás', () => {
+    expect(compatWindowDays({ windowDays: null, windowBefore: 2, windowAfter: 3 })).toBe(3)
+    expect(compatWindowDays({ windowDays: 99, windowBefore: 2, windowAfter: 3 })).toBe(3)
   })
 })

@@ -51,6 +51,7 @@ export {
   computeVisitWindow,
   normalizeVisitWindow,
   visitWindowInputFromSpec,
+  compatWindowDays,
   VISIT_WINDOW_VERSION,
   type VisitWindow,
   type NormalizedVisitWindow,

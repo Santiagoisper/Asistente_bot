@@ -1,6 +1,7 @@
 import { getLatestStudySpec } from '@ichtys/ingestion'
 import { studySpecSchema } from '@ichtys/ingestion'
 import type { StudySpec } from '@ichtys/ingestion'
+import { formatVisitWindow } from '@ichtys/ingestion/visit-window-format'
 import type { RetrievedChunk } from '@ichtys/rag/retriever'
 
 /**
@@ -105,13 +106,14 @@ function formatEndpoints(spec: StudySpec): string {
   return lines.join('\n')
 }
 
-function formatVisits(spec: StudySpec): string {
+export function formatVisits(spec: StudySpec): string {
   if (spec.visits.length === 0) return ''
   const lines: string[] = ['CRONOGRAMA DE ACTIVIDADES (VISITAS):']
   for (const v of spec.visits) {
     const dayStr = v.day !== null ? ` | Día ${v.day}` : ''
     const labelStr = v.label ? ` (${v.label})` : ''
-    const windowStr = v.windowDays !== null ? ` ±${v.windowDays}d` : ''
+    const windowLabel = formatVisitWindow(v)
+    const windowStr = windowLabel === '—' ? '' : ` ${windowLabel}`
     lines.push(`${v.name}${labelStr}${dayStr}${windowStr}`)
     if (v.procedures.length > 0) {
       lines.push(`  Procedimientos: ${v.procedures.join(', ')}`)

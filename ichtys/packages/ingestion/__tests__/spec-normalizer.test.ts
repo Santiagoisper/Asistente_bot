@@ -237,7 +237,7 @@ describe('normalizeStudySpec', () => {
         { number: '1', text: 'Adultos mayores de 18 años', sourcePages: [52], confidence: 'high' as const },
       ],
       visits: [
-        { name: 'Visita 1', label: 'Día -35', day: -35, windowDays: null, procedures: ['Consentimiento'], sourcePages: [18], confidence: 'high' as const },
+        { name: 'Visita 1', label: 'Día -35', day: -35, windowDays: null, windowBefore: null, windowAfter: null, procedures: ['Consentimiento'], sourcePages: [18], confidence: 'high' as const },
       ],
       extractionWarnings: ['una advertencia'],
     }

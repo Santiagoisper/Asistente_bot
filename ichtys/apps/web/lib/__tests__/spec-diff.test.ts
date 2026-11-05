@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { StudyEndpoint, StudySpec } from '@ichtys/ingestion'
+import type { StudyEndpoint, StudySpec, StudyVisit } from '@ichtys/ingestion'
 import { diffSpecs } from '../spec-diff'
 
 // El diff solo lee inclusionCriteria/exclusionCriteria/endpoints/visits, así que
@@ -94,5 +94,44 @@ describe('diffSpecs — endpoints (alineación LCS)', () => {
     const diff = diffSpecs(spec([a, b]), spec([b, c]))
     const indices = diff.endpoints.map((d) => d.index)
     expect(new Set(indices).size).toBe(indices.length)
+  })
+})
+
+function visit(partial: Partial<StudyVisit> & { name: string }): StudyVisit {
+  return {
+    label: null,
+    day: 21,
+    windowDays: null,
+    windowBefore: null,
+    windowAfter: null,
+    procedures: [],
+    sourcePages: [1],
+    confidence: 'high',
+    ...partial,
+  }
+}
+
+function specWithVisits(visits: StudyVisit[]): StudySpec {
+  return {
+    inclusionCriteria: [],
+    exclusionCriteria: [],
+    endpoints: [],
+    visits,
+  } as unknown as StudySpec
+}
+
+describe('T10 diff de la ventana normalizada', () => {
+  it('detecta windowDays 3 contra before 2 / after 3 aunque el legado coincida', () => {
+    const oldVisit = visit({ name: 'Día 21', windowDays: 3 })
+    const newVisit = visit({ name: 'Día 21', windowDays: 3, windowBefore: 2, windowAfter: 3 })
+    const diff = diffSpecs(specWithVisits([oldVisit]), specWithVisits([newVisit]))
+    expect(diff.visits.find((row) => row.key === 'Día 21')?.diffType).toBe('modified')
+  })
+
+  it('no marca cambio cuando la ventana normalizada es ±3', () => {
+    const oldVisit = visit({ name: 'Día 21', windowDays: 3 })
+    const newVisit = visit({ name: 'Día 21', windowDays: 3, windowBefore: 3, windowAfter: 3 })
+    const diff = diffSpecs(specWithVisits([oldVisit]), specWithVisits([newVisit]))
+    expect(diff.visits.find((row) => row.key === 'Día 21')?.diffType).toBe('unchanged')
   })
 })

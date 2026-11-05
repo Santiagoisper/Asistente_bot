@@ -107,3 +107,21 @@ export function visitWindowInputFromSpec(
     toleranceAfter: window.after,
   }
 }
+
+/**
+ * Dato de compatibilidad para una vuelta atrás (ADR-7 §6). El código nuevo
+ * no lo lee. Si hay cotas nuevas, `windowDays` queda en el máximo; si no, se
+ * conserva el legado.
+ */
+export function compatWindowDays(visit: {
+  windowDays?: number | null
+  windowBefore?: number | null
+  windowAfter?: number | null
+}): number | null {
+  const before = visit.windowBefore ?? null
+  const after = visit.windowAfter ?? null
+  if (before === null && after === null) {
+    return typeof visit.windowDays === 'number' ? visit.windowDays : null
+  }
+  return Math.max(before ?? 0, after ?? 0)
+}
