@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { AccessError, canManageDocuments, handleApiError, validateStudyAccess } from '@ichtys/auth'
 import { auditLogs, db, documents, documentVersions } from '@ichtys/db'
 import { putPrivateDocumentPdf } from './blob-storage'
@@ -9,7 +10,7 @@ import {
 } from '../../../../lib/security/rate-limit'
 import { getOrCreateRequestId, log, makeRecord } from '../../../../lib/observability/logger'
 import { uploadMetaInput as uploadMeta } from '../../../../lib/api/input-schemas'
-import { validatePdfUpload } from '../../../../lib/documents/pdf-upload-validation'
+import { MAX_UPLOAD_BODY_BYTES, validatePdfUpload } from '../../../../lib/documents/pdf-upload-validation'
 
 export const runtime = 'nodejs'
 
@@ -38,8 +39,56 @@ function buildBlobKey(fileName: string): string {
 }
 
 /**
- * POST /api/documents/upload - validates study access, stores the PDF in
- * Vercel Blob, registers the document and its initial pending version.
+ * Content-Length por encima del tope, o un valor que no es un entero seguro,
+ * se rechaza sin leer. Un número chico no se cree: el stream se mide aparte.
+ */
+function declaredBodyTooLarge(req: Request): boolean {
+  const raw = req.headers.get('content-length')
+  if (raw === null) return false
+  if (!/^\d+$/.test(raw)) return true
+  const size = Number(raw)
+  return !Number.isSafeInteger(size) || size > MAX_UPLOAD_BODY_BYTES
+}
+
+/**
+ * Lee el multipart contando bytes reales y cancela el stream al pasar el tope.
+ * Recién entonces se parsea. Un Content-Length falso y chico no abre el cuerpo.
+ */
+async function formDataWithinCap(req: Request): Promise<FormData | 'too_large'> {
+  if (declaredBodyTooLarge(req)) return 'too_large'
+  if (req.body === null) return req.formData()
+
+  const reader = req.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    if (!value || value.byteLength === 0) continue
+    if (total + value.byteLength > MAX_UPLOAD_BODY_BYTES) {
+      await reader.cancel().catch(() => undefined)
+      return 'too_large'
+    }
+    chunks.push(value)
+    total += value.byteLength
+  }
+
+  const body = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    body.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  const headers = new Headers(req.headers)
+  headers.set('content-length', String(total))
+  return new Request(req.url, { method: 'POST', headers, body }).formData()
+}
+
+/**
+ * POST /api/documents/upload — el estudio viaja en la query para poder
+ * autenticar y autorizar (acceso y rol) antes de tocar el archivo. El cuerpo
+ * se lee con tope de bytes reales; al superarlo se cancela y se responde 413.
+ * La validación por archivo (MIME, firma, 50 MiB) se mantiene.
  */
 export async function POST(req: Request): Promise<Response> {
   const requestId = getOrCreateRequestId(req)
@@ -52,15 +101,40 @@ export async function POST(req: Request): Promise<Response> {
       return new Response('Bad Request', { status: 400 })
     }
 
-    const form = await req.formData()
+    const studyId = z.string().uuid().safeParse(url.searchParams.get('studyId'))
+    if (!studyId.success) {
+      return new Response('Bad Request', { status: 400 })
+    }
+
+    const access = await validateStudyAccess(studyId.data)
+    if (!canManageDocuments(access.role)) {
+      throw new AccessError('Forbidden', 403)
+    }
+    const { userId, orgId, study } = access
+
+    let form: FormData
+    try {
+      const loaded = await formDataWithinCap(req)
+      if (loaded === 'too_large') {
+        return new Response('Payload Too Large', { status: 413 })
+      }
+      form = loaded
+    } catch {
+      return new Response('Bad Request', { status: 400 })
+    }
 
     if (form.has('organization_id') || form.has('organizationId')) {
       return new Response('Bad Request', { status: 400 })
     }
 
+    const formStudyId = getRequiredString(form, 'studyId')
+    if (formStudyId !== studyId.data) {
+      return new Response('Bad Request', { status: 400 })
+    }
+
     const file = form.get('file')
     const meta = uploadMeta.safeParse({
-      studyId: getRequiredString(form, 'studyId'),
+      studyId: formStudyId,
       name: getOptionalString(form, 'name'),
       documentType: getRequiredString(form, 'documentType'),
     })
@@ -76,12 +150,6 @@ export async function POST(req: Request): Promise<Response> {
     if (pdfVerdict !== 'ok') {
       return new Response('Unsupported Media Type', { status: 415 })
     }
-
-    const access = await validateStudyAccess(meta.data.studyId)
-    if (!canManageDocuments(access.role)) {
-      throw new AccessError('Forbidden', 403)
-    }
-    const { userId, orgId, study } = access
 
     const uploadRlConfig = getUploadRateLimitConfig()
     const rateLimit = await enforceSlidingWindowRateLimit({

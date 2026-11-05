@@ -71,6 +71,7 @@ vi.mock('../../../../../lib/observability/logger', async (importOriginal) => {
   return { ...actual, log: vi.fn() }
 })
 
+import { MAX_UPLOAD_BODY_BYTES } from '../../../../../lib/documents/pdf-upload-validation'
 import { POST } from '../route'
 
 // ---------------------------------------------------------------------------
@@ -85,12 +86,15 @@ function pdfFile(name = 'protocolo.pdf'): File {
   return new File([bytes], name, { type: 'application/pdf' })
 }
 
-function uploadRequest(file: File = pdfFile()): Request {
+function uploadRequest(file: File = pdfFile(), studyId = STUDY_ID): Request {
   const form = new FormData()
-  form.set('studyId', STUDY_ID)
+  form.set('studyId', studyId)
   form.set('documentType', 'protocol')
   form.set('file', file)
-  return new Request('http://localhost/api/documents/upload', { method: 'POST', body: form })
+  return new Request(
+    `http://localhost/api/documents/upload?studyId=${encodeURIComponent(studyId)}`,
+    { method: 'POST', body: form },
+  )
 }
 
 function documentRow() {
@@ -206,6 +210,131 @@ describe('POST /api/documents/upload — camino feliz', () => {
     expect(body.documentVersionId).toBe(version.id)
     expect(mocks.putPrivateDocumentPdf).toHaveBeenCalledTimes(1)
   })
+})
+
+describe('POST /api/documents/upload — G14-53-1 acceso antes del archivo', () => {
+  it('responde 403 sin parsear ni leer el cuerpo si el rol no gestiona documentos', async () => {
+    mocks.validateStudyAccess.mockResolvedValue({
+      userId: 'user_test',
+      orgId: ORG_ID,
+      study: { id: STUDY_ID, name: 'Estudio' },
+      role: 'read_only_monitor',
+    })
+    let pulls = 0
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1
+        controller.enqueue(new Uint8Array(1024))
+      },
+    })
+    const req = new Request(`http://localhost/api/documents/upload?studyId=${STUDY_ID}`, {
+      method: 'POST',
+      headers: { 'content-type': 'multipart/form-data; boundary=----ficticio' },
+      body,
+      duplex: 'half',
+    } as RequestInit)
+    const formData = vi.spyOn(req, 'formData')
+
+    const res = await POST(req)
+
+    expect(res.status).toBe(403)
+    expect(await res.text()).toBe('Forbidden')
+    expect(formData).not.toHaveBeenCalled()
+    expect(req.bodyUsed).toBe(false)
+    expect(pulls).toBeLessThanOrEqual(1)
+    expect(mocks.validateStudyAccess).toHaveBeenCalledWith(STUDY_ID)
+    expect(mocks.putPrivateDocumentPdf).not.toHaveBeenCalled()
+    expect(mocks.transaction).not.toHaveBeenCalled()
+  })
+
+  it('rechaza un Content-Length enorme sin leer el formulario ni guardar', async () => {
+    const req = new Request(`http://localhost/api/documents/upload?studyId=${STUDY_ID}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'multipart/form-data; boundary=----ficticio',
+        'content-length': String(1_000_000_000),
+      },
+      body: '------ficticio--\r\n',
+    })
+    const formData = vi.spyOn(req, 'formData')
+
+    const res = await POST(req)
+
+    expect(res.status).toBe(413)
+    expect(formData).not.toHaveBeenCalled()
+    expect(mocks.putPrivateDocumentPdf).not.toHaveBeenCalled()
+    expect(mocks.transaction).not.toHaveBeenCalled()
+  })
+
+  it('lee el PDF real aunque el Content-Length diga 1', async () => {
+    const { document, version } = mockTransaction()
+    mocks.putPrivateDocumentPdf.mockResolvedValueOnce({
+      url: 'https://s.private.blob/x/protocolo.pdf',
+      pathname: 'x/protocolo.pdf',
+    })
+    const boundary = '----ficticio'
+    const fileBytes = new TextEncoder().encode('%PDF-1.4 sintetico')
+    const head = new TextEncoder().encode(
+      `--${boundary}\r\nContent-Disposition: form-data; name="studyId"\r\n\r\n${STUDY_ID}\r\n` +
+        `--${boundary}\r\nContent-Disposition: form-data; name="documentType"\r\n\r\nprotocol\r\n` +
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="protocolo.pdf"\r\nContent-Type: application/pdf\r\n\r\n`,
+    )
+    const tail = new TextEncoder().encode(`\r\n--${boundary}--\r\n`)
+    const body = new Uint8Array(head.length + fileBytes.length + tail.length)
+    body.set(head, 0)
+    body.set(fileBytes, head.length)
+    body.set(tail, head.length + fileBytes.length)
+    const req = new Request(`http://localhost/api/documents/upload?studyId=${STUDY_ID}`, {
+      method: 'POST',
+      headers: {
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+        'content-length': '1',
+      },
+      body,
+    })
+
+    const res = await POST(req)
+    const payload = (await res.json()) as { documentId?: string; documentVersionId?: string }
+
+    expect(res.status).toBe(202)
+    expect(payload.documentId).toBe(document.id)
+    expect(payload.documentVersionId).toBe(version.id)
+    expect(mocks.putPrivateDocumentPdf).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancela un stream que supera el tope aunque el Content-Length diga 1', async () => {
+    const chunk = new Uint8Array(1024 * 1024)
+    let sent = 0
+    let cancelled = false
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(chunk.slice())
+        sent += chunk.byteLength
+      },
+      cancel() {
+        cancelled = true
+      },
+    })
+    const req = new Request(`http://localhost/api/documents/upload?studyId=${STUDY_ID}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'multipart/form-data; boundary=----ficticio',
+        'content-length': '1',
+      },
+      body,
+      duplex: 'half',
+    } as RequestInit)
+    const formData = vi.spyOn(req, 'formData')
+
+    const res = await POST(req)
+
+    expect(res.status).toBe(413)
+    expect(cancelled).toBe(true)
+    expect(sent).toBeLessThanOrEqual(MAX_UPLOAD_BODY_BYTES + 4 * chunk.byteLength)
+    expect(formData).not.toHaveBeenCalled()
+    expect(mocks.putPrivateDocumentPdf).not.toHaveBeenCalled()
+    expect(mocks.transaction).not.toHaveBeenCalled()
+  }, 30_000)
 })
 
 describe('POST /api/documents/upload — gestión documental (S1)', () => {
