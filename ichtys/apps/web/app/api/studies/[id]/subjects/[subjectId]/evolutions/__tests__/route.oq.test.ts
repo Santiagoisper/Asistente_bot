@@ -263,6 +263,59 @@ describe('OQ-003 — cifrado at-rest en POST', () => {
   })
 })
 
+describe('G14-53-2 — el fallo del perfil no se registra crudo', () => {
+  it('escribe profile_refresh_failed y omite el marcador del error', async () => {
+    const marker = 'PACIENTE_FICTICIO_123_INYECCION_LOG'
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbInsertReturning.mockResolvedValueOnce([
+      {
+        id: mocks.EVOLUTION_ID,
+        visitLabel: null,
+        createdAt: new Date('2026-07-04T12:00:00Z'),
+      },
+    ])
+    const profileErr = new Error(`fallo con ${marker}`)
+    profileErr.stack = `stack ${marker}\nsegunda`
+    Object.assign(profileErr, { detail: marker, cause: { message: marker } })
+    mocks.refreshPatientProfileFromEvolution.mockRejectedValueOnce(profileErr)
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      const res = await POST(
+        new Request('http://localhost/api/evolutions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-request-id': 'req-g14-53-2',
+          },
+          body: JSON.stringify({ content: CLINICAL_TEXT }),
+        }),
+        makeParams(),
+      )
+
+      expect(res.status).toBe(201)
+      const body = (await res.json()) as { profileUpdated?: boolean }
+      expect(body.profileUpdated).toBe(false)
+      const logged = errorSpy.mock.calls
+        .map((args) =>
+          args
+            .map((value) => {
+              if (value instanceof Error) return `${value.name} ${value.message} ${value.stack ?? ''}`
+              if (value && typeof value === 'object') return JSON.stringify(value)
+              return String(value)
+            })
+            .join(' '),
+        )
+        .join('\n')
+      expect(logged).toContain('profile_refresh_failed')
+      expect(logged).toContain('req-g14-53-2')
+      expect(logged).not.toContain(marker)
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+})
+
 describe('S4 — evoluciones comparan el estudio de la URL', () => {
   it('GET y POST pasan el id de la URL antes de leer o escribir', async () => {
     const otherStudyId = crypto.randomUUID()

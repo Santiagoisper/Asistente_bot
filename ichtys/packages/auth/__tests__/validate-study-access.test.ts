@@ -463,9 +463,25 @@ function createGetRequest(path: string): Request {
 }
 
 function createUploadRequest(form: FormData, query = ''): Request {
-  return new Request(`http://localhost/api/documents/upload${query}`, {
+  const params = new URLSearchParams(query.startsWith('?') ? query.slice(1) : query)
+  const studyId = form.get('studyId')
+  if (typeof studyId === 'string' && !params.has('studyId')) {
+    params.set('studyId', studyId)
+  }
+  const qs = params.toString()
+  return new Request(`http://localhost/api/documents/upload${qs ? `?${qs}` : ''}`, {
     method: 'POST',
     body: form,
+  })
+}
+
+/** Sesión con rol documental, para llegar a la validación del archivo. */
+function allowDocumentUpload(fixture: TenantFixture): void {
+  mockActiveOrgAndStudy(fixture)
+  mocks.auth.mockResolvedValue({
+    userId: fixture.userId,
+    orgId: fixture.clerkOrgId,
+    orgRole: 'org:site_coordinator',
   })
 }
 
@@ -1148,12 +1164,13 @@ describe('document upload registry', () => {
     const fixture = createTenantFixture()
     const form = createUploadForm(fixture, createPdfFile())
     form.set('organization_id', crypto.randomUUID())
+    allowDocumentUpload(fixture)
 
     const response = await documentUploadPost(createUploadRequest(form))
 
     expect(response.status).toBe(400)
-    expect(mocks.auth).not.toHaveBeenCalled()
     expect(mocks.put).not.toHaveBeenCalled()
+    expect(mocks.transaction).not.toHaveBeenCalled()
   })
 
   it('upload rejects organization_id in query params', async () => {
@@ -1172,33 +1189,33 @@ describe('document upload registry', () => {
   it('upload rejects a non-PDF file', async () => {
     const fixture = createTenantFixture()
     const form = createUploadForm(fixture, createTextFile())
+    allowDocumentUpload(fixture)
 
     const response = await documentUploadPost(createUploadRequest(form))
 
     expect(response.status).toBe(415)
-    expect(mocks.auth).not.toHaveBeenCalled()
     expect(mocks.put).not.toHaveBeenCalled()
   })
 
   it('upload rejects a file with PDF MIME type but no %PDF- signature', async () => {
     const fixture = createTenantFixture()
     const form = createUploadForm(fixture, createSpoofedPdfFile())
+    allowDocumentUpload(fixture)
 
     const response = await documentUploadPost(createUploadRequest(form))
 
     expect(response.status).toBe(415)
-    expect(mocks.auth).not.toHaveBeenCalled()
     expect(mocks.put).not.toHaveBeenCalled()
   })
 
   it('upload rejects a PDF larger than the server upload limit', async () => {
     const fixture = createTenantFixture()
     const form = createUploadForm(fixture, createPdfFile('large.pdf', maxPdfBytes + 1))
+    allowDocumentUpload(fixture)
 
     const response = await documentUploadPost(createUploadRequest(form))
 
     expect(response.status).toBe(413)
-    expect(mocks.auth).not.toHaveBeenCalled()
     expect(mocks.put).not.toHaveBeenCalled()
   })
 

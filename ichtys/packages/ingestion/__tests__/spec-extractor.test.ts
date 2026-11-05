@@ -324,13 +324,61 @@ describe('extractStudySpec', () => {
     const result = await extractStudySpec(makeProtocolPages())
 
     expect(result.warnings).toEqual(expect.arrayContaining([
-      expect.stringContaining('duplicate visit name'),
-      expect.stringContaining('not ordered by day'),
-      expect.stringContaining('has no procedures'),
+      expect.stringContaining('duplicate_visit_name'),
+      expect.stringContaining('day_order'),
+      expect.stringContaining('no_procedures'),
       expect.stringContaining('has an invalid visit window'),
     ]))
+    expect(result.warnings.join('\n')).not.toContain('Visita 4')
     expect(result.spec.visits.map((visit) => visit.confidence)).toEqual(['low', 'low'])
     expect(result.spec.visits[1]?.windowDays).toBeNull()
+  })
+
+  it('no copia el nombre de la visita (ni un salto de línea) a warnings ni a extractionWarnings', async () => {
+    mockExtractionByPrompt()
+    const marker = 'PACIENTE_FICTICIO_123_INYECCION_LOG'
+    const poisoned = `${marker}\nLINEA_INYECTADA`
+    const original = mocks.generateObject.getMockImplementation()!
+    mocks.generateObject.mockImplementation((args: { prompt: string }) => {
+      if (args.prompt.includes('schedule of activities')) {
+        return Promise.resolve({
+          object: {
+            visits: [
+              {
+                name: poisoned,
+                label: 'Semana 12',
+                day: 85,
+                windowDays: 3,
+                procedures: ['HbA1c'],
+                sourcePages: [19],
+                confidence: 'high',
+              },
+              {
+                name: poisoned,
+                label: 'Semana 2',
+                day: 14,
+                windowDays: 1,
+                procedures: [],
+                sourcePages: [19],
+                confidence: 'high',
+              },
+            ],
+          },
+        })
+      }
+      return original(args)
+    })
+
+    const result = await extractStudySpec(makeProtocolPages())
+    const extractionWarnings = result.warnings
+
+    expect(result.spec.visits.some((visit) => visit.name.includes(marker))).toBe(true)
+    expect(result.warnings.join('\n')).not.toContain(marker)
+    expect(result.warnings.join('\n')).not.toContain('LINEA_INYECTADA')
+    expect(extractionWarnings.join('\n')).not.toContain(marker)
+    expect(extractionWarnings.join('\n')).not.toContain('LINEA_INYECTADA')
+    expect(result.warnings.some((warning) => warning.includes('duplicate_visit_name') && warning.includes('index='))).toBe(true)
+    expect(result.warnings.some((warning) => warning.includes('\n'))).toBe(false)
   })
 
   it('does not treat prose "v 12" as a visit label or lower every visit on count mismatch', async () => {
@@ -431,11 +479,11 @@ describe('extractStudySpec', () => {
           // El SDK real (ai 7) valida la salida contra el schema del grupo y
           // lanza NoObjectGeneratedError con .text = JSON crudo del modelo.
           if (!args.schema.safeParse(object).success) {
-            return Promise.reject(
-              Object.assign(new Error('No object generated: response did not match schema.'), {
-                text: JSON.stringify(object),
-              }),
-            )
+            const validationError = new Error('No object generated: response did not match schema.')
+            validationError.name = 'AI_NoObjectGeneratedError'
+            return Promise.reject(Object.assign(validationError, {
+              text: JSON.stringify(object),
+            }))
           }
           return Promise.resolve({ object })
         }
@@ -456,6 +504,48 @@ describe('extractStudySpec', () => {
     expect(result.warnings.some((w) => w.includes('provider failure'))).toBe(false)
   })
 
+  it.each([
+    ['autenticación', 'AI_APICallError', 401, 'authentication_error'],
+    ['cuota', 'AI_APICallError', 429, 'insufficient_quota'],
+    ['transporte', 'TypeError', undefined, 'ECONNRESET'],
+  ] as const)(
+    'no recupera la salida de un error de %s aunque traiga text, toolInput y cause.value',
+    async (_label, name, status, code) => {
+      mockExtractionByPrompt()
+      const marker = 'MARCADOR_PROVEEDOR_FICTICIO'
+      const payload = {
+        inclusionCriteria: [
+          { number: '1', text: marker, sourcePages: [52], confidence: 'high' },
+        ],
+        exclusionCriteria: [],
+      }
+      const original = mocks.generateObject.getMockImplementation()!
+      mocks.generateObject.mockImplementation((args: { prompt: string }) => {
+        if (args.prompt.includes('inclusion criteria')) {
+          const error = new Error(`provider unavailable ${marker}`)
+          error.name = name
+          error.stack = `stack ${marker}`
+          return Promise.reject(Object.assign(error, {
+            status,
+            code,
+            text: JSON.stringify(payload),
+            toolInput: JSON.stringify(payload),
+            cause: { value: payload },
+          }))
+        }
+        return original(args)
+      })
+
+      const result = await extractStudySpec(makeProtocolPages())
+      const rendered = JSON.stringify({ spec: result.spec, warnings: result.warnings })
+
+      expect(rendered).not.toContain(marker)
+      expect(result.spec.inclusionCriteria).toEqual([])
+      expect(result.warnings.some((warning) => warning.includes('fuera de cotas'))).toBe(false)
+      expect(result.warnings.some((warning) => warning.includes('extraction_failed'))).toBe(true)
+    },
+  )
+
   it('B1: .text recuperado sin exclusionCriteria deja advertencia que nombra la exclusión', async () => {
     mockExtractionByPrompt()
     const original = mocks.generateObject.getMockImplementation()!
@@ -472,11 +562,11 @@ describe('extractStudySpec', () => {
           // schema del grupo la exige, así que el SDK rechaza).
           const object = { inclusionCriteria: [validCriterion] }
           if (!args.schema.safeParse(object).success) {
-            return Promise.reject(
-              Object.assign(new Error('No object generated: response did not match schema.'), {
-                text: JSON.stringify(object),
-              }),
-            )
+            const validationError = new Error('No object generated: response did not match schema.')
+            validationError.name = 'AI_NoObjectGeneratedError'
+            return Promise.reject(Object.assign(validationError, {
+              text: JSON.stringify(object),
+            }))
           }
           return Promise.resolve({ object })
         }
