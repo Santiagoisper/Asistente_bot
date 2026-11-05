@@ -1,12 +1,15 @@
 /**
- * Línea de base del extractor en 090e506 contra los fixtures F1–F5.
+ * Línea de base del extractor contra los fixtures F1–F5.
  *
+ * Registra el hash real de ichtys/packages/ingestion. Si no es el árbol
+ * de 090e506, avisa, marca NO COMPARABLE y sigue.
  * Sin ANTHROPIC_API_KEY no llama a la red y no inventa contadores.
  * Con clave, corre solo el grupo de visitas (visitsOnly) y corta antes
  * del fixture siguiente si el gasto estimado llega a 3 USD.
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { performance } from 'node:perf_hooks'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -17,25 +20,78 @@ const REPO_ROOT = resolve(ICHTYS, '..')
 const FIXTURES = resolve(ICHTYS, 'fixtures/soa')
 const OUT = resolve(FIXTURES, 'baseline.json')
 export const EXTRACTOR_SHA = '090e506c90775e9c6dba0478477405a0106192c1'
-/** Árbol git de ichtys/packages/ingestion en EXTRACTOR_SHA. El checkout lo compara sin traer ese commit. */
+/** Árbol git de ichtys/packages/ingestion en EXTRACTOR_SHA. Es la referencia, no el checkout. */
 export const EXTRACTOR_TREE = '60521881832d2545f214b46477819651d849c8c9'
 const SPEND_CAP_USD = 3
 const IDS = ['F1', 'F2', 'F3', 'F4', 'F5'] as const
+const TREE_HASH = /^[0-9a-f]{40}$/
 
-export function extractorTreeMatches(expectedTree = EXTRACTOR_TREE, repoRoot = REPO_ROOT): boolean {
-  if (!/^[0-9a-f]{40}$/.test(expectedTree)) return false
+interface TreeRecord {
+  extractorSha: string
+  extractorTree: string | null
+  extractorTreeMatches: boolean
+  comparability: 'NO COMPARABLE' | null
+}
+
+function gitExit(repoRoot: string, args: string[]): number | null {
   try {
-    execFileSync('git', ['diff', '--quiet', 'HEAD', '--', 'ichtys/packages/ingestion'], {
+    execFileSync('git', args, { cwd: repoRoot, stdio: 'ignore' })
+    return 0
+  } catch (error) {
+    const status = (error as { status?: number }).status
+    return typeof status === 'number' ? status : null
+  }
+}
+
+function workingTreeHash(repoRoot: string): string | null {
+  const indexDir = mkdtempSync(resolve(tmpdir(), 'soa-ingestion-'))
+  const env = { ...process.env, GIT_INDEX_FILE: resolve(indexDir, 'index') }
+  try {
+    execFileSync('git', ['read-tree', 'HEAD'], { cwd: repoRoot, env, stdio: 'ignore' })
+    execFileSync('git', ['add', '-A', '--', 'ichtys/packages/ingestion'], { cwd: repoRoot, env, stdio: 'ignore' })
+    const rootTree = execFileSync('git', ['write-tree'], { cwd: repoRoot, env, encoding: 'utf8' }).trim()
+    const tree = execFileSync('git', ['rev-parse', '--verify', `${rootTree}:ichtys/packages/ingestion`], {
       cwd: repoRoot,
-      stdio: 'ignore',
-    })
+      encoding: 'utf8',
+    }).trim()
+    return TREE_HASH.test(tree) ? tree : null
+  } catch {
+    return null
+  } finally {
+    rmSync(indexDir, { recursive: true, force: true })
+  }
+}
+
+export function actualIngestionTree(repoRoot = REPO_ROOT): string | null {
+  const dirty = gitExit(repoRoot, ['diff', '--quiet', 'HEAD', '--', 'ichtys/packages/ingestion'])
+  if (dirty === 1) return workingTreeHash(repoRoot)
+  if (dirty !== 0) return null
+  try {
     const tree = execFileSync('git', ['rev-parse', '--verify', 'HEAD:ichtys/packages/ingestion'], {
       cwd: repoRoot,
       encoding: 'utf8',
     }).trim()
-    return tree === expectedTree
+    return TREE_HASH.test(tree) ? tree : null
   } catch {
-    return false
+    return null
+  }
+}
+
+export function extractorTreeMatches(expectedTree = EXTRACTOR_TREE, repoRoot = REPO_ROOT): boolean {
+  if (!TREE_HASH.test(expectedTree)) return false
+  const actual = actualIngestionTree(repoRoot)
+  if (actual === null) return false
+  return actual === expectedTree
+}
+
+function treeRecord(): TreeRecord {
+  const extractorTree = actualIngestionTree()
+  const extractorTreeMatches = extractorTree === EXTRACTOR_TREE
+  return {
+    extractorSha: EXTRACTOR_SHA,
+    extractorTree,
+    extractorTreeMatches,
+    comparability: extractorTreeMatches ? null : 'NO COMPARABLE',
   }
 }
 
@@ -115,13 +171,14 @@ function installFetchMeter(bucket: { spent: number }): () => void {
   }
 }
 
-function writeNotRun(): never {
+function writeNotRun(record: TreeRecord): never {
   const payload = {
     status: 'not_run',
     reason: 'NO VERIFICADO',
-    detail:
-      'No hay ANTHROPIC_API_KEY en el entorno ni en ichtys/.env.local. El extractor de 090e506 solo llama a Anthropic. No se inventaron contadores.',
-    extractorSha: EXTRACTOR_SHA,
+    detail: record.extractorTreeMatches
+      ? 'No hay ANTHROPIC_API_KEY en el entorno ni en ichtys/.env.local. El extractor de 090e506 solo llama a Anthropic. No se inventaron contadores.'
+      : 'No hay ANTHROPIC_API_KEY en el entorno ni en ichtys/.env.local. El árbol de ingestion no es el de 090e506: NO COMPARABLE. No se inventaron contadores.',
+    ...record,
     spendCapUsd: SPEND_CAP_USD,
     visitsOnly: true,
     fixtures: null,
@@ -131,7 +188,7 @@ function writeNotRun(): never {
   process.exit(2)
 }
 
-async function measure(full: boolean): Promise<void> {
+async function measure(full: boolean, record: TreeRecord): Promise<void> {
   const bucket = { spent: 0 }
   const restore = installFetchMeter(bucket)
   const fixtures: Record<string, unknown> = {}
@@ -184,7 +241,7 @@ async function measure(full: boolean): Promise<void> {
   writeFileSync(OUT, `${JSON.stringify({
     status: 'measured',
     reason: null,
-    extractorSha: EXTRACTOR_SHA,
+    ...record,
     spendCapUsd: SPEND_CAP_USD,
     spentUsd: round(bucket.spent),
     visitsOnly: !full,
@@ -202,18 +259,20 @@ function isDirectRun(): boolean {
   }
 }
 
-function refuseMismatchedTree(): never {
+function warnIfNotComparable(record: TreeRecord): void {
+  if (record.extractorTreeMatches) return
+  const seen = record.extractorTree ?? 'desconocido'
   process.stderr.write(
-    `baseline: ichtys/packages/ingestion no coincide con el árbol de ${EXTRACTOR_SHA}. No se escribió baseline.json.\n`,
+    `baseline: aviso: el árbol de ichtys/packages/ingestion (${seen}) no es el de ${EXTRACTOR_SHA} (${EXTRACTOR_TREE}). NO COMPARABLE. La corrida sigue.\n`,
   )
-  process.exit(1)
 }
 
 if (isDirectRun()) {
-  if (!extractorTreeMatches()) refuseMismatchedTree()
+  const record = treeRecord()
+  warnIfNotComparable(record)
   const full = process.argv.includes('--full')
-  if (!loadKey()) writeNotRun()
-  measure(full).catch((error: unknown) => {
+  if (!loadKey()) writeNotRun(record)
+  measure(full, record).catch((error: unknown) => {
     process.stderr.write(`baseline: ${error instanceof Error ? error.name : 'error'}\n`)
     process.exit(1)
   })

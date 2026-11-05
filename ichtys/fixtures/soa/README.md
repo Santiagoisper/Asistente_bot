@@ -67,7 +67,7 @@ cd ichtys
 node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/soa-fixtures/baseline.ts
 ```
 
-Ese comando sale con código 2 cuando no hay clave: escribe `baseline.json` y no llama a la red. Node avisa si se omite `--disable-warning`, porque `ichtys/package.json` no declara `"type": "module"`. No hace falta tocarlo. Antes de escribir, comprueba que el árbol `ichtys/packages/ingestion` es el de `090e506c90775e9c6dba0478477405a0106192c1`. Si no coincide, sale con código 1 y no escribe `baseline.json`.
+Ese comando sale con código 2 cuando no hay clave: escribe `baseline.json` y no llama a la red. Node avisa si se omite `--disable-warning`, porque `ichtys/package.json` no declara `"type": "module"`. No hace falta tocarlo. El archivo registra el hash real del árbol `ichtys/packages/ingestion`. Si no es el de `090e506c90775e9c6dba0478477405a0106192c1`, avisa por stderr, deja `extractorTreeMatches` en false y la etiqueta `NO COMPARABLE`, y sigue. No corta la corrida.
 
 Con clave, Node plano no puede importar el extractor: los imports relativos no llevan extensión. El comando es este:
 
