@@ -1,5 +1,4 @@
 import { after } from 'next/server'
-import { z } from 'zod'
 import { handleApiError, validateDocumentVersionAccess } from '@ichtys/auth'
 import { runIngestion } from '@ichtys/ingestion'
 import {
@@ -7,17 +6,13 @@ import {
   getIngestionRateLimitConfig,
   rateLimitResponse,
 } from '../../../../lib/security/rate-limit'
+import { JsonBodyTooLargeError, readJsonBody } from '../../../../lib/api/body-limit'
+import { triggerInput } from '../../../../lib/api/input-schemas'
 
 export const runtime = 'nodejs'
 // Ingestion + spec extraction para un protocolo de 200+ páginas toma ~60-120s.
 // Vercel Pro soporta hasta 300s. El after() callback hereda este maxDuration.
 export const maxDuration = 300
-
-const triggerInput = z
-  .object({
-    documentVersionId: z.string().uuid(),
-  })
-  .strict()
 
 /**
  * POST /api/ingestion/run — dispara ingestion para un document version.
@@ -35,10 +30,16 @@ export async function POST(req: Request): Promise<Response> {
     return new Response('Bad Request', { status: 400 })
   }
 
+  // Tope de bytes ANTES de parsear (413, H7 vuelta 2). El
+  // documentVersionId viene del body, así que el auth no puede adelantarse:
+  // el corte por bytes es la barrera barata de esta ruta.
   let body: unknown
   try {
-    body = await req.json()
-  } catch {
+    body = await readJsonBody(req)
+  } catch (err) {
+    if (err instanceof JsonBodyTooLargeError) {
+      return new Response('Payload Too Large', { status: 413 })
+    }
     return new Response('Bad Request', { status: 400 })
   }
 

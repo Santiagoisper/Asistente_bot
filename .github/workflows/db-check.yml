@@ -34,7 +34,9 @@ jobs:
       - if: steps.guard.outputs.skip != 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Paso 1 (A7): mismo motivo que ci.yml — ai 7 exige Node moderno y
+          # este workflow de la RAÍZ es el que GitHub ejecuta.
+          node-version: '24'
           cache: 'pnpm'
           cache-dependency-path: ichtys/pnpm-lock.yaml
       - if: steps.guard.outputs.skip != 'true'

@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import { handleApiError, validateStudyAccess } from '@ichtys/auth'
 import {
   AnswerOrchestratorError,
@@ -17,6 +16,8 @@ import {
   rateLimitResponse,
 } from '../../../lib/security/rate-limit'
 import { getOrCreateRequestId, log, makeRecord } from '../../../lib/observability/logger'
+import { JsonBodyTooLargeError, readJsonBody } from '../../../lib/api/body-limit'
+import { chatInput } from '../../../lib/api/input-schemas'
 
 /**
  * POST /api/chat — grounded answer engine with full chat persistence.
@@ -55,25 +56,6 @@ async function devLogError(step: string, err: unknown): Promise<void> {
 
 const FORBIDDEN_ORG_FIELDS = ['orgId', 'organizationId', 'organization_id'] as const
 
-// Defined locally to avoid loading the DB client during test module resolution.
-const documentTypeEnum = z.enum([
-  'protocol',
-  'investigator_brochure',
-  'lab_manual',
-  'pharmacy_manual',
-  'other',
-])
-
-const chatInput = z
-  .object({
-    studyId: z.string().uuid(),
-    question: z.string().min(1),
-    conversationId: z.string().uuid().optional(),
-    documentType: documentTypeEnum.optional(),
-    topK: z.number().int().positive().max(20).optional(),
-  })
-  .strict()
-
 function hasOrgField(body: unknown): boolean {
   if (typeof body !== 'object' || body === null) return false
   return FORBIDDEN_ORG_FIELDS.some((field) => field in (body as Record<string, unknown>))
@@ -92,11 +74,16 @@ export async function POST(req: Request): Promise<Response> {
     }
   }
 
-  // 2. Parse body.
+  // 2. Parse body — tope de bytes ANTES de parsear (413, H7 vuelta 2). El
+  //    studyId viene del body, así que el auth no puede adelantarse: el corte
+  //    por bytes es la barrera barata de esta ruta.
   let body: unknown
   try {
-    body = await req.json()
-  } catch {
+    body = await readJsonBody(req)
+  } catch (err) {
+    if (err instanceof JsonBodyTooLargeError) {
+      return new Response('Payload Too Large', { status: 413 })
+    }
     return new Response('Bad Request', { status: 400 })
   }
 

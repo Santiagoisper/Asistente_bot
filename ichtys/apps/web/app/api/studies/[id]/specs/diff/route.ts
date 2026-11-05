@@ -1,18 +1,14 @@
 import { NextResponse } from 'next/server'
-import { z } from 'zod'
 import { AccessError, validateStudyAccess } from '@ichtys/auth'
 import { and, db, eq, inArray, studySpecs } from '@ichtys/db'
 import { studySpecSchema } from '@ichtys/ingestion'
 import { diffSpecs } from '../../../../../../lib/spec-diff'
+import { specDiffQueryInput as querySchema } from '../../../../../../lib/api/input-schemas'
+import { zodIssuesForResponse } from '../../../../../../lib/api/zod-issues'
 
 interface RouteParams {
   params: Promise<{ id: string }>
 }
-
-const querySchema = z.object({
-  v1: z.string().uuid('v1 debe ser un UUID válido'),
-  v2: z.string().uuid('v2 debe ser un UUID válido'),
-})
 
 /**
  * GET /api/studies/[id]/specs/diff?v1=<specId>&v2=<specId>
@@ -34,7 +30,10 @@ export async function GET(req: Request, { params }: RouteParams) {
   })
   if (!parsed.success) {
     return NextResponse.json(
-      { error: 'Parámetros inválidos', details: parsed.error.flatten() },
+      // Respuesta acotada como el resto de la app (H7 vuelta 3): código y
+      // ruta de cada issue, a lo sumo 10. z.flattenError quedó obsoleto en
+      // zod 4 (ADR-8 §3) y ya no se usa en esta ruta.
+      { error: 'Parámetros inválidos', ...zodIssuesForResponse(parsed.error) },
       { status: 400 },
     )
   }

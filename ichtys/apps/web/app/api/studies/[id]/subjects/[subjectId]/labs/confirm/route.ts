@@ -3,6 +3,7 @@ import { writeAuditLog } from '../../../../../../../../lib/chat/persistence'
 import { confirmLabOcrReview, LabReviewError } from '../../../../../../../../lib/subjects/lab-review-service'
 import { PhiConfigError } from '../../../../../../../../lib/subjects/phi-fields'
 import { labOcrConfirmSchema } from '../../../../../../../../lib/subjects/schemas'
+import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../../../lib/api/body-limit'
 
 export const runtime = 'nodejs'
 
@@ -13,11 +14,26 @@ export async function POST(
 ): Promise<Response> {
   const { subjectId } = await params
 
-  let body: unknown = {}
+  // Auth primero: subjectId viene de params, no del body — el acceso se
+  // valida antes de leer el cuerpo (vuelta 2 del delta zod, requisito del
+  // Sicario). El tope de bytes (413) corta cuerpos gigantes antes del
+  // JSON.parse y del safeParse (H7).
+  let access: Awaited<ReturnType<typeof validateSubjectAccess>>
   try {
-    const raw = await req.text()
-    if (raw.trim()) body = JSON.parse(raw)
-  } catch {
+    access = await validateSubjectAccess(subjectId)
+  } catch (err) {
+    return handleApiError(err)
+  }
+
+  // POST sin labs = confirmar la revisión tal como se extrajo → body vacío
+  // es válido ({}).
+  let body: unknown
+  try {
+    body = await readJsonBody(req, { allowEmpty: true })
+  } catch (err) {
+    if (err instanceof JsonBodyTooLargeError) {
+      return new Response('Payload Too Large', { status: 413 })
+    }
     return new Response('Bad Request', { status: 400 })
   }
 
@@ -27,7 +43,7 @@ export async function POST(
   }
 
   try {
-    const { orgId, userId, study, subject } = await validateSubjectAccess(subjectId)
+    const { orgId, userId, study, subject } = access
 
     const profile = await confirmLabOcrReview({
       orgId,

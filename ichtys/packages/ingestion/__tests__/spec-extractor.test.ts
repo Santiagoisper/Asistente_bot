@@ -19,14 +19,24 @@ vi.mock('@ichtys/llm', () => ({
   runWithLlmFallback: vi.fn(
     async (
       _opts: unknown,
-      run: (model: unknown, provider: string, reportUsage: (u: unknown) => void) => Promise<unknown>,
+      run: (
+        model: unknown,
+        provider: string,
+        reportUsage: (u: { inputTokens: number; outputTokens: number }) => void,
+      ) => Promise<unknown>,
     ) => {
-      const result = await run(mocks.mockModel, 'anthropic', () => {})
+      // Paso 1 (A7): acumulador real, como el fallback de producción — el
+      // total que reporta el runner es el que llega a recordUsage.
+      const usage = { inputTokens: 0, outputTokens: 0 }
+      const result = await run(mocks.mockModel, 'anthropic', (u) => {
+        usage.inputTokens += u.inputTokens
+        usage.outputTokens += u.outputTokens
+      })
       return {
         result,
         provider: 'anthropic',
         modelId: 'claude-sonnet-4-6',
-        usage: { inputTokens: 0, outputTokens: 0 },
+        usage,
         keySource: 'platform',
       }
     },
@@ -82,10 +92,14 @@ const EMPTY_GROUPS = {
 /** Configura generateObject para responder según el contenido del prompt. */
 function mockExtractionByPrompt() {
   mocks.generateObject.mockImplementation(({ prompt }: { prompt: string }) => {
+    // Paso 1 (A7): usage con el shape de ai 7 — cada llamada "gasta" 10/20
+    // tokens, para poder afirmar que el consumo llega a recordUsage.
+    const usage = { inputTokens: 10, outputTokens: 20 }
     // Semantic locator call — returns page ranges based on which sections are present.
     if (prompt.startsWith('COMPACT PAGE MAP:')) {
       const hasEndpoints = prompt.includes('[P44]')
       return Promise.resolve({
+        usage,
         object: {
           identification: { pageStart: 1, pageEnd: 2 },
           eligibility: { pageStart: 52, pageEnd: 59 },
@@ -96,10 +110,11 @@ function mockExtractionByPrompt() {
       })
     }
     if (prompt.includes('protocol identification')) {
-      return Promise.resolve({ object: EMPTY_GROUPS.identification })
+      return Promise.resolve({ usage, object: EMPTY_GROUPS.identification })
     }
     if (prompt.includes('inclusion criteria')) {
       return Promise.resolve({
+        usage,
         object: {
           inclusionCriteria: [
             { number: '1', text: 'Adultos mayores de 18 años', sourcePages: [52], confidence: 'high' },
@@ -112,6 +127,7 @@ function mockExtractionByPrompt() {
     }
     if (prompt.includes('objectives and their') && prompt.includes('endpoints')) {
       return Promise.resolve({
+        usage,
         object: {
           endpoints: [
             { type: 'primary', objective: 'demostrar superioridad', endpoint: 'cambio en HbA1c', sourcePages: [44], confidence: 'high' },
@@ -121,6 +137,7 @@ function mockExtractionByPrompt() {
     }
     if (prompt.includes('schedule of activities')) {
       return Promise.resolve({
+        usage,
         object: {
           visits: [
             { name: 'Visita 4', label: 'Semana 12', day: 85, windowDays: 3, procedures: ['HbA1c', 'muestra PK'], sourcePages: [19], confidence: 'high' },
@@ -169,16 +186,40 @@ describe('extractStudySpec', () => {
     expect(mocks.generateObject).toHaveBeenCalledTimes(5)
   })
 
+  it('registra el consumo con inputTokens > 0 cuando hay usageCtx — mapeo ai 7 (A7)', async () => {
+    mockExtractionByPrompt()
+
+    await extractStudySpec(makeProtocolPages(), [], {
+      orgId: 'org-1',
+      studyId: 'study-1',
+      userId: 'user-1',
+    })
+
+    // El registro es POR llamada LLM (comportamiento de base): 1 locator + 4
+    // grupos = 5 registros, cada uno con los 10/20 tokens de su llamada.
+    expect(mocks.recordUsage).toHaveBeenCalledTimes(5)
+    let totalInput = 0
+    for (const call of mocks.recordUsage.mock.calls) {
+      const arg = call[0] as { kind: string; inputTokens: number; outputTokens: number }
+      expect(arg.kind).toBe('spec_extraction')
+      expect(arg.inputTokens).toBe(10)
+      expect(arg.inputTokens).toBeGreaterThan(0)
+      expect(arg.outputTokens).toBe(20)
+      totalInput += arg.inputTokens
+    }
+    expect(totalInput).toBe(50)
+  })
+
   it('sends only the located section pages to each group prompt', async () => {
     mockExtractionByPrompt()
 
     await extractStudySpec(makeProtocolPages())
 
-    const calls = mocks.generateObject.mock.calls as Array<[{ prompt: string; system: string }]>
+    const calls = mocks.generateObject.mock.calls as Array<[{ prompt: string; instructions: string }]>
     const eligibilityCall = calls.find(([arg]) => arg.prompt.includes('inclusion criteria'))?.[0]
     if (!eligibilityCall) throw new Error('eligibility extraction call not found')
 
-    expect(eligibilityCall.system).toBe(SPEC_EXTRACTION_SYSTEM_PROMPT)
+    expect(eligibilityCall.instructions).toBe(SPEC_EXTRACTION_SYSTEM_PROMPT)
     expect(eligibilityCall.prompt).toContain('[PAGE 52]')
     expect(eligibilityCall.prompt).toContain('[PAGE 53]')
     // La sección de elegibilidad no debe incluir el SoA ni la introducción.
@@ -306,6 +347,150 @@ describe('extractStudySpec', () => {
       'visits: extracted visit count (1) is inconsistent with 4 detected visit/time labels',
     )
     expect(result.spec.visits[0]?.confidence).toBe('high')
+  })
+
+  // -------------------------------------------------------------------------
+  // Regresión E5 (vuelta 4): un tope NUNCA tumba más que el ítem afectado.
+  // En 0f441f4 un procedimiento de 601 chars o 101 sourcePages en UNA visita
+  // hacían que studySpecSchema.parse (final de extractStudySpec) lanzara
+  // ZodError y se perdieran los CUATRO grupos.
+  // -------------------------------------------------------------------------
+
+  it('un procedimiento de 601 chars y 101 sourcePages no tumban la extracción (se recortan con advertencia)', async () => {
+    mockExtractionByPrompt()
+    const original = mocks.generateObject.getMockImplementation()!
+    mocks.generateObject.mockImplementation((args: { prompt: string }) => {
+      if (args.prompt.includes('schedule of activities')) {
+        return Promise.resolve({
+          object: {
+            visits: [
+              {
+                name: 'Visita 4',
+                label: 'Semana 12',
+                day: 85,
+                windowDays: 3,
+                procedures: ['HbA1c', `procedimiento-largo-${'x'.repeat(580)}`], // 601 chars
+                sourcePages: Array.from({ length: 101 }, (_, i) => i + 1),
+                confidence: 'high',
+              },
+              {
+                name: 'Visita 1',
+                label: 'Selección',
+                day: -35,
+                windowDays: null,
+                procedures: ['Consentimiento'],
+                sourcePages: [18],
+                confidence: 'high',
+              },
+            ],
+          },
+        })
+      }
+      return original(args)
+    })
+
+    const result = await extractStudySpec(makeProtocolPages())
+
+    // La extracción COMPLETA se guarda: criterios, endpoints e identificación
+    // intactos (antes: ZodError y nada).
+    expect(result.spec.inclusionCriteria).toHaveLength(1)
+    expect(result.spec.exclusionCriteria).toHaveLength(1)
+    expect(result.spec.endpoints).toHaveLength(1)
+    // La visita afectada sobrevive RECORTADA al tope, la válida intacta.
+    expect(result.spec.visits).toHaveLength(2)
+    expect(result.spec.visits[0]?.procedures[1]).toHaveLength(500)
+    expect(result.spec.visits[0]?.sourcePages).toHaveLength(100)
+    expect(result.spec.visits[1]?.procedures).toEqual(['Consentimiento'])
+    // Una advertencia por ítem recortado, con lo que se ajustó.
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining('procedimientos recortados'),
+      expect.stringContaining('sourcePages recortadas'),
+    ]))
+    expect(result.warnings.some((warning) => warning.includes('extraction_failed'))).toBe(false)
+  })
+
+  it('un criterio de 10.001 chars no tumba el grupo aunque el SDK lo rechace: se recupera la salida cruda', async () => {
+    mockExtractionByPrompt()
+    const original = mocks.generateObject.getMockImplementation()!
+    const longCriterion = {
+      number: '1',
+      text: 'Adultos mayores de 18 años '.repeat(371), // 27*371 = 10.017 chars > tope 10.000
+      sourcePages: [52],
+      confidence: 'high',
+    }
+    const validCriterion = {
+      number: '2',
+      text: 'HbA1c entre 7,5% y 10,0%',
+      sourcePages: [52],
+      confidence: 'high',
+    }
+    mocks.generateObject.mockImplementation(
+      (args: { prompt: string; schema: { safeParse: (value: unknown) => { success: boolean } } }) => {
+        if (args.prompt.includes('inclusion criteria')) {
+          const object = { inclusionCriteria: [longCriterion, validCriterion], exclusionCriteria: [] }
+          // El SDK real (ai 7) valida la salida contra el schema del grupo y
+          // lanza NoObjectGeneratedError con .text = JSON crudo del modelo.
+          if (!args.schema.safeParse(object).success) {
+            return Promise.reject(
+              Object.assign(new Error('No object generated: response did not match schema.'), {
+                text: JSON.stringify(object),
+              }),
+            )
+          }
+          return Promise.resolve({ object })
+        }
+        return original(args as { prompt: string })
+      },
+    )
+
+    const result = await extractStudySpec(makeProtocolPages())
+
+    // El grupo NO se pierde (antes: grupo vacío + "provider failure"):
+    // el criterio largo se recorta y el válido pasa intacto.
+    expect(result.spec.inclusionCriteria).toHaveLength(2)
+    expect(result.spec.inclusionCriteria[0]?.text).toHaveLength(10_000)
+    expect(result.spec.inclusionCriteria[1]?.text).toBe('HbA1c entre 7,5% y 10,0%')
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining('texto recortado'),
+    ]))
+    expect(result.warnings.some((w) => w.includes('provider failure'))).toBe(false)
+  })
+
+  it('B1: .text recuperado sin exclusionCriteria deja advertencia que nombra la exclusión', async () => {
+    mockExtractionByPrompt()
+    const original = mocks.generateObject.getMockImplementation()!
+    const validCriterion = {
+      number: '1',
+      text: 'Adultos mayores de 18 años',
+      sourcePages: [52],
+      confidence: 'high',
+    }
+    mocks.generateObject.mockImplementation(
+      (args: { prompt: string; schema: { safeParse: (value: unknown) => { success: boolean } } }) => {
+        if (args.prompt.includes('inclusion criteria')) {
+          // El modelo devolvió SOLO inclusión: la exclusión ni vino (y el
+          // schema del grupo la exige, así que el SDK rechaza).
+          const object = { inclusionCriteria: [validCriterion] }
+          if (!args.schema.safeParse(object).success) {
+            return Promise.reject(
+              Object.assign(new Error('No object generated: response did not match schema.'), {
+                text: JSON.stringify(object),
+              }),
+            )
+          }
+          return Promise.resolve({ object })
+        }
+        return original(args as { prompt: string })
+      },
+    )
+
+    const result = await extractStudySpec(makeProtocolPages())
+
+    // La inclusión se recupera; la exclusión queda vacía PERO nombrada —
+    // no se lee como "este protocolo no tiene criterios de exclusión".
+    expect(result.spec.inclusionCriteria).toHaveLength(1)
+    expect(result.spec.exclusionCriteria).toEqual([])
+    expect(result.warnings.some((w) => w.includes('exclusion') && w.includes('ausente'))).toBe(true)
   })
 })
 

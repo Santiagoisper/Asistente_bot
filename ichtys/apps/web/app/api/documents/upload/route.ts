@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import { handleApiError, validateStudyAccess } from '@ichtys/auth'
 import { auditLogs, db, documents, documentVersions } from '@ichtys/db'
 import { putPrivateDocumentPdf } from './blob-storage'
@@ -8,6 +7,7 @@ import {
   rateLimitResponse,
 } from '../../../../lib/security/rate-limit'
 import { getOrCreateRequestId, log, makeRecord } from '../../../../lib/observability/logger'
+import { uploadMetaInput as uploadMeta } from '../../../../lib/api/input-schemas'
 
 export const runtime = 'nodejs'
 
@@ -30,21 +30,6 @@ async function hasPdfMagicBytes(file: File): Promise<boolean> {
   if (head.length < PDF_MAGIC_BYTES.length) return false
   return new TextDecoder('ascii').decode(head) === PDF_MAGIC_BYTES
 }
-
-const documentType = z.enum([
-  'protocol',
-  'investigator_brochure',
-  'lab_manual',
-  'pharmacy_manual',
-  'soa',
-  'other',
-])
-
-const uploadMeta = z.object({
-  studyId: z.string().uuid(),
-  name: z.string().min(1).optional(),
-  documentType,
-})
 
 function getOptionalString(form: FormData, key: string): string | undefined {
   const value = form.get(key)

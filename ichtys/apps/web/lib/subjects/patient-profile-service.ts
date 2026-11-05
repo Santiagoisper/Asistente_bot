@@ -12,7 +12,9 @@ import { generateObject } from 'ai'
 import { z } from 'zod'
 import { decryptProfileJson, encryptProfileJson } from './phi-fields'
 
-const llmFactsSchema = z.object({
+// Exportado para poder testear su tamaño (A7): cada campo extra infla el
+// prompt del extractor clínico que corre sobre texto clínico real.
+export const llmFactsSchema = z.object({
   ageYears: z.number().int().positive().nullable().optional(),
   systolic: z.number().int().positive().nullable().optional(),
   diastolic: z.number().int().positive().nullable().optional(),
@@ -72,14 +74,18 @@ async function extractFactsWithLlm(
           model,
           abortSignal: signal,
           schema: llmFactsSchema,
-          system: `Sos un extractor clínico para ensayos. Devolvé SOLO datos estructurados presentes en el texto.
+          // Paso 1 (A7): mismo modo de salida que el medido (jsonTool) y
+          // temperature explícita — ai 7 ya no manda 0 por defecto.
+          providerOptions: { anthropic: { structuredOutputMode: 'jsonTool' } },
+          temperature: 0,
+          instructions: `Sos un extractor clínico para ensayos. Devolvé SOLO datos estructurados presentes en el texto.
 No inventes valores. Si un dato no está explícito, omitilo o usá null.
 Labs comunes: HbA1c (%), glucosa (mg/dL), creatinina, eGFR.
 Medicaciones: nombre genérico, dosis y frecuencia si aparecen.`,
           prompt: redactedContent.slice(0, 8000),
-          maxTokens: 1024,
+          maxOutputTokens: 1024,
         })
-        reportUsage({ inputTokens: response.usage?.promptTokens ?? 0, outputTokens: response.usage?.completionTokens ?? 0 })
+        reportUsage({ inputTokens: response.usage?.inputTokens ?? 0, outputTokens: response.usage?.outputTokens ?? 0 })
         return response.object
       },
     )

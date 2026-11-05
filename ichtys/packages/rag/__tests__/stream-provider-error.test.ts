@@ -95,18 +95,35 @@ beforeEach(() => {
   mocks.resolveProviderChain.mockReturnValue(['anthropic'])
   mocks.isProviderConfigured.mockReturnValue(true)
   mocks.getDefaultProviderPreference.mockReturnValue('anthropic')
-  mocks.generateObject.mockResolvedValue({ object: { confidence: 'high' } })
+  mocks.generateObject.mockResolvedValue({
+    object: { confidence: 'high' },
+    // Paso 1 (A7): usage con el shape de ai 7 — lo reporta el eval de confianza.
+    usage: { inputTokens: 3, outputTokens: 2 },
+  })
   mocks.runWithLlmFallback.mockImplementation(
     async (
       _opts: unknown,
-      run: (model: unknown, provider: string, reportUsage: (u: unknown) => void, signal: AbortSignal) => Promise<unknown>,
-    ) => ({
-      result: await run(mocks.mockModel, 'anthropic', () => {}, new AbortController().signal),
-      provider: 'anthropic',
-      modelId: 'claude-sonnet-5-5',
-      usage: { inputTokens: 0, outputTokens: 0 },
-      keySource: 'platform',
-    }),
+      run: (
+        model: unknown,
+        provider: string,
+        reportUsage: (u: { inputTokens: number; outputTokens: number }) => void,
+        signal: AbortSignal,
+      ) => Promise<unknown>,
+    ) => {
+      // Paso 1 (A7): acumulador real, como el fallback de producción.
+      const usage = { inputTokens: 0, outputTokens: 0 }
+      const result = await run(mocks.mockModel, 'anthropic', (u) => {
+        usage.inputTokens += u.inputTokens
+        usage.outputTokens += u.outputTokens
+      }, new AbortController().signal)
+      return {
+        result,
+        provider: 'anthropic',
+        modelId: 'claude-sonnet-5-5',
+        usage,
+        keySource: 'platform',
+      }
+    },
   )
 })
 
@@ -176,6 +193,64 @@ describe('answerEngineStream — falla del proveedor ≠ evidencia insuficiente 
     const done = events.find((e) => (e as { type: string }).type === 'done') as { confidence: string; evidences: unknown[] } | undefined
     expect(done?.confidence).toBe('high')
     expect(done?.evidences.length).toBeGreaterThan(0)
+  })
+
+  it('happy path: usageEvents con inputTokens > 0 para chat_answer y chat_eval (A7)', async () => {
+    async function* healthy(): AsyncGenerator<string> { yield 'HbA1c entre 7,0 % y 10,0 % [1]' }
+    // Usage del stream con el shape de ai 7 (usage es una promesa en el result).
+    mocks.streamText.mockReturnValue({
+      textStream: healthy(),
+      usage: Promise.resolve({ inputTokens: 21, outputTokens: 34 }),
+    })
+
+    const { events, error } = await collectStream(makeInput())
+
+    expect(error).toBeNull()
+    const done = events.find((e) => (e as { type: string }).type === 'done') as
+      | { usageEvents?: Array<{ kind: string; inputTokens: number; outputTokens: number }> }
+      | undefined
+    const answerEvent = done?.usageEvents?.find((e) => e.kind === 'chat_answer')
+    const evalEvent = done?.usageEvents?.find((e) => e.kind === 'chat_eval')
+    // El stream renombró promptTokens→inputTokens y el eval completionTokens→
+    // outputTokens: ambos tienen que llegar > 0 para que recordUsage facture.
+    expect(answerEvent?.inputTokens).toBe(21)
+    expect(answerEvent?.outputTokens).toBe(34)
+    expect(evalEvent?.inputTokens).toBe(3)
+    expect(evalEvent?.outputTokens).toBe(2)
+  })
+
+  it('streamText con temperature 0 — ai@4 lo inyectaba por defecto, ai@7 no (R1, B3)', async () => {
+    async function* healthy(): AsyncGenerator<string> { yield 'HbA1c entre 7,0 % y 10,0 % [1]' }
+    mocks.streamText.mockReturnValue({ textStream: healthy() })
+
+    await collectStream(makeInput())
+
+    // En ai@4.3.19 prepareCallSettings inyectaba temperature 0; ai@7 no tiene
+    // default. El paso 1 conserva el comportamiento medido: 0 explícito.
+    expect(mocks.streamText).toHaveBeenCalledWith(
+      expect.objectContaining({ temperature: 0 })
+    )
+  })
+
+  it('kit ai 7: AICallError (statusCode 500) vía onError + stream vacío sigue siendo provider_unavailable, nunca insufficient_evidence (A7)', async () => {
+    mocks.resolveProviderChain.mockReturnValue(['anthropic'])
+    // Forma del error que levanta el kit nuevo: AICallError con statusCode y
+    // url, mensaje neutro (sin texto clínico).
+    const ai7Error = Object.assign(new Error('API error'), {
+      name: 'AICallError',
+      statusCode: 500,
+      url: 'https://api.anthropic.com/v1/messages',
+      isRetryable: true,
+    })
+    streamTextFailingWith(ai7Error)
+
+    const { events, error } = await collectStream(makeInput({ llmProviderPreference: 'anthropic' }))
+
+    // El contrato que no puede romperse con el kit nuevo (E2E 2026-10-22):
+    // fallo de proveedor = ERROR, jamás un done "insufficient_evidence".
+    expect(events.filter((e) => (e as { type: string }).type === 'done')).toHaveLength(0)
+    expect(error).toBeInstanceOf(AnswerEngineError)
+    expect((error as AnswerEngineError).code).toBe('provider_unavailable')
   })
 
   it('cadena de 1 con 429 transitorio → llm_rate_limited (saturación), no "proveedor no disponible" (sugerencia reviewer #39)', async () => {

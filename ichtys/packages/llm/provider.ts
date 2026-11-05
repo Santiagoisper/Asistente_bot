@@ -165,7 +165,9 @@ export function createLanguageModel(
     }
     case 'openai': {
       const openai = createOpenAI({ apiKey })
-      return openai(modelId)
+      // Paso 1 (A7): .chat() explícito para seguir en Chat Completions — el
+      // default del provider pasó a la Responses API en el SDK 5.0.
+      return openai.chat(modelId)
     }
     case 'google': {
       const google = createGoogleGenerativeAI({ apiKey })
@@ -180,7 +182,9 @@ export function createLanguageModel(
         apiKey,
         baseURL: 'https://openrouter.ai/api/v1',
       })
-      return openrouter(modelId)
+      // Paso 1 (A7): .chat() explícito — mismo motivo que openai (Chat
+      // Completions, no la Responses API del default nuevo).
+      return openrouter.chat(modelId)
     }
   }
 }

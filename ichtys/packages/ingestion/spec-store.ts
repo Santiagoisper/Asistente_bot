@@ -1,6 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm'
 import { db, studySpecs, type StudySpecRow } from '@ichtys/db'
 import { studySpecSchema, type StudySpec } from './study-spec'
+import { capExtractionWarnings, normalizeStudySpec, warningCodeSummary } from './spec-normalizer'
 import type { ApprovedSpecExample } from './spec-extractor'
 import { SEED_SPEC_EXAMPLE } from './seed-spec-example'
 
@@ -16,6 +17,24 @@ export function specRichness(spec: StudySpec): number {
 
 export function isMeaningfulSpec(spec: StudySpec): boolean {
   return specRichness(spec) > 0
+}
+
+/**
+ * Una fila guardada que no valida el schema actual se salta en vez de
+ * romper la lectura. Con las cotas de la vuelta 3 no debería pasar nunca,
+ * pero si pasa hay que verlo (Architect, revisión del delta zod): se
+ * registra id/versión y el primer código de error — SIN contenido del spec.
+ */
+function warnSkippedSpec(
+  context: string,
+  row: { id: string; version: number },
+  error: { issues: ReadonlyArray<{ code: string; path: ReadonlyArray<PropertyKey> }> },
+): void {
+  const first = error.issues[0]
+  console.warn(
+    `[spec-store:${context}] spec ${row.id} v${row.version} no valida el schema actual ` +
+      `(${error.issues.length} issues; primero: ${first?.code} en ${first?.path.join('.')}) — fila omitida`,
+  )
 }
 
 /**
@@ -43,7 +62,33 @@ export interface SavedStudySpec {
 }
 
 export async function saveStudySpec(params: SaveStudySpecParams): Promise<SavedStudySpec> {
-  const spec = studySpecSchema.parse(params.spec)
+  // Vuelta 4 (regresión E5): mismo criterio que el extractor — normalizar
+  // ANTES del .parse. El spec llega de la salida del modelo (o del pipeline,
+  // que junta TODAS las advertencias de extracción); un tope jamás puede
+  // tumbar el guardado completo. Sobre un spec válido es idempotente.
+  // Vuelta 5 (B2): los ajustes del guardado se PERSISTEN en
+  // extractionWarnings — el banner de la pantalla lee de ahí, no de la
+  // consola. Vuelta 5 (G4-S1): el log sólo lleva conteos y códigos, jamás
+  // contenido del documento o del modelo.
+  const normalizationWarnings: string[] = []
+  const base = normalizeStudySpec(params.spec, normalizationWarnings)
+  let spec = base
+  if (normalizationWarnings.length > 0) {
+    spec = normalizeStudySpec(
+      {
+        ...base,
+        extractionWarnings: capExtractionWarnings([
+          ...(base.extractionWarnings ?? []),
+          ...normalizationWarnings,
+        ]),
+      },
+      [], // ya normalizado: sólo re-valida tras sumar los ajustes del guardado
+    )
+    console.warn(
+      `[spec-store:save] spec normalizado para studyId=${params.studyId} ` +
+        `(${normalizationWarnings.length} ajustes: ${warningCodeSummary(normalizationWarnings)})`,
+    )
+  }
 
   // Fetch recent versions: need latest version number + any approved spec.
   // Limit to 20 — realistic max for clinical trial protocol versions; ordered
@@ -93,6 +138,8 @@ export async function getApprovedSpecExamples(params: {
 }): Promise<ApprovedSpecExample[]> {
   const rows = await db
     .select({
+      id: studySpecs.id,
+      version: studySpecs.version,
       spec: studySpecs.spec,
     })
     .from(studySpecs)
@@ -107,7 +154,10 @@ export async function getApprovedSpecExamples(params: {
 
   const examples = rows.map(row => {
     const spec = studySpecSchema.safeParse(row.spec)
-    if (!spec.success) return null
+    if (!spec.success) {
+      warnSkippedSpec('approved-examples', row, spec.error)
+      return null
+    }
     const protocolCode = spec.data.identification.protocolCode ?? null
     return { protocolCode, spec: spec.data }
   }).filter((x): x is ApprovedSpecExample => x !== null)
@@ -152,7 +202,10 @@ export async function getLatestStudySpec(params: {
 
   for (const row of rows) {
     const parsed = studySpecSchema.safeParse(row.spec)
-    if (!parsed.success) continue
+    if (!parsed.success) {
+      warnSkippedSpec('latest', row, parsed.error)
+      continue
+    }
     if (!parsed.data.extractionFailed && isMeaningfulSpec(parsed.data)) return row
   }
 
@@ -203,7 +256,11 @@ export async function getLatestMeaningfulStudySpec(params: {
 
   for (const row of rows) {
     const parsed = studySpecSchema.safeParse(row.spec)
-    if (parsed.success && !parsed.data.extractionFailed && isMeaningfulSpec(parsed.data)) return row
+    if (!parsed.success) {
+      warnSkippedSpec('latest-meaningful', row, parsed.error)
+      continue
+    }
+    if (!parsed.data.extractionFailed && isMeaningfulSpec(parsed.data)) return row
   }
 
   return null

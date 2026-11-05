@@ -488,11 +488,17 @@ export async function answerEngine(input: AnswerEngineInput): Promise<AnswerResu
           model,
           abortSignal: signal,
           schema: answerSchema,
-          mode: 'tool',
-          system: SYSTEM_PROMPT,
+          // Paso 1 (A7): kit nuevo con modo de salida IGUAL al medido — jsonTool,
+          // no output_format nativo (se quita en el paso 2).
+          providerOptions: { anthropic: { structuredOutputMode: 'jsonTool' } },
+          // ai@4 inyectaba temperature 0 en toda llamada (prepareCallSettings);
+          // ai@7 no tiene default y el proveedor usaría 1.0. El paso 1 es
+          // "solo el kit, mismo comportamiento": 0 explícito (R1, B3).
+          temperature: 0,
+          instructions: SYSTEM_PROMPT,
           prompt: buildUserPrompt(question, context, conversationHistory),
         })
-        reportUsage({ inputTokens: result.usage?.promptTokens ?? 0, outputTokens: result.usage?.completionTokens ?? 0 })
+        reportUsage({ inputTokens: result.usage?.inputTokens ?? 0, outputTokens: result.usage?.outputTokens ?? 0 })
         return result.object as StructuredAnswer
       },
     )
@@ -616,13 +622,16 @@ async function evaluateStreamedAnswerConfidence(
           model,
           abortSignal: signal,
           schema: confidenceOnlySchema,
-          mode: 'tool',
-          system:
+          // Paso 1 (A7): mismo modo de salida que el medido + temperature explícita
+          // (ai 7 ya no manda 0 por defecto; los 4.x la respetan).
+          providerOptions: { anthropic: { structuredOutputMode: 'jsonTool' } },
+          temperature: 0,
+          instructions:
             'You evaluate whether a clinical answer is fully supported by the provided document excerpts. ' +
             'Return insufficient_evidence if the answer speculates, extrapolates, or is not supported by the excerpts.',
           prompt: `USER QUESTION:\n${question}\n\nDOCUMENT EXCERPTS:\n${context}\n\nGENERATED ANSWER:\n${fullAnswer}\n\nRate confidence for this answer.`,
         })
-        reportUsage({ inputTokens: evalResult.usage?.promptTokens ?? 0, outputTokens: evalResult.usage?.completionTokens ?? 0 })
+        reportUsage({ inputTokens: evalResult.usage?.inputTokens ?? 0, outputTokens: evalResult.usage?.outputTokens ?? 0 })
         return evalResult.object.confidence
       },
     )
@@ -781,9 +790,13 @@ export async function* answerEngineStream(
       const textStream = streamTextWithTimeout((signal) => {
         streamResultRef = streamText({
           model,
-          system: STREAM_ANSWER_SYSTEM_PROMPT,
+          instructions: STREAM_ANSWER_SYSTEM_PROMPT,
           prompt: userPrompt,
           abortSignal: signal,
+          // Igual que el camino no-streaming (R1, B3): ai@4 mandaba 0 por
+          // defecto, ai@7 no — 0 explícito para conservar el comportamiento
+          // medido en el paso 1.
+          temperature: 0,
           onError: ({ error }) => {
             streamError = error
           },
@@ -806,8 +819,8 @@ export async function* answerEngineStream(
           kind: 'chat_answer',
           provider,
           model: getModelId(provider, 'answer'),
-          inputTokens: streamUsage?.promptTokens ?? 0,
-          outputTokens: streamUsage?.completionTokens ?? 0,
+          inputTokens: streamUsage?.inputTokens ?? 0,
+          outputTokens: streamUsage?.outputTokens ?? 0,
           keySource,
         }
         timing = {

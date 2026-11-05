@@ -56,7 +56,7 @@ vi.mock('../phi-fields', () => ({
   decryptProfileJson: mocks.decryptProfileJson,
 }))
 
-import { refreshPatientProfileFromEvolution } from '../patient-profile-service'
+import { llmFactsSchema, refreshPatientProfileFromEvolution } from '../patient-profile-service'
 
 const PARAMS = {
   orgId: crypto.randomUUID(),
@@ -124,5 +124,57 @@ describe('refreshPatientProfileFromEvolution — logging del error del proveedor
 
     const logged = errorSpy.mock.calls[0]!.map((part) => String(part)).join(' ')
     expect(logged).toBe('[clinical-extract] LLM extraction failed: TypeError')
+  })
+})
+
+describe('refreshPatientProfileFromEvolution — medición de consumo (A7)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.findFirst.mockResolvedValue(null)
+    mocks.updateWhere.mockResolvedValue(undefined)
+    mocks.extractFactsFromEvolution.mockReturnValue({ labs: [] })
+    mocks.mergeExtractions.mockReturnValue({ labs: [] })
+    mocks.mergeProfileWithExtraction.mockReturnValue({ version: 1, labs: [], medications: [], conditions: [] })
+  })
+
+  it('registra el consumo del extractor clínico con inputTokens > 0 — mapeo ai 7', async () => {
+    // Acumulador real (como el fallback de producción): el total que reporta
+    // el runner es el que llega a recordUsage.
+    mocks.runWithLlmFallback.mockImplementation(async (_cfg, runner) => {
+      const usage = { inputTokens: 0, outputTokens: 0 }
+      const reportUsage = (u: { inputTokens: number; outputTokens: number }) => {
+        usage.inputTokens += u.inputTokens
+        usage.outputTokens += u.outputTokens
+      }
+      const result = await runner({} as never, 'anthropic', reportUsage, undefined as never)
+      return { result, provider: 'anthropic', modelId: 'claude-sonnet-4-6', usage, keySource: 'org' }
+    })
+    const { generateObject } = await import('ai')
+    // El result de ai 7 trae más campos (finishReason, response, ...) que este
+    // test no usa — el código solo lee .object y .usage. Usage va con el shape
+    // completo de LanguageModelUsage (totalTokens + detalles).
+    vi.mocked(generateObject).mockResolvedValueOnce({
+      object: { ageYears: 58, labs: [], medications: [], conditions: [] },
+      usage: {
+        inputTokens: 7,
+        outputTokens: 5,
+        totalTokens: 12,
+        inputTokenDetails: { noCacheTokens: undefined, cacheReadTokens: undefined, cacheWriteTokens: undefined },
+        outputTokenDetails: { textTokens: undefined, reasoningTokens: undefined },
+      },
+    } as never)
+
+    await refreshPatientProfileFromEvolution(PARAMS)
+
+    expect(mocks.recordUsage).toHaveBeenCalledTimes(1)
+    expect(mocks.recordUsage).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'clinical_extraction', inputTokens: 7, outputTokens: 5 }),
+    )
+  })
+
+  it('llmFactsSchema se mantiene chico: ≤ 10 campos (presupuesto de tokens del extractor clínico)', () => {
+    // Cada campo opcional extra infla el schema que viaja en cada llamada
+    // sobre texto clínico redactado — tope duro de 10.
+    expect(Object.keys(llmFactsSchema.shape).length).toBeLessThanOrEqual(10)
   })
 })

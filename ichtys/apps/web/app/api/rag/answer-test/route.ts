@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import { handleApiError, validateStudyAccess } from '@ichtys/auth'
 import {
   generateAnswerForStudy,
@@ -9,6 +8,8 @@ import {
   enforceSlidingWindowRateLimit,
   rateLimitResponse,
 } from '../../../../lib/security/rate-limit'
+import { JsonBodyTooLargeError, readJsonBody } from '../../../../lib/api/body-limit'
+import { answerTestInput } from '../../../../lib/api/input-schemas'
 
 /**
  * POST /api/rag/answer-test — INTERNAL TESTING ENDPOINT
@@ -26,25 +27,6 @@ export const runtime = 'nodejs'
 
 // Org-identifier fields that must never come from the client.
 const FORBIDDEN_ORG_FIELDS = ['orgId', 'organizationId', 'organization_id'] as const
-
-// Mirrors packages/db/schema/enums.ts — defined locally to avoid loading the
-// DB client (which requires DATABASE_URL) during module resolution in tests.
-const documentTypeEnum = z.enum([
-  'protocol',
-  'investigator_brochure',
-  'lab_manual',
-  'pharmacy_manual',
-  'other',
-])
-
-const answerTestInput = z
-  .object({
-    studyId: z.string().uuid(),
-    question: z.string().min(1),
-    documentType: documentTypeEnum.optional(),
-    topK: z.number().int().positive().max(20).optional(),
-  })
-  .strict()
 
 function hasOrgField(body: unknown): boolean {
   if (typeof body !== 'object' || body === null) return false
@@ -74,11 +56,16 @@ export async function POST(req: Request): Promise<Response> {
     return rateLimitResponse(rateLimit.retryAfterSeconds)
   }
 
-  // 3. Parse body.
+  // 3. Parse body — tope de bytes ANTES de parsear (413, H7 vuelta 2). El
+  //    studyId viene del body, así que el auth no puede adelantarse: el corte
+  //    por bytes es la barrera barata de esta ruta.
   let body: unknown
   try {
-    body = await req.json()
-  } catch {
+    body = await readJsonBody(req)
+  } catch (err) {
+    if (err instanceof JsonBodyTooLargeError) {
+      return new Response('Payload Too Large', { status: 413 })
+    }
     return new Response('Bad Request', { status: 400 })
   }
 

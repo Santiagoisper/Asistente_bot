@@ -27,9 +27,13 @@ export type FieldConfidenceLevel = z.infer<typeof fieldConfidenceLevelSchema>
 export const profileFieldConfidenceSchema = z.object({
   ageYears: fieldConfidenceLevelSchema.optional(),
   bloodPressure: fieldConfidenceLevelSchema.optional(),
-  labs: z.record(fieldConfidenceLevelSchema).optional(),
-  medications: z.record(fieldConfidenceLevelSchema).optional(),
-  conditions: z.record(fieldConfidenceLevelSchema).optional(),
+  // z.record con DOS argumentos (ADR-8 §3): zod 4 ya no acepta la forma de
+  // uno (claves implícitas string). Mismo significado histórico: claves
+  // arbitrarias (hba1c, metformina, ...) → nivel de confianza. Protegido por
+  // el round-trip del perfil cifrado en formato viejo (M6).
+  labs: z.record(z.string(), fieldConfidenceLevelSchema).optional(),
+  medications: z.record(z.string(), fieldConfidenceLevelSchema).optional(),
+  conditions: z.record(z.string(), fieldConfidenceLevelSchema).optional(),
 })
 export type ProfileFieldConfidence = z.infer<typeof profileFieldConfidenceSchema>
 

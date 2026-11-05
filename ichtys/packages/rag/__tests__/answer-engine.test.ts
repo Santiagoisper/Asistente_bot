@@ -24,14 +24,27 @@ vi.mock('@ichtys/llm', () => ({
   runWithLlmFallback: vi.fn(
     async (
       _opts: unknown,
-      run: (model: unknown, provider: string, reportUsage: (u: unknown) => void) => Promise<unknown>,
-    ) => ({
-      result: await run(mocks.mockModel, 'anthropic', () => {}),
-      provider: 'anthropic',
-      modelId: 'claude-sonnet-4-6',
-      usage: { inputTokens: 0, outputTokens: 0 },
-      keySource: 'platform',
-    }),
+      run: (
+        model: unknown,
+        provider: string,
+        reportUsage: (u: { inputTokens: number; outputTokens: number }) => void,
+      ) => Promise<unknown>,
+    ) => {
+      // Paso 1 (A7): acumulador real, como el fallback de producción — el
+      // total que reporta el runner es el que llega a recordUsage.
+      const usage = { inputTokens: 0, outputTokens: 0 }
+      const result = await run(mocks.mockModel, 'anthropic', (u) => {
+        usage.inputTokens += u.inputTokens
+        usage.outputTokens += u.outputTokens
+      })
+      return {
+        result,
+        provider: 'anthropic',
+        modelId: 'claude-sonnet-4-6',
+        usage,
+        keySource: 'platform',
+      }
+    },
   ),
   createLanguageModel: vi.fn().mockReturnValue(mocks.mockModel),
   getDefaultProviderPreference: vi.fn().mockReturnValue('auto'),
@@ -114,6 +127,8 @@ function makeLLMResponse(overrides: {
   answer?: string
   confidence?: 'high' | 'medium' | 'low' | 'insufficient_evidence'
   citationIndices?: number[]
+  /** Usage con el shape de ai 7 (inputTokens/outputTokens). */
+  usage?: { inputTokens: number; outputTokens: number }
 }) {
   return {
     object: {
@@ -121,6 +136,7 @@ function makeLLMResponse(overrides: {
       confidence: overrides.confidence ?? 'high',
       citationIndices: overrides.citationIndices ?? [1],
     },
+    ...(overrides.usage ? { usage: overrides.usage } : {}),
   }
 }
 
@@ -244,6 +260,31 @@ describe('answerEngine — responses with evidence', () => {
 
     expect(result.confidence).toBe('high')
     expect(result.evidences).toHaveLength(3)
+  })
+
+  it('usageEvents llega con inputTokens > 0 — el mapeo ai 7 (inputTokens/outputTokens) no se pierde (A7)', async () => {
+    const chunks = [
+      makeChunk({ similarityScore: 0.92 }),
+      makeChunk({ similarityScore: 0.89 }),
+      makeChunk({ similarityScore: 0.86 }),
+    ]
+    mocks.generateObject.mockResolvedValueOnce(
+      makeLLMResponse({
+        confidence: 'high',
+        citationIndices: [1, 2, 3],
+        usage: { inputTokens: 11, outputTokens: 13 },
+      })
+    )
+
+    const result = await answerEngine(makeInput(chunks))
+
+    // El camino answer → recordUsage (answer-orchestrator) itera usageEvents:
+    // inputTokens 0 acá = consumo invisible en la facturación de la org.
+    const answerEvent = result.usageEvents?.find((e) => e.kind === 'chat_answer')
+    expect(answerEvent).toBeDefined()
+    expect(answerEvent?.inputTokens).toBe(11)
+    expect(answerEvent?.inputTokens).toBeGreaterThan(0)
+    expect(answerEvent?.outputTokens).toBe(13)
   })
 
   it('returns medium confidence with evidences', async () => {
@@ -436,10 +477,27 @@ describe('answerEngine — prompt-injection guard', () => {
 
     expect(mocks.generateObject).toHaveBeenCalledWith(
       expect.objectContaining({
-        system: SYSTEM_PROMPT,
+        // Paso 1 (A7): el prompt de sistema viaja como `instructions` (ai 7).
+        instructions: SYSTEM_PROMPT,
       })
     )
     expect(SYSTEM_PROMPT).toMatch(/ignore.*instruction/i)
+  })
+
+  it('calls the LLM with temperature 0 — ai@4 lo inyectaba por defecto, ai@7 no (R1, B3)', async () => {
+    const chunk = makeChunk({ similarityScore: 0.90 })
+    mocks.generateObject.mockResolvedValueOnce(
+      makeLLMResponse({ confidence: 'high', citationIndices: [1] })
+    )
+
+    await answerEngine(makeInput([chunk]))
+
+    // En ai@4.3.19 prepareCallSettings inyectaba temperature 0 en TODA
+    // llamada; ai@7 no tiene default (Anthropic usaría 1.0). El paso 1
+    // conserva el comportamiento medido: 0 explícito.
+    expect(mocks.generateObject).toHaveBeenCalledWith(
+      expect.objectContaining({ temperature: 0 })
+    )
   })
 
   it('system prompt instructs the LLM to respond in the same language as the question', () => {
