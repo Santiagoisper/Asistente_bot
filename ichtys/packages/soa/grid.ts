@@ -131,7 +131,8 @@ interface TextGroup {
 }
 
 /** Agrupa ítems de texto por adyacencia x (los tokens partidos vuelven a ser
- * un texto; los partidos en DOS LÍNEAS se recomponen de abajo hacia arriba). */
+ * un texto). El camino con prefijo no usa esto para la ficha partida: ahí
+ * el orden es por fila, ver `composePrefixedHeader`. */
 function groupTexts(items: TextItem[]): TextGroup[] {
   const sorted = [...items].sort(
     (a, b) => a.bbox[0] - b.bbox[0] || b.bbox[1] - a.bbox[1],
@@ -147,6 +148,83 @@ function groupTexts(items: TextItem[]): TextGroup[] {
     }
   }
   return groups.filter((g) => g.text.length > 0)
+}
+
+/** Misma línea de una ficha: techo/base a ≤ esta tolerancia (pt). */
+const SAME_LINE_TOLERANCE = 1.5
+/** Líneas vecinas de una ficha partida (prefijo arriba, número abajo). */
+const SPLIT_LINE_GAP = 12
+
+interface HeaderPiece {
+  x0: number
+  x1: number
+  y0: number
+  y1: number
+  text: string
+}
+
+/**
+ * G22 §3 C2, camino con prefijo. Una ficha partida son dos líneas alineadas
+ * en x: el prefijo arriba y el número abajo se leen de arriba abajo
+ * (`V` + `12` = `V12`). Ordenar por el borde izquierdo pone el número
+ * primero cuando tiene dos cifras (`12 V`), y un espacio del extractor
+ * entre fichas alarga la caja hasta la columna de al lado (`V1 V 2`).
+ * Los espacios se descartan. En la MISMA línea, dos palabras a ≤ 6 pt
+ * siguen unidas con espacio (`Fin etapa`).
+ */
+function composePrefixedHeader(items: TextItem[]): TextGroup[] {
+  const pieces: HeaderPiece[] = items
+    .filter((item) => item.str.trim().length > 0)
+    .map((item) => ({
+      x0: item.bbox[0],
+      x1: item.bbox[2],
+      y0: item.bbox[1],
+      y1: item.bbox[3],
+      text: item.str.trim(),
+    }))
+    .sort((a, b) => a.x0 - b.x0 || b.y1 - a.y1)
+
+  const groups: HeaderPiece[][] = []
+  for (const piece of pieces) {
+    const group = groups.find((candidate) =>
+      candidate.some((other) => {
+        const yDist = Math.abs(piece.y0 - other.y0)
+        if (yDist <= SAME_LINE_TOLERANCE) {
+          return piece.x0 - other.x1 <= TEXT_GROUP_GAP && other.x0 - piece.x1 <= TEXT_GROUP_GAP
+        }
+        const overlaps = piece.x0 <= other.x1 + 1 && piece.x1 >= other.x0 - 1
+        return overlaps && yDist <= SPLIT_LINE_GAP
+      }),
+    )
+    if (group) group.push(piece)
+    else groups.push([piece])
+  }
+
+  return groups
+    .map((group) => {
+      const lines: HeaderPiece[][] = []
+      const byTop = [...group].sort((a, b) => b.y1 - a.y1 || a.x0 - b.x0)
+      for (const piece of byTop) {
+        const line = lines.find((row) => Math.abs(row[0]!.y0 - piece.y0) <= SAME_LINE_TOLERANCE)
+        if (line) line.push(piece)
+        else lines.push([piece])
+      }
+      const text = lines
+        .map((line) =>
+          line
+            .sort((a, b) => a.x0 - b.x0)
+            .map((piece) => piece.text)
+            .join(' '),
+        )
+        .join('')
+      return {
+        x0: Math.min(...group.map((piece) => piece.x0)),
+        x1: Math.max(...group.map((piece) => piece.x1)),
+        text,
+      }
+    })
+    .filter((group) => group.text.length > 0)
+    .sort((a, b) => a.x0 - b.x0)
 }
 
 /** Texto comparable de ficha: sin espacios (los tokens partidos ya se recomponen). */
@@ -467,10 +545,9 @@ function readTable(
     for (let i = 0; i + 1 < vxs.length; i++) bandsX.push([vxs[i]!, vxs[i + 1]!])
 
     // --- Encabezado: bandas de texto con más fichas de visita, MÁS las
-    // pegadas (±8 pt): una ficha partida por el extractor ("V" / "12" en dos
-    // líneas) cae en dos bandas por el techo de sus cajas. Los ítems se
-    // recomponen por adyacencia x (groupTexts), así la ficha vuelve a ser un
-    // solo texto.
+    // pegadas (±8 pt): una ficha partida ("V" / "12" en dos líneas) cae en
+    // dos bandas por el techo de sus cajas. En el camino con prefijo se
+    // componen de arriba abajo (G22 §3 C2), no por el borde izquierdo.
     const bands = textBands(page.items)
     let headerY = 0
     let headerHits = 0
@@ -524,7 +601,7 @@ function readTable(
           x1: t.bbox[2],
           text: numericHeader.chips[i] ?? t.str.trim(),
         }))
-      : groupTexts(
+      : composePrefixedHeader(
           bands
             .filter((b) => Math.abs(b.y - headerY) <= 8)
             .flatMap((b) => b.items)
