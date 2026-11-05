@@ -96,5 +96,15 @@ export function parseWindow(raw: string): VisitWindow | null {
     return { before: null, after: n, unit }
   }
 
+  // Exacta "0 d" (F2 T1): sin tolerancia, el día justo. Con unidad EXPLÍCITA
+  // — un entero pelado no trae unidad y no se inventa (mismo criterio que
+  // G23-K1 en timing).
+  const exact = text.match(/^(\d{1,3})\s*(.+)$/)
+  if (exact) {
+    const n = Number(exact[1])
+    const unit = unitOf(exact[2] ?? '')
+    if (unit !== null && withinAbuseBounds(n)) return { before: n, after: n, unit }
+  }
+
   return null
 }

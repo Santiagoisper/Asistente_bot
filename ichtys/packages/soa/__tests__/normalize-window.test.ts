@@ -45,6 +45,12 @@ describe('T2 — parser de ventanas sin modelo (catálogo completo)', () => {
     }
   })
 
+  it('exacta «0 d» (F2 T1): el día justo, sin tolerancia; entero pelado no', () => {
+    expect(parseWindow('0 d')).toEqual({ before: 0, after: 0, unit: 'day' })
+    // Sin unidad explícita no se inventa (criterio G23-K1): queda para el modelo.
+    expect(parseWindow('42')).toBeNull()
+  })
+
   it('G23-K2: dos signos iguales no son ventana before/after → null', () => {
     // «+3/+7»: todo después del día; «−7/−1»: todo antes. Ventana entera de
     // un lado: duda para el ensamblado, no un before/after inventado.

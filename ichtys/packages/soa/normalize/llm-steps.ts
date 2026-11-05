@@ -58,10 +58,14 @@ export const ruleParagraphSchema = z.object({
 })
 
 export interface HeadersInput {
+  /** Contexto (clave de la tabla en el raw), no contenido del documento:
+   *  deja al puerto alinear por tabla y a los logs citar códigos (S8). */
+  tableKey: string
   tableTitle: string
   headers: Array<{ col: number; headerText: string; timeText: string; windowText: string }>
 }
 export interface RowsInput {
+  tableKey: string
   rows: Array<{ row: number; label: string; hasMarks: boolean; commentText: string }>
 }
 export interface NotesInput {
