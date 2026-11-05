@@ -622,6 +622,24 @@ function safeProviderError(error: unknown): { name: string; code: string; status
 }
 
 /**
+ * Nombres exactos del AI SDK (clase y `.name` real, que lleva el prefijo AI_).
+ * Un error de autenticación, cuota o transporte puede traer los mismos campos
+ * y no se recupera.
+ */
+const OUTPUT_VALIDATION_ERROR_NAMES: ReadonlySet<string> = new Set([
+  'NoObjectGeneratedError',
+  'AI_NoObjectGeneratedError',
+  'InvalidToolInputError',
+  'AI_InvalidToolInputError',
+])
+
+function isOutputValidationError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false
+  const name = (error as { name?: unknown }).name
+  return typeof name === 'string' && OUTPUT_VALIDATION_ERROR_NAMES.has(name)
+}
+
+/**
  * Recupera la salida CRUDA del modelo de un error de validación del AI SDK
  * (regresión E5, vuelta 4): generateObject valida la respuesta contra el
  * schema del grupo y lanza NoObjectGeneratedError / InvalidToolInputError
@@ -631,6 +649,7 @@ function safeProviderError(error: unknown): { name: string; code: string; status
  * en vez de perderlo entero.
  */
 function recoverModelOutput(error: unknown, keys: readonly string[]): unknown | null {
+  if (!isOutputValidationError(error)) return null
   const err = error as { text?: unknown; toolInput?: unknown; cause?: unknown } | null
   const candidates: unknown[] = []
   for (const raw of [err?.text, err?.toolInput]) {
