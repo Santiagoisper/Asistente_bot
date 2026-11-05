@@ -27,7 +27,7 @@ const COL_W = 34
 const cx = (c: number) => COL_X0 + c * COL_W + COL_W / 2
 
 /** Página con el bloque de encabezado del protocolo de 46 columnas. */
-function r46Page(ids: 'split' | 'timeOnly'): PageGeom {
+function r46Page(ids: 'split' | 'timeOnly', labelY = 497): PageGeom {
   const page = 1
   const items: TextItem[] = []
   const rules: RuleLine[] = []
@@ -44,7 +44,7 @@ function r46Page(ids: 'split' | 'timeOnly'): PageGeom {
       items.push(text(page, String(c + 1), x0, 502, 5))
     }
     // Etiqueta del bloque, alineada con la línea del número (~497, medida G18).
-    items.push(text(page, 'Visitas', 22, 497, 7))
+    items.push(text(page, 'Visitas', 22, labelY, 7))
   } else {
     // Sin fila de ids: la única fila de fichas es de tiempo (F5 / R3).
     for (let c = 0; c < COLS; c++) items.push(centered(page, `W${c + 1}`, cx(c), 506))
@@ -110,5 +110,16 @@ describe('G18 §3.2 — columnas desde la fila de ids, no del tiempo', () => {
     expect(table.columns.map((c) => c.timingText)).toEqual(
       Array.from({ length: COLS }, (_, i) => `S${i + 1}`),
     )
+  })
+
+  it('la etiqueta del bloque alineada con la línea del número no es columna (§3.5)', () => {
+    // R-46 real: la etiqueta vive a la izquierda (x≈82) alineada con la
+    // línea 2 del bloque (~502) — dentro de la ventana ±8 de la banda de
+    // fichas, pero es ETIQUETA, no columna de visita.
+    const pages = [r46Page('split', 502)]
+    const table = readGrid(pages, locateSchedule(pages)).tables[0]!
+
+    expect(table.columns).toHaveLength(COLS)
+    expect(table.columns.some((c) => c.headerText.includes('Visitas'))).toBe(false)
   })
 })

@@ -50,6 +50,7 @@ import {
   MARK_STRINGS,
   normalizeNumericToken,
   TIME_TOKEN,
+  VISIT_ID_TOKEN,
 } from './header'
 import type { NumericHeader } from './header'
 import type {
@@ -506,6 +507,16 @@ function readTable(
             .filter((i) => i.str.trim().length > 0 && i.fontSize >= 4),
         )
 
+    // G18 §3.5: los grupos a la IZQUIERDA de la primera ficha son la
+    // etiqueta del bloque (x≈82 en R-46, alineada con la línea del número:
+    // cae dentro de la ventana ±8 pero no es visita) — nunca columnas. La
+    // zona de la derecha (p. ej. «Comentarios») se conserva.
+    const firstChipIdx = headerGroups.findIndex((g) => {
+      const t = g.text.trim()
+      return VISIT_ID_TOKEN.test(t) || TIME_TOKEN.test(t)
+    })
+    const chipGroups = firstChipIdx > 0 ? headerGroups.slice(firstChipIdx) : headerGroups
+
     // --- Bandas de columna efectivas: los bordes V no siempre llegan por
     // columna (F1 T2 y F5 T1 dejan zonas sin bordes intermedios), así que una
     // banda-x que contiene varias fichas del encabezado se SUBDIVIDE por
@@ -513,7 +524,7 @@ function readTable(
     const effBands: Array<[number, number]> = []
     const effTokens: TextGroup[][] = []
     for (const band of bandsX) {
-      const tokens = headerGroups.filter((g) => {
+      const tokens = chipGroups.filter((g) => {
         const cx = (g.x0 + g.x1) / 2
         return cx >= band[0] && cx <= band[1]
       })
@@ -570,39 +581,55 @@ function readTable(
       }
     }
 
-    // --- G18 §3.2: proyección de la fila de TIEMPO (camino con prefijo).
-    // La fila de tiempo bajo la línea de ids no define columnas (arriba): se
-    // proyecta por x sobre las columnas de ESTA página como `timing`. La
-    // franja válida va de la ventana pegada del encabezado (−8 pt) al techo
-    // de la PRIMERA marca: entre ambos vive el resto del bloque de
-    // encabezado; una fila de tiempo más abajo (bajo marcas) pertenece a
-    // otra tabla apilada y no se proyecta (el discriminador de G18 §4). El
-    // camino numérico (fila etiquetada «semanas…» con enteros) se proyecta
-    // con el bloque multilínea de §3.3.
-    if (!numericHeader && localColumns.length > 0) {
-      const firstMarkTop = Math.min(
-        ...page.items
-          .filter((i) => MARK_STRINGS.has(i.str.trim()) && i.fontSize >= MIN_MARK_FONT)
-          .map((i) => i.bbox[3]),
-      )
-      const timeItems = page.items
-        .filter(
-          (i) =>
-            TIME_TOKEN.test(i.str.trim()) &&
-            i.fontSize >= 4 &&
-            !i.rotated &&
-            i.bbox[3] <= headerY - 8 &&
-            i.bbox[1] >= firstMarkTop,
+    // --- G18 §3.2: la fila de TIEMPO se proyecta por x como `timing` sobre
+    // las columnas de la página (nunca define columnas). El tiempo nunca es
+    // id de visita (K2): P3 lo lleva a `timing` del contrato Schedule.
+    const assignTiming = (timeItems: TextItem[]): void => {
+      if (timeItems.length === 0) return
+      for (const lc of localColumns) {
+        const idx = columnTokens.findIndex((s) => lc.token !== null && s.has(lc.token))
+        // Solo llena la primera vez: el encabezado repetido de una página
+        // de continuación proyecta lo mismo; no sobrescribe.
+        if (idx < 0 || columns[idx]!.timingText !== '') continue
+        const chips = timeItems.filter((i) => i.bbox[0] < lc.band[1] && i.bbox[2] > lc.band[0])
+        if (chips.length > 0) columns[idx]!.timingText = chips.map((c) => c.str.trim()).join(' ')
+      }
+    }
+    if (localColumns.length > 0) {
+      if (!numericHeader) {
+        // Camino con prefijo: fichas S…/W…/D… de la franja entre la ventana
+        // pegada del encabezado (−8 pt) y el techo de la PRIMERA marca —
+        // entre ambos vive el resto del bloque de encabezado; una fila de
+        // tiempo más abajo (bajo marcas) pertenece a otra tabla apilada y
+        // no se proyecta (el discriminador de G18 §4, en forma temprana).
+        const firstMarkTop = Math.min(
+          ...page.items
+            .filter((i) => MARK_STRINGS.has(i.str.trim()) && i.fontSize >= MIN_MARK_FONT)
+            .map((i) => i.bbox[3]),
         )
-        .sort((a, b) => a.bbox[0] - b.bbox[0])
-      if (timeItems.length > 0) {
-        for (const lc of localColumns) {
-          const idx = columnTokens.findIndex((s) => lc.token !== null && s.has(lc.token))
-          // Solo llena la primera vez: el encabezado repetido de una página
-          // de continuación proyecta lo mismo; no sobrescribe.
-          if (idx < 0 || columns[idx]!.timingText !== '') continue
-          const chips = timeItems.filter((i) => i.bbox[0] < lc.band[1] && i.bbox[2] > lc.band[0])
-          if (chips.length > 0) columns[idx]!.timingText = chips.map((c) => c.str.trim()).join(' ')
+        assignTiming(
+          page.items
+            .filter(
+              (i) =>
+                TIME_TOKEN.test(i.str.trim()) &&
+                i.fontSize >= 4 &&
+                !i.rotated &&
+                i.bbox[3] <= headerY - 8 &&
+                i.bbox[1] >= firstMarkTop,
+            )
+            .sort((a, b) => a.bbox[0] - b.bbox[0]),
+        )
+      } else if (numericHeader.kind === 'visit') {
+        // Camino numérico (G18 §3.3): la tira de eje temporal etiquetada del
+        // MISMO bloque (misma región por el discriminador §4: sin marcas
+        // entre ambas) proyecta sus enteros. visitOnly dentro de la región
+        // la oculta como fuente de COLUMNAS; como fuente de timing se la
+        // busca entre las candidatas completas.
+        const timeStrip = findNumericHeaderCandidates(page.items)
+          .filter((c) => c.kind === 'time' && c.y < numericHeader.y)
+          .sort((a, b) => b.y - a.y)[0]
+        if (timeStrip) {
+          assignTiming([...timeStrip.tokens].sort((a, b) => a.bbox[0] - b.bbox[0]))
         }
       }
     }
