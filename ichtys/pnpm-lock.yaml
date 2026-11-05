@@ -302,6 +302,16 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@26.6.5)(happy-dom@21.0.4(bufferutil@4.1.0))
 
+  packages/soa:
+    dependencies:
+      pdfjs-dist:
+        specifier: 6.4.299
+        version: 6.4.299
+    devDependencies:
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@26.6.5)(happy-dom@21.0.4(bufferutil@4.1.0))
+
   packages/ui:
     devDependencies:
       '@types/react':
