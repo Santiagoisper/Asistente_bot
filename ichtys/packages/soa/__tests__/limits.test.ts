@@ -26,6 +26,26 @@ function minimalPdf(pageCount: number): Uint8Array {
   for (let i = 0; i < pageCount; i++) {
     objects[i + 3] = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>'
   }
+  return assemblePdf(objects)
+}
+
+/** PDF de UNA página con un ítem horizontal y otro girado 90° (K1). */
+function rotatedTextPdf(): Uint8Array {
+  const content =
+    'BT /F1 10 Tf 1 0 0 1 20 100 Tm (horizontal) Tj ET\n' +
+    'BT /F1 10 Tf 0 1 -1 0 150 20 Tm (girado) Tj ET\n'
+  const objects: string[] = []
+  objects[1] = '<< /Type /Catalog /Pages 2 0 R >>'
+  objects[2] = '<< /Type /Pages /Count 1 /Kids [3 0 R] >>'
+  objects[3] =
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>'
+  objects[4] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'
+  objects[5] = `<< /Length ${content.length} >>\nstream\n${content}endstream`
+  return assemblePdf(objects)
+}
+
+/** Cuerpo + xref de un PDF a partir de sus objetos (todo ASCII). */
+function assemblePdf(objects: string[]): Uint8Array {
   let body = '%PDF-1.4\n'
   const offsets: number[] = []
   for (let i = 1; i < objects.length; i++) {
@@ -65,5 +85,26 @@ describe('K3 — topes de lectura S5 con rechazo controlado', () => {
     expect(pages).toHaveLength(2)
     expect(pages.map((p) => p.page)).toEqual([1, 2])
     expect(pages.every((p) => p.items.length === 0 && p.rules.length === 0)).toBe(true)
+  })
+})
+
+describe('K1 — señal de texto rotado (transform b/c ≠ 0)', () => {
+  it('un PDF con texto dibujado girado 90° reporta el ítem como rotated', async () => {
+    // Una página con dos ítems: uno horizontal (Tm 1 0 0 1) y uno girado
+    // (Tm 0 1 -1 0, transform b ≠ 0). Helvetica es fuente estándar, sin
+    // archivos. En los fixtures no hay texto rotado — esta es la señal que
+    // dispara el reason 'rotated_text' de grid cuando acompañan refs sin
+    // nota (G6).
+    const page = (await loadPageGeometry(rotatedTextPdf()))[0]!
+    expect(page.items).toHaveLength(2)
+    const horizontal = page.items.find((i) => !i.rotated)
+    const rotated = page.items.find((i) => i.rotated)
+    expect(horizontal).toBeDefined()
+    expect(rotated).toBeDefined()
+    expect(rotated!.fontSize).toBeGreaterThan(0)
+    // El girado es más ALTO que ancho (el texto corre en y).
+    expect(rotated!.bbox[3] - rotated!.bbox[1]).toBeGreaterThan(
+      rotated!.bbox[2] - rotated!.bbox[0],
+    )
   })
 })

@@ -3,7 +3,7 @@
  *
  * Etapas de P2 (sin modelo ni claves):
  *   (a) `locateSchedule` — localiza las páginas del cronograma (locate.ts);
- *   (b) `readGrid` — grilla cruda por tabla con chequeos G1–G5, llamadas de
+ *   (b) `readGrid` — grilla cruda por tabla con chequeos G1–G7, llamadas de
  *       nota y outcome (grid.ts).
  */
 export { loadPageGeometry, PdfLimitError } from './pdf-text'

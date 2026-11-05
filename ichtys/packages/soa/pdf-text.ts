@@ -194,7 +194,8 @@ async function pageGeometry(page: PDFPageProxy, pageNumber: number): Promise<Pag
     const fontSize = Math.hypot(raw.transform[2] ?? 0, raw.transform[3] ?? 0)
     const bbox = textItemBBox(raw.transform, raw.width ?? 0, raw.height ?? 0)
     if (!bbox || fontSize <= 0) continue
-    items.push({ page: pageNumber, str: raw.str, bbox, fontSize })
+    const rotated = Math.abs(raw.transform[1] ?? 0) >= 1e-6 || Math.abs(raw.transform[2] ?? 0) >= 1e-6
+    items.push({ page: pageNumber, str: raw.str, bbox, fontSize, rotated })
   }
 
   const operatorList = await page.getOperatorList()

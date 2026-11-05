@@ -15,12 +15,12 @@
  *
  * T12 mide F3 completo (90 páginas): ≤ 10 s y heap ≤ 512 MB, medidos.
  *
- * Límite conocido (S8/L1): las notas al pie de F2 T2 están dibujadas
- * VERTICALES a mano por el generador (comentario lateral, fuente 5, sin
- * /Rotate) — el lector extrae notas de páginas dedicadas y de pies
- * horizontales, no de texto rotado manual. Por eso T9 no usa F2: sus
- * noteRefs de celda sí salen (T9 general ya los cubre en el 100 %), pero su
- * `notes[]` queda incompleto a propósito.
+ * Límite conocido (S8/L1, hoy SEÑALADO por G6/G7): las notas al pie de F2
+ * T2 están dibujadas al costado de la grilla en fuente 5 — el lector extrae
+ * notas de páginas dedicadas y de pies (fuente 8–10), no de columnas
+ * laterales diminutas. Sus noteRefs de celda sí salen (T9 general los cubre
+ * al 100 %); la pérdida ya no es silenciosa: G6 cuenta los refs sin texto y
+ * G7 el texto pequeño no consumido (K1+R2), y la tabla baja a 'partial'.
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -100,9 +100,9 @@ describe('T9 — llamadas de nota (noteRefs) ≥ 90 % del gold', () => {
   })
 })
 
-describe('T10 — chequeos G1–G5 y outcome', () => {
-  for (const fixture of ['F1', 'F2', 'F3', 'F4', 'F5'] as const) {
-    it(`${fixture}: toda tabla pasa G1–G5 y queda 'complete'`, async () => {
+describe('T10 — chequeos G1–G7 y outcome', () => {
+  for (const fixture of ['F1', 'F3', 'F4', 'F5'] as const) {
+    it(`${fixture}: toda tabla pasa G1–G7 y queda 'complete'`, async () => {
       const schedule = await loadSchedule(fixture)
       expect(schedule.tables.length).toBeGreaterThan(0)
       for (const table of schedule.tables) {
@@ -115,17 +115,38 @@ describe('T10 — chequeos G1–G5 y outcome', () => {
     })
   }
 
+  it('F2: T1/T3 sanas completas; T2 queda partial con G6 y G7 (pérdida silenciosa, K1+R2)', async () => {
+    // Las notas al pie de F2 T2 están dibujadas al costado derecho de la
+    // grilla en fuente 5 (columnas laterales de texto): el extractor de
+    // notas no las alcanza y las celdas quedan con 16 refs únicos sin
+    // texto. Antes esto salía 'complete' — pérdida silenciosa.
+    const schedule = await loadSchedule('F2')
+    const byKey = new Map(schedule.tables.map((t) => [t.key, t]))
+    expect(byKey.get('T1')!.outcome).toBe('complete')
+    expect(byKey.get('T3')!.outcome).toBe('complete')
+    const t2 = byKey.get('T2')!
+    expect(t2.outcome).toBe('partial')
+    expect(t2.reasons).toContain('validation_failed:G6')
+    expect(t2.reasons).toContain('validation_failed:G7')
+    const g6 = t2.checks.find((c) => c.id === 'G6')!
+    expect(g6.pass).toBe(false)
+    expect(g6.detail).toBe('refs sin nota: 16')
+  })
+
   it('F3 truncado: la tabla cortada queda partial con truncated_pages, nunca complete', async () => {
     // 90 páginas; las últimas 10 de GRILLA de T2 son p52–61, así que el
-    // corte en 51 deja a T2 terminando en grilla (señal de truncado) y a T1
-    // intacta (termina p39).
+    // corte en 51 deja a T2 terminando en grilla (señal de truncado). T1
+    // termina en p39 pero sus notas dedicadas viven al FINAL del documento
+    // (p62+): el corte las elimina y G6 señala las 27 llamadas huérfanas —
+    // la pérdida de notas por truncado ya no es invisible.
     const schedule = await loadSchedule('F3', 51)
     const t1 = schedule.tables[0]!
     const t2 = schedule.tables[1]!
     expect(t2.outcome).not.toBe('complete')
     expect(t2.outcome).toBe('partial')
     expect(t2.reasons).toContain('truncated_pages')
-    expect(t1.outcome).toBe('complete')
+    expect(t1.outcome).toBe('partial')
+    expect(t1.reasons).toContain('validation_failed:G6')
   })
 })
 

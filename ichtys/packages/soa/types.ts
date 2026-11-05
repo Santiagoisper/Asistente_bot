@@ -17,6 +17,12 @@ export interface TextItem {
   str: string
   bbox: BBox
   fontSize: number
+  /**
+   * El texto NO está en el eje horizontal: el transform trae b/c ≠ 0
+   * (rotado o skew). El lector no extrae contenido de estos ítems — quedan
+   * reportados para que G6 pueda señalar pérdida (reason 'rotated_text').
+   */
+  rotated: boolean
 }
 
 /** Segmento de borde de tabla (horizontal o vertical), en espacio de usuario sin rotar. */

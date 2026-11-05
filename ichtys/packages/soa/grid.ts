@@ -31,8 +31,9 @@
  * escribe la marca pegada al TECHO de la fila (otra operación de texto) y la
  * base sigue cayendo dentro de la fila correcta.
  *
- * `checks` y `outcome` llegan con el commit de G1–G5; hasta entonces la
- * tabla sale `partial` con `checks_pending`.
+ * `checks` (G1–G5 geométricos; G6 llamadas de nota con texto; G7 texto
+ * pequeño no consumido) bajan la tabla a 'partial' con
+ * 'validation_failed:<id>' cuando fallan.
  */
 import type {
   BBox,
@@ -96,6 +97,16 @@ const FOLIO_TEXT_RE = /^(página|page)\b/i
  * grilla, no celdas del cronograma. Se entrega como fila cruda; P3 decide.
  */
 const DAY_ROW_RE = /^(día|dia|day|días|dias|days|study day|semana|week)\b/i
+
+/** Ficha de día de la banda estructural ("D-1", "D 0", "D+14"): no es contenido de celda. */
+const DAY_TOKEN_RE = /^D\s*[-+]?\d{1,3}$/i
+
+/**
+ * Tope de fuente de "texto pequeño" para G7: por debajo de esto un ítem en
+ * zona de grilla que no cayó en ninguna celda es contenido perdido en
+ * silencio (notas dibujadas al costado, marcas diminutas).
+ */
+const TINY_FONT_MAX = 6
 
 /** Separación entre ítems de texto que siguen siendo UN grupo (pt). */
 const TEXT_GROUP_GAP = 6
@@ -245,6 +256,11 @@ function readTable(
   const windowCoverage: Array<{ page: number; covered: number; local: number; hasText: boolean }> = []
   const firstColByPage = new Map<number, number>()
   const windowBandByPage = new Map<number, [number, number]>()
+  // Estado para G6/G7 (K1, R2): texto pequeño no consumido y texto rotado
+  // por página de grilla; bandas de fila de atributo (estructura, no celdas).
+  const tinyUnconsumed: Array<{ page: number; count: number }> = []
+  const rotatedByPage = new Map<number, number>()
+  const attrBandsByPage = new Map<number, Array<[number, number]>>()
 
   // Las páginas de notas dedicadas no son de grilla (locate las aparta):
   // entran al loop solo para extraer sus notas.
@@ -473,6 +489,13 @@ function readTable(
       }
     }
 
+    // Bandas de fila de atributo para G7: sus superíndices quedan sin celda
+    // POR DISEÑO (las filas de atributo no emiten celdas), no es pérdida.
+    const attrBands = rowBands
+      .filter((b) => b.isAttribute)
+      .map((b) => [b.y0, b.y1] as [number, number])
+    if (attrBands.length > 0) attrBandsByPage.set(pageNumber, attrBands)
+
     // --- RawRow por banda (de arriba a abajo = orden de lectura).
     for (const [bandIdx, band] of rowBands.entries()) {
       const label = band.labelItems.map((i) => i.str.trim()).join(' ')
@@ -567,6 +590,22 @@ function readTable(
     for (const item of page.items) {
       const ref = item.str.trim()
       if (item.fontSize > medianFont * 0.75 || !NOTE_REF_RE.test(ref)) continue
+      // Continuación de palabra partida, no superíndice: el candidato ARRANCA
+      // dentro del rango-x de otro ítem de texto de la misma línea (el "a"
+      // final de "Hast"+"a" de la fila de ventana — pdfjs solapa los anchos
+      // por kerning). Un superíndice real va a la izquierda de su texto o
+      // solo; la marca no cuenta como palabra (el ref se cuelga de ella).
+      const glued = page.items.some(
+        (other) =>
+          other !== item &&
+          !MARK_STRINGS.has(other.str.trim()) &&
+          other.str.trim().length > 0 &&
+          item.bbox[0] >= other.bbox[0] - 0.5 &&
+          item.bbox[0] < other.bbox[2] - 0.5 &&
+          other.bbox[3] > item.bbox[1] - 2 &&
+          other.bbox[1] < item.bbox[3] + 2,
+      )
+      if (glued) continue
       const sx = (item.bbox[0] + item.bbox[2]) / 2
       const sy = (item.bbox[1] + item.bbox[3]) / 2
       let best: RawCell | null = null
@@ -765,6 +804,45 @@ function readTable(
         bbox: item.bbox,
       })
     }
+
+    // --- G7 (R2) y K1: texto pequeño no consumido y texto rotado en la zona
+    // de grilla. "No consumido" = el centro del ítem no cae en ninguna celda
+    // emitida de la página (±2 en x, ±4 en y — en columnas sombreadas el
+    // superíndice se dibuja pegado al techo de la fila y queda ~3 pt por
+    // encima de la banda). Encima de la fila de ventana, a la izquierda de la
+    // primera columna, en bandas de fila de ATRIBUTO y las fichas de día
+    // ("D -1") es estructura (encabezado, etiquetas, ejes), no contenido
+    // perdido.
+    let rotated = 0
+    let tiny = 0
+    const pageCells = cells.filter((c) => c.page === pageNumber)
+    const wBand = windowBandByPage.get(pageNumber)
+    const fcx = firstColByPage.get(pageNumber) ?? Infinity
+    const pageAttrBands = attrBandsByPage.get(pageNumber) ?? []
+    for (const item of page.items) {
+      if (item.rotated) rotated++
+      const s = item.str.trim()
+      if (s.length === 0 || item.fontSize >= TINY_FONT_MAX || item.fontSize <= 0) continue
+      if (DAY_TOKEN_RE.test(s)) continue
+      if (item.bbox[0] < fcx - 2) continue
+      const cy = (item.bbox[1] + item.bbox[3]) / 2
+      if (wBand && cy > wBand[1] + 2) continue
+      if (pageAttrBands.some(([y0, y1]) => cy >= y0 - 3 && cy <= y1 + 3)) continue
+      const cx = (item.bbox[0] + item.bbox[2]) / 2
+      if (
+        !pageCells.some(
+          (c) =>
+            cx >= c.bbox[0] - 2 &&
+            cx <= c.bbox[2] + 2 &&
+            cy >= c.bbox[1] - 4 &&
+            cy <= c.bbox[3] + 4,
+        )
+      ) {
+        tiny++
+      }
+    }
+    if (rotated > 0) rotatedByPage.set(pageNumber, rotated)
+    if (tiny > 0) tinyUnconsumed.push({ page: pageNumber, count: tiny })
   }
 
   // --- Chequeos geométricos §4. Cada uno pasa o deja la tabla en 'partial'
@@ -888,6 +966,33 @@ function readTable(
     detail: g5bad.length === 0 ? 'sin columnas superpuestas' : g5bad.join(', '),
   })
 
+  // G6 (K1): toda llamada de nota de una celda tiene texto de nota — los
+  // refs ÚNICOS de las celdas contra los refs de las notas de la tabla. Sin
+  // texto hay pérdida silenciosa (F2 T2: notas dibujadas fuera de los rangos
+  // del extractor), y la tabla baja a 'partial' con la cantidad.
+  const cellRefSet = new Set(cells.flatMap((c) => c.noteRefs))
+  const noteRefSet = new Set(notes.map((n) => n.ref))
+  const orphanRefs = [...cellRefSet].filter((r) => !noteRefSet.has(r)).length
+  const g6pass = orphanRefs === 0
+  checks.push({
+    id: 'G6',
+    pass: g6pass,
+    detail: g6pass ? `refs ${cellRefSet.size} con nota` : `refs sin nota: ${orphanRefs}`,
+  })
+
+  // G7 (R2): sin texto pequeño no consumido en la zona de grilla — un ítem
+  // diminuto (< 6 pt) fuera de toda celda es contenido que el lector pierde
+  // en silencio (notas al costado de la grilla, marcas diminutas).
+  const tinyTotal = tinyUnconsumed.reduce((acc, t) => acc + t.count, 0)
+  checks.push({
+    id: 'G7',
+    pass: tinyTotal === 0,
+    detail:
+      tinyTotal === 0
+        ? 'sin texto pequeño perdido'
+        : tinyUnconsumed.map((t) => `p${t.page}: ${t.count}`).join(', '),
+  })
+
   // --- Outcome (ADR-10 §e): sin páginas/columnas no hay grilla; si falla un
   // chequeo la tabla queda 'partial' con su motivo. Cortes de documento: la
   // última página del PDF siendo de grilla de esta tabla = tabla truncada
@@ -914,6 +1019,15 @@ function readTable(
     if (located.pages.length > PAGE_LIMIT) {
       outcome = 'partial'
       reasons.push('page_limit')
+    }
+    // K1: con llamadas de nota huérfanas, el texto rotado (transform b/c ≠ 0)
+    // de las páginas de grilla es la explicación geométrica de la pérdida —
+    // el lector no extrae contenido de texto rotado. Solo acompaña a un G6
+    // fallido: un rotado sin pérdida (folio lateral, decoración) no baja la
+    // tabla. En los fixtures no hay texto rotado; la señal queda para SoAs
+    // reales.
+    if (!g6pass && rotatedByPage.size > 0) {
+      reasons.push('rotated_text')
     }
   }
 
