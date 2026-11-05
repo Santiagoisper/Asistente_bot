@@ -10,4 +10,16 @@
  */
 export { loadPageGeometry } from './pdf-text'
 export { locateSchedule } from './locate'
-export type { BBox, PageGeom, RuleLine, ScheduleLocation, TextItem } from './types'
+export { readGrid } from './grid'
+export type {
+  BBox,
+  PageGeom,
+  RawCell,
+  RawColumn,
+  RawRow,
+  RawSchedule,
+  RawTable,
+  RuleLine,
+  ScheduleLocation,
+  TextItem,
+} from './types'
