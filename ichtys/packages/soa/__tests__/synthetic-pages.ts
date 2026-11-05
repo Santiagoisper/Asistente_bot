@@ -161,6 +161,8 @@ export interface StripsDocSpec {
   firstPage?: number
   withMarks?: boolean
   markGlyph?: string
+  /** Fichas que NUNCA reciben marca (C2: columna con ficha y sin contenido). */
+  silentChips?: string[]
 }
 
 /**
@@ -202,7 +204,13 @@ export function buildStrips(spec: StripsDocSpec): { pages: PageGeom[]; marks: nu
       for (let r = 0; r < nRows; r++) {
         items.push(text(page, `Procedimiento ${page}-${s + 1}-${r + 1}`, LABEL_X0 + 2, rowTop - 6))
         for (let c = 0; c < columns; c++) {
-          if (spec.withMarks !== false && (c % nRows === r || (c * 2 + 1) % nRows === r)) {
+          const chip = strip.chips[c]
+          if (
+            spec.withMarks !== false &&
+            typeof chip === 'string' &&
+            !(spec.silentChips ?? []).includes(chip) &&
+            (c % nRows === r || (c * 2 + 1) % nRows === r)
+          ) {
             items.push(centered(page, spec.markGlyph ?? 'X', COL_X0 + c * COL_W + COL_W / 2, rowTop - 5, 7))
             marks++
           }

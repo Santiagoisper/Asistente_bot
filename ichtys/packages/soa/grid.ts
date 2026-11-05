@@ -486,6 +486,7 @@ function readTable(
           headerText: tokens.map((t) => t.text).join(' '),
           headerBBox: box,
           headerSource: pageHeaderSource,
+          empty: false,
         })
         columnTokens.push(new Set(norm))
       }
@@ -1065,6 +1066,13 @@ function readTable(
           .filter((s) => s !== null)
           .join(' · '),
   })
+
+  // C2 (P2c): las columnas sin contenido en NINGUNA página quedan marcadas
+  // en el crudo (K1): la ficha no desaparece, P3 la ve vacía — mismo
+  // criterio de contenido que G1 (sin la fila de ventana).
+  const coveredCols = new Set<number>()
+  for (const covered of coveredByPage.values()) for (const c of covered) coveredCols.add(c)
+  for (const col of columns) col.empty = !coveredCols.has(col.index)
 
   // G2: en cada página con textos de ventana, la ventana cubre todas las
   // columnas de esa página tras expandir las combinadas.

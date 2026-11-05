@@ -86,6 +86,12 @@ export interface RawColumn {
   headerText: string
   headerBBox: BBox
   headerSource: HeaderSource
+  /**
+   * C2 (P2c): sin contenido en NINGUNA página (mismo criterio de contenido
+   * que G1: celdas fuera de la fila de ventana). La columna NO se descarta
+   * (K1): la ficha queda y P3 la ve vacía; G1 baja la tabla a 'partial'.
+   */
+  empty: boolean
 }
 
 /** Fila cruda detectada por geometría. */
