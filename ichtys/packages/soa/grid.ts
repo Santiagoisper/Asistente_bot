@@ -58,7 +58,7 @@ const WINDOW_ROW_RE =
 
 /** Léxico de fila de atributo (ADR-10 §2.2 b: la clasificación fina es P3). */
 const ATTRIBUTE_RE =
-  /(ayuno|fasting|visita a la clínica|on ?site|presencial|tipo de visita|visit type)/i
+  /(ayuno|fasting|visita a la clínica|on ?site|presencial|tipo de visita|visit type|^tipo\b)/i
 
 /** Tolerancia de agrupado de fronteras (pt). */
 const EDGE_EPSILON = 1
@@ -71,6 +71,31 @@ const ROW_CLUSTER_GAP = 10
 
 /** Texto de celda de rango ("según necesidad" y variantes). */
 const PRN_RE = /(según necesidad|as needed|a demanda|si aplica|p\.?r\.?n\.?)/
+
+/** Llamada de nota: número corto, letra o marca tipográfica. */
+const NOTE_REF_RE = /^(\d{1,2}|[a-z]|†|‡|§)$/
+
+/**
+ * Línea de nota: "ref␣texto" en una sola operación de texto (pdfjs colapsa
+ * los dos espacios del dibujo a uno). La fuente de las líneas de nota es ~9
+ * (el título de la página de notas es 12; el folio y el encabezado, 7–8).
+ */
+const NOTE_LINE_RE = /^(\d{1,2}|[†‡§]|[a-z])\s+(\S.*)$/
+const NOTE_FONT_MIN = 8
+const NOTE_FONT_MAX = 10
+
+/** Tope de seguridad de páginas por tabla (§3: sin tope de 30; 100 → partial). */
+const PAGE_LIMIT = 100
+
+/** Folio impreso ("Página 11 de 50") — texto de página, no de celda. */
+const FOLIO_TEXT_RE = /^(página|page)\b/i
+
+/**
+ * Banda de días ("Día", "Study day"…): fila estructural del SoA como la
+ * ventana y los atributos — lleva el eje temporal (D-1, D0…) sobre la
+ * grilla, no celdas del cronograma. Se entrega como fila cruda; P3 decide.
+ */
+const DAY_ROW_RE = /^(día|dia|day|días|dias|days|study day|semana|week)\b/i
 
 /** Separación entre ítems de texto que siguen siendo UN grupo (pt). */
 const TEXT_GROUP_GAP = 6
@@ -203,18 +228,49 @@ interface RowBand {
 function readTable(
   located: ScheduleLocation['tables'][number],
   byPage: Map<number, PageGeom>,
+  lastDocPage: number,
 ): RawTable {
   const columns: RawColumn[] = []
   const columnTokens: Array<Set<string>> = []
   const seenTokens = new Set<string>()
   const rows: RawRow[] = []
   const cells: RawCell[] = []
+  const notes: RawTable['notes'] = []
   let windowRow: { rowIndex: number; cells: RawCell[] } | null = null
   let lastRowIndex = -1
+  // Estado para los chequeos §4: filas de ventana (todas, una por página) y
+  // contadores de marcas por página (G3), cobertura de ventana (G2).
+  const windowRowIndexes = new Set<number>()
+  const markStats: Array<{ page: number; present: number; attr: number; assigned: number }> = []
+  const windowCoverage: Array<{ page: number; covered: number; local: number; hasText: boolean }> = []
+  const firstColByPage = new Map<number, number>()
+  const windowBandByPage = new Map<number, [number, number]>()
 
-  for (const pageNumber of located.pages) {
+  // Las páginas de notas dedicadas no son de grilla (locate las aparta):
+  // entran al loop solo para extraer sus notas.
+  const pageNumbers = [...located.pages]
+  for (const pn of located.notePages) if (!pageNumbers.includes(pn)) pageNumbers.push(pn)
+  for (const pageNumber of pageNumbers) {
     const page = byPage.get(pageNumber)
     if (!page) continue
+
+    // --- Notas de página dedicada: cada nota es UNA operación de texto
+    // "ref␣texto"; la continuación del spill ("Continúa la nota anterior: …")
+    // no lleva ref y queda fuera. El texto se devuelve pero nunca se loguea
+    // (S8).
+    if (located.notePages.includes(pageNumber)) {
+      for (const item of page.items) {
+        const match = item.str.trim().match(NOTE_LINE_RE)
+        if (!match || item.fontSize < NOTE_FONT_MIN || item.fontSize > NOTE_FONT_MAX) continue
+        notes.push({
+          ref: match[1]!,
+          page: pageNumber,
+          text: match[2]!.trim(),
+          bbox: item.bbox,
+        })
+      }
+      continue
+    }
 
     // --- Fronteras de celda de la página.
     const vxs = clusterEdges(
@@ -315,6 +371,7 @@ function readTable(
 
     // Zona de etiquetas: a la izquierda de la primera banda-x con ficha.
     const firstColumnX = localColumns[0]?.band[0] ?? Infinity
+    firstColByPage.set(pageNumber, firstColumnX)
     const marks = page.items.filter(
       (i) => MARK_STRINGS.has(i.str.trim()) && i.fontSize >= MIN_MARK_FONT,
     )
@@ -459,6 +516,13 @@ function readTable(
     }
 
     // --- Celdas: cada marca cae en una columna (centro-x) y una fila (base de caja).
+    // G3 ("ninguna marca sin dueño") compara TODAS las marcas de la página
+    // contra las celdas emitidas: las de una fila de atributo ("Ayuno"…,
+    // ADR-10 §2.2 b) cuentan como presentes pero no son celdas; las que no
+    // caen en banda de columna/fila quedan presentes sin dueño.
+    let marksPresent = 0
+    let marksAttr = 0
+    let marksAssigned = 0
     for (const mark of marks) {
       const colIdx = effBands.findIndex(
         ([x0, x1]) => center(mark) >= x0 - 0.5 && center(mark) <= x1 + 0.5,
@@ -466,13 +530,13 @@ function readTable(
       const rowIdx = rowBands.findIndex(
         (band) => mark.bbox[1] >= band.y0 - 0.5 && mark.bbox[1] <= band.y1 + 0.5,
       )
-      // Solo marcas dentro de la grilla: banda de columna (con ficha de
-      // encabezado) y banda-y de fila. Las que quedan fuera las reporta G3.
-      // Las marcas de una fila de atributo ("Ayuno"…, ADR-10 §2.2 b) no son
-      // celdas del cronograma: la fila se entrega marcada y P3 decide.
+      marksPresent++
       if (colIdx < 0 || rowIdx < 0) continue
-      if (rowBands[rowIdx]!.isAttribute) continue
       if (!localColumns.some((lc) => lc.band === effBands[colIdx])) continue
+      if (rowBands[rowIdx]!.isAttribute) {
+        marksAttr++
+        continue
+      }
 
       const tableCol = tableColOfBand(effBands[colIdx]!)
       const [cx0, cx1] = effBands[colIdx]!
@@ -489,6 +553,35 @@ function readTable(
         noteRefs: [],
         distanceToCenter: Math.min(Math.abs(center(mark) - (cx0 + cx1) / 2) / width, 1),
       })
+      marksAssigned++
+    }
+    markStats.push({ page: pageNumber, present: marksPresent, attr: marksAttr, assigned: marksAssigned })
+
+    // --- Llamadas de nota (§3): superíndices (≤ 0,75 × la mediana de fuente
+    // de la página) pegados a una celda de marca. El vínculo es por
+    // proximidad al centro de la celda: en columnas sombreadas el
+    // superíndice se escribe sobre el techo de la fila, no junto a la marca.
+    const fontSizes = page.items.map((i) => i.fontSize).sort((a, b) => a - b)
+    const medianFont = fontSizes[Math.floor(fontSizes.length / 2)] ?? 6
+    const pageMarkCells = cells.filter((c) => c.page === pageNumber && c.kind === 'mark')
+    for (const item of page.items) {
+      const ref = item.str.trim()
+      if (item.fontSize > medianFont * 0.75 || !NOTE_REF_RE.test(ref)) continue
+      const sx = (item.bbox[0] + item.bbox[2]) / 2
+      const sy = (item.bbox[1] + item.bbox[3]) / 2
+      let best: RawCell | null = null
+      let bestDist = Infinity
+      for (const cell of pageMarkCells) {
+        const cx = (cell.bbox[0] + cell.bbox[2]) / 2
+        const cy = (cell.bbox[1] + cell.bbox[3]) / 2
+        if (Math.abs(sx - cx) > 10 || Math.abs(sy - cy) > 14) continue
+        const dist = Math.abs(sx - cx) + Math.abs(sy - cy)
+        if (dist < bestDist) {
+          bestDist = dist
+          best = cell
+        }
+      }
+      if (best && !best.noteRefs.includes(ref)) best.noteRefs.push(ref)
     }
 
     // --- Fila de ventana: la banda del "Ventana…" con sus textos por grupo
@@ -570,6 +663,19 @@ function readTable(
         })
       }
       cells.push(...windowCells)
+      windowRowIndexes.add(rows.length - 1)
+      windowBandByPage.set(pageNumber, [wBox[1], wBox[3]])
+      // G2 por página (F3 imprime una tabla en tiras de columnas): la ventana
+      // de ESA página debe cubrir las columnas con FICHA de esa página — el
+      // generador solo dibuja grupos de ventana sobre fichas de visita, no
+      // sobre los "—" que acompañan a las tiras.
+      const visitable = localColumns.filter((lc) => lc.token !== null && lc.token !== '—').length
+      windowCoverage.push({
+        page: pageNumber,
+        covered: new Set(windowCells.flatMap((c) => c.spanCols)).size,
+        local: visitable,
+        hasText: windowCells.length > 0,
+      })
       windowRow ??= { rowIndex: rows.length - 1, cells: [] }
       if (windowRow.rowIndex === rows.length - 1) windowRow.cells = windowCells
     }
@@ -643,6 +749,172 @@ function readTable(
         })
       }
     }
+
+    // --- Notas al pie de la grilla (generador: comment_w, F2 T2): mismas
+    // líneas de nota, dibujadas debajo de la última fila de la página.
+    const lastBottom = rowBands.length > 0 ? Math.min(...rowBands.map((b) => b.y0)) : Infinity
+    for (const item of page.items) {
+      const match = item.str.trim().match(NOTE_LINE_RE)
+      if (!match || item.fontSize < NOTE_FONT_MIN || item.fontSize > NOTE_FONT_MAX) continue
+      const cy = (item.bbox[1] + item.bbox[3]) / 2
+      if (cy >= lastBottom - 2) continue
+      notes.push({
+        ref: match[1]!,
+        page: pageNumber,
+        text: match[2]!.trim(),
+        bbox: item.bbox,
+      })
+    }
+  }
+
+  // --- Chequeos geométricos §4. Cada uno pasa o deja la tabla en 'partial'
+  // con 'validation_failed:<id>' (ADR-10 §e); los details son solo conteos,
+  // sin texto del documento.
+  const checks: RawTable['checks'] = []
+
+  // G1: toda columna registrada tiene al menos una celda fuera de la(s)
+  // fila(s) de ventana.
+  const contentCols = new Set(
+    cells.filter((c) => !windowRowIndexes.has(c.rowIndex)).map((c) => c.colIndex),
+  )
+  const emptyCols = columns.filter((c) => !contentCols.has(c.index)).length
+  checks.push({
+    id: 'G1',
+    pass: emptyCols === 0,
+    detail: `columnas ${columns.length}, sin contenido ${emptyCols}`,
+  })
+
+  // G2: en cada página con textos de ventana, la ventana cubre todas las
+  // columnas de esa página tras expandir las combinadas.
+  const g2bad = windowCoverage.filter((w) => w.hasText && w.covered !== w.local)
+  checks.push({
+    id: 'G2',
+    pass: g2bad.length === 0,
+    detail:
+      windowCoverage.length === 0
+        ? 'sin fila de ventana'
+        : g2bad.length === 0
+          ? `ventana completa en ${windowCoverage.length} pág.`
+          : `sin cubrir en ${g2bad.map((w) => `p${w.page} ${w.covered}/${w.local}`).join(', ')}`,
+  })
+
+  // G3: ninguna marca sin dueño — presentes menos las de filas de atributo
+  // iguales a las celdas emitidas, página por página.
+  const g3bad = markStats.filter((s) => s.present - s.attr !== s.assigned)
+  checks.push({
+    id: 'G3',
+    pass: g3bad.length === 0,
+    detail:
+      g3bad.length === 0
+        ? `marcas con dueño en ${markStats.length} pág.`
+        : g3bad.map((s) => `p${s.page} ${s.assigned}/${s.present - s.attr}`).join(', '),
+  })
+
+  // G4: una fila normal vacía solo es sospechosa si HAY contenido de celda
+  // visible que no se entregó — una fila de procedimiento sin marcas (o la
+  // media fila del split en la zona de etiquetas) es legítimamente vacía;
+  // decidir si es "narrativa" es semántica de P3. Las marcas perdidas las
+  // pesca G3; acá queda el TEXTO de zona de columnas sin celda (una corrida
+  // "según necesidad" que no se combinó, un valor suelto).
+  const rowsWithCells = new Set(
+    cells.filter((c) => !windowRowIndexes.has(c.rowIndex)).map((c) => c.rowIndex),
+  )
+  const g4bad: string[] = []
+  for (const row of rows) {
+    if (
+      row.isAttributeCandidate ||
+      DAY_ROW_RE.test(row.label) ||
+      row.continuedFromPrevPage ||
+      windowRowIndexes.has(row.index) ||
+      rowsWithCells.has(row.index)
+    ) {
+      continue
+    }
+    // Banda de bordes que ENGLOBA la fila de ventana (la ventana de dos
+    // líneas da dos intervalos: el justo y el que la contiene entera): es la
+    // misma fila, no una vacía.
+    const engulfsWindow = rows.some(
+      (w) =>
+        w.page === row.page &&
+        w.index !== row.index &&
+        windowRowIndexes.has(w.index) &&
+        w.y0 >= row.y0 - 1 &&
+        w.y1 <= row.y1 + 1,
+    )
+    if (engulfsWindow) continue
+    const page = byPage.get(row.page)
+    if (!page) continue
+    const firstColumnX = firstColByPage.get(row.page) ?? Infinity
+    const wBand = windowBandByPage.get(row.page)
+    const visible = page.items.some((i) => {
+      const s = i.str.trim()
+      if (s.length === 0 || MARK_STRINGS.has(s) || FOLIO_TEXT_RE.test(s)) return false
+      if (i.fontSize < 5 || i.bbox[0] < firstColumnX - 2) return false
+      const cy = (i.bbox[1] + i.bbox[3]) / 2
+      if (wBand && cy >= wBand[0] - 1 && cy <= wBand[1] + 1) return false
+      return cy >= row.y0 && cy <= row.y1
+    })
+    if (visible) g4bad.push(`p${row.page}·f${row.index}`)
+  }
+  checks.push({
+    id: 'G4',
+    pass: g4bad.length === 0,
+    detail:
+      g4bad.length === 0
+        ? `filas ${rows.length}, vacías sin contenido perdido`
+        : g4bad.slice(0, 6).join(', ') + (g4bad.length > 6 ? ` (+${g4bad.length - 6})` : ''),
+  })
+
+  // G5: sin dos columnas de la misma página a menos de 3 pt de centro.
+  const centersByPage = new Map<number, number[]>()
+  for (const col of columns) {
+    const arr = centersByPage.get(col.page)
+    if (arr) arr.push(col.xCenter)
+    else centersByPage.set(col.page, [col.xCenter])
+  }
+  const g5bad: string[] = []
+  for (const [page, centers] of centersByPage) {
+    centers.sort((a, b) => a - b)
+    for (let i = 0; i + 1 < centers.length; i++) {
+      if (centers[i + 1]! - centers[i]! < 3) {
+        g5bad.push(`p${page}`)
+        break
+      }
+    }
+  }
+  checks.push({
+    id: 'G5',
+    pass: g5bad.length === 0,
+    detail: g5bad.length === 0 ? 'sin columnas superpuestas' : g5bad.join(', '),
+  })
+
+  // --- Outcome (ADR-10 §e): sin páginas/columnas no hay grilla; si falla un
+  // chequeo la tabla queda 'partial' con su motivo. Cortes de documento: la
+  // última página del PDF siendo de grilla de esta tabla = tabla truncada
+  // (los sanos terminan en notas/pad, nunca en grilla); el tope de seguridad
+  // de 100 páginas marca sin cortar la lectura.
+  const reasons: string[] = []
+  let outcome: RawTable['outcome']
+  if (located.pages.length === 0) {
+    outcome = 'failed'
+    reasons.push('not_located')
+  } else if (columns.length === 0) {
+    outcome = 'failed'
+    reasons.push('grid_unreadable')
+  } else {
+    const failed = checks.filter((c) => !c.pass)
+    outcome = failed.length === 0 ? 'complete' : 'partial'
+    reasons.push(...failed.map((c) => `validation_failed:${c.id}`))
+  }
+  if (outcome !== 'failed') {
+    if (located.pages.at(-1) === lastDocPage) {
+      outcome = 'partial'
+      reasons.push('truncated_pages')
+    }
+    if (located.pages.length > PAGE_LIMIT) {
+      outcome = 'partial'
+      reasons.push('page_limit')
+    }
   }
 
   return {
@@ -652,10 +924,10 @@ function readTable(
     rows,
     cells,
     windowRow,
-    notes: [],
-    checks: [],
-    outcome: 'partial',
-    reasons: ['checks_pending'],
+    notes,
+    checks,
+    outcome,
+    reasons,
   }
 }
 
@@ -665,8 +937,9 @@ function readTable(
  */
 export function readGrid(pages: PageGeom[], location: ScheduleLocation): RawSchedule {
   const byPage = new Map(pages.map((p) => [p.page, p]))
+  const lastDocPage = pages.length > 0 ? pages[pages.length - 1]!.page : 0
   return {
-    tables: location.tables.map((table) => readTable(table, byPage)),
+    tables: location.tables.map((table) => readTable(table, byPage, lastDocPage)),
     location,
   }
 }

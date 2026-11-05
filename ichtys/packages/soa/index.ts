@@ -3,10 +3,8 @@
  *
  * Etapas de P2 (sin modelo ni claves):
  *   (a) `locateSchedule` — localiza las páginas del cronograma (locate.ts);
- *   (b) `readGrid` — arma la grilla cruda por tabla (grid.ts).
- *
- * Este archivo crece con cada commit de P2; hoy expone la capa de PDF y la
- * etapa (a). `readGrid` se agrega con su commit.
+ *   (b) `readGrid` — grilla cruda por tabla con chequeos G1–G5, llamadas de
+ *       nota y outcome (grid.ts).
  */
 export { loadPageGeometry } from './pdf-text'
 export { locateSchedule } from './locate'
