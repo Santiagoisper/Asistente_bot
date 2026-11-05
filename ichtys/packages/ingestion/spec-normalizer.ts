@@ -345,11 +345,27 @@ export function capExtractionWarnings(list: readonly unknown[]): string[] {
   return kept
 }
 
+/**
+ * Códigos que este módulo (y el extractor) generan antes de los dos puntos.
+ * La lista es blanca a propósito: un prefijo desconocido puede ser texto del
+ * modelo o del documento, y los logs sólo llevan códigos y conteos (G4-S1).
+ */
+const WARNING_CODE_WHITELIST: ReadonlySet<string> = new Set([
+  'identification',
+  'eligibility',
+  'endpoints',
+  'visits',
+  'locator',
+  'section-location',
+  'extractionWarnings',
+])
+
 /** Resumen «código×N» de advertencias para logs: conteos y códigos, sin contenido (G4-S1). */
 export function warningCodeSummary(warnings: string[]): string {
   const counts = new Map<string, number>()
   for (const warning of warnings) {
-    const code = (warning.split(':')[0] ?? '').trim() || 'sin-código'
+    const rawCode = (warning.split(':', 1)[0] ?? '').trim()
+    const code = WARNING_CODE_WHITELIST.has(rawCode) ? rawCode : 'otros'
     counts.set(code, (counts.get(code) ?? 0) + 1)
   }
   return Array.from(counts.entries()).map(([code, count]) => `${code}×${count}`).join(', ')

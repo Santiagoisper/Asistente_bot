@@ -10,6 +10,7 @@ import {
   normalizeStudySpec,
   normalizeVisit,
   normalizeVisitsGroup,
+  warningCodeSummary,
 } from '../spec-normalizer'
 import {
   emptyStudySpec,
@@ -257,3 +258,28 @@ describe('normalizeStudySpec', () => {
     expect(warnings.some((w) => w.includes('advertencias recortadas'))).toBe(true)
   })
 })
+
+describe('warningCodeSummary — lista blanca de códigos (H1)', () => {
+  it('agrupa sólo los códigos conocidos por su prefijo', () => {
+    expect(
+      warningCodeSummary([
+        'visits: duplicate_visit_name index=1,2',
+        'visits: visita #3: recortado',
+        'eligibility: exclusion: ausente o inválido en la salida del modelo — 0 ítems',
+        'extractionWarnings: 250 advertencias recortadas al tope de 200',
+      ]),
+    ).toBe('visits×2, eligibility×1, extractionWarnings×1')
+  })
+
+  it('un prefijo desconocido se agrupa como «otros» y nunca se loguea el texto', () => {
+    const summary = warningCodeSummary([
+      'PACIENTE_FICTICIO_123: detalle clínico',
+      'otro prefijo libre: más texto',
+      'sin dos puntos',
+    ])
+    expect(summary).toBe('otros×3')
+    expect(summary).not.toContain('PACIENTE_FICTICIO_123')
+    expect(summary).not.toContain('detalle clínico')
+  })
+})
+
