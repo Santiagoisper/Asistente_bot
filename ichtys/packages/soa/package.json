@@ -14,8 +14,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "pdfjs-dist": "6.4.299",
-    "zod": "^4.6.7"
+    "pdfjs-dist": "6.4.299"
   },
   "devDependencies": {
     "vitest": "^2.1.8"
