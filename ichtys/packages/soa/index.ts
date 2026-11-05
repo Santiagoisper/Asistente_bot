@@ -12,6 +12,7 @@ export { locateSchedule } from './locate'
 export { columnCenterCollisions, readGrid } from './grid'
 export type {
   BBox,
+  HeaderSource,
   PageGeom,
   RawCell,
   RawColumn,

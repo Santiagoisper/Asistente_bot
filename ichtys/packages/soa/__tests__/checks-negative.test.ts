@@ -280,6 +280,7 @@ describe('R1 — cada chequeo G1–G5 detecta su defecto', () => {
       x1: xCenter + 17,
       headerText: `V${index}`,
       headerBBox: box(xCenter - 4, 700, xCenter + 4, 714),
+      headerSource: 'prefixed',
     })
     // Dos columnas de la misma página a 2 pt de centro: colisión.
     expect(columnCenterCollisions([col(0, 6, 200), col(1, 6, 202)])).toBe('p6')

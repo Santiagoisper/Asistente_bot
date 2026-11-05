@@ -35,8 +35,10 @@
  * pequeño no consumido) bajan la tabla a 'partial' con
  * 'validation_failed:<id>' cuando fallan.
  */
+import { findNumericHeader, MARK_STRINGS, normalizeNumericToken, VISIT_TOKEN } from './header'
 import type {
   BBox,
+  HeaderSource,
   PageGeom,
   RawCell,
   RawColumn,
@@ -46,12 +48,6 @@ import type {
   ScheduleLocation,
   TextItem,
 } from './types'
-
-/** Marcas de celda de la capa de texto (el generador escribe 'X' en DejaVu 7). */
-const MARK_STRINGS = new Set(['x', 'X', '✓', '●', '•'])
-
-/** Fichas de visita del encabezado (mismo criterio que locate). */
-const VISIT_TOKEN = /^(V|VR|S|W|D)\d+$|^(SCR|DT|FA|SEL|ET|FU|EOS|EOT|VNP|VF|VME\d+|VDT|VME)$/i
 
 /** Fila de ventana (etiqueta de la banda). */
 const WINDOW_ROW_RE =
@@ -138,7 +134,7 @@ function groupTexts(items: TextItem[]): TextGroup[] {
 
 /** Texto comparable de ficha: sin espacios (los tokens partidos ya se recomponen). */
 function normalizeText(text: string): string {
-  return text.replace(/\s+/g, '')
+  return normalizeNumericToken(text)
 }
 
 interface ItemBand {
@@ -252,7 +248,21 @@ function readTable(
   // Estado para los chequeos §4: filas de ventana (todas, una por página) y
   // contadores de marcas por página (G3), cobertura de ventana (G2).
   const windowRowIndexes = new Set<number>()
-  const markStats: Array<{ page: number; present: number; attr: number; assigned: number }> = []
+  /** Por qué una marca presente no llegó a ser celda (P2b c): solo códigos y conteos (S8). */
+  interface LostMarks {
+    sinColumna: number
+    bandaSinFicha: number
+    sinFila: number
+  }
+  const markStats: Array<{
+    page: number
+    present: number
+    attr: number
+    assigned: number
+    lost: LostMarks
+  }> = []
+  /** Rango-x de las columnas con ficha de cada página (G4 distingue texto dentro y fuera). */
+  const columnSpanByPage = new Map<number, [number, number]>()
   const windowCoverage: Array<{ page: number; covered: number; local: number; hasText: boolean }> = []
   // G1 por página (ADR-10 §d-1): columnas de tabla con ficha de encabezado
   // en cada página, para exigirles contenido en ESA página.
@@ -324,12 +334,26 @@ function readTable(
         headerY = band.y
       }
     }
-    const headerGroups = groupTexts(
-      bands
-        .filter((b) => Math.abs(b.y - headerY) <= 8)
-        .flatMap((b) => b.items)
-        .filter((i) => i.str.trim().length > 0 && i.fontSize >= 4),
-    )
+    // Plan B (P2b): sin al menos 2 fichas con prefijo, el encabezado puede ser
+    // la fila ETIQUETADA de enteros ("Número de visita" 1, 2, 3 … con guiones
+    // como columnas sin número). Las fichas van una por una — nunca por
+    // groupTexts, que uniría "1" y "-" en columnas angostas — y la etiqueta
+    // queda fuera: no es una columna.
+    // K2: las columnas registradas en ESTA página dicen de dónde salió su
+    // encabezado, para que P3 nunca tome un día por un número de visita.
+    const numericHeader = headerHits < 2 ? findNumericHeader(page.items) : null
+    if (numericHeader) headerY = numericHeader.y
+    const pageHeaderSource: HeaderSource = numericHeader
+      ? numericHeader.kind === 'visit' ? 'numeric_visit' : 'numeric_time'
+      : 'prefixed'
+    const headerGroups = numericHeader
+      ? numericHeader.tokens.map((t) => ({ x0: t.bbox[0], x1: t.bbox[2], text: t.str.trim() }))
+      : groupTexts(
+          bands
+            .filter((b) => Math.abs(b.y - headerY) <= 8)
+            .flatMap((b) => b.items)
+            .filter((i) => i.str.trim().length > 0 && i.fontSize >= 4),
+        )
 
     // --- Bandas de columna efectivas: los bordes V no siempre llegan por
     // columna (F1 T2 y F5 T1 dejan zonas sin bordes intermedios), así que una
@@ -387,6 +411,7 @@ function readTable(
           x1: band[1],
           headerText: tokens.map((t) => t.text).join(' '),
           headerBBox: box,
+          headerSource: pageHeaderSource,
         })
         columnTokens.push(new Set(norm))
       }
@@ -395,6 +420,12 @@ function readTable(
     // Zona de etiquetas: a la izquierda de la primera banda-x con ficha.
     const firstColumnX = localColumns[0]?.band[0] ?? Infinity
     firstColByPage.set(pageNumber, firstColumnX)
+    if (localColumns.length > 0) {
+      columnSpanByPage.set(pageNumber, [
+        Math.min(...localColumns.map((lc) => lc.band[0])),
+        Math.max(...localColumns.map((lc) => lc.band[1])),
+      ])
+    }
     const marks = page.items.filter(
       (i) => MARK_STRINGS.has(i.str.trim()) && i.fontSize >= MIN_MARK_FONT,
     )
@@ -561,6 +592,7 @@ function readTable(
     let marksPresent = 0
     let marksAttr = 0
     let marksAssigned = 0
+    const lost: LostMarks = { sinColumna: 0, bandaSinFicha: 0, sinFila: 0 }
     for (const mark of marks) {
       const colIdx = effBands.findIndex(
         ([x0, x1]) => center(mark) >= x0 - 0.5 && center(mark) <= x1 + 0.5,
@@ -569,8 +601,20 @@ function readTable(
         (band) => mark.bbox[1] >= band.y0 - 0.5 && mark.bbox[1] <= band.y1 + 0.5,
       )
       marksPresent++
-      if (colIdx < 0 || rowIdx < 0) continue
-      if (!localColumns.some((lc) => lc.band === effBands[colIdx])) continue
+      // Tipo de la pérdida, en este orden: sin banda-x, banda sin ficha de
+      // encabezado, sin fila. present = attr + assigned + lost, siempre.
+      if (colIdx < 0) {
+        lost.sinColumna++
+        continue
+      }
+      if (!localColumns.some((lc) => lc.band === effBands[colIdx])) {
+        lost.bandaSinFicha++
+        continue
+      }
+      if (rowIdx < 0) {
+        lost.sinFila++
+        continue
+      }
       if (rowBands[rowIdx]!.isAttribute) {
         marksAttr++
         continue
@@ -593,7 +637,7 @@ function readTable(
       })
       marksAssigned++
     }
-    markStats.push({ page: pageNumber, present: marksPresent, attr: marksAttr, assigned: marksAssigned })
+    markStats.push({ page: pageNumber, present: marksPresent, attr: marksAttr, assigned: marksAssigned, lost })
 
     // --- Llamadas de nota (§3): superíndices (≤ 0,75 × la mediana de fuente
     // de la página) pegados a una celda de marca. El vínculo es por
@@ -946,7 +990,16 @@ function readTable(
     detail:
       g3bad.length === 0
         ? `marcas con dueño en ${markStats.length} pág.`
-        : g3bad.map((s) => `p${s.page} ${s.assigned}/${s.present - s.attr}`).join(', '),
+        : g3bad
+            .map((s) => {
+              const kinds = [
+                s.lost.sinColumna > 0 ? `sin_columna:${s.lost.sinColumna}` : '',
+                s.lost.bandaSinFicha > 0 ? `banda_sin_ficha:${s.lost.bandaSinFicha}` : '',
+                s.lost.sinFila > 0 ? `sin_fila:${s.lost.sinFila}` : '',
+              ].filter((k) => k !== '')
+              return `p${s.page} ${s.assigned}/${s.present - s.attr}${kinds.length > 0 ? ` [${kinds.join(' ')}]` : ''}`
+            })
+            .join(', '),
   })
 
   // G4: una fila normal vacía solo es sospechosa si HAY contenido de celda
@@ -959,6 +1012,8 @@ function readTable(
     cells.filter((c) => !windowRowIndexes.has(c.rowIndex)).map((c) => c.rowIndex),
   )
   const g4bad: string[] = []
+  let g4InColumn = 0
+  let g4Outside = 0
   for (const row of rows) {
     if (
       row.isAttributeCandidate ||
@@ -985,7 +1040,7 @@ function readTable(
     if (!page) continue
     const firstColumnX = firstColByPage.get(row.page) ?? Infinity
     const wBand = windowBandByPage.get(row.page)
-    const visible = page.items.some((i) => {
+    const visibleItems = page.items.filter((i) => {
       const s = i.str.trim()
       if (s.length === 0 || MARK_STRINGS.has(s) || FOLIO_TEXT_RE.test(s)) return false
       if (i.fontSize < 5 || i.bbox[0] < firstColumnX - 2) return false
@@ -993,7 +1048,18 @@ function readTable(
       if (wBand && cy >= wBand[0] - 1 && cy <= wBand[1] + 1) return false
       return cy >= row.y0 && cy <= row.y1
     })
-    if (visible) g4bad.push(`p${row.page}·f${row.index}`)
+    if (visibleItems.length > 0) {
+      g4bad.push(`p${row.page}·f${row.index}`)
+      // Tipo: algún texto dentro del rango de columnas con ficha, o todo fuera
+      // (a la derecha: tira de comentarios, texto de margen).
+      const span = columnSpanByPage.get(row.page)
+      const inside = visibleItems.some((i) => {
+        const cx = (i.bbox[0] + i.bbox[2]) / 2
+        return span !== undefined && cx >= span[0] && cx <= span[1]
+      })
+      if (inside) g4InColumn++
+      else g4Outside++
+    }
   }
   checks.push({
     id: 'G4',
@@ -1001,7 +1067,14 @@ function readTable(
     detail:
       g4bad.length === 0
         ? `filas ${rows.length}, vacías sin contenido perdido`
-        : g4bad.slice(0, 6).join(', ') + (g4bad.length > 6 ? ` (+${g4bad.length - 6})` : ''),
+        : g4bad.slice(0, 6).join(', ') +
+          (g4bad.length > 6 ? ` (+${g4bad.length - 6})` : '') +
+          ` [${[
+            g4InColumn > 0 ? `texto_en_columna:${g4InColumn}` : '',
+            g4Outside > 0 ? `texto_fuera_de_columnas:${g4Outside}` : '',
+          ]
+            .filter((k) => k !== '')
+            .join(' ')}]`,
   })
 
   // G5: sin dos columnas de la misma página a menos de 3 pt de centro.
@@ -1046,6 +1119,8 @@ function readTable(
   // de 100 páginas marca sin cortar la lectura.
   const reasons: string[] = []
   let outcome: RawTable['outcome']
+  // Marcas del conjunto reconocido en toda la tabla (K1).
+  const totalMarks = markStats.reduce((acc, s) => acc + s.present, 0)
   if (located.pages.length === 0) {
     outcome = 'failed'
     reasons.push('not_located')
@@ -1055,6 +1130,14 @@ function readTable(
     // jamás un salto silencioso de página.
     outcome = 'failed'
     reasons.push('grid_unreadable')
+  } else if (totalMarks === 0) {
+    // K1 (G12): el localizador conservó esta racha porque tiene encabezado,
+    // pero ni una marca del conjunto reconocido apareció (un glifo que no
+    // conocemos, o una tabla de abreviaturas con fichas V1…). La tabla NO se
+    // puede leer y no puede quedar como grilla vacía que parezca «sin
+    // cronograma»: sale `failed` visible con 'no_marks'.
+    outcome = 'failed'
+    reasons.push('no_marks')
   } else {
     const failed = checks.filter((c) => !c.pass)
     outcome = failed.length === 0 ? 'complete' : 'partial'
