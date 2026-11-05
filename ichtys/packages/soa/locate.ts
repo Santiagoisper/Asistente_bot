@@ -18,11 +18,8 @@
  * El texto de la página (`headerSignature`, subtítulos) se devuelve pero
  * nunca se loguea (S8).
  */
-import { findNumericHeader, normalizeNumericToken, VISIT_TOKEN } from './header'
-import type { PageGeom, ScheduleLocation, TextItem } from './types'
-
-/** Marcas de celda que pueden aparecer en la capa de texto. */
-const MARK_STRINGS = new Set(['x', 'X', '✓', '●', '•'])
+import { findNumericHeader, MARK_STRINGS, normalizeNumericToken, VISIT_TOKEN } from './header'
+import type { HeaderSource, PageGeom, ScheduleLocation, TextItem } from './types'
 
 /** Título de la sección del cronograma (banda de sección). */
 const SECTION_RE = /(cronograma|schedule of|tabla de actividades|calendario|plan de visitas)/i
@@ -121,6 +118,8 @@ interface ScoredPage {
   accepted: boolean
   /** Motivo de rechazo si !accepted y score > 0. */
   rejectReason: ScheduleLocation['rejected'][number]['reason'] | null
+  /** De dónde salió el encabezado de la página (K2): null si no hay encabezado. */
+  headerKind: HeaderSource | null
   /** Subtítulo de tabla impreso bajo el título de sección ('' si no hay). */
   subtitle: string
   /** Tokens de la banda de encabezado de visitas (orden por x). */
@@ -152,12 +151,15 @@ function scorePage(p: PageGeom): ScoredPage {
     }
   }
   // Plan B (P2b): encabezado numérico etiquetado (mismo detector que grid).
+  // K2: se registra de qué tipo salió (visita vs. eje temporal).
   let numericTokens: string[] | null = null
+  let headerKind: HeaderSource | null = headerCount >= MIN_HEADER_TOKENS ? 'prefixed' : null
   if (headerCount < MIN_HEADER_TOKENS) {
     const numeric = findNumericHeader(p.items)
     if (numeric) {
       headerCount = numeric.integers.length
       numericTokens = numeric.tokens.map((t) => normalizeNumericToken(t.str))
+      headerKind = numeric.kind === 'visit' ? 'numeric_visit' : 'numeric_time'
     }
   }
 
@@ -215,6 +217,7 @@ function scorePage(p: PageGeom): ScoredPage {
     signals: { landscape, rulesV, rulesH, marks, gridCols, headerTokens: headerCount, windowRow, title, tocDots, listTables, synopsis },
     accepted,
     rejectReason,
+    headerKind,
     subtitle,
     headerTokens: numericTokens ?? (headerBand ? [...headerBand.tokens] : []),
     notesTitle,
@@ -237,6 +240,8 @@ interface TableAcc {
   /** Evidencia de la racha (P2b b): marcas totales, páginas con encabezado, máx. columnas de marcas. */
   marks: number
   headerPages: number
+  /** Tipos de encabezado vistos en la racha (K2), para la firma de la tabla. */
+  headerKinds: Set<HeaderSource>
   maxGridCols: number
   notePages: number[]
   subtitle: string
@@ -307,6 +312,7 @@ export function locateSchedule(pages: PageGeom[]): ScheduleLocation {
         pages: [],
         marks: 0,
         headerPages: 0,
+        headerKinds: new Set(),
         maxGridCols: 0,
         notePages: [],
         subtitle: s.subtitle,
@@ -318,7 +324,10 @@ export function locateSchedule(pages: PageGeom[]): ScheduleLocation {
     table.pages.push(s.page)
     table.marks += s.signals.marks ?? 0
     table.maxGridCols = Math.max(table.maxGridCols, s.signals.gridCols ?? 0)
-    if ((s.signals.headerTokens ?? 0) >= MIN_HEADER_TOKENS) table.headerPages++
+    if ((s.signals.headerTokens ?? 0) >= MIN_HEADER_TOKENS) {
+      table.headerPages++
+      if (s.headerKind !== null) table.headerKinds.add(s.headerKind)
+    }
     // Firma de encabezado: unión en orden de primera aparición (auditoría;
     // en F3 las tiras de columnas de una misma tabla se suman acá).
     for (const token of s.headerTokens) {
@@ -327,23 +336,27 @@ export function locateSchedule(pages: PageGeom[]): ScheduleLocation {
     previousAccepted = s.page
   }
 
-  // Precisión (P2b b): una racha sin ningún encabezado (con prefijo o
-  // numérico) y sin densidad de marcas es ruido — una tabla con bordes y
-  // alguna «X» que no es cronograma. Se descarta con razón EXPLÍCITA en
-  // `rejected`, nunca en silencio. Una racha con encabezado pero sin marcas
-  // (tabla de abreviaturas con fichas V1…) es 'low_density'. Una racha DENSA
-  // sin encabezado reconocible se conserva: es una tabla real ilegible y
-  // tiene que salir `failed`, no desaparecer.
+  // Precisión (P2b b) + K1 (G12): una racha sin NINGÚN encabezado (con
+  // prefijo o numérico) y sin densidad de marcas es ruido — una tabla con
+  // bordes y alguna «X» que no es cronograma. Se descarta con razón
+  // EXPLÍCITA en `rejected`, nunca en silencio. Una racha CON encabezado
+  // NUNCA se descarta (K1): las marcas se reconocen con un conjunto fijo de
+  // glifos y un cronograma real marcado con otro símbolo queda con
+  // encabezado y 0 marcas reconocidas — tirarlo sería la pérdida silenciosa
+  // que P2 cierra. Se conserva y la lectura la baja a 'failed' con 'no_marks'
+  // (la tabla de abreviaturas con fichas V1… queda igual: ruido honesto,
+  // visible). Una racha DENSA sin encabezado reconocible tampoco se
+  // descarta: es una tabla real ilegible y tiene que salir `failed`, no
+  // desaparecer.
   const kept: TableAcc[] = []
   for (const table of tables) {
     const hasHeader = table.headerPages > 0
     const dense = table.marks >= DENSE_RUN_MARKS && table.maxGridCols >= MIN_GRID_COLS
-    if ((hasHeader && table.marks >= MIN_MARKS) || dense) {
+    if (hasHeader || dense) {
       kept.push(table)
       continue
     }
-    const reason: ScheduleLocation['rejected'][number]['reason'] = hasHeader ? 'low_density' : 'no_header'
-    for (const page of table.pages) rejected.push({ page, reason })
+    for (const page of table.pages) rejected.push({ page, reason: 'no_header' })
   }
   // Claves contiguas tras el descarte.
   tables.length = 0
@@ -373,6 +386,15 @@ export function locateSchedule(pages: PageGeom[]): ScheduleLocation {
 
   rejected.sort((a, b) => a.page - b.page)
 
+  // Firma de la tabla (K2): cualquier encabezado de VISITA gana (prefijo o
+  // numérico); 'numeric_time' solo si ninguna página de la racha tuvo
+  // encabezado de visita — es el caso que P3 debe tratar como tiempo.
+  const headerKindOf = (t: TableAcc): ScheduleLocation['tables'][number]['headerKind'] =>
+    t.headerKinds.has('numeric_visit') ? 'numeric_visit'
+    : t.headerKinds.has('prefixed') ? 'prefixed'
+    : t.headerKinds.has('numeric_time') ? 'numeric_time'
+    : 'none'
+
   return {
     candidates,
     tables: tables.map((t) => ({
@@ -380,6 +402,7 @@ export function locateSchedule(pages: PageGeom[]): ScheduleLocation {
       pages: t.pages,
       notePages: t.notePages.sort((a, b) => a - b),
       headerSignature: t.headerSignature,
+      headerKind: headerKindOf(t),
     })),
     rejected,
   }

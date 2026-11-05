@@ -46,6 +46,8 @@ export interface DocSpec {
   firstPage?: number
   /** Dibuja las marcas "X" (por defecto sí). Sin marcas la grilla es solo estructura y encabezado. */
   withMarks?: boolean
+  /** Glifo de las marcas (por defecto "X"): K1 prueba glifos dentro y fuera del conjunto reconocido. */
+  markGlyph?: string
 }
 
 export function build(spec: DocSpec): { pages: PageGeom[]; marks: number } {
@@ -93,7 +95,7 @@ export function build(spec: DocSpec): { pages: PageGeom[]; marks: number } {
       items.push(text(page, `Procedimiento ${page}-${r + 1}`, LABEL_X0 + 2, rowTop - 6))
       for (let c = 0; c < columns; c++) {
         if (spec.withMarks !== false && (c % nRows === r || (c * 2 + 1) % nRows === r)) {
-          items.push(centered(page, 'X', COL_X0 + c * COL_W + COL_W / 2, rowTop - 5, 7))
+          items.push(centered(page, spec.markGlyph ?? 'X', COL_X0 + c * COL_W + COL_W / 2, rowTop - 5, 7))
           marks++
         }
       }

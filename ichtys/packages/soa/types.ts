@@ -48,12 +48,33 @@ export interface PageGeom {
 export interface ScheduleLocation {
   /** Todas las páginas con score > 0, con sus señales, para auditar. */
   candidates: Array<{ page: number; score: number; signals: Record<string, number> }>
-  tables: Array<{ key: string; pages: number[]; notePages: number[]; headerSignature: string[] }>
+  tables: Array<{
+    key: string
+    pages: number[]
+    notePages: number[]
+    headerSignature: string[]
+    /**
+     * De dónde salió el encabezado de la tabla (K2): 'none' si ninguna página
+     * de la racha tuvo encabezado reconocible (racha densa conservada).
+     */
+    headerKind: HeaderSource | 'none'
+  }>
   rejected: Array<{
     page: number
     reason: 'toc' | 'list_of_tables' | 'synopsis_prose' | 'low_density' | 'no_header'
   }>
 }
+
+/**
+ * De dónde salió el encabezado de una columna (K2, G12):
+ * - 'prefixed' — fichas con prefijo (V1, S3, W12…): el texto ES el id impreso;
+ * - 'numeric_visit' — fila etiquetada «Número de visita» + enteros: el entero
+ *   es número de visita;
+ * - 'numeric_time' — fila etiquetada «Día»/«Semana» + enteros: el entero es
+ *   TIEMPO. Contrato para P3: un entero numeric_time va a `timing`, NUNCA a
+ *   `printedId` — tomarlo por id de visita sería un id inventado (R3, ADR-10 §0).
+ */
+export type HeaderSource = 'prefixed' | 'numeric_visit' | 'numeric_time'
 
 /** Columna cruda detectada por geometría. */
 export interface RawColumn {
@@ -64,6 +85,7 @@ export interface RawColumn {
   x1: number
   headerText: string
   headerBBox: BBox
+  headerSource: HeaderSource
 }
 
 /** Fila cruda detectada por geometría. */

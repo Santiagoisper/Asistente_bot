@@ -20,6 +20,18 @@ import type { TextItem } from './types'
 export const VISIT_TOKEN =
   /^(V|VR|S|W|D)\d+$|^(SCR|DT|FA|SEL|ET|FU|EOS|EOT|VNP|VF|VME\d+|VDT|VME)$/i
 
+/**
+ * Marcas de celda que pueden aparecer en la capa de texto (K1, G12): la «X»
+ * del generador y los glifos de los cronogramas reales (✔ √ ○ ■ + …). UN
+ * solo conjunto compartido por locate y grid: si uno reconociera una marca
+ * que el otro no, una tabla localizada se leería sin sus marcas (o una no
+ * localizada escondería un cronograma). Un glifo FUERA del conjunto no
+ * descarta la tabla: la racha se conserva y sale `failed`/`no_marks`.
+ */
+export const MARK_STRINGS = new Set([
+  'x', 'X', '✓', '✔', '√', '●', '•', '○', '◯', '■', '□', '✗', '+',
+])
+
 /** Una columna sin número en el encabezado numérico (se normaliza a "—"). */
 export const DASH_TOKEN = '—'
 

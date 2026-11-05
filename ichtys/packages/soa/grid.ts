@@ -35,9 +35,10 @@
  * pequeño no consumido) bajan la tabla a 'partial' con
  * 'validation_failed:<id>' cuando fallan.
  */
-import { findNumericHeader, normalizeNumericToken, VISIT_TOKEN } from './header'
+import { findNumericHeader, MARK_STRINGS, normalizeNumericToken, VISIT_TOKEN } from './header'
 import type {
   BBox,
+  HeaderSource,
   PageGeom,
   RawCell,
   RawColumn,
@@ -47,9 +48,6 @@ import type {
   ScheduleLocation,
   TextItem,
 } from './types'
-
-/** Marcas de celda de la capa de texto (el generador escribe 'X' en DejaVu 7). */
-const MARK_STRINGS = new Set(['x', 'X', '✓', '●', '•'])
 
 /** Fila de ventana (etiqueta de la banda). */
 const WINDOW_ROW_RE =
@@ -341,8 +339,13 @@ function readTable(
     // como columnas sin número). Las fichas van una por una — nunca por
     // groupTexts, que uniría "1" y "-" en columnas angostas — y la etiqueta
     // queda fuera: no es una columna.
+    // K2: las columnas registradas en ESTA página dicen de dónde salió su
+    // encabezado, para que P3 nunca tome un día por un número de visita.
     const numericHeader = headerHits < 2 ? findNumericHeader(page.items) : null
     if (numericHeader) headerY = numericHeader.y
+    const pageHeaderSource: HeaderSource = numericHeader
+      ? numericHeader.kind === 'visit' ? 'numeric_visit' : 'numeric_time'
+      : 'prefixed'
     const headerGroups = numericHeader
       ? numericHeader.tokens.map((t) => ({ x0: t.bbox[0], x1: t.bbox[2], text: t.str.trim() }))
       : groupTexts(
@@ -408,6 +411,7 @@ function readTable(
           x1: band[1],
           headerText: tokens.map((t) => t.text).join(' '),
           headerBBox: box,
+          headerSource: pageHeaderSource,
         })
         columnTokens.push(new Set(norm))
       }
@@ -1115,6 +1119,8 @@ function readTable(
   // de 100 páginas marca sin cortar la lectura.
   const reasons: string[] = []
   let outcome: RawTable['outcome']
+  // Marcas del conjunto reconocido en toda la tabla (K1).
+  const totalMarks = markStats.reduce((acc, s) => acc + s.present, 0)
   if (located.pages.length === 0) {
     outcome = 'failed'
     reasons.push('not_located')
@@ -1124,6 +1130,14 @@ function readTable(
     // jamás un salto silencioso de página.
     outcome = 'failed'
     reasons.push('grid_unreadable')
+  } else if (totalMarks === 0) {
+    // K1 (G12): el localizador conservó esta racha porque tiene encabezado,
+    // pero ni una marca del conjunto reconocido apareció (un glifo que no
+    // conocemos, o una tabla de abreviaturas con fichas V1…). La tabla NO se
+    // puede leer y no puede quedar como grilla vacía que parezca «sin
+    // cronograma»: sale `failed` visible con 'no_marks'.
+    outcome = 'failed'
+    reasons.push('no_marks')
   } else {
     const failed = checks.filter((c) => !c.pass)
     outcome = failed.length === 0 ? 'complete' : 'partial'

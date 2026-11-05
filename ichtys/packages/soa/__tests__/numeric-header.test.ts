@@ -128,3 +128,57 @@ describe('P2b (a) — guardas negativas', () => {
     expect(tableOf(pages).columns).toHaveLength(0)
   })
 })
+
+describe('K2 — headerSource/headerKind: de dónde salió el encabezado (contrato para P3)', () => {
+  it('fila «Día» con enteros: columnas numeric_time — el entero es tiempo, jamás un printedId', () => {
+    const { pages } = build({
+      header: { label: 'Día', values: [1, 29, 57] },
+      rowsPerPage: [3, 3],
+    })
+    expect(locateSchedule(pages).tables[0]!.headerKind).toBe('numeric_time')
+    const table = tableOf(pages)
+    expect(table.columns).toHaveLength(3)
+    expect(table.columns.every((c) => c.headerSource === 'numeric_time')).toBe(true)
+  })
+
+  it('fila «Número de visita» con enteros: numeric_visit', () => {
+    const { pages } = build({
+      header: { label: 'Número de visita', values: [1, 2, 3, 4] },
+      rowsPerPage: [3, 3],
+    })
+    expect(locateSchedule(pages).tables[0]!.headerKind).toBe('numeric_visit')
+    expect(tableOf(pages).columns.every((c) => c.headerSource === 'numeric_visit')).toBe(true)
+  })
+
+  it('fichas con prefijo (V1…): prefixed', () => {
+    const prefixed = Array.from({ length: 6 }, (_, i) => `V${i + 1}`)
+    const { pages } = build({
+      header: { label: null, values: prefixed },
+      rowsPerPage: [3, 3],
+      commentsHeader: false,
+    })
+    expect(locateSchedule(pages).tables[0]!.headerKind).toBe('prefixed')
+    expect(tableOf(pages).columns.every((c) => c.headerSource === 'prefixed')).toBe(true)
+  })
+
+  it('«Número de visita» con una fila «Día» debajo: la tabla sigue siendo numeric_visit', () => {
+    const { pages } = build({
+      header: { label: 'Número de visita', values: [1, 2, 3, 4, 5, 6] },
+      rowsPerPage: [3, 3],
+      timeRow: { label: 'Día', values: [1, 8, 15, 22, 29, 36] },
+    })
+    expect(locateSchedule(pages).tables[0]!.headerKind).toBe('numeric_visit')
+    const table = tableOf(pages)
+    // Las columnas vienen de la fila de visitas, no de la de días.
+    expect(table.columns.map((c) => c.headerText)).toEqual(['1', '2', '3', '4', '5', '6'])
+    expect(table.columns.every((c) => c.headerSource === 'numeric_visit')).toBe(true)
+  })
+
+  it('una racha densa conservada sin encabezado reconocible: headerKind none', () => {
+    const { pages } = build({
+      header: { label: 'Peso (kg)', values: NUMERIC_VALUES },
+      rowsPerPage: [4, 3],
+    })
+    expect(locateSchedule(pages).tables[0]!.headerKind).toBe('none')
+  })
+})
