@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   normalizeCriterion,
+  normalizeEligibilityGroup,
   normalizeIdentification,
   normalizeStudySpec,
   normalizeVisit,
@@ -61,6 +62,7 @@ describe('normalizeVisit / normalizeVisitsGroup', () => {
     const warnings: string[] = []
     const out = normalizeVisit(
       { name: 'Visita 4', label: 'Semana 12', day: 85, windowDays: 3, procedures: ['ok', 'x'.repeat(MAX_SPEC_PROCEDURE_CHARS + 101)], sourcePages: [19], confidence: 'high' },
+      'visits: visita #1',
       warnings,
     )
     expect(out?.procedures[1]).toHaveLength(MAX_SPEC_PROCEDURE_CHARS)
@@ -72,6 +74,7 @@ describe('normalizeVisit / normalizeVisitsGroup', () => {
     const warnings: string[] = []
     const out = normalizeVisit(
       { name: 'Visita 4', label: null, day: null, windowDays: null, procedures: ['HbA1c'], sourcePages: Array.from({ length: MAX_SPEC_SOURCE_PAGES + 1 }, (_, i) => i + 1), confidence: 'high' },
+      'visits: visita #1',
       warnings,
     )
     expect(out?.sourcePages).toHaveLength(MAX_SPEC_SOURCE_PAGES)
@@ -82,6 +85,7 @@ describe('normalizeVisit / normalizeVisitsGroup', () => {
     const warnings: string[] = []
     const out = normalizeVisit(
       { name: 'Visita 4', label: null, day: 14, windowDays: -2, procedures: [], sourcePages: [19], confidence: 'high' },
+      'visits: visita #1',
       warnings,
     )
     expect(out?.windowDays).toBeNull()
@@ -125,6 +129,100 @@ describe('normalizeIdentification', () => {
     const warnings: string[] = []
     const out = normalizeIdentification('no soy un objeto', warnings)
     expect(out).toEqual({ protocolCode: null, title: null, phase: null, sourcePages: [] })
+  })
+})
+
+describe('B1 — una lista ausente nunca queda vacía en silencio', () => {
+  it('normalizeEligibilityGroup con una sola clave advierte la lista faltante', () => {
+    const warnings: string[] = []
+    const group = normalizeEligibilityGroup(
+      {
+        inclusionCriteria: [
+          { number: '1', text: 'Adultos mayores de 18 años', sourcePages: [52], confidence: 'high' },
+        ],
+      },
+      warnings,
+    )
+    expect(group.inclusionCriteria).toHaveLength(1)
+    expect(group.exclusionCriteria).toEqual([])
+    expect(warnings).toContain('eligibility: exclusion: ausente o inválido en la salida del modelo — 0 ítems')
+  })
+
+  it('clave presente pero no-arreglo (string) da la misma advertencia, nombrando la lista', () => {
+    const warnings: string[] = []
+    const group = normalizeEligibilityGroup({ inclusionCriteria: [], exclusionCriteria: 'ninguno' }, warnings)
+    expect(group.exclusionCriteria).toEqual([])
+    expect(warnings.some((warning) => warning.includes('exclusion') && warning.includes('ausente o inválido'))).toBe(true)
+  })
+})
+
+describe('G4-S1 — ninguna advertencia copia contenido del documento', () => {
+  it('recortes con marcador y salto de línea en number/name/objective: sólo categoría e índice', () => {
+    const marker = 'PACIENTE_FICTICIO_123\nINYECCION_LOG'
+    const warnings: string[] = []
+    normalizeStudySpec(
+      {
+        ...emptyStudySpec(),
+        inclusionCriteria: [
+          { number: marker, text: 'x'.repeat(MAX_SPEC_TEXT_CHARS + 1), sourcePages: [52], confidence: 'high' },
+        ],
+        exclusionCriteria: [{ number: marker, text: 'sin páginas', sourcePages: [], confidence: 'high' }],
+        endpoints: [
+          { type: 'primary', objective: marker, endpoint: 'y'.repeat(MAX_SPEC_TEXT_CHARS + 1), sourcePages: [5], confidence: 'high' },
+        ],
+        visits: [
+          { name: marker, label: null, day: 1, windowDays: null, procedures: ['ok', 'z'.repeat(MAX_SPEC_PROCEDURE_CHARS + 1)], sourcePages: [19], confidence: 'high' },
+        ],
+      },
+      warnings,
+    )
+    expect(warnings.length).toBeGreaterThanOrEqual(4)
+    for (const warning of warnings) {
+      expect(warning).not.toContain('PACIENTE_FICTICIO_123')
+      expect(warning).not.toContain('INYECCION_LOG')
+      expect(warning).not.toContain('\n')
+    }
+    expect(warnings.some((warning) => warning.includes('visita #1'))).toBe(true)
+    expect(warnings.some((warning) => warning.includes('criterio #1'))).toBe(true)
+  })
+})
+
+describe('confianza — un ítem reparado baja su confidence a low (N1/O2)', () => {
+  it('criterio recortado: high → low y la advertencia lo registra', () => {
+    const warnings: string[] = []
+    const out = normalizeCriterion(
+      { number: '1', text: 'x'.repeat(MAX_SPEC_TEXT_CHARS + 1), sourcePages: [52], confidence: 'high' },
+      'test',
+      warnings,
+    )
+    expect(out?.confidence).toBe('low')
+    expect(warnings[0]).toContain('low')
+  })
+
+  it('visita con procedimiento largo baja a low; la válida vecina conserva su confidence', () => {
+    const warnings: string[] = []
+    const group = normalizeVisitsGroup(
+      {
+        visits: [
+          { name: 'Válida', label: null, day: 1, windowDays: null, procedures: ['ECG'], sourcePages: [2], confidence: 'high' },
+          { name: 'Reparada', label: null, day: 1, windowDays: null, procedures: ['x'.repeat(MAX_SPEC_PROCEDURE_CHARS + 1)], sourcePages: [3], confidence: 'medium' },
+        ],
+      },
+      warnings,
+    )
+    expect(group.visits[0]?.confidence).toBe('high')
+    expect(group.visits[1]?.confidence).toBe('low')
+  })
+
+  it('un criterio válido conserva su confidence original (sin reparación no hay cambio)', () => {
+    const warnings: string[] = []
+    const out = normalizeCriterion(
+      { number: '1', text: 'Adultos mayores de 18 años', sourcePages: [1], confidence: 'medium' },
+      'test',
+      warnings,
+    )
+    expect(out?.confidence).toBe('medium')
+    expect(warnings).toEqual([])
   })
 })
 

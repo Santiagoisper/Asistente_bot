@@ -1,7 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm'
 import { db, studySpecs, type StudySpecRow } from '@ichtys/db'
 import { studySpecSchema, type StudySpec } from './study-spec'
-import { normalizeStudySpec } from './spec-normalizer'
+import { capExtractionWarnings, normalizeStudySpec, warningCodeSummary } from './spec-normalizer'
 import type { ApprovedSpecExample } from './spec-extractor'
 import { SEED_SPEC_EXAMPLE } from './seed-spec-example'
 
@@ -66,12 +66,27 @@ export async function saveStudySpec(params: SaveStudySpecParams): Promise<SavedS
   // ANTES del .parse. El spec llega de la salida del modelo (o del pipeline,
   // que junta TODAS las advertencias de extracción); un tope jamás puede
   // tumbar el guardado completo. Sobre un spec válido es idempotente.
+  // Vuelta 5 (B2): los ajustes del guardado se PERSISTEN en
+  // extractionWarnings — el banner de la pantalla lee de ahí, no de la
+  // consola. Vuelta 5 (G4-S1): el log sólo lleva conteos y códigos, jamás
+  // contenido del documento o del modelo.
   const normalizationWarnings: string[] = []
-  const spec = normalizeStudySpec(params.spec, normalizationWarnings)
+  const base = normalizeStudySpec(params.spec, normalizationWarnings)
+  let spec = base
   if (normalizationWarnings.length > 0) {
+    spec = normalizeStudySpec(
+      {
+        ...base,
+        extractionWarnings: capExtractionWarnings([
+          ...(base.extractionWarnings ?? []),
+          ...normalizationWarnings,
+        ]),
+      },
+      [], // ya normalizado: sólo re-valida tras sumar los ajustes del guardado
+    )
     console.warn(
       `[spec-store:save] spec normalizado para studyId=${params.studyId} ` +
-        `(${normalizationWarnings.length} ajustes; primero: ${normalizationWarnings[0]})`,
+        `(${normalizationWarnings.length} ajustes: ${warningCodeSummary(normalizationWarnings)})`,
     )
   }
 

@@ -455,6 +455,43 @@ describe('extractStudySpec', () => {
     ]))
     expect(result.warnings.some((w) => w.includes('provider failure'))).toBe(false)
   })
+
+  it('B1: .text recuperado sin exclusionCriteria deja advertencia que nombra la exclusión', async () => {
+    mockExtractionByPrompt()
+    const original = mocks.generateObject.getMockImplementation()!
+    const validCriterion = {
+      number: '1',
+      text: 'Adultos mayores de 18 años',
+      sourcePages: [52],
+      confidence: 'high',
+    }
+    mocks.generateObject.mockImplementation(
+      (args: { prompt: string; schema: { safeParse: (value: unknown) => { success: boolean } } }) => {
+        if (args.prompt.includes('inclusion criteria')) {
+          // El modelo devolvió SOLO inclusión: la exclusión ni vino (y el
+          // schema del grupo la exige, así que el SDK rechaza).
+          const object = { inclusionCriteria: [validCriterion] }
+          if (!args.schema.safeParse(object).success) {
+            return Promise.reject(
+              Object.assign(new Error('No object generated: response did not match schema.'), {
+                text: JSON.stringify(object),
+              }),
+            )
+          }
+          return Promise.resolve({ object })
+        }
+        return original(args as { prompt: string })
+      },
+    )
+
+    const result = await extractStudySpec(makeProtocolPages())
+
+    // La inclusión se recupera; la exclusión queda vacía PERO nombrada —
+    // no se lee como "este protocolo no tiene criterios de exclusión".
+    expect(result.spec.inclusionCriteria).toHaveLength(1)
+    expect(result.spec.exclusionCriteria).toEqual([])
+    expect(result.warnings.some((w) => w.includes('exclusion') && w.includes('ausente'))).toBe(true)
+  })
 })
 
 // ---------------------------------------------------------------------------

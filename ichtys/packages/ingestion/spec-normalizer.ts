@@ -79,8 +79,15 @@ function repairItem<T>(
   if (repaired) {
     const second = schema.safeParse(repaired.value)
     if (second.success) {
-      warnings.push(`${describe}: ${repaired.adjustments.join('; ')}`)
-      return second.data
+      // Decisión del Foreman (N1/O2, vuelta 5): un ítem REPARADO lleva la
+      // marca de la reparación — su confidence baja a 'low', la insignia por
+      // ítem que la pantalla ya muestra. El contenido no se toca.
+      const data = second.data as T & { confidence?: unknown }
+      const hasConfidence = 'confidence' in data
+      const adjusted = (hasConfidence ? { ...data, confidence: 'low' } : data) as T
+      const notes = hasConfidence ? [...repaired.adjustments, "confidence bajada a 'low' (ítem reparado)"] : repaired.adjustments
+      warnings.push(`${describe}: ${notes.join('; ')}`)
+      return adjusted
     }
   }
   warnings.push(`${describe}: descartado — no se pudo ajustar a las cotas del spec`)
@@ -136,10 +143,10 @@ export function normalizeEndpoint(
   }, warnings)
 }
 
-export function normalizeVisit(raw: unknown, warnings: string[]): StudyVisit | null {
-  const name = typeof raw === 'object' && raw !== null ? (raw as JsonRecord).name : undefined
-  const label = typeof name === 'string' ? `"${name.slice(0, MAX_SPEC_VISIT_LABEL_CHARS)}"` : 'desconocida'
-  return repairItem(studyVisitSchema, raw, `visits: visita ${label}`, (item) => {
+export function normalizeVisit(raw: unknown, label: string, warnings: string[]): StudyVisit | null {
+  // G4-S1: el label lo arma el llamador con la posición del ítem («visita #7») —
+  // la advertencia nunca copia name ni ningún campo del documento/modelo.
+  return repairItem(studyVisitSchema, raw, label, (item) => {
     const visitName = clipString(item.name, MAX_SPEC_VISIT_LABEL_CHARS)
     if (!visitName) return null
     const visitLabel =
@@ -247,12 +254,19 @@ function normalizeList<T>(
   raw: unknown,
   max: number,
   label: string,
-  normalizeOne: (item: unknown, warnings: string[]) => T | null,
+  normalizeOne: (item: unknown, index: number, warnings: string[]) => T | null,
   warnings: string[],
 ): T[] {
-  if (!Array.isArray(raw)) return []
+  // B1 (vuelta 5): una lista ausente o no-arreglo devuelve [] PERO nombrada.
+  // Sin esto, la recuperación de una salida parcial del SDK («solo vino
+  // inclusionCriteria») dejaba exclusionCriteria = [] en silencio, que en
+  // pantalla se lee como «este protocolo no tiene criterios de exclusión».
+  if (!Array.isArray(raw)) {
+    warnings.push(`${label}: ausente o inválido en la salida del modelo — 0 ítems`)
+    return []
+  }
   const items = raw
-    .map((item) => normalizeOne(item, warnings))
+    .map((item, index) => normalizeOne(item, index, warnings))
     .filter((item): item is T => item !== null)
   if (items.length > max) {
     warnings.push(`${label}: ${items.length} ítems recortados a ${max}`)
@@ -269,11 +283,11 @@ export function normalizeEligibilityGroup(
   return {
     inclusionCriteria: normalizeList(
       group.inclusionCriteria, MAX_SPEC_ITEMS, 'eligibility: inclusion',
-      (item, w) => normalizeCriterion(item, `eligibility: inclusión ${labelOf(item)}`, w), warnings,
+      (item, index, w) => normalizeCriterion(item, `eligibility: inclusión criterio #${index + 1}`, w), warnings,
     ),
     exclusionCriteria: normalizeList(
       group.exclusionCriteria, MAX_SPEC_ITEMS, 'eligibility: exclusion',
-      (item, w) => normalizeCriterion(item, `eligibility: exclusión ${labelOf(item)}`, w), warnings,
+      (item, index, w) => normalizeCriterion(item, `eligibility: exclusión criterio #${index + 1}`, w), warnings,
     ),
   }
 }
@@ -286,7 +300,7 @@ export function normalizeEndpointsGroup(
   return {
     endpoints: normalizeList(
       group.endpoints, MAX_SPEC_ITEMS, 'endpoints',
-      (item, w) => normalizeEndpoint(item, `endpoints: ${labelOf(item)}`, w), warnings,
+      (item, index, w) => normalizeEndpoint(item, `endpoints: endpoint #${index + 1}`, w), warnings,
     ),
   }
 }
@@ -297,19 +311,48 @@ export function normalizeVisitsGroup(
 ): { visits: StudyVisit[] } {
   const group = (typeof raw === 'object' && raw !== null ? raw : {}) as JsonRecord
   return {
-    visits: normalizeList(group.visits, MAX_SPEC_ITEMS, 'visits', normalizeVisit, warnings),
+    visits: normalizeList(
+      group.visits, MAX_SPEC_ITEMS, 'visits',
+      (item, index, w) => normalizeVisit(item, `visits: visita #${index + 1}`, w), warnings,
+    ),
   }
 }
 
-/** Etiqueta corta del ítem para las advertencias (número o type), sin texto largo. */
-function labelOf(item: unknown): string {
-  if (typeof item !== 'object' || item === null) return ''
-  const record = item as JsonRecord
-  const number = record.number
-  if (typeof number === 'string' && number.length > 0) return number.slice(0, MAX_SPEC_NUMBER_CHARS)
-  const type = record.type
-  if (typeof type === 'string' && type.length > 0) return type
-  return ''
+/** ¿Advertencia de descarte o recuperación? Se priorizan al recortar (B2). */
+function isPriorityWarning(warning: string): boolean {
+  return warning.includes('descartado') || warning.includes('recuperada')
+}
+
+/**
+ * Cierra la lista de advertencias a las cotas (B2, vuelta 5): recorta cada
+ * una a 1000 chars y, si hay más de 200, conserva primero descartes y
+ * recuperaciones (las que el revisor clínico debe ver sí o sí) y deja la
+ * última entrada como «… y N advertencias más». Antes el recorte conservaba
+ * las primeras 200 — justo las de descarte, que se agregan al final, se
+ * perdían.
+ */
+export function capExtractionWarnings(list: readonly unknown[]): string[] {
+  const clipped = list
+    .map((warning) => clipString(warning, MAX_SPEC_WARNING_CHARS) ?? '')
+    .filter((warning) => warning.length > 0)
+  if (clipped.length <= MAX_SPEC_EXTRACTION_WARNINGS) return clipped
+  const kept = [
+    ...clipped.filter(isPriorityWarning),
+    ...clipped.filter((warning) => !isPriorityWarning(warning)),
+  ].slice(0, MAX_SPEC_EXTRACTION_WARNINGS - 1)
+  const omitted = clipped.length - kept.length
+  kept.push(`… y ${omitted} advertencia${omitted === 1 ? '' : 's'} más`)
+  return kept
+}
+
+/** Resumen «código×N» de advertencias para logs: conteos y códigos, sin contenido (G4-S1). */
+export function warningCodeSummary(warnings: string[]): string {
+  const counts = new Map<string, number>()
+  for (const warning of warnings) {
+    const code = (warning.split(':')[0] ?? '').trim() || 'sin-código'
+    counts.set(code, (counts.get(code) ?? 0) + 1)
+  }
+  return Array.from(counts.entries()).map(([code, count]) => `${code}×${count}`).join(', ')
 }
 
 /**
@@ -322,32 +365,32 @@ export function normalizeStudySpec(raw: unknown, warnings: string[]): StudySpec 
   const rawWarnings = Array.isArray(spec.extractionWarnings)
     ? spec.extractionWarnings
     : []
-  const clippedWarnings = rawWarnings
-    .map((warning) => clipString(warning, MAX_SPEC_WARNING_CHARS) ?? '')
-    .filter((warning) => warning.length > 0)
-    .slice(0, MAX_SPEC_EXTRACTION_WARNINGS)
-  if (clippedWarnings.length < rawWarnings.length) {
+  const clippedWarnings = capExtractionWarnings(rawWarnings)
+  const overLength = rawWarnings.some(
+    (warning) => typeof warning === 'string' && warning.length > MAX_SPEC_WARNING_CHARS,
+  )
+  if (clippedWarnings.length < rawWarnings.length || overLength) {
     warnings.push(
-      `extractionWarnings: ${rawWarnings.length} advertencias recortadas a ${clippedWarnings.length}` +
-      ` (tope ${MAX_SPEC_EXTRACTION_WARNINGS})`,
+      `extractionWarnings: ${rawWarnings.length} advertencias recortadas al tope de ${MAX_SPEC_EXTRACTION_WARNINGS}`,
     )
   }
 
   const identification = normalizeIdentification(spec.identification, warnings)
   const inclusionCriteria = normalizeList(
     spec.inclusionCriteria, MAX_SPEC_ITEMS, 'eligibility: inclusion',
-    (item, w) => normalizeCriterion(item, `eligibility: inclusión ${labelOf(item)}`, w), warnings,
+    (item, index, w) => normalizeCriterion(item, `eligibility: inclusión criterio #${index + 1}`, w), warnings,
   )
   const exclusionCriteria = normalizeList(
     spec.exclusionCriteria, MAX_SPEC_ITEMS, 'eligibility: exclusion',
-    (item, w) => normalizeCriterion(item, `eligibility: exclusión ${labelOf(item)}`, w), warnings,
+    (item, index, w) => normalizeCriterion(item, `eligibility: exclusión criterio #${index + 1}`, w), warnings,
   )
   const endpoints = normalizeList(
     spec.endpoints, MAX_SPEC_ITEMS, 'endpoints',
-    (item, w) => normalizeEndpoint(item, `endpoints: ${labelOf(item)}`, w), warnings,
+    (item, index, w) => normalizeEndpoint(item, `endpoints: endpoint #${index + 1}`, w), warnings,
   )
   const visits = normalizeList(
-    spec.visits, MAX_SPEC_ITEMS, 'visits', normalizeVisit, warnings,
+    spec.visits, MAX_SPEC_ITEMS, 'visits',
+    (item, index, w) => normalizeVisit(item, `visits: visita #${index + 1}`, w), warnings,
   )
 
   const normalized = {

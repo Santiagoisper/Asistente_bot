@@ -22,6 +22,7 @@ import {
   isMeaningfulSpec,
   saveStudySpec,
 } from './spec-store'
+import { warningCodeSummary } from './spec-normalizer'
 import { reextractStudySpec } from './reextract-spec'
 import { getOrgLlmApiKeys } from '@ichtys/db'
 import { emptyStudySpec, mergeSoaVisits, studySpecSchema, type StudySpec } from './study-spec'
@@ -311,7 +312,13 @@ async function persistSpecDraft(
       : input.documentVersionId
 
     if (warnings.length > 0) {
-      console.warn(`[spec-extractor] warnings for documentVersionId=${input.documentVersionId}:`, warnings)
+      // G4-S1 (vuelta 5): conteos y códigos, nunca contenido — las
+      // advertencias enteras viven en extractionWarnings (DB/pantalla), no
+      // en los logs de Vercel.
+      console.warn(
+        `[spec-extractor] ${warnings.length} warnings para documentVersionId=${input.documentVersionId} ` +
+          `(${warningCodeSummary(warnings)})`,
+      )
     }
     if (detectedLanguage) {
       console.log(`[spec-extractor] detected language: ${detectedLanguage}`)
