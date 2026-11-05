@@ -97,4 +97,18 @@ describe('G18 §3.2 — columnas desde la fila de ids, no del tiempo', () => {
       Array.from({ length: COLS }, (_, i) => `W${i + 1}`),
     )
   })
+
+  it('la fila de semanas se proyecta como timing por x, sin definir columnas', () => {
+    const pages = [r46Page('split')]
+    const table = readGrid(pages, locateSchedule(pages)).tables[0]!
+
+    // Las columnas siguen siendo las visitas (B-1)…
+    expect(table.columns.map((c) => c.headerText.replace(/\s+/g, ''))).toEqual(
+      Array.from({ length: COLS }, (_, i) => `V${i + 1}`),
+    )
+    // …y cada una lleva su semana como timing (G18 §3.2).
+    expect(table.columns.map((c) => c.timingText)).toEqual(
+      Array.from({ length: COLS }, (_, i) => `S${i + 1}`),
+    )
+  })
 })

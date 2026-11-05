@@ -92,6 +92,13 @@ export interface RawColumn {
    * (K1): la ficha queda y P3 la ve vacía; G1 baja la tabla a 'partial'.
    */
   empty: boolean
+  /**
+   * G18 §3.2: fichas de TIEMPO (S…, W…, D…) de la fila bajo el encabezado
+   * de ids, proyectadas por x sobre esta columna (orden x, texto crudo,
+   * unidas con espacio). '' si la tabla no tiene fila de tiempo. El tiempo
+   * NUNCA es id de visita (K2): P3 lo lleva a `timing`.
+   */
+  timingText: string
 }
 
 /** Fila cruda detectada por geometría. */

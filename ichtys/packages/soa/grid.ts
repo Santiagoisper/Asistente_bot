@@ -49,6 +49,7 @@ import {
   LABEL_WINDOW,
   MARK_STRINGS,
   normalizeNumericToken,
+  TIME_TOKEN,
 } from './header'
 import type {
   BBox,
@@ -537,8 +538,46 @@ function readTable(
           headerBBox: box,
           headerSource: pageHeaderSource,
           empty: false,
+          timingText: '',
         })
         columnTokens.push(new Set(norm))
+      }
+    }
+
+    // --- G18 §3.2: proyección de la fila de TIEMPO (camino con prefijo).
+    // La fila de tiempo bajo la línea de ids no define columnas (arriba): se
+    // proyecta por x sobre las columnas de ESTA página como `timing`. La
+    // franja válida va de la ventana pegada del encabezado (−8 pt) al techo
+    // de la PRIMERA marca: entre ambos vive el resto del bloque de
+    // encabezado; una fila de tiempo más abajo (bajo marcas) pertenece a
+    // otra tabla apilada y no se proyecta (el discriminador de G18 §4). El
+    // camino numérico (fila etiquetada «semanas…» con enteros) se proyecta
+    // con el bloque multilínea de §3.3.
+    if (!numericHeader && localColumns.length > 0) {
+      const firstMarkTop = Math.min(
+        ...page.items
+          .filter((i) => MARK_STRINGS.has(i.str.trim()) && i.fontSize >= MIN_MARK_FONT)
+          .map((i) => i.bbox[3]),
+      )
+      const timeItems = page.items
+        .filter(
+          (i) =>
+            TIME_TOKEN.test(i.str.trim()) &&
+            i.fontSize >= 4 &&
+            !i.rotated &&
+            i.bbox[3] <= headerY - 8 &&
+            i.bbox[1] >= firstMarkTop,
+        )
+        .sort((a, b) => a.bbox[0] - b.bbox[0])
+      if (timeItems.length > 0) {
+        for (const lc of localColumns) {
+          const idx = columnTokens.findIndex((s) => lc.token !== null && s.has(lc.token))
+          // Solo llena la primera vez: el encabezado repetido de una página
+          // de continuación proyecta lo mismo; no sobrescribe.
+          if (idx < 0 || columns[idx]!.timingText !== '') continue
+          const chips = timeItems.filter((i) => i.bbox[0] < lc.band[1] && i.bbox[2] > lc.band[0])
+          if (chips.length > 0) columns[idx]!.timingText = chips.map((c) => c.str.trim()).join(' ')
+        }
       }
     }
 
