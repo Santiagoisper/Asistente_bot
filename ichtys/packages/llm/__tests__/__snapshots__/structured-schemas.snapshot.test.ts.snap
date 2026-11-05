@@ -1425,6 +1425,367 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
 }
 `;
 
+exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) > jsonSchema de soaHeadersOutput coincide con la instantánea 1`] = `
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "headers": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "armOnly": {
+            "maxLength": 64,
+            "type": "string",
+          },
+          "col": {
+            "maximum": 199,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "printedIdSpan": {
+            "anyOf": [
+              {
+                "additionalItems": false,
+                "items": [
+                  {
+                    "maximum": 119,
+                    "minimum": 0,
+                    "type": "integer",
+                  },
+                  {
+                    "maximum": 120,
+                    "minimum": 1,
+                    "type": "integer",
+                  },
+                ],
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array",
+              },
+              {
+                "type": "null",
+              },
+            ],
+          },
+          "timingIfUnparsed": {
+            "additionalProperties": false,
+            "properties": {
+              "unit": {
+                "enum": [
+                  "day",
+                  "week",
+                ],
+                "type": "string",
+              },
+              "value": {
+                "maximum": 900,
+                "minimum": -60,
+                "type": "integer",
+              },
+            },
+            "required": [
+              "value",
+              "unit",
+            ],
+            "type": "object",
+          },
+          "type": {
+            "enum": [
+              "standard",
+              "pk_only",
+              "dispense_only",
+              "hybrid",
+              "remote",
+              "screening",
+              "end_of_study",
+              "early_termination",
+              "unscheduled",
+              "follow_up",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "col",
+          "printedIdSpan",
+          "type",
+        ],
+        "type": "object",
+      },
+      "maxItems": 200,
+      "type": "array",
+    },
+  },
+  "required": [
+    "headers",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) > jsonSchema de soaNotesOutput coincide con la instantánea 1`] = `
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "notes": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "conditions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "appliesTo": {
+                  "enum": [
+                    "row",
+                    "cells",
+                  ],
+                  "type": "string",
+                },
+                "doseTiming": {
+                  "maxLength": 120,
+                  "type": "string",
+                },
+                "expr": {
+                  "maxLength": 300,
+                  "type": "string",
+                },
+                "kind": {
+                  "enum": [
+                    "population",
+                    "arm",
+                    "dose_timing",
+                    "consent",
+                    "country",
+                    "event",
+                    "dependency",
+                    "order",
+                    "fasting",
+                  ],
+                  "type": "string",
+                },
+                "procedureWindow": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "after": {
+                      "maximum": 60,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "before": {
+                      "maximum": 30,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "unit": {
+                      "enum": [
+                        "day",
+                        "week",
+                        "hour",
+                      ],
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "before",
+                    "after",
+                    "unit",
+                  ],
+                  "type": "object",
+                },
+              },
+              "required": [
+                "kind",
+                "expr",
+                "appliesTo",
+              ],
+              "type": "object",
+            },
+            "maxItems": 16,
+            "type": "array",
+          },
+          "ref": {
+            "maxLength": 16,
+            "type": "string",
+          },
+        },
+        "required": [
+          "ref",
+          "conditions",
+        ],
+        "type": "object",
+      },
+      "maxItems": 200,
+      "type": "array",
+    },
+  },
+  "required": [
+    "notes",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) > jsonSchema de soaRowsOutput coincide con la instantánea 1`] = `
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "rows": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "conditions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "expr": {
+                  "maxLength": 300,
+                  "type": "string",
+                },
+                "kind": {
+                  "enum": [
+                    "population",
+                    "arm",
+                    "dose_timing",
+                    "consent",
+                    "country",
+                    "event",
+                    "dependency",
+                    "order",
+                    "fasting",
+                  ],
+                  "type": "string",
+                },
+              },
+              "required": [
+                "kind",
+                "expr",
+              ],
+              "type": "object",
+            },
+            "maxItems": 16,
+            "type": "array",
+          },
+          "kind": {
+            "enum": [
+              "procedure",
+              "attribute_fasting",
+              "attribute_onsite",
+              "attribute_visit_type",
+              "section",
+              "narrative_rule",
+            ],
+            "type": "string",
+          },
+          "row": {
+            "maximum": 499,
+            "minimum": 0,
+            "type": "integer",
+          },
+        },
+        "required": [
+          "row",
+          "kind",
+          "conditions",
+        ],
+        "type": "object",
+      },
+      "maxItems": 500,
+      "type": "array",
+    },
+  },
+  "required": [
+    "rows",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) > jsonSchema de soaRulesOutput coincide con la instantánea 1`] = `
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "rules": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "affectsVisits": {
+            "anyOf": [
+              {
+                "items": {
+                  "maximum": 199,
+                  "minimum": 0,
+                  "type": "integer",
+                },
+                "maxItems": 200,
+                "type": "array",
+              },
+              {
+                "const": "all",
+                "type": "string",
+              },
+            ],
+          },
+          "conditions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "expr": {
+                  "maxLength": 300,
+                  "type": "string",
+                },
+                "kind": {
+                  "enum": [
+                    "population",
+                    "arm",
+                    "dose_timing",
+                    "consent",
+                    "country",
+                    "event",
+                    "dependency",
+                    "order",
+                    "fasting",
+                  ],
+                  "type": "string",
+                },
+              },
+              "required": [
+                "kind",
+                "expr",
+              ],
+              "type": "object",
+            },
+            "maxItems": 16,
+            "type": "array",
+          },
+          "paragraph": {
+            "maximum": 199,
+            "minimum": 0,
+            "type": "integer",
+          },
+        },
+        "required": [
+          "paragraph",
+          "conditions",
+          "affectsVisits",
+        ],
+        "type": "object",
+      },
+      "maxItems": 50,
+      "type": "array",
+    },
+  },
+  "required": [
+    "rules",
+  ],
+  "type": "object",
+}
+`;
+
 exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) > jsonSchema de visitsGroup coincide con la instantánea 1`] = `
 {
   "$schema": "http://json-schema.org/draft-07/schema#",

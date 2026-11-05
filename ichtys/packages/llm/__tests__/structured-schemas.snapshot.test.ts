@@ -15,10 +15,16 @@ import {
 } from '../../ingestion/spec-extractor'
 import { llmFactsSchema } from '../../../apps/web/lib/subjects/patient-profile-service'
 import { labObservationSchema } from '../../clinical/profile-schema'
-// P3 (ADR-10 §3): el contrato Schedule del paquete soa. Sus sub-esquemas
-// viajan al modelo en las llamadas del normalizador; el contrato completo
-// registra aquí su forma (M4) y su cuenta de opcionales (M5, tope 10).
+// P3 (ADR-10 §3): el contrato Schedule del paquete soa y los esquemas de
+// SALIDA de sus 4 llamadas (estos sí viajan al proveedor como output
+// schema). Registran aquí su forma (M4) y su cuenta de opcionales (M5).
 import { scheduleSchema } from '../../soa/schedule-contract'
+import {
+  headersOutputSchema,
+  notesOutputSchema,
+  rowsOutputSchema,
+  rulesOutputSchema,
+} from '../../soa/normalize/llm-steps'
 // Esquema y tope REALES de la ruta labs/confirm (Architect, vuelta 3): el M9
 // no usa una copia local — si alguien cambia el tope, este test lo sigue.
 import { labOcrConfirmSchema } from '../../../apps/web/lib/subjects/schemas'
@@ -43,6 +49,10 @@ const STRUCTURED_SCHEMAS = {
   answer: answerSchema,
   llmFacts: llmFactsSchema,
   scheduleContract: scheduleSchema,
+  soaHeadersOutput: headersOutputSchema,
+  soaRowsOutput: rowsOutputSchema,
+  soaNotesOutput: notesOutputSchema,
+  soaRulesOutput: rulesOutputSchema,
 } as const
 
 // Misma regla que @ai-sdk/anthropic 4.0.96 dist/index.js:3826-3845.
@@ -279,6 +289,56 @@ describe('veredictos de validación sin cambio (ADR-8 M7)', () => {
           pages: [2, 3],
           status: 'open',
         },
+      ],
+    },
+    // P3: salidas de las 4 llamadas del normalizador (orden B-P3 §2).
+    soaHeadersOutput: {
+      headers: [
+        { col: 0, printedIdSpan: [0, 2], type: 'screening' },
+        {
+          col: 1,
+          printedIdSpan: null,
+          type: 'unscheduled',
+          timingIfUnparsed: { value: 15, unit: 'day' },
+          armOnly: 'A',
+        },
+      ],
+    },
+    soaRowsOutput: {
+      rows: [
+        {
+          row: 0,
+          kind: 'procedure',
+          conditions: [{ kind: 'fasting', expr: 'En ayunas de al menos 8 h' }],
+        },
+        { row: 3, kind: 'attribute_fasting', conditions: [] },
+      ],
+    },
+    soaNotesOutput: {
+      notes: [
+        {
+          ref: '1',
+          conditions: [
+            { kind: 'arm', expr: 'Solo en participantes del brazo A', appliesTo: 'cells' },
+          ],
+        },
+        {
+          ref: '9',
+          conditions: [
+            {
+              kind: 'dose_timing',
+              expr: 'Ventana propia',
+              appliesTo: 'row',
+              procedureWindow: { before: 4, after: 2, unit: 'week' },
+            },
+          ],
+        },
+      ],
+    },
+    soaRulesOutput: {
+      rules: [
+        { paragraph: 0, conditions: [{ kind: 'order', expr: 'antes de V1' }], affectsVisits: 'all' },
+        { paragraph: 2, conditions: [], affectsVisits: [0, 3, 5] },
       ],
     },
   }
