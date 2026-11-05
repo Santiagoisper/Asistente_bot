@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { OrigenPanel } from './origen-panel'
 import { PrintSheets, SemanaView } from './semana-view'
+import { answerQuestion } from '../../lib/cabina/answers'
 import { checklistKey, readChecklist, writeChecklist } from '../../lib/cabina/checklist'
 import { demoStudy } from '../../lib/cabina/demo-data'
 import { buildSheet, type SheetItem } from '../../lib/cabina/filter'
@@ -57,6 +58,11 @@ export function CabinaApp() {
   const [panelKey, setPanelKey] = useState<string | null>(null)
   const [approved, setApproved] = useState(false)
   const [view, setView] = useState<'cabina' | 'semana'>('cabina')
+  const [mobileTab, setMobileTab] = useState<'antes' | 'dia' | 'alertas'>('dia')
+  const [question, setQuestion] = useState('')
+  const [reply, setReply] = useState<{ text: string; page: number | null } | null>(null)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const askRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const now = startOfDay(new Date())
@@ -121,7 +127,7 @@ export function CabinaApp() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 text-alphi-navy">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 pb-40 text-alphi-navy lg:pb-0">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-sm text-alphi-muted">
@@ -291,8 +297,15 @@ export function CabinaApp() {
         ) : null}
       </section>
 
+      <div className="flex gap-2 lg:hidden" role="tablist" aria-label="Partes de la visita">
+        {([['antes', 'Antes'], ['dia', 'El día'], ['alertas', 'Alertas']] as const).map(([key, label]) => (
+          <button key={key} type="button" role="tab" aria-selected={mobileTab === key} className={viewButton(mobileTab === key)} onClick={() => setMobileTab(key)}>
+            {label}
+          </button>
+        ))}
+      </div>
       <div className="grid items-start gap-4 lg:grid-cols-[1fr_1.25fr_1fr]">
-        <section className={cardClass} aria-labelledby="cabina-antes">
+        <section className={`${cardClass} ${phonePanel(mobileTab === 'antes')}`} aria-labelledby="cabina-antes">
           <h2 id="cabina-antes" className="mb-2 text-base font-semibold">
             Antes de la visita
           </h2>
@@ -310,7 +323,7 @@ export function CabinaApp() {
           </ul>
         </section>
 
-        <section className={cardClass} aria-labelledby="cabina-dia">
+        <section className={`${cardClass} ${phonePanel(mobileTab === 'dia')}`} aria-labelledby="cabina-dia">
           <h2 id="cabina-dia" className="mb-2 text-base font-semibold">
             El día, en orden
           </h2>
@@ -338,7 +351,7 @@ export function CabinaApp() {
           <p className="mt-2 text-xs text-alphi-muted">El protocolo fija el orden de los pasos 2 a 5. Los demás pasos no tienen un orden fijado.</p>
         </section>
 
-        <div className="flex flex-col gap-3">
+        <div className={`flex flex-col gap-3 ${phonePanel(mobileTab === 'alertas')}`}>
           {alerts.map((item) => (
             <AlertCard
               key={item.procedure.key}
@@ -405,6 +418,36 @@ export function CabinaApp() {
         </section>
       </div>
 
+      <form
+        className="fixed inset-x-0 bottom-14 z-30 border-t border-alphi-border bg-white p-3 lg:static lg:rounded-2xl lg:border lg:p-4"
+        onSubmit={(event: FormEvent) => {
+          event.preventDefault()
+          setReply(answerQuestion(question, demoStudy.answers))
+        }}
+      >
+        <label className="block text-sm font-semibold" htmlFor="cabina-pregunta">
+          Preguntar sobre esta visita
+        </label>
+        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+          <input
+            ref={askRef}
+            id="cabina-pregunta"
+            className={fieldClass}
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+            placeholder="¿Puedo comer? ¿Qué extraigo?"
+          />
+          <button type="submit" className={`inline-flex min-h-11 items-center justify-center rounded-lg bg-[#0F5E73] px-4 text-sm font-semibold text-white ${focusRing}`}>
+            Preguntar
+          </button>
+        </div>
+        {reply ? (
+          <p className="mt-2 text-sm" role="status">
+            {reply.text}
+            {reply.page != null ? ` [${reply.page}]` : ''}
+          </p>
+        ) : null}
+      </form>
       <p className="text-center text-sm text-alphi-muted">Datos ficticios. Verificar siempre con el protocolo original.</p>
       </>
       ) : null}
@@ -428,6 +471,55 @@ export function CabinaApp() {
         </>
       ) : null}
       <PrintSheets today={today} />
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-alphi-border bg-white lg:hidden" aria-label="Navegación de la demo">
+        <button type="button" className={barButton(view === 'cabina')} onClick={() => setView('cabina')}>
+          Inicio
+        </button>
+        <button type="button" className={barButton(view === 'semana')} onClick={() => setView('semana')}>
+          Estudio
+        </button>
+        <button
+          type="button"
+          className={barButton(false)}
+          onClick={() => {
+            setView('cabina')
+            window.setTimeout(() => askRef.current?.focus(), 0)
+          }}
+        >
+          Preguntar
+        </button>
+        <button type="button" className={barButton(moreOpen)} aria-expanded={moreOpen} onClick={() => setMoreOpen((open) => !open)}>
+          Más
+        </button>
+      </nav>
+      {moreOpen ? (
+        <div role="dialog" aria-label="Más opciones" className="fixed inset-x-0 bottom-14 z-40 rounded-t-2xl border border-alphi-border bg-white p-4 shadow-alphi-modal lg:hidden">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-base font-semibold">Pacientes ficticios</h2>
+            <button type="button" className={`inline-flex min-h-11 items-center px-3 text-sm font-semibold text-[#0F5E73] ${focusRing}`} onClick={() => setMoreOpen(false)}>
+              Cerrar
+            </button>
+          </div>
+          <ul className="flex flex-col gap-2">
+            {demoStudy.patients.map((item) => (
+              <li key={item.id}>
+                <button
+                  type="button"
+                  className={`inline-flex min-h-11 w-full items-center rounded-lg border border-alphi-border px-3 text-left text-sm font-semibold ${focusRing}`}
+                  onClick={() => {
+                    setPatientId(item.id)
+                    setView('cabina')
+                    setMoreOpen(false)
+                  }}
+                >
+                  {patientOption(item)}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-sm text-alphi-muted">Datos ficticios. Verificar siempre con el protocolo original.</p>
+        </div>
+      ) : null}
       <style>{printCss}</style>
     </div>
   )
@@ -449,6 +541,14 @@ const printCss = `
 
 function viewButton(active: boolean): string {
   return `inline-flex min-h-11 items-center rounded-lg px-4 text-sm font-semibold ${focusRing} ${active ? 'bg-[#0F5E73] text-white' : 'border border-alphi-border bg-white text-alphi-navy'}`
+}
+
+function phonePanel(active: boolean): string {
+  return active ? 'block' : 'max-lg:hidden'
+}
+
+function barButton(active: boolean): string {
+  return `inline-flex min-h-11 flex-1 items-center justify-center text-sm font-semibold ${focusRing} ${active ? 'text-[#0F5E73]' : 'text-[#33424F]'}`
 }
 
 function WindowCard({
