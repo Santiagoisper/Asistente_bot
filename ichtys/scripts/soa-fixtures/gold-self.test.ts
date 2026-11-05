@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { scoreSchedule, type Counts, type ScheduleDoc, type ScoreReport } from './score'
 
 const FIXTURES = resolve(dirname(fileURLToPath(import.meta.url)), '../../fixtures/soa')
-const IDS = ['F1', 'F2', 'F3', 'F4', 'F5'] as const
+const IDS = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8'] as const
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
@@ -51,4 +51,15 @@ describe('gold contra sí mismo', () => {
       expectPerfect(scoreSchedule(clone(gold), clone(gold)), id)
     })
   }
+
+  it('F8 con las claves del candidato invertidas da el mismo puntaje', () => {
+    const gold = JSON.parse(readFileSync(resolve(FIXTURES, 'F8.gold.json'), 'utf8')) as ScheduleDoc
+    const straight = scoreSchedule(clone(gold), clone(gold))
+    const swapped = clone(gold)
+    const flip = (key: string | null | undefined) => (key === 'T1' ? 'T2' : key === 'T2' ? 'T1' : key)
+    for (const table of swapped.tables ?? []) table.key = flip(table.key) ?? table.key
+    for (const visit of swapped.visits ?? []) visit.tableKey = flip(visit.tableKey) ?? null
+    for (const note of swapped.notes ?? []) note.tableKey = flip(note.tableKey) ?? note.tableKey
+    expect(scoreSchedule(clone(gold), swapped)).toEqual(straight)
+  })
 })
