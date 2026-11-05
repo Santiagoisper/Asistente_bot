@@ -10,6 +10,7 @@ import {
 import { createEvolutionSchema } from '../../../../../../../lib/subjects/schemas'
 import { refreshPatientProfileFromEvolution } from '../../../../../../../lib/subjects/patient-profile-service'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../../lib/api/body-limit'
+import { getOrCreateRequestId } from '../../../../../../../lib/observability/logger'
 
 export const runtime = 'nodejs'
 
@@ -66,6 +67,7 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string; subjectId: string }> },
 ): Promise<Response> {
+  const requestId = getOrCreateRequestId(req)
   const { id: routeStudyId, subjectId } = await params
 
   // Auth primero: subjectId viene de params, no del body (vuelta 2 del
@@ -138,8 +140,15 @@ export async function POST(
         evolutionContent: parsed.data.content,
       })
       profileUpdated = true
-    } catch (profileErr) {
-      console.error('[evolution.create] profile refresh failed:', profileErr)
+    } catch {
+      // El error crudo puede traer mensaje, stack y campos de dependencias.
+      // Solo código estable, id de la solicitud y los ids que ya tenemos.
+      console.error('[evolution.create] profile_refresh_failed', {
+        code: 'profile_refresh_failed',
+        requestId,
+        studyId: study.id,
+        subjectId: subject.id,
+      })
     }
 
     return Response.json(
