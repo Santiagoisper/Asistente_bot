@@ -1,0 +1,2751 @@
+{
+  "fixture": "F9",
+  "seed": 1010,
+  "generatorVersion": "1.3.0",
+  "document": {
+    "pages": 3,
+    "sopPages": [
+      2,
+      3
+    ],
+    "falseHitPages": [],
+    "gridOrientation": "landscape",
+    "gridPageSize": [
+      792.0,
+      612.0
+    ]
+  },
+  "tables": [
+    {
+      "key": "T1",
+      "title": "Cronograma de encabezado mixto",
+      "branch": null,
+      "phase": "tratamiento",
+      "pages": [
+        2,
+        3
+      ],
+      "notePages": [],
+      "outcome": "complete",
+      "reasons": []
+    }
+  ],
+  "visits": [
+    {
+      "key": "T1-C00",
+      "tableKey": "T1",
+      "printedId": "1",
+      "label": "Columna 1",
+      "timing": {
+        "kind": "scheduled",
+        "value": 7,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 3,
+        "after": 3,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 2,
+      "bbox": [
+        150.0,
+        498.0,
+        169.09,
+        508.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          150.0,
+          498.0,
+          169.09,
+          508.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "T1-C01",
+      "tableKey": "T1",
+      "printedId": "2",
+      "label": "Columna 2",
+      "timing": {
+        "kind": "scheduled",
+        "value": 14,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 3,
+        "after": 3,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 2,
+      "bbox": [
+        169.09,
+        498.0,
+        188.18,
+        508.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          169.09,
+          498.0,
+          188.18,
+          508.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "T1-C02",
+      "tableKey": "T1",
+      "printedId": "3",
+      "label": "Columna 3",
+      "timing": {
+        "kind": "scheduled",
+        "value": 21,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 3,
+        "after": 3,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 2,
+      "bbox": [
+        188.18,
+        498.0,
+        207.27,
+        508.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          188.18,
+          498.0,
+          207.27,
+          508.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "T1-C03",
+      "tableKey": "T1",
+      "printedId": "4",
+      "label": "Columna 4",
+      "timing": {
+        "kind": "scheduled",
+        "value": 28,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 3,
+        "after": 3,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 2,
+      "bbox": [
+        207.27,
+        498.0,
+        226.36,
+        508.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          207.27,
+          498.0,
+          226.36,
+          508.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "T1-C04",
+      "tableKey": "T1",
+      "printedId": "5",
+      "label": "Columna 5",
+      "timing": {
+        "kind": "scheduled",
+        "value": 35,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 3,
+        "after": 3,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 2,
+      "bbox": [
+        226.36,
+        498.0,
+        245.45,
+        508.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          226.36,
+          498.0,
+          245.45,
+          508.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "T1-C05",
+      "tableKey": "T1",
+      "printedId": "6",
+      "label": "Columna 6",
+      "timing": {
+        "kind": "scheduled",
+        "value": 42,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 3,
+        "after": 3,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 2,
+      "bbox": [
+        245.45,
+        498.0,
+        264.54,
+        508.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          245.45,
+          498.0,
+          264.54,
+          508.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "T1-C06",
+      "tableKey": "T1",
+      "printedId": "7",
+      "label": "Columna 7",
+      "timing": {
+        "kind": "scheduled",
+        "value": 49,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 3,
+        "after": 3,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 2,
+      "bbox": [
+        264.54,
+        498.0,
+        283.63,
+        508.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          264.54,
+          498.0,
+          283.63,
+          508.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "T1-C07",
+      "tableKey": "T1",
+      "printedId": "8",
+      "label": "Columna 8",
+      "timing": {
+        "kind": "scheduled",
+        "value": 56,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 3,
+        "after": 3,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 2,
+      "bbox": [
+        283.63,
+        498.0,
+        302.72,
+        508.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          283.63,
+          498.0,
+          302.72,
+          508.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "T1-C08",
+      "tableKey": "T1",
+      "printedId": "9",
+      "label": "Columna 9",
+      "timing": {
+        "kind": "scheduled",
+        "value": 63,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 3,
+        "after": 3,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 2,
+      "bbox": [
+        302.72,
+        498.0,
+        321.81,
+        508.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          302.72,
+          498.0,
+          321.81,
+          508.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "T1-C09",
+      "tableKey": "T1",
+      "printedId": "10",
+      "label": "Columna 10",
+      "timing": {
+        "kind": "scheduled",
+        "value": 70,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 3,
+        "after": 3,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 2,
+      "bbox": [
+        321.81,
+        498.0,
+        345.99,
+        508.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          321.81,
+          498.0,
+          345.99,
+          508.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "T1-C10",
+      "tableKey": "T1",
+      "printedId": "ET",
+      "label": "Columna ET",
+      "timing": {
+        "kind": "scheduled",
+        "value": 77,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 3,
+        "after": 3,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 2,
+      "bbox": [
+        345.99,
+        498.0,
+        369.93,
+        508.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          345.99,
+          498.0,
+          369.93,
+          508.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "T1-C11",
+      "tableKey": "T1",
+      "printedId": "FA",
+      "label": "Columna FA",
+      "timing": {
+        "kind": "scheduled",
+        "value": 84,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 3,
+        "after": 3,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 2,
+      "bbox": [
+        369.93,
+        498.0,
+        394.0,
+        508.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          369.93,
+          498.0,
+          394.0,
+          508.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "T1-C12",
+      "tableKey": "T1",
+      "printedId": "EOS",
+      "label": "Columna EOS",
+      "timing": {
+        "kind": "scheduled",
+        "value": 91,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 3,
+        "after": 3,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 2,
+      "bbox": [
+        394.0,
+        498.0,
+        424.43,
+        508.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          394.0,
+          498.0,
+          424.43,
+          508.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "T1-C13",
+      "tableKey": "T1",
+      "printedId": "Fin etapa",
+      "label": "Columna Fin etapa",
+      "timing": {
+        "kind": "scheduled",
+        "value": 98,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 3,
+        "after": 3,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 2,
+      "bbox": [
+        424.43,
+        498.0,
+        475.27,
+        508.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          424.43,
+          498.0,
+          475.27,
+          508.0
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "key": "T1-C14",
+      "tableKey": "T1",
+      "printedId": "Anotacion larga de las fichas",
+      "label": "Columna Anotacion larga de las fichas",
+      "timing": {
+        "kind": "scheduled",
+        "value": 105,
+        "unit": "day",
+        "anchor": null,
+        "recurrence": null
+      },
+      "window": {
+        "before": 3,
+        "after": 3,
+        "unit": "day"
+      },
+      "type": "standard",
+      "attributes": {
+        "fasting": null,
+        "onSite": null,
+        "armOnly": null
+      },
+      "page": 2,
+      "bbox": [
+        475.27,
+        498.0,
+        604.77,
+        508.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          475.27,
+          498.0,
+          604.77,
+          508.0
+        ]
+      },
+      "confidence": 1
+    }
+  ],
+  "procedures": [
+    {
+      "key": "F901",
+      "label": "Consentimiento informado",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 2,
+      "bbox": [
+        28.0,
+        455.0,
+        150.0,
+        469.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          28.0,
+          455.0,
+          150.0,
+          469.0
+        ]
+      }
+    },
+    {
+      "key": "F902",
+      "label": "Criterios de inclusión/exclusión",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 2,
+      "bbox": [
+        28.0,
+        439.0,
+        150.0,
+        453.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          28.0,
+          439.0,
+          150.0,
+          453.0
+        ]
+      }
+    },
+    {
+      "key": "F903",
+      "label": "Datos demográficos",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 2,
+      "bbox": [
+        28.0,
+        423.0,
+        150.0,
+        437.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          28.0,
+          423.0,
+          150.0,
+          437.0
+        ]
+      }
+    },
+    {
+      "key": "F904",
+      "label": "Antecedentes",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 3,
+      "bbox": [
+        28.0,
+        455.0,
+        150.0,
+        469.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          28.0,
+          455.0,
+          150.0,
+          469.0
+        ]
+      }
+    },
+    {
+      "key": "F905",
+      "label": "Medicación concomitante",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 3,
+      "bbox": [
+        28.0,
+        439.0,
+        150.0,
+        453.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          28.0,
+          439.0,
+          150.0,
+          453.0
+        ]
+      }
+    },
+    {
+      "key": "F906",
+      "label": "Eventos adversos",
+      "section": null,
+      "kind": "procedure",
+      "conditions": [],
+      "aliases": [],
+      "page": 3,
+      "bbox": [
+        28.0,
+        423.0,
+        150.0,
+        437.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          28.0,
+          423.0,
+          150.0,
+          437.0
+        ]
+      }
+    }
+  ],
+  "procedureAliases": [],
+  "cells": [
+    {
+      "visitKey": "T1-C00",
+      "procedureKey": "F901",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        150.0,
+        455.0,
+        169.09,
+        469.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          150.0,
+          455.0,
+          169.09,
+          469.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C02",
+      "procedureKey": "F901",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        188.18,
+        455.0,
+        207.27,
+        469.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          188.18,
+          455.0,
+          207.27,
+          469.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C04",
+      "procedureKey": "F901",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        226.36,
+        455.0,
+        245.45,
+        469.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          226.36,
+          455.0,
+          245.45,
+          469.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C06",
+      "procedureKey": "F901",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        264.54,
+        455.0,
+        283.63,
+        469.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          264.54,
+          455.0,
+          283.63,
+          469.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C08",
+      "procedureKey": "F901",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        302.72,
+        455.0,
+        321.81,
+        469.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          302.72,
+          455.0,
+          321.81,
+          469.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C10",
+      "procedureKey": "F901",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        345.99,
+        455.0,
+        369.93,
+        469.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          345.99,
+          455.0,
+          369.93,
+          469.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C12",
+      "procedureKey": "F901",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        394.0,
+        455.0,
+        424.43,
+        469.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          394.0,
+          455.0,
+          424.43,
+          469.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C14",
+      "procedureKey": "F901",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        475.27,
+        455.0,
+        604.77,
+        469.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          475.27,
+          455.0,
+          604.77,
+          469.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C01",
+      "procedureKey": "F902",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        169.09,
+        439.0,
+        188.18,
+        453.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          169.09,
+          439.0,
+          188.18,
+          453.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C03",
+      "procedureKey": "F902",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        207.27,
+        439.0,
+        226.36,
+        453.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          207.27,
+          439.0,
+          226.36,
+          453.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C05",
+      "procedureKey": "F902",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        245.45,
+        439.0,
+        264.54,
+        453.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          245.45,
+          439.0,
+          264.54,
+          453.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C07",
+      "procedureKey": "F902",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        283.63,
+        439.0,
+        302.72,
+        453.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          283.63,
+          439.0,
+          302.72,
+          453.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C09",
+      "procedureKey": "F902",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        321.81,
+        439.0,
+        345.99,
+        453.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          321.81,
+          439.0,
+          345.99,
+          453.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C11",
+      "procedureKey": "F902",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        369.93,
+        439.0,
+        394.0,
+        453.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          369.93,
+          439.0,
+          394.0,
+          453.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C13",
+      "procedureKey": "F902",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        424.43,
+        439.0,
+        475.27,
+        453.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          424.43,
+          439.0,
+          475.27,
+          453.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C00",
+      "procedureKey": "F903",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        150.0,
+        423.0,
+        169.09,
+        437.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          150.0,
+          423.0,
+          169.09,
+          437.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C02",
+      "procedureKey": "F903",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        188.18,
+        423.0,
+        207.27,
+        437.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          188.18,
+          423.0,
+          207.27,
+          437.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C04",
+      "procedureKey": "F903",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        226.36,
+        423.0,
+        245.45,
+        437.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          226.36,
+          423.0,
+          245.45,
+          437.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C06",
+      "procedureKey": "F903",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        264.54,
+        423.0,
+        283.63,
+        437.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          264.54,
+          423.0,
+          283.63,
+          437.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C08",
+      "procedureKey": "F903",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        302.72,
+        423.0,
+        321.81,
+        437.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          302.72,
+          423.0,
+          321.81,
+          437.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C10",
+      "procedureKey": "F903",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        345.99,
+        423.0,
+        369.93,
+        437.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          345.99,
+          423.0,
+          369.93,
+          437.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C12",
+      "procedureKey": "F903",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        394.0,
+        423.0,
+        424.43,
+        437.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          394.0,
+          423.0,
+          424.43,
+          437.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C14",
+      "procedureKey": "F903",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 2,
+      "bbox": [
+        475.27,
+        423.0,
+        604.77,
+        437.0
+      ],
+      "source": {
+        "page": 2,
+        "bbox": [
+          475.27,
+          423.0,
+          604.77,
+          437.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C01",
+      "procedureKey": "F904",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 3,
+      "bbox": [
+        169.09,
+        455.0,
+        188.18,
+        469.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          169.09,
+          455.0,
+          188.18,
+          469.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C03",
+      "procedureKey": "F904",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 3,
+      "bbox": [
+        207.27,
+        455.0,
+        226.36,
+        469.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          207.27,
+          455.0,
+          226.36,
+          469.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C05",
+      "procedureKey": "F904",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 3,
+      "bbox": [
+        245.45,
+        455.0,
+        264.54,
+        469.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          245.45,
+          455.0,
+          264.54,
+          469.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C07",
+      "procedureKey": "F904",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 3,
+      "bbox": [
+        283.63,
+        455.0,
+        302.72,
+        469.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          283.63,
+          455.0,
+          302.72,
+          469.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C09",
+      "procedureKey": "F904",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 3,
+      "bbox": [
+        321.81,
+        455.0,
+        345.99,
+        469.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          321.81,
+          455.0,
+          345.99,
+          469.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C11",
+      "procedureKey": "F904",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 3,
+      "bbox": [
+        369.93,
+        455.0,
+        394.0,
+        469.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          369.93,
+          455.0,
+          394.0,
+          469.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C13",
+      "procedureKey": "F904",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 3,
+      "bbox": [
+        424.43,
+        455.0,
+        475.27,
+        469.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          424.43,
+          455.0,
+          475.27,
+          469.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C00",
+      "procedureKey": "F905",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 3,
+      "bbox": [
+        150.0,
+        439.0,
+        169.09,
+        453.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          150.0,
+          439.0,
+          169.09,
+          453.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C02",
+      "procedureKey": "F905",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 3,
+      "bbox": [
+        188.18,
+        439.0,
+        207.27,
+        453.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          188.18,
+          439.0,
+          207.27,
+          453.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C04",
+      "procedureKey": "F905",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 3,
+      "bbox": [
+        226.36,
+        439.0,
+        245.45,
+        453.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          226.36,
+          439.0,
+          245.45,
+          453.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C06",
+      "procedureKey": "F905",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 3,
+      "bbox": [
+        264.54,
+        439.0,
+        283.63,
+        453.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          264.54,
+          439.0,
+          283.63,
+          453.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C08",
+      "procedureKey": "F905",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 3,
+      "bbox": [
+        302.72,
+        439.0,
+        321.81,
+        453.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          302.72,
+          439.0,
+          321.81,
+          453.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C10",
+      "procedureKey": "F905",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 3,
+      "bbox": [
+        345.99,
+        439.0,
+        369.93,
+        453.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          345.99,
+          439.0,
+          369.93,
+          453.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C12",
+      "procedureKey": "F905",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 3,
+      "bbox": [
+        394.0,
+        439.0,
+        424.43,
+        453.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          394.0,
+          439.0,
+          424.43,
+          453.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C14",
+      "procedureKey": "F905",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 3,
+      "bbox": [
+        475.27,
+        439.0,
+        604.77,
+        453.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          475.27,
+          439.0,
+          604.77,
+          453.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C01",
+      "procedureKey": "F906",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 3,
+      "bbox": [
+        169.09,
+        423.0,
+        188.18,
+        437.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          169.09,
+          423.0,
+          188.18,
+          437.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C03",
+      "procedureKey": "F906",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 3,
+      "bbox": [
+        207.27,
+        423.0,
+        226.36,
+        437.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          207.27,
+          423.0,
+          226.36,
+          437.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C05",
+      "procedureKey": "F906",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 3,
+      "bbox": [
+        245.45,
+        423.0,
+        264.54,
+        437.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          245.45,
+          423.0,
+          264.54,
+          437.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C07",
+      "procedureKey": "F906",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 3,
+      "bbox": [
+        283.63,
+        423.0,
+        302.72,
+        437.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          283.63,
+          423.0,
+          302.72,
+          437.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C09",
+      "procedureKey": "F906",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 3,
+      "bbox": [
+        321.81,
+        423.0,
+        345.99,
+        437.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          321.81,
+          423.0,
+          345.99,
+          437.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C11",
+      "procedureKey": "F906",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 3,
+      "bbox": [
+        369.93,
+        423.0,
+        394.0,
+        437.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          369.93,
+          423.0,
+          394.0,
+          437.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    },
+    {
+      "visitKey": "T1-C13",
+      "procedureKey": "F906",
+      "mark": "x",
+      "noteRefs": [],
+      "conditions": [],
+      "procedureWindow": null,
+      "page": 3,
+      "bbox": [
+        424.43,
+        423.0,
+        475.27,
+        437.0
+      ],
+      "source": {
+        "page": 3,
+        "bbox": [
+          424.43,
+          423.0,
+          475.27,
+          437.0
+        ]
+      },
+      "confidence": 1,
+      "reviewed": false
+    }
+  ],
+  "notes": [],
+  "outOfTableRules": [],
+  "inconsistencies": [],
+  "difficulty": {
+    "splitTokens": 0,
+    "mergedCells": 0,
+    "shadedColumns": 0,
+    "unnumberedColumns": 0,
+    "rotatedPages": 0,
+    "glyphLoss": false
+  },
+  "header": {
+    "kind": "mixed",
+    "visitColumns": 15,
+    "repeatedOnEveryGridPage": true,
+    "label": {
+      "text": "Visita",
+      "x": 40.0,
+      "baseline": 500.0
+    },
+    "labelColumnCountsAsVisit": false,
+    "windowCoversLabel": false,
+    "cardBaseline": 500.0,
+    "firstCardX": 150.0,
+    "columns": [
+      {
+        "index": 0,
+        "printedId": "1",
+        "kind": "integer",
+        "parts": [
+          "1"
+        ],
+        "glyphX": 150.0,
+        "baseline": 500.0
+      },
+      {
+        "index": 1,
+        "printedId": "2",
+        "kind": "integer",
+        "parts": [
+          "2"
+        ],
+        "glyphX": 169.09,
+        "baseline": 500.0
+      },
+      {
+        "index": 2,
+        "printedId": "3",
+        "kind": "integer",
+        "parts": [
+          "3"
+        ],
+        "glyphX": 188.18,
+        "baseline": 500.0
+      },
+      {
+        "index": 3,
+        "printedId": "4",
+        "kind": "integer",
+        "parts": [
+          "4"
+        ],
+        "glyphX": 207.27,
+        "baseline": 500.0
+      },
+      {
+        "index": 4,
+        "printedId": "5",
+        "kind": "integer",
+        "parts": [
+          "5"
+        ],
+        "glyphX": 226.36,
+        "baseline": 500.0
+      },
+      {
+        "index": 5,
+        "printedId": "6",
+        "kind": "integer",
+        "parts": [
+          "6"
+        ],
+        "glyphX": 245.45,
+        "baseline": 500.0
+      },
+      {
+        "index": 6,
+        "printedId": "7",
+        "kind": "integer",
+        "parts": [
+          "7"
+        ],
+        "glyphX": 264.54,
+        "baseline": 500.0
+      },
+      {
+        "index": 7,
+        "printedId": "8",
+        "kind": "integer",
+        "parts": [
+          "8"
+        ],
+        "glyphX": 283.63,
+        "baseline": 500.0
+      },
+      {
+        "index": 8,
+        "printedId": "9",
+        "kind": "integer",
+        "parts": [
+          "9"
+        ],
+        "glyphX": 302.72,
+        "baseline": 500.0
+      },
+      {
+        "index": 9,
+        "printedId": "10",
+        "kind": "integer",
+        "parts": [
+          "10"
+        ],
+        "glyphX": 321.81,
+        "baseline": 500.0
+      },
+      {
+        "index": 10,
+        "printedId": "ET",
+        "kind": "letters",
+        "parts": [
+          "ET"
+        ],
+        "glyphX": 345.99,
+        "baseline": 500.0
+      },
+      {
+        "index": 11,
+        "printedId": "FA",
+        "kind": "letters",
+        "parts": [
+          "FA"
+        ],
+        "glyphX": 369.93,
+        "baseline": 500.0
+      },
+      {
+        "index": 12,
+        "printedId": "EOS",
+        "kind": "letters",
+        "parts": [
+          "EOS"
+        ],
+        "glyphX": 394.0,
+        "baseline": 500.0
+      },
+      {
+        "index": 13,
+        "printedId": "Fin etapa",
+        "kind": "split",
+        "parts": [
+          "Fin",
+          "etapa"
+        ],
+        "glyphX": 424.43,
+        "baseline": 500.0
+      },
+      {
+        "index": 14,
+        "printedId": "Anotacion larga de las fichas",
+        "kind": "legend",
+        "parts": [
+          "Anotacion larga de las fichas"
+        ],
+        "glyphX": 475.27,
+        "baseline": 500.0
+      }
+    ],
+    "pages": [
+      {
+        "page": 2,
+        "columns": [
+          {
+            "index": 0,
+            "printedId": "1",
+            "kind": "integer",
+            "parts": [
+              "1"
+            ],
+            "glyphX": 150.0,
+            "baseline": 500.0,
+            "bbox": [
+              150.0,
+              498.0,
+              169.09,
+              508.0
+            ]
+          },
+          {
+            "index": 1,
+            "printedId": "2",
+            "kind": "integer",
+            "parts": [
+              "2"
+            ],
+            "glyphX": 169.09,
+            "baseline": 500.0,
+            "bbox": [
+              169.09,
+              498.0,
+              188.18,
+              508.0
+            ]
+          },
+          {
+            "index": 2,
+            "printedId": "3",
+            "kind": "integer",
+            "parts": [
+              "3"
+            ],
+            "glyphX": 188.18,
+            "baseline": 500.0,
+            "bbox": [
+              188.18,
+              498.0,
+              207.27,
+              508.0
+            ]
+          },
+          {
+            "index": 3,
+            "printedId": "4",
+            "kind": "integer",
+            "parts": [
+              "4"
+            ],
+            "glyphX": 207.27,
+            "baseline": 500.0,
+            "bbox": [
+              207.27,
+              498.0,
+              226.36,
+              508.0
+            ]
+          },
+          {
+            "index": 4,
+            "printedId": "5",
+            "kind": "integer",
+            "parts": [
+              "5"
+            ],
+            "glyphX": 226.36,
+            "baseline": 500.0,
+            "bbox": [
+              226.36,
+              498.0,
+              245.45,
+              508.0
+            ]
+          },
+          {
+            "index": 5,
+            "printedId": "6",
+            "kind": "integer",
+            "parts": [
+              "6"
+            ],
+            "glyphX": 245.45,
+            "baseline": 500.0,
+            "bbox": [
+              245.45,
+              498.0,
+              264.54,
+              508.0
+            ]
+          },
+          {
+            "index": 6,
+            "printedId": "7",
+            "kind": "integer",
+            "parts": [
+              "7"
+            ],
+            "glyphX": 264.54,
+            "baseline": 500.0,
+            "bbox": [
+              264.54,
+              498.0,
+              283.63,
+              508.0
+            ]
+          },
+          {
+            "index": 7,
+            "printedId": "8",
+            "kind": "integer",
+            "parts": [
+              "8"
+            ],
+            "glyphX": 283.63,
+            "baseline": 500.0,
+            "bbox": [
+              283.63,
+              498.0,
+              302.72,
+              508.0
+            ]
+          },
+          {
+            "index": 8,
+            "printedId": "9",
+            "kind": "integer",
+            "parts": [
+              "9"
+            ],
+            "glyphX": 302.72,
+            "baseline": 500.0,
+            "bbox": [
+              302.72,
+              498.0,
+              321.81,
+              508.0
+            ]
+          },
+          {
+            "index": 9,
+            "printedId": "10",
+            "kind": "integer",
+            "parts": [
+              "10"
+            ],
+            "glyphX": 321.81,
+            "baseline": 500.0,
+            "bbox": [
+              321.81,
+              498.0,
+              345.99,
+              508.0
+            ]
+          },
+          {
+            "index": 10,
+            "printedId": "ET",
+            "kind": "letters",
+            "parts": [
+              "ET"
+            ],
+            "glyphX": 345.99,
+            "baseline": 500.0,
+            "bbox": [
+              345.99,
+              498.0,
+              369.93,
+              508.0
+            ]
+          },
+          {
+            "index": 11,
+            "printedId": "FA",
+            "kind": "letters",
+            "parts": [
+              "FA"
+            ],
+            "glyphX": 369.93,
+            "baseline": 500.0,
+            "bbox": [
+              369.93,
+              498.0,
+              394.0,
+              508.0
+            ]
+          },
+          {
+            "index": 12,
+            "printedId": "EOS",
+            "kind": "letters",
+            "parts": [
+              "EOS"
+            ],
+            "glyphX": 394.0,
+            "baseline": 500.0,
+            "bbox": [
+              394.0,
+              498.0,
+              424.43,
+              508.0
+            ]
+          },
+          {
+            "index": 13,
+            "printedId": "Fin etapa",
+            "kind": "split",
+            "parts": [
+              "Fin",
+              "etapa"
+            ],
+            "glyphX": 424.43,
+            "baseline": 500.0,
+            "bbox": [
+              424.43,
+              498.0,
+              475.27,
+              508.0
+            ]
+          },
+          {
+            "index": 14,
+            "printedId": "Anotacion larga de las fichas",
+            "kind": "legend",
+            "parts": [
+              "Anotacion larga de las fichas"
+            ],
+            "glyphX": 475.27,
+            "baseline": 500.0,
+            "bbox": [
+              475.27,
+              498.0,
+              604.77,
+              508.0
+            ]
+          }
+        ],
+        "rows": 3,
+        "label": {
+          "text": "Visita",
+          "x": 40.0,
+          "baseline": 500.0
+        },
+        "window": {
+          "label": "Ventana",
+          "baseline": 478.0,
+          "coversLabel": false,
+          "text": "3 d"
+        },
+        "labelColumn": {
+          "countsAsVisit": false,
+          "bbox": [
+            28.0,
+            422.0,
+            150.0,
+            512.0
+          ]
+        },
+        "cardBaseline": 500.0,
+        "firstCardX": 150.0,
+        "dataRows": [
+          {
+            "procedureKey": "F901",
+            "baseline": 460.0,
+            "bbox": [
+              40.0,
+              455.0,
+              604.77,
+              469.0
+            ]
+          },
+          {
+            "procedureKey": "F902",
+            "baseline": 444.0,
+            "bbox": [
+              40.0,
+              439.0,
+              604.77,
+              453.0
+            ]
+          },
+          {
+            "procedureKey": "F903",
+            "baseline": 428.0,
+            "bbox": [
+              40.0,
+              423.0,
+              604.77,
+              437.0
+            ]
+          }
+        ]
+      },
+      {
+        "page": 3,
+        "columns": [
+          {
+            "index": 0,
+            "printedId": "1",
+            "kind": "integer",
+            "parts": [
+              "1"
+            ],
+            "glyphX": 150.0,
+            "baseline": 500.0,
+            "bbox": [
+              150.0,
+              498.0,
+              169.09,
+              508.0
+            ]
+          },
+          {
+            "index": 1,
+            "printedId": "2",
+            "kind": "integer",
+            "parts": [
+              "2"
+            ],
+            "glyphX": 169.09,
+            "baseline": 500.0,
+            "bbox": [
+              169.09,
+              498.0,
+              188.18,
+              508.0
+            ]
+          },
+          {
+            "index": 2,
+            "printedId": "3",
+            "kind": "integer",
+            "parts": [
+              "3"
+            ],
+            "glyphX": 188.18,
+            "baseline": 500.0,
+            "bbox": [
+              188.18,
+              498.0,
+              207.27,
+              508.0
+            ]
+          },
+          {
+            "index": 3,
+            "printedId": "4",
+            "kind": "integer",
+            "parts": [
+              "4"
+            ],
+            "glyphX": 207.27,
+            "baseline": 500.0,
+            "bbox": [
+              207.27,
+              498.0,
+              226.36,
+              508.0
+            ]
+          },
+          {
+            "index": 4,
+            "printedId": "5",
+            "kind": "integer",
+            "parts": [
+              "5"
+            ],
+            "glyphX": 226.36,
+            "baseline": 500.0,
+            "bbox": [
+              226.36,
+              498.0,
+              245.45,
+              508.0
+            ]
+          },
+          {
+            "index": 5,
+            "printedId": "6",
+            "kind": "integer",
+            "parts": [
+              "6"
+            ],
+            "glyphX": 245.45,
+            "baseline": 500.0,
+            "bbox": [
+              245.45,
+              498.0,
+              264.54,
+              508.0
+            ]
+          },
+          {
+            "index": 6,
+            "printedId": "7",
+            "kind": "integer",
+            "parts": [
+              "7"
+            ],
+            "glyphX": 264.54,
+            "baseline": 500.0,
+            "bbox": [
+              264.54,
+              498.0,
+              283.63,
+              508.0
+            ]
+          },
+          {
+            "index": 7,
+            "printedId": "8",
+            "kind": "integer",
+            "parts": [
+              "8"
+            ],
+            "glyphX": 283.63,
+            "baseline": 500.0,
+            "bbox": [
+              283.63,
+              498.0,
+              302.72,
+              508.0
+            ]
+          },
+          {
+            "index": 8,
+            "printedId": "9",
+            "kind": "integer",
+            "parts": [
+              "9"
+            ],
+            "glyphX": 302.72,
+            "baseline": 500.0,
+            "bbox": [
+              302.72,
+              498.0,
+              321.81,
+              508.0
+            ]
+          },
+          {
+            "index": 9,
+            "printedId": "10",
+            "kind": "integer",
+            "parts": [
+              "10"
+            ],
+            "glyphX": 321.81,
+            "baseline": 500.0,
+            "bbox": [
+              321.81,
+              498.0,
+              345.99,
+              508.0
+            ]
+          },
+          {
+            "index": 10,
+            "printedId": "ET",
+            "kind": "letters",
+            "parts": [
+              "ET"
+            ],
+            "glyphX": 345.99,
+            "baseline": 500.0,
+            "bbox": [
+              345.99,
+              498.0,
+              369.93,
+              508.0
+            ]
+          },
+          {
+            "index": 11,
+            "printedId": "FA",
+            "kind": "letters",
+            "parts": [
+              "FA"
+            ],
+            "glyphX": 369.93,
+            "baseline": 500.0,
+            "bbox": [
+              369.93,
+              498.0,
+              394.0,
+              508.0
+            ]
+          },
+          {
+            "index": 12,
+            "printedId": "EOS",
+            "kind": "letters",
+            "parts": [
+              "EOS"
+            ],
+            "glyphX": 394.0,
+            "baseline": 500.0,
+            "bbox": [
+              394.0,
+              498.0,
+              424.43,
+              508.0
+            ]
+          },
+          {
+            "index": 13,
+            "printedId": "Fin etapa",
+            "kind": "split",
+            "parts": [
+              "Fin",
+              "etapa"
+            ],
+            "glyphX": 424.43,
+            "baseline": 500.0,
+            "bbox": [
+              424.43,
+              498.0,
+              475.27,
+              508.0
+            ]
+          },
+          {
+            "index": 14,
+            "printedId": "Anotacion larga de las fichas",
+            "kind": "legend",
+            "parts": [
+              "Anotacion larga de las fichas"
+            ],
+            "glyphX": 475.27,
+            "baseline": 500.0,
+            "bbox": [
+              475.27,
+              498.0,
+              604.77,
+              508.0
+            ]
+          }
+        ],
+        "rows": 3,
+        "label": {
+          "text": "Visita",
+          "x": 40.0,
+          "baseline": 500.0
+        },
+        "window": {
+          "label": "Ventana",
+          "baseline": 478.0,
+          "coversLabel": false,
+          "text": "3 d"
+        },
+        "labelColumn": {
+          "countsAsVisit": false,
+          "bbox": [
+            28.0,
+            422.0,
+            150.0,
+            512.0
+          ]
+        },
+        "cardBaseline": 500.0,
+        "firstCardX": 150.0,
+        "dataRows": [
+          {
+            "procedureKey": "F904",
+            "baseline": 460.0,
+            "bbox": [
+              40.0,
+              455.0,
+              604.77,
+              469.0
+            ]
+          },
+          {
+            "procedureKey": "F905",
+            "baseline": 444.0,
+            "bbox": [
+              40.0,
+              439.0,
+              604.77,
+              453.0
+            ]
+          },
+          {
+            "procedureKey": "F906",
+            "baseline": 428.0,
+            "bbox": [
+              40.0,
+              423.0,
+              604.77,
+              437.0
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

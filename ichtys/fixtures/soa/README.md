@@ -1,6 +1,6 @@
 # Fixtures sintéticos de cronograma (ADR-10, P1)
 
-Cinco PDF inventados, F1 a F5, y el JSON de verdad que sale del mismo generador. No hay patrocinador, fármaco, código de estudio ni analito real. Sirven para medir un extractor de cronogramas. No son un protocolo.
+PDF inventados, F1 a F5 y F9, y el JSON de verdad que sale del mismo generador. No hay patrocinador, fármaco, código de estudio ni analito real. Sirven para medir un extractor de cronogramas. No son un protocolo.
 
 Semillas fijas: F1 `1001`, F2 `1002`, F3 `1003`, F4 `1004`, F5 `1005`. Versión del generador: `1.1.0`.
 
@@ -11,8 +11,9 @@ Semillas fijas: F1 `1001`, F2 `1002`, F3 `1003`, F4 `1004`, F5 `1005`. Versión 
 | F3 | 90 | 49 | 572 | 27 | 3 |
 | F4 | 8 | 2 | 45 | 5 | 2 |
 | F5 | 40 | 6 | 198 | 10 | 3 |
+| F9 | 3 | 2 | 45 | 0 | 0 |
 
-Esas cifras son el inventario del gold, no una medición del extractor.
+Esas cifras son el inventario del gold, no una medición del extractor. F9 no planta inconsistencias: el rasgo que mide está en la geometría del encabezado.
 
 ## Qué trae cada trampa
 
@@ -21,6 +22,7 @@ Esas cifras son el inventario del gold, no una medición del extractor.
 - F3. Grilla muy partida: 2 o 3 filas por página, una continuación de columnas, tres columnas sin número y una fila duplicada. Pasa el tope de 30 páginas del extractor actual a propósito. Cuatro rótulos dicen el brazo o el subgrupo. La dispensación sin número queda solo para el brazo A, y V4 solo para el brazo B.
 - F4. Ocho páginas. El índice, la sinopsis y la lista de tablas citan «1.3 Cronograma de actividades» antes de la grilla. La fila de ventana se llama «Margen de visita».
 - F5. Inglés. La primera página de la segunda tabla se dibuja apaisada y después lleva `/Rotate 90`. Las cajas del gold quedan en el espacio sin rotar. El encabezado de esa tabla tiene dos niveles. Tres rótulos dicen el brazo o el subgrupo.
+- F9. Generador `1.3.0`, semilla `1010`. Encabezado mixto en una sola línea: la etiqueta «Visita» (6 letras) a la izquierda, en la misma línea que las fichas; después 10 enteros, `ET`, `FA`, `EOS`, la ficha `Fin etapa` partida en dos palabras y la leyenda «Anotacion larga de las fichas». Las 15 columnas tienen marcas. La fila «Ventana» cubre esas columnas y no la etiqueta. La etiqueta no es una visita. El encabezado se repite en las 2 páginas de grilla.
 
 El relleno no contiene «cronograma de actividades», «schedule of assessments», «plan de visitas» ni «SoA». Esas frases están solo en los falsos aciertos y en el encabezado de cada grilla.
 
@@ -36,7 +38,10 @@ Hace falta Python 3 y las librerías de `ichtys/scripts/soa-fixtures/requirement
 python3 -m venv /tmp/soa-venv
 /tmp/soa-venv/bin/pip install -r ichtys/scripts/soa-fixtures/requirements.txt
 /tmp/soa-venv/bin/python ichtys/scripts/soa-fixtures/generate.py
+/tmp/soa-venv/bin/python ichtys/scripts/soa-fixtures/generate.py F9
 ```
+
+Sin argumentos se reescriben F1 a F5. Con `F9` solo sale ese fixture, en el generador `1.3.0`.
 
 Salida: `ichtys/fixtures/soa/F{n}.pdf`, `F{n}.gold.json` y `F{n}.render/pagina-{k}.png` a 72 dpi. El PDF y el gold quedan en el repositorio. Los PNG no: `ichtys/.gitignore` ignora `fixtures/soa/*.render/` y el generador los vuelve a escribir iguales. El PNG de la página rotada de F5 es la página como la muestra un visor. Las cajas del JSON siguen el espacio de usuario sin rotar.
 

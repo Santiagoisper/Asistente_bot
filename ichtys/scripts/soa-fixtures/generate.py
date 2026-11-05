@@ -3,11 +3,15 @@
 
 El mismo proceso escribe el PDF y el JSON de verdad. Semillas fijas.
 Contenido inventado: sin patrocinador, sin fármaco y sin protocolo real.
+
+F6, F6b, F7, F8 y F9 (generador 1.3.0) viven en f6_f7.py:
+`python generate.py F9` no reescribe F1–F5 ni los otros de 1.3.0.
 """
 from __future__ import annotations
 
 import io
 import json
+import sys
 from pathlib import Path
 
 from pypdf import PdfReader, PdfWriter
@@ -1579,6 +1583,15 @@ def emit(doc, extra):
 
 
 def main():
+    requested = sys.argv[1:]
+    if requested:
+        known = {"F6", "F6b", "F7", "F8", "F9"}
+        unknown = [name for name in requested if name not in known]
+        if unknown:
+            raise SystemExit(f"aparte de F1–F5 solo se generan F6, F6b, F7, F8 y F9; no entiendo {unknown}")
+        from f6_f7 import emit_named
+        emit_named(requested)
+        return
     builders = [build_f1, build_f2, build_f3, assemble_f4, build_f5]
     golds = []
     for builder in builders:

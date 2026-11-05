@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { scoreSchedule, type Counts, type ScheduleDoc, type ScoreReport } from './score'
 
 const FIXTURES = resolve(dirname(fileURLToPath(import.meta.url)), '../../fixtures/soa')
-const IDS = ['F1', 'F2', 'F3', 'F4', 'F5'] as const
+const IDS = ['F1', 'F2', 'F3', 'F4', 'F5', 'F9'] as const
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
