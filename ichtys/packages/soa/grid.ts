@@ -266,6 +266,10 @@ function readTable(
   // entran al loop solo para extraer sus notas.
   const pageNumbers = [...located.pages]
   for (const pn of located.notePages) if (!pageNumbers.includes(pn)) pageNumbers.push(pn)
+  // R7: una página localizada que NO está en el input es un documento con
+  // huecos — la tabla no se puede leer completa, así que la tabla sale
+  // 'failed' con 'grid_unreadable' en vez de saltar la página en silencio.
+  const missingPages = pageNumbers.filter((pn) => !byPage.has(pn))
   for (const pageNumber of pageNumbers) {
     const page = byPage.get(pageNumber)
     if (!page) continue
@@ -1003,7 +1007,10 @@ function readTable(
   if (located.pages.length === 0) {
     outcome = 'failed'
     reasons.push('not_located')
-  } else if (columns.length === 0) {
+  } else if (missingPages.length > 0 || columns.length === 0) {
+    // 'grid_unreadable': sin columnas no hay grilla (ADR-10 §e), y una
+    // página localizada AUSENTE del input (R7) hace la lectura imposible —
+    // jamás un salto silencioso de página.
     outcome = 'failed'
     reasons.push('grid_unreadable')
   } else {
