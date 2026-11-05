@@ -223,11 +223,12 @@ export function findNumericHeaders(items: TextItem[]): NumericHeader[] {
       .sort((a, b) => a.bbox[0] - b.bbox[0])
       .filter((l) => row.some((t) => t.bbox[0] < l.bbox[2] && t.bbox[2] > l.bbox[0]))
 
+    // Ficha compuesta con el TEXTO IMPRESO (el guion queda tal como salió:
+    // la normalización a '—' es decisión del llamador — locate la aplica a
+    // la firma, grid conserva el texto crudo de la columna).
     const chips = row.map((t) => {
-      const num = normalizeNumericToken(t.str)
-      if (num === DASH_TOKEN) return num
-      const letter = letters.find((l) => l.bbox[0] < t.bbox[2] && l.bbox[2] > t.bbox[0])
-      return letter ? `${letter.str.trim()}${num}` : num
+      const letter = letters.find((l) => l.bbox[0] < t.bbox[2] && l.bbox[2] > l.bbox[0])
+      return letter ? `${letter.str.trim()}${t.str.trim()}` : t.str.trim()
     })
     const yTop = letters.length > 0 ? Math.max(top, ...letters.map((l) => l.bbox[3])) : top
     candidates.push({ y: top, yTop, kind, tokens: row, letters, chips, labelItems, integers })

@@ -18,7 +18,7 @@
  * El texto de la página (`headerSignature`, subtítulos) se devuelve pero
  * nunca se loguea (S8).
  */
-import { findNumericHeaders, MARK_STRINGS, VISIT_TOKEN } from './header'
+import { findNumericHeaders, MARK_STRINGS, normalizeNumericToken, VISIT_TOKEN } from './header'
 import type { HeaderSource, PageGeom, ScheduleLocation, TextItem } from './types'
 
 /** Título de la sección del cronograma (banda de sección). */
@@ -161,7 +161,9 @@ function scorePage(p: PageGeom): ScoredPage {
     const strips = findNumericHeaders(p.items)
     if (strips.length > 0) {
       headerCount = strips.reduce((acc, s) => acc + s.integers.length, 0)
-      numericTokens = strips.flatMap((s) => s.chips)
+      // La firma lleva las fichas NORMALIZADAS: cualquier guion impreso
+      // ("-", "–") es la misma «columna sin número» (—).
+      numericTokens = strips.flatMap((s) => s.chips.map(normalizeNumericToken))
       headerKind = strips.some((s) => s.kind === 'visit') ? 'numeric_visit' : 'numeric_time'
     }
   }

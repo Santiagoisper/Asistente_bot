@@ -6,6 +6,13 @@
  * columnas, filas y celdas se leen con la geometría LOCAL de la página. Sin
  * modelo, sin red, sin logs (S8).
  *
+ * P2c C1b — REGIONES: el encabezado puede venir en TIRAS apiladas por
+ * página (protocolo de 46 columnas); cada tira es una región con su franja
+ * vertical y el cuerpo de lectura corre por región: las filas cuelgan de SU
+ * tira y las marcas van a las columnas de ESA tira (las tiras comparten la
+ * grilla x; sin regiones, las marcas de la tira de abajo se asignarían a
+ * las columnas de la de arriba).
+ *
  * Columnas de la tabla: una banda-x por ficha de encabezado vista POR
  * PRIMERA VEZ — F3 imprime una misma tabla en tiras de columnas re-escaladas
  * (V1–V10 anchas en p13, V11–V16 en p14, la tabla completa en p15+), así que
@@ -35,7 +42,7 @@
  * pequeño no consumido) bajan la tabla a 'partial' con
  * 'validation_failed:<id>' cuando fallan.
  */
-import { findNumericHeader, MARK_STRINGS, normalizeNumericToken, VISIT_TOKEN } from './header'
+import { findNumericHeader, findNumericHeaders, MARK_STRINGS, normalizeNumericToken, VISIT_TOKEN } from './header'
 import type {
   BBox,
   HeaderSource,
@@ -284,15 +291,15 @@ function readTable(
   // 'failed' con 'grid_unreadable' en vez de saltar la página en silencio.
   const missingPages = pageNumbers.filter((pn) => !byPage.has(pn))
   for (const pageNumber of pageNumbers) {
-    const page = byPage.get(pageNumber)
-    if (!page) continue
+    const srcPage = byPage.get(pageNumber)
+    if (!srcPage) continue
 
     // --- Notas de página dedicada: cada nota es UNA operación de texto
     // "ref␣texto"; la continuación del spill ("Continúa la nota anterior: …")
     // no lleva ref y queda fuera. El texto se devuelve pero nunca se loguea
     // (S8).
     if (located.notePages.includes(pageNumber)) {
-      for (const item of page.items) {
+      for (const item of srcPage.items) {
         const match = item.str.trim().match(NOTE_LINE_RE)
         if (!match || item.fontSize < NOTE_FONT_MIN || item.fontSize > NOTE_FONT_MAX) continue
         notes.push({
@@ -304,6 +311,66 @@ function readTable(
       }
       continue
     }
+
+    // --- Regiones de grilla de la página (P2c C1b): el encabezado puede
+    // venir en TIRAS apiladas (protocolo de 46 columnas: fichas de visita
+    // en dos franjas por página, ficha partida prefijo/número). Cada tira
+    // es una REGIÓN con su franja vertical: sus filas cuelgan de ELLA y sus
+    // marcas van a SUS columnas — las tiras comparten la grilla x, así que
+    // sin regiones las marcas de la tira de abajo caerían en las columnas
+    // de la de arriba (sobre-asignación). Con fichas con prefijo (≥ 2 en
+    // una banda) o sin tiras reconocibles, la región es la página entera
+    // (comportamiento previo a P2c).
+    let prefixedBandHits = 0
+    for (const band of textBands(srcPage.items)) {
+      const hits = band.items.filter((i) => VISIT_TOKEN.test(i.str.trim())).length
+      if (hits > prefixedBandHits) prefixedBandHits = hits
+    }
+    const regions: Array<{ yTop: number; yBottom: number }> = []
+    if (prefixedBandHits >= 2) {
+      regions.push({ yTop: Infinity, yBottom: -Infinity })
+    } else {
+      const strips = findNumericHeaders(srcPage.items)
+      if (strips.length === 0) {
+        regions.push({ yTop: Infinity, yBottom: -Infinity })
+      } else {
+        for (const [k, strip] of strips.entries()) {
+          // La franja de una tira llega hasta el techo de la siguiente; la
+          // última, hasta el fondo de la página.
+          regions.push({ yTop: strip.yTop, yBottom: strips[k + 1]?.yTop ?? -Infinity })
+        }
+      }
+    }
+
+    // Acumuladores POR PÁGINA (G1/G3/G4/G7 leen por página, no por región).
+    let marksPresent = 0
+    let marksAttr = 0
+    let marksAssigned = 0
+    const lost: LostMarks = { sinColumna: 0, bandaSinFicha: 0, sinFila: 0 }
+    const pageHeaderCols = new Set<number>()
+    let pageFirstColX = Infinity
+    let pageSpan: [number, number] | null = null
+    const pageAttrBands: Array<[number, number]> = []
+    let pageWindowBand: [number, number] | null = null
+    let lastBottom = Infinity
+
+    for (const [regionIdx, region] of regions.entries()) {
+      // Sub-página: los ítems con el centro de su caja en la franja de la
+      // tira y las reglas que la cruzan. El cuerpo de lectura no distingue
+      // región de página: encuentra su encabezado, filas y celdas dentro
+      // de la franja.
+      const page: PageGeom = {
+        ...srcPage,
+        items: srcPage.items.filter((i) => {
+          const cy = (i.bbox[1] + i.bbox[3]) / 2
+          return cy > region.yBottom && cy <= region.yTop
+        }),
+        rules: srcPage.rules.filter((r) => {
+          const rTop = Math.max(r.y0, r.y1)
+          const rBottom = Math.min(r.y0, r.y1)
+          return rTop > region.yBottom && rBottom < region.yTop
+        }),
+      }
 
     // --- Fronteras de celda de la página.
     const vxs = clusterEdges(
@@ -341,13 +408,20 @@ function readTable(
     // queda fuera: no es una columna.
     // K2: las columnas registradas en ESTA página dicen de dónde salió su
     // encabezado, para que P3 nunca tome un día por un número de visita.
+    // P2c C1b: la ficha se registra COMPUESTA (chips): con la ficha partida
+    // en dos filas, el prefijo de arriba + el número de abajo son UNA ficha
+    // ('V1'), no una columna sin identidad.
     const numericHeader = headerHits < 2 ? findNumericHeader(page.items) : null
     if (numericHeader) headerY = numericHeader.y
     const pageHeaderSource: HeaderSource = numericHeader
       ? numericHeader.kind === 'visit' ? 'numeric_visit' : 'numeric_time'
       : 'prefixed'
     const headerGroups = numericHeader
-      ? numericHeader.tokens.map((t) => ({ x0: t.bbox[0], x1: t.bbox[2], text: t.str.trim() }))
+      ? numericHeader.tokens.map((t, i) => ({
+          x0: t.bbox[0],
+          x1: t.bbox[2],
+          text: numericHeader.chips[i] ?? t.str.trim(),
+        }))
       : groupTexts(
           bands
             .filter((b) => Math.abs(b.y - headerY) <= 8)
@@ -419,12 +493,15 @@ function readTable(
 
     // Zona de etiquetas: a la izquierda de la primera banda-x con ficha.
     const firstColumnX = localColumns[0]?.band[0] ?? Infinity
-    firstColByPage.set(pageNumber, firstColumnX)
+    pageFirstColX = Math.min(pageFirstColX, firstColumnX)
     if (localColumns.length > 0) {
-      columnSpanByPage.set(pageNumber, [
+      const span: [number, number] = [
         Math.min(...localColumns.map((lc) => lc.band[0])),
         Math.max(...localColumns.map((lc) => lc.band[1])),
-      ])
+      ]
+      pageSpan = pageSpan
+        ? [Math.min(pageSpan[0], span[0]), Math.max(pageSpan[1], span[1])]
+        : span
     }
     const marks = page.items.filter(
       (i) => MARK_STRINGS.has(i.str.trim()) && i.fontSize >= MIN_MARK_FONT,
@@ -527,18 +604,19 @@ function readTable(
       }
     }
 
-    // Bandas de fila de atributo para G7: sus superíndices quedan sin celda
-    // POR DISEÑO (las filas de atributo no emiten celdas), no es pérdida.
-    const attrBands = rowBands
-      .filter((b) => b.isAttribute)
-      .map((b) => [b.y0, b.y1] as [number, number])
-    if (attrBands.length > 0) attrBandsByPage.set(pageNumber, attrBands)
+    // Bandas de fila de atributo para G7 (acumuladas por página): sus
+    // superíndices quedan sin celda POR DISEÑO (las filas de atributo no
+    // emiten celdas), no es pérdida.
+    pageAttrBands.push(
+      ...rowBands.filter((b) => b.isAttribute).map((b) => [b.y0, b.y1] as [number, number]),
+    )
 
     // --- RawRow por banda (de arriba a abajo = orden de lectura).
     for (const [bandIdx, band] of rowBands.entries()) {
       const label = band.labelItems.map((i) => i.str.trim()).join(' ')
       const continued =
         bandIdx === 0 &&
+        regionIdx === 0 &&
         pageNumber > (located.pages[0] ?? pageNumber) &&
         label.length === 0 &&
         lastRowIndex >= 0
@@ -576,23 +654,21 @@ function readTable(
       return tableCol >= 0 ? tableCol : local >= 0 ? local : 0
     }
 
-    // G1: qué columnas de tabla tienen ficha de encabezado en esta página.
-    const pageHeaderCols = new Set<number>()
+    // G1: qué columnas de tabla tienen ficha de encabezado en esta región;
+    // el conjunto se acumula por página.
+    const regionHeaderCols = new Set<number>()
     for (const lc of localColumns) {
       if (lc.token === null) continue
-      pageHeaderCols.add(tableColOfBand(lc.band))
+      regionHeaderCols.add(tableColOfBand(lc.band))
     }
-    headerColsByPage.set(pageNumber, pageHeaderCols)
+    for (const col of regionHeaderCols) pageHeaderCols.add(col)
 
     // --- Celdas: cada marca cae en una columna (centro-x) y una fila (base de caja).
     // G3 ("ninguna marca sin dueño") compara TODAS las marcas de la página
     // contra las celdas emitidas: las de una fila de atributo ("Ayuno"…,
     // ADR-10 §2.2 b) cuentan como presentes pero no son celdas; las que no
-    // caen en banda de columna/fila quedan presentes sin dueño.
-    let marksPresent = 0
-    let marksAttr = 0
-    let marksAssigned = 0
-    const lost: LostMarks = { sinColumna: 0, bandaSinFicha: 0, sinFila: 0 }
+    // caen en banda de columna/fila quedan presentes sin dueño. Los
+    // contadores son POR PÁGINA (se acumulan entre regiones).
     for (const mark of marks) {
       const colIdx = effBands.findIndex(
         ([x0, x1]) => center(mark) >= x0 - 0.5 && center(mark) <= x1 + 0.5,
@@ -636,50 +712,6 @@ function readTable(
         distanceToCenter: Math.min(Math.abs(center(mark) - (cx0 + cx1) / 2) / width, 1),
       })
       marksAssigned++
-    }
-    markStats.push({ page: pageNumber, present: marksPresent, attr: marksAttr, assigned: marksAssigned, lost })
-
-    // --- Llamadas de nota (§3): superíndices (≤ 0,75 × la mediana de fuente
-    // de la página) pegados a una celda de marca. El vínculo es por
-    // proximidad al centro de la celda: en columnas sombreadas el
-    // superíndice se escribe sobre el techo de la fila, no junto a la marca.
-    const fontSizes = page.items.map((i) => i.fontSize).sort((a, b) => a - b)
-    const medianFont = fontSizes[Math.floor(fontSizes.length / 2)] ?? 6
-    const pageMarkCells = cells.filter((c) => c.page === pageNumber && c.kind === 'mark')
-    for (const item of page.items) {
-      const ref = item.str.trim()
-      if (item.fontSize > medianFont * 0.75 || !NOTE_REF_RE.test(ref)) continue
-      // Continuación de palabra partida, no superíndice: el candidato ARRANCA
-      // dentro del rango-x de otro ítem de texto de la misma línea (el "a"
-      // final de "Hast"+"a" de la fila de ventana — pdfjs solapa los anchos
-      // por kerning). Un superíndice real va a la izquierda de su texto o
-      // solo; la marca no cuenta como palabra (el ref se cuelga de ella).
-      const glued = page.items.some(
-        (other) =>
-          other !== item &&
-          !MARK_STRINGS.has(other.str.trim()) &&
-          other.str.trim().length > 0 &&
-          item.bbox[0] >= other.bbox[0] - 0.5 &&
-          item.bbox[0] < other.bbox[2] - 0.5 &&
-          other.bbox[3] > item.bbox[1] - 2 &&
-          other.bbox[1] < item.bbox[3] + 2,
-      )
-      if (glued) continue
-      const sx = (item.bbox[0] + item.bbox[2]) / 2
-      const sy = (item.bbox[1] + item.bbox[3]) / 2
-      let best: RawCell | null = null
-      let bestDist = Infinity
-      for (const cell of pageMarkCells) {
-        const cx = (cell.bbox[0] + cell.bbox[2]) / 2
-        const cy = (cell.bbox[1] + cell.bbox[3]) / 2
-        if (Math.abs(sx - cx) > 10 || Math.abs(sy - cy) > 14) continue
-        const dist = Math.abs(sx - cx) + Math.abs(sy - cy)
-        if (dist < bestDist) {
-          bestDist = dist
-          best = cell
-        }
-      }
-      if (best && !best.noteRefs.includes(ref)) best.noteRefs.push(ref)
     }
 
     // --- Fila de ventana: la banda del "Ventana…" con sus textos por grupo
@@ -762,7 +794,9 @@ function readTable(
       }
       cells.push(...windowCells)
       windowRowIndexes.add(rows.length - 1)
-      windowBandByPage.set(pageNumber, [wBox[1], wBox[3]])
+      pageWindowBand = pageWindowBand
+        ? [Math.min(pageWindowBand[0], wBox[1]), Math.max(pageWindowBand[1], wBox[3])]
+        : [wBox[1], wBox[3]]
       // G2 por página (F3 imprime una tabla en tiras de columnas): la ventana
       // de ESA página debe cubrir las columnas con FICHA de esa página — el
       // generador solo dibuja grupos de ventana sobre fichas de visita, no
@@ -848,10 +882,76 @@ function readTable(
       }
     }
 
+    // Fondo de la grilla de la región para las notas al pie (la más baja de
+    // las regiones de la página: las notas viven debajo de la última fila).
+    if (rowBands.length > 0) lastBottom = Math.min(lastBottom, ...rowBands.map((b) => b.y0))
+
+    } // — fin de las regiones de la página
+
+    // --- Estado POR PÁGINA tras leer todas sus regiones (G1/G3/G4/G7 leen
+    // por página, no por tira).
+    markStats.push({
+      page: pageNumber,
+      present: marksPresent,
+      attr: marksAttr,
+      assigned: marksAssigned,
+      lost,
+    })
+    firstColByPage.set(pageNumber, pageFirstColX)
+    headerColsByPage.set(pageNumber, pageHeaderCols)
+    if (pageSpan) columnSpanByPage.set(pageNumber, pageSpan)
+    if (pageAttrBands.length > 0) attrBandsByPage.set(pageNumber, pageAttrBands)
+    if (pageWindowBand) windowBandByPage.set(pageNumber, pageWindowBand)
+
+    // --- Llamadas de nota (§3): superíndices (≤ 0,75 × la mediana de fuente
+    // de la página) pegados a una celda de marca. El vínculo es por
+    // proximidad al centro de la celda: en columnas sombreadas el
+    // superíndice se escribe sobre el techo de la fila, no junto a la marca.
+    // Corre sobre la página COMPLETA: los superíndices pueden colgarse de
+    // celdas de cualquier región.
+    const fontSizes = srcPage.items.map((i) => i.fontSize).sort((a, b) => a - b)
+    const medianFont = fontSizes[Math.floor(fontSizes.length / 2)] ?? 6
+    const pageMarkCells = cells.filter((c) => c.page === pageNumber && c.kind === 'mark')
+    for (const item of srcPage.items) {
+      const ref = item.str.trim()
+      if (item.fontSize > medianFont * 0.75 || !NOTE_REF_RE.test(ref)) continue
+      // Continuación de palabra partida, no superíndice: el candidato ARRANCA
+      // dentro del rango-x de otro ítem de texto de la misma línea (el "a"
+      // final de "Hast"+"a" de la fila de ventana — pdfjs solapa los anchos
+      // por kerning). Un superíndice real va a la izquierda de su texto o
+      // solo; la marca no cuenta como palabra (el ref se cuelga de ella).
+      const glued = srcPage.items.some(
+        (other) =>
+          other !== item &&
+          !MARK_STRINGS.has(other.str.trim()) &&
+          other.str.trim().length > 0 &&
+          item.bbox[0] >= other.bbox[0] - 0.5 &&
+          item.bbox[0] < other.bbox[2] - 0.5 &&
+          other.bbox[3] > item.bbox[1] - 2 &&
+          other.bbox[1] < item.bbox[3] + 2,
+      )
+      if (glued) continue
+      const sx = (item.bbox[0] + item.bbox[2]) / 2
+      const sy = (item.bbox[1] + item.bbox[3]) / 2
+      let best: RawCell | null = null
+      let bestDist = Infinity
+      for (const cell of pageMarkCells) {
+        const cx = (cell.bbox[0] + cell.bbox[2]) / 2
+        const cy = (cell.bbox[1] + cell.bbox[3]) / 2
+        if (Math.abs(sx - cx) > 10 || Math.abs(sy - cy) > 14) continue
+        const dist = Math.abs(sx - cx) + Math.abs(sy - cy)
+        if (dist < bestDist) {
+          bestDist = dist
+          best = cell
+        }
+      }
+      if (best && !best.noteRefs.includes(ref)) best.noteRefs.push(ref)
+    }
+
     // --- Notas al pie de la grilla (generador: comment_w, F2 T2): mismas
-    // líneas de nota, dibujadas debajo de la última fila de la página.
-    const lastBottom = rowBands.length > 0 ? Math.min(...rowBands.map((b) => b.y0)) : Infinity
-    for (const item of page.items) {
+    // líneas de nota, dibujadas debajo de la última fila de la página (la
+    // más baja de todas las regiones).
+    for (const item of srcPage.items) {
       const match = item.str.trim().match(NOTE_LINE_RE)
       if (!match || item.fontSize < NOTE_FONT_MIN || item.fontSize > NOTE_FONT_MAX) continue
       const cy = (item.bbox[1] + item.bbox[3]) / 2
@@ -877,8 +977,7 @@ function readTable(
     const pageCells = cells.filter((c) => c.page === pageNumber)
     const wBand = windowBandByPage.get(pageNumber)
     const fcx = firstColByPage.get(pageNumber) ?? Infinity
-    const pageAttrBands = attrBandsByPage.get(pageNumber) ?? []
-    for (const item of page.items) {
+    for (const item of srcPage.items) {
       if (item.rotated) rotated++
       const s = item.str.trim()
       if (s.length === 0 || item.fontSize >= TINY_FONT_MAX || item.fontSize <= 0) continue
@@ -1178,7 +1277,10 @@ function readTable(
 }
 
 /**
- * G5 (§4-5): sin dos columnas de la MISMA página a menos de 3 pt de centro.
+ * G5 (§4-5): sin dos columnas de la MISMA página a menos de 3 pt de centro
+ * EN LA MISMA FRANJA VERTICAL (P2c C1b): las tiras de encabezado apiladas
+ * comparten la grilla x — V1 vive sobre V9 — y son columnas legítimas; la
+ * colisión exige que las cajas de encabezado también se solapen en y.
  * Extraído como función pura porque por mutación de ENTRADA no es
  * alcanzable: `groupTexts` une fichas a ≤6 pt y la subdivisión de bandas
  * corta por puntos medios, así que dos columnas vecinas con sendas fichas
@@ -1188,21 +1290,28 @@ function readTable(
  * con columnas sintéticas.
  */
 export function columnCenterCollisions(columns: RawColumn[]): string | null {
-  const centersByPage = new Map<number, number[]>()
+  const byPage = new Map<number, Array<{ xCenter: number; y0: number; y1: number }>>()
   for (const col of columns) {
-    const arr = centersByPage.get(col.page)
-    if (arr) arr.push(col.xCenter)
-    else centersByPage.set(col.page, [col.xCenter])
+    const arr = byPage.get(col.page)
+    const entry = { xCenter: col.xCenter, y0: col.headerBBox[1], y1: col.headerBBox[3] }
+    if (arr) arr.push(entry)
+    else byPage.set(col.page, [entry])
   }
   const bad: string[] = []
-  for (const [page, centers] of centersByPage) {
-    centers.sort((a, b) => a - b)
-    for (let i = 0; i + 1 < centers.length; i++) {
-      if (centers[i + 1]! - centers[i]! < 3) {
-        bad.push(`p${page}`)
-        break
+  for (const [page, cols] of byPage) {
+    cols.sort((a, b) => a.xCenter - b.xCenter)
+    let hit = false
+    for (let i = 0; i < cols.length && !hit; i++) {
+      for (let j = i + 1; j < cols.length && cols[j]!.xCenter - cols[i]!.xCenter < 3; j++) {
+        const a = cols[i]!
+        const b = cols[j]!
+        if (Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) > 0) {
+          hit = true
+          break
+        }
       }
     }
+    if (hit) bad.push(`p${page}`)
   }
   return bad.length === 0 ? null : bad.join(', ')
 }
