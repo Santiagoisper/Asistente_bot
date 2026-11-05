@@ -7,7 +7,17 @@ export function checklistKey(patientId: string, visitKey: string): string {
   return `cabina-demo:checklist:v1:${patientId}:${visitKey}`
 }
 
-export function readChecklist(storage: ChecklistStore, key: string): string[] {
+/** El getter de localStorage puede lanzar antes de getItem. */
+export function safeStorage(host: { localStorage?: ChecklistStore } = globalThis): ChecklistStore | null {
+  try {
+    return host.localStorage ?? null
+  } catch {
+    return null
+  }
+}
+
+export function readChecklist(storage: ChecklistStore | null, key: string): string[] {
+  if (storage === null) return []
   try {
     const raw = storage.getItem(key)
     if (!raw) return []
@@ -19,7 +29,8 @@ export function readChecklist(storage: ChecklistStore, key: string): string[] {
   }
 }
 
-export function writeChecklist(storage: ChecklistStore, key: string, keys: string[]): void {
+export function writeChecklist(storage: ChecklistStore | null, key: string, keys: string[]): void {
+  if (storage === null) return
   try {
     storage.setItem(key, JSON.stringify(keys))
   } catch {

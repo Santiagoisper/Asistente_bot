@@ -13,7 +13,7 @@ export function DemoNavLink() {
       href="/demo"
       aria-label="Estudio de demostración"
       aria-current={active ? 'page' : undefined}
-      className={`rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors hover:bg-white/10 hover:text-white ${focusRing} ${active ? 'text-white' : 'text-white/75'}`}
+      className={`inline-flex min-h-11 items-center rounded-lg px-2.5 text-sm font-medium transition-colors hover:bg-white/10 hover:text-white ${focusRing} ${active ? 'text-white' : 'text-white/75'}`}
     >
       Demo
     </Link>

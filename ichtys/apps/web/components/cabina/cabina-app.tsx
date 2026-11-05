@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { OrigenPanel } from './origen-panel'
 import { PrintSheets, SemanaView } from './semana-view'
 import { answerQuestion } from '../../lib/cabina/answers'
-import { checklistKey, readChecklist, writeChecklist } from '../../lib/cabina/checklist'
+import { checklistKey, readChecklist, safeStorage, writeChecklist } from '../../lib/cabina/checklist'
 import { demoStudy } from '../../lib/cabina/demo-data'
 import { buildSheet, type SheetItem } from '../../lib/cabina/filter'
 import { unresolvedKeys } from '../../lib/cabina/origen'
@@ -82,7 +82,7 @@ export function CabinaApp() {
   }, [patientId])
 
   useEffect(() => {
-    setChecked(readChecklist(window.localStorage, checklistKey(patientId, visitKey)))
+    setChecked(readChecklist(safeStorage(), checklistKey(patientId, visitKey)))
   }, [patientId, visitKey])
 
   const patient = demoStudy.patients.find((item) => item.id === patientId) ?? demoStudy.patients[0]
@@ -112,7 +112,7 @@ export function CabinaApp() {
   function toggleCheck(procedureKey: string, on: boolean) {
     const next = on ? Array.from(new Set([...checked, procedureKey])) : checked.filter((item) => item !== procedureKey)
     setChecked(next)
-    writeChecklist(window.localStorage, checklistKey(patientId, visitKey), next)
+    writeChecklist(safeStorage(), checklistKey(patientId, visitKey), next)
     setPanelKey(procedureKey)
   }
 
