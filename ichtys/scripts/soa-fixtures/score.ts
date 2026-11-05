@@ -4,8 +4,8 @@
  * Visitas: (tabla alineada, día canónico). Semana = valor × 7, tolerancia ±1.
  * Sin tiempo: printedId normalizado dentro de la tabla. El tipo no entra en
  * la identidad; se mide en `types`. Procedimientos: etiqueta normalizada,
- * alias del gold, o similitud ≥ 0,85. Salida: solo contadores. `--private`
- * no imprime etiquetas ni texto.
+ * alias del gold, o similitud ≥ 0,85. `scoreGrid` califica la geometría cruda
+ * sin modelo. Salida: solo contadores. `--private` no imprime etiquetas ni texto.
  */
 import { readFileSync } from 'node:fs'
 
@@ -52,6 +52,8 @@ export interface TableRec {
   reasons?: string[]
 }
 
+export type BBox = [number, number, number, number]
+
 export interface VisitRec {
   key: string
   tableKey: string | null
@@ -61,6 +63,8 @@ export interface VisitRec {
   window: WindowSpec | null
   type: VisitType
   attributes?: { fasting?: boolean | null; onSite?: boolean | null; armOnly?: string | null } | null
+  page?: number | null
+  bbox?: BBox | null
 }
 
 export interface ProcedureRec {
@@ -77,6 +81,8 @@ export interface CellRec {
   mark: Mark
   noteRefs?: string[]
   conditions?: Condition[]
+  page?: number | null
+  bbox?: BBox | null
 }
 
 export interface NoteRec {
@@ -98,6 +104,7 @@ export interface InconsistencyRec {
 }
 
 export interface ScheduleDoc {
+  document?: { pages?: number; sopPages?: number[]; falseHitPages?: number[] }
   tables?: TableRec[]
   visits?: VisitRec[]
   procedures?: ProcedureRec[]
@@ -107,6 +114,57 @@ export interface ScheduleDoc {
   outOfTableRules?: RuleRec[]
   inconsistencies?: InconsistencyRec[]
   meta?: { costUsd?: number | null; latencyS?: number | null }
+}
+
+export interface RawColumn {
+  index?: number
+  page: number
+  xCenter: number
+  x0?: number
+  x1?: number
+  headerText?: string
+  headerBBox?: BBox
+}
+
+export interface RawCell {
+  page: number
+  rowIndex?: number
+  colIndex?: number
+  text?: string
+  bbox: BBox
+  kind: 'mark' | 'text' | 'merged'
+  spanCols?: number[]
+  noteRefs?: string[]
+  distanceToCenter?: number
+}
+
+export interface RawTable {
+  key: string
+  pages: number[]
+  columns?: RawColumn[]
+  rows?: unknown[]
+  cells?: RawCell[]
+  notes?: Array<{ ref: string; page: number; text?: string; bbox?: BBox }>
+  outcome?: 'complete' | 'partial' | 'failed'
+  reasons?: string[]
+}
+
+export interface RawSchedule {
+  tables?: RawTable[]
+  location?: {
+    candidates?: unknown[]
+    tables?: Array<{ key: string; pages: number[]; notePages?: number[]; headerSignature?: string[] }>
+    rejected?: Array<{ page: number; reason: string }>
+  }
+}
+
+export interface GridScore {
+  pages: Counts
+  tables: Counts
+  columns: Counts
+  markedCells: Counts
+  mergedCells: Counts
+  noteCalls: Counts
 }
 
 export interface Counts { tp: number; fp: number; fn: number }
@@ -684,6 +742,207 @@ export function adaptLegacyVisits(spec: { visits?: LegacyVisit[] }, gold: Schedu
   return { tables: [], visits, procedures, cells, notes: [], outOfTableRules: [], inconsistencies: [] }
 }
 
+function boxCenter(box: BBox): [number, number] {
+  return [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2]
+}
+
+function containsPoint(box: BBox, x: number, y: number): boolean {
+  return box[0] <= x && x <= box[2] && box[1] <= y && y <= box[3]
+}
+
+function candidateTables(raw: RawSchedule): RawTable[] {
+  if ((raw.tables ?? []).length > 0) return raw.tables ?? []
+  return (raw.location?.tables ?? []).map((table) => ({ key: table.key, pages: table.pages ?? [], columns: [], cells: [] }))
+}
+
+function locatedPages(raw: RawSchedule): Set<number> {
+  const pages = new Set<number>()
+  for (const table of candidateTables(raw)) {
+    for (const page of table.pages ?? []) pages.add(page)
+  }
+  return pages
+}
+
+function scorePages(gold: ScheduleDoc, raw: RawSchedule): Counts {
+  const located = locatedPages(raw)
+  const sop = new Set(gold.document?.sopPages ?? [])
+  const counts = emptyCounts()
+  for (const page of located) {
+    if (sop.has(page)) counts.tp += 1
+    else counts.fp += 1
+  }
+  for (const page of sop) {
+    if (!located.has(page)) counts.fn += 1
+  }
+  return counts
+}
+
+function scoreTables(goldTables: TableRec[], rawTables: RawTable[], tableMap: Map<string, string>): Counts {
+  const counts = emptyCounts()
+  counts.tp = tableMap.size
+  counts.fp = rawTables.filter((table) => !tableMap.has(table.key)).length
+  const alignedGold = new Set(tableMap.values())
+  counts.fn = goldTables.filter((table) => !alignedGold.has(table.key)).length
+  return counts
+}
+
+/**
+ * La caja de la visita queda en la primera página del encabezado.
+ * Una columna de una página posterior es acierto si su centro x cae en
+ * la caja x de alguna visita de la tabla. El recall pide esa columna en
+ * la página de la visita, para no cruzar las columnas partidas.
+ */
+function scoreColumns(gold: ScheduleDoc, rawTables: RawTable[], tableMap: Map<string, string>): Counts {
+  const counts = emptyCounts()
+  const pagesByTable = new Map((gold.tables ?? []).map((table) => [table.key, new Set(table.pages ?? [])]))
+  const visitsByTable = new Map<string, VisitRec[]>()
+  for (const visit of gold.visits ?? []) {
+    if (visit.page == null || !visit.bbox) continue
+    const list = visitsByTable.get(visit.tableKey ?? '') ?? []
+    list.push(visit)
+    visitsByTable.set(visit.tableKey ?? '', list)
+  }
+  const recalled = new Set<string>()
+  for (const table of rawTables) {
+    const goldKey = tableMap.get(table.key)
+    if (!goldKey) {
+      counts.fp += table.columns?.length ?? 0
+      continue
+    }
+    const visits = visitsByTable.get(goldKey) ?? []
+    const pages = pagesByTable.get(goldKey) ?? new Set<number>()
+    for (const column of table.columns ?? []) {
+      const hits = visits.filter((visit) => visit.bbox && column.xCenter >= visit.bbox[0] && column.xCenter <= visit.bbox[2])
+      if (hits.length === 0) {
+        counts.fp += 1
+        continue
+      }
+      counts.tp += 1
+      if (!pages.has(column.page)) continue
+      for (const visit of hits) {
+        if (visit.page === column.page) recalled.add(visit.key)
+      }
+    }
+  }
+  for (const visits of visitsByTable.values()) {
+    for (const visit of visits) {
+      if (!recalled.has(visit.key)) counts.fn += 1
+    }
+  }
+  return counts
+}
+
+function scoreMarks(gold: ScheduleDoc, rawTables: RawTable[]): Counts {
+  const goldMarks = (gold.cells ?? []).filter((cell) => (cell.mark === 'x' || cell.mark === 'conditional') && cell.page != null && cell.bbox)
+  const candidates = rawTables.flatMap((table) => (table.cells ?? []).filter((cell) => cell.kind === 'mark' && cell.bbox && cell.page != null))
+  const ranked: Array<{ gi: number; ci: number; dist: number }> = []
+  goldMarks.forEach((cell, gi) => {
+    const [gx, gy] = boxCenter(cell.bbox!)
+    candidates.forEach((other, ci) => {
+      if (other.page !== cell.page) return
+      const [cx, cy] = boxCenter(other.bbox)
+      if (!containsPoint(cell.bbox!, cx, cy)) return
+      ranked.push({ gi, ci, dist: (cx - gx) ** 2 + (cy - gy) ** 2 })
+    })
+  })
+  ranked.sort((a, b) => a.dist - b.dist || a.gi - b.gi || a.ci - b.ci)
+  const usedGold = new Set<number>()
+  const usedCand = new Set<number>()
+  for (const pair of ranked) {
+    if (usedGold.has(pair.gi) || usedCand.has(pair.ci)) continue
+    usedGold.add(pair.gi)
+    usedCand.add(pair.ci)
+  }
+  return { tp: usedGold.size, fp: candidates.length - usedCand.size, fn: goldMarks.length - usedGold.size }
+}
+
+function isMerged(cell: RawCell): boolean {
+  return cell.kind === 'merged' || (cell.spanCols?.length ?? 0) > 1
+}
+
+function scoreMerged(gold: ScheduleDoc, rawTables: RawTable[]): Counts {
+  const goldPrn = (gold.cells ?? []).filter((cell) => cell.mark === 'prn_range' && cell.page != null && cell.bbox)
+  const candidates = rawTables.flatMap((table) => (table.cells ?? []).filter((cell) => isMerged(cell) && cell.bbox && cell.page != null))
+  const covered = new Set<number>()
+  const useful = new Set<number>()
+  goldPrn.forEach((cell, gi) => {
+    const [gx, gy] = boxCenter(cell.bbox!)
+    candidates.forEach((other, ci) => {
+      if (other.page !== cell.page) return
+      if (!containsPoint(other.bbox, gx, gy)) return
+      covered.add(gi)
+      useful.add(ci)
+    })
+  })
+  return { tp: covered.size, fp: candidates.length - useful.size, fn: goldPrn.length - covered.size }
+}
+
+function scoreNoteCalls(gold: ScheduleDoc, rawTables: RawTable[]): Counts {
+  const goldCalls: Array<{ page: number; bbox: BBox; ref: string }> = []
+  for (const cell of gold.cells ?? []) {
+    if (cell.page == null || !cell.bbox) continue
+    for (const ref of cell.noteRefs ?? []) {
+      const trimmed = ref.trim()
+      if (trimmed) goldCalls.push({ page: cell.page, bbox: cell.bbox, ref: trimmed })
+    }
+  }
+  const candCalls: Array<{ page: number; bbox: BBox; ref: string }> = []
+  for (const table of rawTables) {
+    for (const cell of table.cells ?? []) {
+      if (cell.page == null || !cell.bbox) continue
+      for (const ref of cell.noteRefs ?? []) {
+        const trimmed = ref.trim()
+        if (trimmed) candCalls.push({ page: cell.page, bbox: cell.bbox, ref: trimmed })
+      }
+    }
+  }
+  const ranked: Array<{ gi: number; ci: number; contains: number; dist: number }> = []
+  goldCalls.forEach((left, gi) => {
+    const [gx, gy] = boxCenter(left.bbox)
+    candCalls.forEach((right, ci) => {
+      if (left.page !== right.page || left.ref !== right.ref) return
+      const [cx, cy] = boxCenter(right.bbox)
+      const contains = containsPoint(right.bbox, gx, gy)
+      const sameRow = cy >= left.bbox[1] && cy <= left.bbox[3]
+      if (!contains && !sameRow) return
+      ranked.push({ gi, ci, contains: contains ? 1 : 0, dist: (cx - gx) ** 2 + (cy - gy) ** 2 })
+    })
+  })
+  ranked.sort((a, b) => b.contains - a.contains || a.dist - b.dist || a.gi - b.gi || a.ci - b.ci)
+  const usedGold = new Set<number>()
+  const usedCand = new Set<number>()
+  for (const pair of ranked) {
+    if (usedGold.has(pair.gi) || usedCand.has(pair.ci)) continue
+    usedGold.add(pair.gi)
+    usedCand.add(pair.ci)
+  }
+  return { tp: usedGold.size, fp: candCalls.length - usedCand.size, fn: goldCalls.length - usedGold.size }
+}
+
+export function scoreGrid(gold: ScheduleDoc, raw: RawSchedule): GridScore {
+  const rawTables = candidateTables(raw)
+  const tableMap = alignTables(gold.tables ?? [], rawTables)
+  return {
+    pages: scorePages(gold, raw),
+    tables: scoreTables(gold.tables ?? [], rawTables, tableMap),
+    columns: scoreColumns(gold, rawTables, tableMap),
+    markedCells: scoreMarks(gold, rawTables),
+    mergedCells: scoreMerged(gold, rawTables),
+    noteCalls: scoreNoteCalls(gold, rawTables),
+  }
+}
+
+export function toPrivateGrid(report: GridScore): GridScore {
+  return {
+    pages: { ...report.pages },
+    tables: { ...report.tables },
+    columns: { ...report.columns },
+    markedCells: { ...report.markedCells },
+    mergedCells: { ...report.mergedCells },
+    noteCalls: { ...report.noteCalls },
+  }
+}
+
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8')) as unknown
 }
@@ -694,23 +953,30 @@ function main(): void {
   let candidatePath = ''
   let priv = false
   let legacy = false
+  let grid = false
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i]
     if (arg === '--private') priv = true
     else if (arg === '--legacy') legacy = true
+    else if (arg === '--grid') grid = true
     else if (arg === '--gold') goldPath = args[++i] ?? ''
     else if (arg === '--candidate') candidatePath = args[++i] ?? ''
     else {
-      process.stderr.write('uso: score.ts --gold <gold.json> --candidate <salida.json> [--private] [--legacy]\n')
+      process.stderr.write('uso: score.ts --gold <gold.json> --candidate <salida.json> [--private] [--legacy] [--grid]\n')
       process.exit(2)
     }
   }
-  if (!goldPath || !candidatePath) {
-    process.stderr.write('uso: score.ts --gold <gold.json> --candidate <salida.json> [--private] [--legacy]\n')
+  if (!goldPath || !candidatePath || (grid && legacy)) {
+    process.stderr.write('uso: score.ts --gold <gold.json> --candidate <salida.json> [--private] [--legacy] [--grid]\n')
     process.exit(2)
   }
   const gold = readJson(goldPath) as ScheduleDoc
-  const raw = readJson(candidatePath) as ScheduleDoc & { visits?: LegacyVisit[] }
+  const raw = readJson(candidatePath) as ScheduleDoc & RawSchedule & { visits?: LegacyVisit[] }
+  if (grid) {
+    const geometry = scoreGrid(gold, raw)
+    process.stdout.write(`${JSON.stringify(priv ? toPrivateGrid(geometry) : geometry)}\n`)
+    return
+  }
   const report = scoreSchedule(gold, legacy ? adaptLegacyVisits(raw, gold) : raw)
   process.stdout.write(`${JSON.stringify(priv ? toPrivate(report) : report)}\n`)
 }

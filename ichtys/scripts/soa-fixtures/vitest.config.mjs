@@ -8,6 +8,6 @@ export default {
   test: {
     maxWorkers: 1,
     fileParallelism: false,
-    include: ['scripts/soa-fixtures/score.test.ts'],
+    include: ['scripts/soa-fixtures/**/*.test.ts'],
   },
 }

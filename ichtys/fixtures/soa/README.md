@@ -42,12 +42,16 @@ Salida: `ichtys/fixtures/soa/F{n}.pdf`, `F{n}.gold.json` y `F{n}.render/pagina-{
 
 ## Calificar
 
-El calificador compara una salida contra el gold. Empareja visitas por `(tableKey, timing.value, timing.unit, type)` y desempatan por `printedId` normalizado. Los procedimientos empatan por etiqueta normalizada, por la tabla de alias del gold, o por similitud de al menos 0,85. `prn_range` se cuenta aparte. La salida son solo contadores. Con `--private` no hay etiquetas ni texto de protocolo. `--legacy` adapta la forma plana de visitas del extractor de `090e506`.
+El calificador compara una salida contra el gold. Las visitas con tiempo emparejan por la tabla alineada y el día canónico: una semana son 7 días, con tolerancia de un día. Las visitas sin tiempo emparejan por el id impreso normalizado, dentro de la tabla. El tipo de visita se mide solo en `types`. Antes de emparejar, las tablas se alinean por las páginas que comparten. Los procedimientos empatan por etiqueta normalizada, por la tabla de alias del gold, o por similitud de al menos 0,85. `prn_range` se cuenta aparte. La salida son solo contadores. Con `--private` no hay etiquetas ni texto de protocolo. `--legacy` adapta la forma plana de visitas del extractor de `090e506`.
+
+`scoreGrid` califica la geometría cruda, sin modelo: páginas del cronograma, tablas, columnas, celdas marcadas, celdas combinadas y llamadas a nota. Una columna repetida en una página siguiente es acierto si su centro x cae en la caja de alguna visita de esa tabla. Para no perder la visita hace falta una columna en la página de su caja. `--grid` usa ese calificador. `--private` sigue devolviendo solo números.
 
 ```bash
 cd ichtys
 npx --yes vitest@2.1.8 run --config scripts/soa-fixtures/vitest.config.mjs --maxWorkers=1 scripts/soa-fixtures/score.test.ts
+npx --yes vitest@2.1.8 run --config scripts/soa-fixtures/vitest.config.mjs --maxWorkers=1 scripts/soa-fixtures/score-grid.test.ts
 npx --yes tsx scripts/soa-fixtures/score.ts --gold fixtures/soa/F4.gold.json --candidate salida.json --legacy --private
+npx --yes tsx scripts/soa-fixtures/score.ts --grid --gold fixtures/soa/F4.gold.json --candidate grilla.json --private
 ```
 
 Sale 0 aunque el puntaje sea malo. Sale 2 si faltan argumentos.
