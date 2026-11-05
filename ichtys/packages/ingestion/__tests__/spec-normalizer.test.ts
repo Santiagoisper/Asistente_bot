@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
+  capExtractionWarnings,
   normalizeCriterion,
   normalizeEligibilityGroup,
   normalizeIdentification,
@@ -282,4 +283,37 @@ describe('warningCodeSummary — lista blanca de códigos (H1)', () => {
     expect(summary).not.toContain('detalle clínico')
   })
 })
+
+describe('capExtractionWarnings — prioridad y segundo recorte (observaciones del Architect)', () => {
+  it('conserva una lista «ausente o inválido» aunque esté al final de >200', () => {
+    const list = [
+      ...Array.from({ length: 250 }, (_, i) => `visits: advertencia ${i + 1}`),
+      'eligibility: exclusion: ausente o inválido en la salida del modelo — 0 ítems',
+    ]
+
+    const out = capExtractionWarnings(list)
+
+    expect(out).toHaveLength(MAX_SPEC_EXTRACTION_WARNINGS)
+    expect(out.some((warning) => warning.includes('ausente o inválido'))).toBe(true)
+    expect(out.at(-1)).toMatch(/^… y \d+ advertencias? más$/)
+  })
+
+  it('un segundo recorte no duplica el resumen y suma lo ya omitido', () => {
+    const first = capExtractionWarnings(
+      Array.from({ length: 250 }, (_, i) => `visits: advertencia ${i + 1}`),
+    )
+    expect(first.at(-1)).toBe('… y 51 advertencias más')
+
+    const second = capExtractionWarnings([
+      ...first,
+      'eligibility: exclusion: ausente o inválido en la salida del modelo — 0 ítems',
+    ])
+
+    const summaries = second.filter((warning) => /^… y \d+ advertencias? más$/.test(warning))
+    expect(summaries).toHaveLength(1)
+    expect(summaries[0]).toBe('… y 52 advertencias más')
+    expect(second).toHaveLength(MAX_SPEC_EXTRACTION_WARNINGS)
+  })
+})
+
 

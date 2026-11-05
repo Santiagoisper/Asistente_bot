@@ -318,30 +318,61 @@ export function normalizeVisitsGroup(
   }
 }
 
-/** ¿Advertencia de descarte o recuperación? Se priorizan al recortar (B2). */
+/** Línea resumen que este módulo agrega al recortar; nunca es contenido. */
+const WARNING_SUMMARY_RE = /^… y (\d+) advertencias? más$/
+
+function warningSummaryLine(omitted: number): string {
+  return `… y ${omitted} advertencia${omitted === 1 ? '' : 's'} más`
+}
+
+/**
+ * ¿Advertencia de descarte, recuperación o lista ausente? Se priorizan al
+ * recortar (B2): son las que el revisor clínico debe ver sí o sí.
+ */
 function isPriorityWarning(warning: string): boolean {
-  return warning.includes('descartado') || warning.includes('recuperada')
+  return (
+    warning.includes('descartado') ||
+    warning.includes('recuperada') ||
+    warning.includes('ausente o inválido')
+  )
 }
 
 /**
  * Cierra la lista de advertencias a las cotas (B2, vuelta 5): recorta cada
- * una a 1000 chars y, si hay más de 200, conserva primero descartes y
- * recuperaciones (las que el revisor clínico debe ver sí o sí) y deja la
- * última entrada como «… y N advertencias más». Antes el recorte conservaba
- * las primeras 200 — justo las de descarte, que se agregan al final, se
- * perdían.
+ * una a 1000 chars y, si hay más de 200, conserva primero descartes,
+ * recuperaciones y listas ausentes (las que el revisor clínico debe ver sí o
+ * sí) y deja la última entrada como «… y N advertencias más». Antes el
+ * recorte conservaba las primeras 200 — justo las de descarte, que se agregan
+ * al final, se perdían.
+ *
+ * Un segundo recorte (spec-store suma los ajustes del guardado) puede recibir
+ * la línea resumen del primero. Se separa y su conteo se suma al nuevo: la
+ * línea nunca cuenta como advertencia ni se persiste duplicada, y el total de
+ * omitidas no se reinicia.
  */
 export function capExtractionWarnings(list: readonly unknown[]): string[] {
   const clipped = list
     .map((warning) => clipString(warning, MAX_SPEC_WARNING_CHARS) ?? '')
     .filter((warning) => warning.length > 0)
-  if (clipped.length <= MAX_SPEC_EXTRACTION_WARNINGS) return clipped
+
+  let carriedOmitted = 0
+  const warnings = clipped.filter((warning) => {
+    const summary = WARNING_SUMMARY_RE.exec(warning)
+    if (!summary) return true
+    carriedOmitted += Number(summary[1])
+    return false
+  })
+
+  if (warnings.length + (carriedOmitted > 0 ? 1 : 0) <= MAX_SPEC_EXTRACTION_WARNINGS) {
+    if (carriedOmitted > 0) warnings.push(warningSummaryLine(carriedOmitted))
+    return warnings
+  }
+
   const kept = [
-    ...clipped.filter(isPriorityWarning),
-    ...clipped.filter((warning) => !isPriorityWarning(warning)),
+    ...warnings.filter(isPriorityWarning),
+    ...warnings.filter((warning) => !isPriorityWarning(warning)),
   ].slice(0, MAX_SPEC_EXTRACTION_WARNINGS - 1)
-  const omitted = clipped.length - kept.length
-  kept.push(`… y ${omitted} advertencia${omitted === 1 ? '' : 's'} más`)
+  kept.push(warningSummaryLine(warnings.length - kept.length + carriedOmitted))
   return kept
 }
 

@@ -120,6 +120,32 @@ describe('saveStudySpec — normaliza antes del .parse (un tope nunca tumba el g
     expect(saved).toHaveLength(200)
   })
 
+  it('segundo recorte: una sola línea resumen y el total omitido no se reinicia', async () => {
+    const warnings = Array.from({ length: 250 }, (_, i) => `advertencia ${i + 1}`)
+
+    await saveStudySpec({
+      orgId: 'org-1',
+      studyId: 'study-1',
+      documentVersionId: 'docver-1',
+      extractionModel: 'claude-opus-5-5',
+      spec: {
+        ...emptyStudySpec(),
+        inclusionCriteria: [
+          { number: '1', text: 'insalvable', sourcePages: [], confidence: 'high' },
+        ],
+        extractionWarnings: warnings,
+      },
+    })
+
+    const saved = insertedSpec().extractionWarnings ?? []
+    const summaries = saved.filter((warning) => /^… y \d+ advertencias? más$/.test(warning))
+    expect(summaries).toHaveLength(1)
+    // 250 originales + 2 ajustes del guardado − 199 conservadas = 53 omitidas.
+    expect(summaries[0]).toBe('… y 53 advertencias más')
+    expect(saved.some((warning) => warning.includes('descartado'))).toBe(true)
+    expect(saved).toHaveLength(200)
+  })
+
   it('B2: los ajustes del guardado se persisten en extractionWarnings (los ve la pantalla)', async () => {
     await saveStudySpec({
       orgId: 'org-1',
