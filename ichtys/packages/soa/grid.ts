@@ -35,6 +35,7 @@
  * pequeño no consumido) bajan la tabla a 'partial' con
  * 'validation_failed:<id>' cuando fallan.
  */
+import { findNumericHeader, normalizeNumericToken, VISIT_TOKEN } from './header'
 import type {
   BBox,
   PageGeom,
@@ -49,9 +50,6 @@ import type {
 
 /** Marcas de celda de la capa de texto (el generador escribe 'X' en DejaVu 7). */
 const MARK_STRINGS = new Set(['x', 'X', '✓', '●', '•'])
-
-/** Fichas de visita del encabezado (mismo criterio que locate). */
-const VISIT_TOKEN = /^(V|VR|S|W|D)\d+$|^(SCR|DT|FA|SEL|ET|FU|EOS|EOT|VNP|VF|VME\d+|VDT|VME)$/i
 
 /** Fila de ventana (etiqueta de la banda). */
 const WINDOW_ROW_RE =
@@ -138,7 +136,7 @@ function groupTexts(items: TextItem[]): TextGroup[] {
 
 /** Texto comparable de ficha: sin espacios (los tokens partidos ya se recomponen). */
 function normalizeText(text: string): string {
-  return text.replace(/\s+/g, '')
+  return normalizeNumericToken(text)
 }
 
 interface ItemBand {
@@ -324,12 +322,21 @@ function readTable(
         headerY = band.y
       }
     }
-    const headerGroups = groupTexts(
-      bands
-        .filter((b) => Math.abs(b.y - headerY) <= 8)
-        .flatMap((b) => b.items)
-        .filter((i) => i.str.trim().length > 0 && i.fontSize >= 4),
-    )
+    // Plan B (P2b): sin al menos 2 fichas con prefijo, el encabezado puede ser
+    // la fila ETIQUETADA de enteros ("Número de visita" 1, 2, 3 … con guiones
+    // como columnas sin número). Las fichas van una por una — nunca por
+    // groupTexts, que uniría "1" y "-" en columnas angostas — y la etiqueta
+    // queda fuera: no es una columna.
+    const numericHeader = headerHits < 2 ? findNumericHeader(page.items) : null
+    if (numericHeader) headerY = numericHeader.y
+    const headerGroups = numericHeader
+      ? numericHeader.tokens.map((t) => ({ x0: t.bbox[0], x1: t.bbox[2], text: t.str.trim() }))
+      : groupTexts(
+          bands
+            .filter((b) => Math.abs(b.y - headerY) <= 8)
+            .flatMap((b) => b.items)
+            .filter((i) => i.str.trim().length > 0 && i.fontSize >= 4),
+        )
 
     // --- Bandas de columna efectivas: los bordes V no siempre llegan por
     // columna (F1 T2 y F5 T1 dejan zonas sin bordes intermedios), así que una

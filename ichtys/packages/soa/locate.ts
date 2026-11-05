@@ -18,14 +18,11 @@
  * El texto de la página (`headerSignature`, subtítulos) se devuelve pero
  * nunca se loguea (S8).
  */
+import { findNumericHeader, normalizeNumericToken, VISIT_TOKEN } from './header'
 import type { PageGeom, ScheduleLocation, TextItem } from './types'
 
 /** Marcas de celda que pueden aparecer en la capa de texto. */
 const MARK_STRINGS = new Set(['x', 'X', '✓', '●', '•'])
-
-/** Fichas de visita en el encabezado (V1, VR3, W12, SCR, DT, FA, SEL…). */
-const VISIT_TOKEN =
-  /^(V|VR|S|W|D)\d+$|^(SCR|DT|FA|SEL|ET|FU|EOS|EOT|VNP|VF|VME\d+|VDT|VME)$/i
 
 /** Título de la sección del cronograma (banda de sección). */
 const SECTION_RE = /(cronograma|schedule of|tabla de actividades|calendario|plan de visitas)/i
@@ -146,6 +143,15 @@ function scorePage(p: PageGeom): ScoredPage {
       headerBand = band
     }
   }
+  // Plan B (P2b): encabezado numérico etiquetado (mismo detector que grid).
+  let numericTokens: string[] | null = null
+  if (headerCount < MIN_HEADER_TOKENS) {
+    const numeric = findNumericHeader(p.items)
+    if (numeric) {
+      headerCount = numeric.integers.length
+      numericTokens = numeric.tokens.map((t) => normalizeNumericToken(t.str))
+    }
+  }
 
   const windowRow = bands.some((b) => WINDOW_RE.test(b.tokens[0] ?? '') || WINDOW_RE.test(b.text))
     ? 1
@@ -202,7 +208,7 @@ function scorePage(p: PageGeom): ScoredPage {
     accepted,
     rejectReason,
     subtitle,
-    headerTokens: headerBand ? [...headerBand.tokens] : [],
+    headerTokens: numericTokens ?? (headerBand ? [...headerBand.tokens] : []),
     notesTitle,
   }
 }
