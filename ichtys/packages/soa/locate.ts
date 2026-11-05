@@ -71,6 +71,26 @@ const MIN_GRID_COLS = 4
  */
 const DENSE_RUN_MARKS = 12
 
+/**
+ * C3 (P2c): una página se UNE a una racha que YA TIENE encabezado solo con
+ * encabezado propio (≥ MIN_HEADER_TOKENS fichas) o densidad de marcas —
+ * contigüidad y subtítulo igual no alcanzan: la medición privada mostró a
+ * T0 absorbiendo una página (p23) sin encabezado propio ni grilla densa.
+ * La página que no califica abre racha propia y esa racha vive o muere por
+ * sus señales (si muere, queda en `rejected` con 'no_header': expulsada
+ * VISIBLE, nunca absorbida en silencio).
+ *
+ * A una racha SIN encabezado visto (P2b b) la unión sigue libre: su
+ * conservación se decide al final por la densidad ACUMULADA de la racha
+ * (una tabla sin encabezado legible y 2–6 filas por página solo cruza el
+ * umbral entre todas sus páginas).
+ */
+const joinsRun = (s: ScoredPage, current: TableAcc | undefined): boolean =>
+  current === undefined ||
+  current.headerPages === 0 ||
+  (s.signals.headerTokens ?? 0) >= MIN_HEADER_TOKENS ||
+  ((s.signals.marks ?? 0) >= DENSE_RUN_MARKS && (s.signals.gridCols ?? 0) >= MIN_GRID_COLS)
+
 interface Band {
   y: number
   items: TextItem[]
@@ -310,7 +330,10 @@ export function locateSchedule(pages: PageGeom[]): ScheduleLocation {
     if (!s.accepted) continue
     const current = tables[tables.length - 1]
     const continues =
-      current !== undefined && s.page === previousAccepted + 1 && s.subtitle === current.subtitle
+      current !== undefined &&
+      s.page === previousAccepted + 1 &&
+      s.subtitle === current.subtitle &&
+      joinsRun(s, current)
     if (!continues) {
       tables.push({
         key: `T${tables.length + 1}`,
