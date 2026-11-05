@@ -79,11 +79,14 @@ function textItemBBox(
     return [e, f, e + width, f + height]
   }
   if (Math.abs(a) < 1e-6 && Math.abs(d) < 1e-6) {
-    // Texto vertical (etiquetas de encabezado giradas): avanza en ±y desde (e, f).
-    const x0 = e - height
+    // Texto vertical (etiquetas giradas ±90°): avanza en ±y desde (e, f) y
+    // el cuerpo del glifo va en ∓x según el signo de c (con b < 0 la caja
+    // crece hacia +x, no hacia −x).
+    const x0 = c > 0 ? e : e - height
+    const x1 = c > 0 ? e + height : e
     const y0 = b > 0 ? f : f - width
     const y1 = b > 0 ? f + width : f
-    return [x0, y0, e, y1]
+    return [x0, y0, x1, y1]
   }
   // Skew real: eje mayor de la caja girada (aproximación axis-aligned).
   const xs = [0, width, -height, 0]

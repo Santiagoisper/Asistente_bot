@@ -29,11 +29,12 @@ function minimalPdf(pageCount: number): Uint8Array {
   return assemblePdf(objects)
 }
 
-/** PDF de UNA página con un ítem horizontal y otro girado 90° (K1). */
+/** PDF de UNA página con un ítem horizontal y dos girados ±90° (K1, R3). */
 function rotatedTextPdf(): Uint8Array {
   const content =
     'BT /F1 10 Tf 1 0 0 1 20 100 Tm (horizontal) Tj ET\n' +
-    'BT /F1 10 Tf 0 1 -1 0 150 20 Tm (girado) Tj ET\n'
+    'BT /F1 10 Tf 0 1 -1 0 150 20 Tm (girado) Tj ET\n' +
+    'BT /F1 10 Tf 0 -1 1 0 30 180 Tm (girado b negativo) Tj ET\n'
   const objects: string[] = []
   objects[1] = '<< /Type /Catalog /Pages 2 0 R >>'
   objects[2] = '<< /Type /Pages /Count 1 /Kids [3 0 R] >>'
@@ -89,22 +90,37 @@ describe('K3 — topes de lectura S5 con rechazo controlado', () => {
 })
 
 describe('K1 — señal de texto rotado (transform b/c ≠ 0)', () => {
-  it('un PDF con texto dibujado girado 90° reporta el ítem como rotated', async () => {
-    // Una página con dos ítems: uno horizontal (Tm 1 0 0 1) y uno girado
-    // (Tm 0 1 -1 0, transform b ≠ 0). Helvetica es fuente estándar, sin
+  it('un PDF con texto dibujado girado ±90° reporta los ítems como rotated con caja correcta', async () => {
+    // Tres ítems: horizontal (Tm 1 0 0 1), girado +90 (Tm 0 1 -1 0, b > 0)
+    // y girado −90 (Tm 0 -1 1 0, b < 0). Helvetica es fuente estándar, sin
     // archivos. En los fixtures no hay texto rotado — esta es la señal que
     // dispara el reason 'rotated_text' de grid cuando acompañan refs sin
-    // nota (G6).
+    // nota (G6). Con b < 0 (R3) la caja crece hacia +x desde el origen (e,f),
+    // no hacia −x.
     const page = (await loadPageGeometry(rotatedTextPdf()))[0]!
-    expect(page.items).toHaveLength(2)
+    expect(page.items).toHaveLength(3)
+    expect(page.items.filter((i) => i.rotated)).toHaveLength(2)
     const horizontal = page.items.find((i) => !i.rotated)
-    const rotated = page.items.find((i) => i.rotated)
     expect(horizontal).toBeDefined()
-    expect(rotated).toBeDefined()
-    expect(rotated!.fontSize).toBeGreaterThan(0)
-    // El girado es más ALTO que ancho (el texto corre en y).
-    expect(rotated!.bbox[3] - rotated!.bbox[1]).toBeGreaterThan(
-      rotated!.bbox[2] - rotated!.bbox[0],
-    )
+    for (const rotated of page.items.filter((i) => i.rotated)) {
+      expect(rotated.fontSize).toBeGreaterThan(0)
+      // Girado: el texto corre en y — la caja es más alta que ancha.
+      expect(rotated.bbox[3] - rotated.bbox[1]).toBeGreaterThan(
+        rotated.bbox[2] - rotated.bbox[0],
+      )
+      expect(rotated.bbox[2]).toBeGreaterThan(rotated.bbox[0])
+      expect(rotated.bbox[3]).toBeGreaterThan(rotated.bbox[1])
+    }
+    // El girado +90 parte de (150, 20): la caja vive en x < 150.
+    const plus90 = page.items.find((i) => i.rotated && i.bbox[2] <= 150.5)!
+    expect(plus90.bbox[2]).toBeGreaterThan(140)
+    // El girado −90 parte de (30, 180): la caja crece hacia +x (R3), con
+    // x0 en el propio origen — antes quedaba corrida −height.
+    const minus90 = page.items.find((i) => i.rotated && i.bbox[0] < 50)!
+    expect(minus90.bbox[0]).toBeGreaterThanOrEqual(29.5)
+    expect(minus90.bbox[0]).toBeLessThan(35)
+    // Y avanza hacia −y desde 180.
+    expect(minus90.bbox[3]).toBeLessThanOrEqual(180.5)
+    expect(minus90.bbox[1]).toBeLessThan(150)
   })
 })
