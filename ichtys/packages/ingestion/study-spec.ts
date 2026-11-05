@@ -108,12 +108,49 @@ export const studyIdentificationSchema = z.object({
 })
 export type StudyIdentification = z.infer<typeof studyIdentificationSchema>
 
+/** Grupos de extracción con resultado propio (ADR-3 §2.4). */
+export const SPEC_GROUP_NAMES = [
+  'locator',
+  'identification',
+  'eligibility',
+  'endpoints',
+  'visits',
+] as const
+export type SpecGroupName = (typeof SPEC_GROUP_NAMES)[number]
+
+export const specGroupOutcomeSchema = z.object({
+  status: z.enum([
+    'ok',
+    'provider_error',
+    'invalid_output',
+    'not_located',
+    'skipped',
+  ]),
+  /** Código estable (nunca texto del modelo ni del documento). */
+  code: z.string().max(64).optional(),
+})
+export type SpecGroupOutcome = z.infer<typeof specGroupOutcomeSchema>
+
+export const specGroupOutcomesSchema = z.object({
+  locator: specGroupOutcomeSchema.optional(),
+  identification: specGroupOutcomeSchema.optional(),
+  eligibility: specGroupOutcomeSchema.optional(),
+  endpoints: specGroupOutcomeSchema.optional(),
+  visits: specGroupOutcomeSchema.optional(),
+})
+export type SpecGroupOutcomes = z.infer<typeof specGroupOutcomesSchema>
+
 export const studySpecSchema = z.object({
   identification: studyIdentificationSchema,
   inclusionCriteria: z.array(eligibilityCriterionSchema).max(MAX_SPEC_ITEMS),
   exclusionCriteria: z.array(eligibilityCriterionSchema).max(MAX_SPEC_ITEMS),
   endpoints: z.array(studyEndpointSchema).max(MAX_SPEC_ITEMS),
   visits: z.array(studyVisitSchema).max(MAX_SPEC_ITEMS),
+  /**
+   * Resultado por grupo (ADR-3 §2.4). Un grupo `invalid_output` deja la
+   * extracción en `partial` y hay que reconocerlo para aprobar la spec.
+   */
+  groupOutcomes: specGroupOutcomesSchema.optional(),
   /** Fuente de las visitas incorporadas desde una guía SoA separada. */
   visitsSource: z.object({
     documentVersionId: z.string().min(1).max(MAX_SPEC_SOURCE_ID_CHARS),
@@ -129,6 +166,19 @@ export const studySpecSchema = z.object({
 })
 export type StudySpec = z.infer<typeof studySpecSchema>
 
+/**
+ * Grupos que impiden aprobar sin un reconocimiento explícito: todo resultado
+ * distinto de `ok`/`skipped` deja la extracción en `partial` (ADR-3 §2.4).
+ */
+export function groupsNeedingAcknowledgement(spec: StudySpec): SpecGroupName[] {
+  const outcomes = spec.groupOutcomes
+  if (!outcomes) return []
+  return SPEC_GROUP_NAMES.filter((group) => {
+    const outcome = outcomes[group]
+    return outcome !== undefined && outcome.status !== 'ok' && outcome.status !== 'skipped'
+  })
+}
+
 export function emptyStudySpec(): StudySpec {
   return {
     identification: { protocolCode: null, title: null, phase: null, sourcePages: [] },
@@ -143,10 +193,21 @@ export function mergeSoaVisits(
   previous: StudySpec | null,
   visits: StudySpec['visits'],
   documentVersionId: string,
+  visitsOutcome?: SpecGroupOutcome,
 ): StudySpec {
+  const { groupOutcomes: previousOutcomes, ...base } = previous ?? emptyStudySpec()
+  // El resultado de `visits` del spec previo describe las visitas del
+  // protocolo que este SoA reemplaza por completo: se descarta. Sólo
+  // sobrevive el resultado de la extracción SoA (si lo hubo) y los demás
+  // grupos quedan intactos (ADR-3 §2.4).
+  const outcomes: SpecGroupOutcomes = { ...previousOutcomes }
+  delete outcomes.visits
+  if (visitsOutcome) outcomes.visits = visitsOutcome
+
   return {
-    ...(previous ?? emptyStudySpec()),
+    ...base,
     visits,
+    ...(Object.keys(outcomes).length > 0 ? { groupOutcomes: outcomes } : {}),
     extractionFailed: false,
     extractionWarnings: [],
     visitsSource: { documentVersionId, documentType: 'soa' },

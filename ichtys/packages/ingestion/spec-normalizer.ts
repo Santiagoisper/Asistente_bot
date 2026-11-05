@@ -15,7 +15,10 @@ import {
   MAX_SPEC_PROCEDURE_CHARS,
   MAX_SPEC_EXTRACTION_WARNINGS,
   MAX_SPEC_WARNING_CHARS,
+  SPEC_GROUP_NAMES,
   type EligibilityCriterion,
+  type SpecGroupName,
+  type SpecGroupOutcome,
   type StudyEndpoint,
   type StudyIdentification,
   type StudySpec,
@@ -402,6 +405,60 @@ export function warningCodeSummary(warnings: string[]): string {
   return Array.from(counts.entries()).map(([code, count]) => `${code}×${count}`).join(', ')
 }
 
+const GROUP_OUTCOME_STATUSES: ReadonlySet<string> = new Set([
+  'ok',
+  'provider_error',
+  'invalid_output',
+  'not_located',
+  'skipped',
+])
+
+/**
+ * Un grupo queda en `invalid_output` si cualquiera de sus ítems se reparó o
+ * descartó, o si la lista vino ausente: la spec es `partial` y hay que
+ * reconocerlo para aprobarla (ADR-3 §2.4). El código es fijo, nunca texto
+ * del modelo.
+ */
+function groupOutcomeFromWarnings(groupWarnings: readonly string[]): SpecGroupOutcome | null {
+  if (groupWarnings.length === 0) return null
+  if (groupWarnings.some((warning) => warning.includes('descartado'))) {
+    return { status: 'invalid_output', code: 'item_discarded' }
+  }
+  if (groupWarnings.some((warning) => warning.includes('ausente o inválido'))) {
+    return { status: 'invalid_output', code: 'missing_or_invalid' }
+  }
+  return { status: 'invalid_output', code: 'item_repaired' }
+}
+
+/** Conserva sólo resultados con forma válida; un `provider_error` previo manda. */
+function mergeGroupOutcomes(
+  raw: unknown,
+  computed: Partial<Record<SpecGroupName, SpecGroupOutcome>>,
+): Partial<Record<SpecGroupName, SpecGroupOutcome>> {
+  const merged: Partial<Record<SpecGroupName, SpecGroupOutcome>> = {}
+  if (typeof raw === 'object' && raw !== null) {
+    const record = raw as Record<string, unknown>
+    for (const group of SPEC_GROUP_NAMES) {
+      const value = record[group]
+      if (typeof value !== 'object' || value === null) continue
+      const outcome = value as Record<string, unknown>
+      if (typeof outcome.status !== 'string' || !GROUP_OUTCOME_STATUSES.has(outcome.status)) continue
+      merged[group] = {
+        status: outcome.status as SpecGroupOutcome['status'],
+        ...(typeof outcome.code === 'string' && outcome.code.length <= 64
+          ? { code: outcome.code }
+          : {}),
+      }
+    }
+  }
+  for (const [group, outcome] of Object.entries(computed) as Array<
+    [SpecGroupName, SpecGroupOutcome]
+  >) {
+    if (merged[group]?.status !== 'provider_error') merged[group] = outcome
+  }
+  return merged
+}
+
 /**
  * Normaliza un spec completo (grupos + extractionWarnings). Es la defensa
  * final antes de studySpecSchema.parse: idempotente sobre un spec válido
@@ -422,23 +479,42 @@ export function normalizeStudySpec(raw: unknown, warnings: string[]): StudySpec 
     )
   }
 
-  const identification = normalizeIdentification(spec.identification, warnings)
+  // Advertencias por grupo: además del banner, deciden el `groupOutcomes`.
+  const groupWarnings: Record<'identification' | 'eligibility' | 'endpoints' | 'visits', string[]> = {
+    identification: [],
+    eligibility: [],
+    endpoints: [],
+    visits: [],
+  }
+
+  const identification = normalizeIdentification(spec.identification, groupWarnings.identification)
+  warnings.push(...groupWarnings.identification)
   const inclusionCriteria = normalizeList(
     spec.inclusionCriteria, MAX_SPEC_ITEMS, 'eligibility: inclusion',
-    (item, index, w) => normalizeCriterion(item, `eligibility: inclusión criterio #${index + 1}`, w), warnings,
+    (item, index, w) => normalizeCriterion(item, `eligibility: inclusión criterio #${index + 1}`, w), groupWarnings.eligibility,
   )
   const exclusionCriteria = normalizeList(
     spec.exclusionCriteria, MAX_SPEC_ITEMS, 'eligibility: exclusion',
-    (item, index, w) => normalizeCriterion(item, `eligibility: exclusión criterio #${index + 1}`, w), warnings,
+    (item, index, w) => normalizeCriterion(item, `eligibility: exclusión criterio #${index + 1}`, w), groupWarnings.eligibility,
   )
+  warnings.push(...groupWarnings.eligibility)
   const endpoints = normalizeList(
     spec.endpoints, MAX_SPEC_ITEMS, 'endpoints',
-    (item, index, w) => normalizeEndpoint(item, `endpoints: endpoint #${index + 1}`, w), warnings,
+    (item, index, w) => normalizeEndpoint(item, `endpoints: endpoint #${index + 1}`, w), groupWarnings.endpoints,
   )
+  warnings.push(...groupWarnings.endpoints)
   const visits = normalizeList(
     spec.visits, MAX_SPEC_ITEMS, 'visits',
-    (item, index, w) => normalizeVisit(item, `visits: visita #${index + 1}`, w), warnings,
+    (item, index, w) => normalizeVisit(item, `visits: visita #${index + 1}`, w), groupWarnings.visits,
   )
+  warnings.push(...groupWarnings.visits)
+
+  const computedOutcomes: Partial<Record<SpecGroupName, SpecGroupOutcome>> = {}
+  for (const group of ['identification', 'eligibility', 'endpoints', 'visits'] as const) {
+    const outcome = groupOutcomeFromWarnings(groupWarnings[group])
+    if (outcome) computedOutcomes[group] = outcome
+  }
+  const groupOutcomes = mergeGroupOutcomes(spec.groupOutcomes, computedOutcomes)
 
   const normalized = {
     identification,
@@ -446,6 +522,7 @@ export function normalizeStudySpec(raw: unknown, warnings: string[]): StudySpec 
     exclusionCriteria,
     endpoints,
     visits,
+    ...(Object.keys(groupOutcomes).length > 0 ? { groupOutcomes } : {}),
     ...(typeof spec.visitsSource === 'object' && spec.visitsSource !== null
       ? { visitsSource: spec.visitsSource }
       : {}),

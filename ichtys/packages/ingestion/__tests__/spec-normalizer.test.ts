@@ -284,8 +284,7 @@ describe('warningCodeSummary — lista blanca de códigos (H1)', () => {
   })
 })
 
-describe('capExtractionWarnings — prioridad y segundo recorte (observaciones del Architect)', () => {
-  it('conserva una lista «ausente o inválido» aunque esté al final de >200', () => {
+describe('capExtractionWarnings — prioridad y segundo recorte (observaciones del Architect)', () => {  it('conserva una lista «ausente o inválido» aunque esté al final de >200', () => {
     const list = [
       ...Array.from({ length: 250 }, (_, i) => `visits: advertencia ${i + 1}`),
       'eligibility: exclusion: ausente o inválido en la salida del modelo — 0 ítems',
@@ -313,6 +312,76 @@ describe('capExtractionWarnings — prioridad y segundo recorte (observaciones d
     expect(summaries).toHaveLength(1)
     expect(summaries[0]).toBe('… y 52 advertencias más')
     expect(second).toHaveLength(MAX_SPEC_EXTRACTION_WARNINGS)
+  })
+})
+
+describe('groupOutcomes — un grupo tocado por el normalizador queda invalid_output (ADR-3)', () => {
+  it('un criterio reparado marca eligibility', () => {
+    const out = normalizeStudySpec(
+      {
+        ...emptyStudySpec(),
+        inclusionCriteria: [
+          {
+            number: '1',
+            text: 'x'.repeat(MAX_SPEC_TEXT_CHARS + 1),
+            sourcePages: [1],
+            confidence: 'high',
+          },
+        ],
+      },
+      [],
+    )
+    expect(out.groupOutcomes?.eligibility).toEqual({
+      status: 'invalid_output',
+      code: 'item_repaired',
+    })
+  })
+
+  it('un criterio descartado marca eligibility con item_discarded', () => {
+    const out = normalizeStudySpec(
+      {
+        ...emptyStudySpec(),
+        inclusionCriteria: [
+          { number: '1', text: 'sin procedencia', sourcePages: [], confidence: 'high' },
+        ],
+      },
+      [],
+    )
+    expect(out.groupOutcomes?.eligibility).toEqual({
+      status: 'invalid_output',
+      code: 'item_discarded',
+    })
+  })
+
+  it('una lista ausente marca el grupo con missing_or_invalid', () => {
+    const out = normalizeStudySpec(
+      { ...emptyStudySpec(), inclusionCriteria: undefined },
+      [],
+    )
+    expect(out.groupOutcomes?.eligibility).toEqual({
+      status: 'invalid_output',
+      code: 'missing_or_invalid',
+    })
+  })
+
+  it('un provider_error previo no se degrada y un spec limpio no agrega grupo', () => {
+    const withProviderError = normalizeStudySpec(
+      {
+        ...emptyStudySpec(),
+        groupOutcomes: { visits: { status: 'provider_error', code: 'llm_rate_limited' } },
+        inclusionCriteria: [
+          { number: '1', text: 'sin procedencia', sourcePages: [], confidence: 'high' },
+        ],
+      },
+      [],
+    )
+    expect(withProviderError.groupOutcomes?.visits).toEqual({
+      status: 'provider_error',
+      code: 'llm_rate_limited',
+    })
+    expect(withProviderError.groupOutcomes?.eligibility?.status).toBe('invalid_output')
+
+    expect(normalizeStudySpec(emptyStudySpec(), [])).toEqual(emptyStudySpec())
   })
 })
 

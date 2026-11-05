@@ -146,6 +146,26 @@ describe('saveStudySpec — normaliza antes del .parse (un tope nunca tumba el g
     expect(saved).toHaveLength(200)
   })
 
+  it('ADR-3: el grupo tocado por el guardado se persiste como invalid_output', async () => {
+    await saveStudySpec({
+      orgId: 'org-1',
+      studyId: 'study-1',
+      documentVersionId: 'docver-1',
+      extractionModel: 'claude-opus-5-5',
+      spec: {
+        ...emptyStudySpec(),
+        inclusionCriteria: [
+          { number: '1', text: 'insalvable', sourcePages: [], confidence: 'high' },
+        ],
+      },
+    })
+
+    expect(insertedSpec().groupOutcomes?.eligibility).toEqual({
+      status: 'invalid_output',
+      code: 'item_discarded',
+    })
+  })
+
   it('B2: los ajustes del guardado se persisten en extractionWarnings (los ve la pantalla)', async () => {
     await saveStudySpec({
       orgId: 'org-1',

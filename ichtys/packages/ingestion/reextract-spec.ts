@@ -99,7 +99,7 @@ export async function reextractStudySpec(params: {
     ? studySpecSchema.parse(previousMeaningful.spec)
     : null
   const specToSave = visitsOnly
-    ? { ...mergeSoaVisits(previousSpec, validated.visits, params.documentVersionId), extractionWarnings: warnings }
+    ? { ...mergeSoaVisits(previousSpec, validated.visits, params.documentVersionId, validated.groupOutcomes?.visits), extractionWarnings: warnings }
     : { ...validated, extractionWarnings: warnings }
 
   const { id, version } = await saveStudySpec({

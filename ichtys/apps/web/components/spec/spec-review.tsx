@@ -1310,7 +1310,31 @@ export default function SpecReview({
   async function handleApprove() {
     setApproving(true)
     try {
-      const res = await fetch(`/api/studies/${studyId}/spec/${specId}/approve`, { method: 'POST' })
+      const url = `/api/studies/${studyId}/spec/${specId}/approve`
+      let res = await fetch(url, { method: 'POST' })
+
+      // ADR-3 §2.4: una spec con grupos parciales exige reconocerlos. El
+      // servidor responde 409 con la lista; sólo se reenvía si la persona
+      // confirma. El reconocimiento queda auditado en el servidor.
+      if (res.status === 409) {
+        const payload = (await res.json().catch(() => null)) as
+          | { error?: string; groups?: string[] }
+          | null
+        if (payload?.error === 'spec_incomplete' && payload.groups?.length) {
+          const groups = payload.groups.join(', ')
+          const confirmed = window.confirm(
+            `La extracción dejó grupos parciales (${groups}). ` +
+              'Revisalos antes de aprobar. ¿Aprobás la spec reconociéndolos?',
+          )
+          if (!confirmed) return
+          res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ acknowledgeGroups: payload.groups }),
+          })
+        }
+      }
+
       if (res.ok) setApproved(true)
     } finally {
       setApproving(false)

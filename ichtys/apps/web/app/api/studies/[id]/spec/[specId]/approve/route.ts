@@ -1,18 +1,52 @@
 import { NextResponse } from 'next/server'
 import { AccessError, validateStudyAccess } from '@ichtys/auth'
 import { and, auditLogs, db, eq, ne, studySpecs } from '@ichtys/db'
-import { studySpecSchema } from '@ichtys/ingestion/study-spec'
+import {
+  groupsNeedingAcknowledgement,
+  studySpecSchema,
+  type SpecGroupName,
+} from '@ichtys/ingestion/study-spec'
+import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../../lib/api/body-limit'
 import { extractSpecTerminology } from '../../../../../../../lib/rag/spec-terminology'
 
 interface RouteParams {
   params: Promise<{ id: string; specId: string }>
 }
 
-export async function POST(_req: Request, { params }: RouteParams) {
+/** La spec tiene grupos parciales que no se reconocieron en el cuerpo. */
+class SpecIncompleteError extends Error {
+  constructor(readonly groups: SpecGroupName[]) {
+    super('Spec incomplete')
+    this.name = 'SpecIncompleteError'
+  }
+}
+
+export async function POST(req: Request, { params }: RouteParams) {
   const { id: studyId, specId } = await params
 
   try {
     const { userId, orgId } = await validateStudyAccess(studyId, 'study_admin')
+
+    // Cuerpo opcional: { acknowledgeGroups: ['eligibility', …] }. Sin cuerpo
+    // se aprueba sólo una spec completa (ADR-3 §2.4).
+    let body: unknown
+    try {
+      body = await readJsonBody(req, { allowEmpty: true })
+    } catch (err) {
+      if (err instanceof JsonBodyTooLargeError) {
+        return NextResponse.json({ error: 'Request body too large' }, { status: 413 })
+      }
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    }
+    const acknowledged = new Set<string>()
+    if (typeof body === 'object' && body !== null) {
+      const raw = (body as Record<string, unknown>).acknowledgeGroups
+      if (Array.isArray(raw)) {
+        for (const group of raw) {
+          if (typeof group === 'string') acknowledged.add(group)
+        }
+      }
+    }
 
     await db.transaction(async (tx) => {
       const target = await tx.query.studySpecs.findFirst({
@@ -28,10 +62,16 @@ export async function POST(_req: Request, { params }: RouteParams) {
         return
       }
 
+      const parsedSpec = studySpecSchema.safeParse(target.spec)
+      const partialGroups = parsedSpec.success
+        ? groupsNeedingAcknowledgement(parsedSpec.data)
+        : []
+      const missing = partialGroups.filter((group) => !acknowledged.has(group))
+      if (missing.length > 0) throw new SpecIncompleteError(missing)
+
       // Pre-computar terminología y persistirla en la columna dedicada (0004).
       let terminologyAnnotations: ReturnType<typeof extractSpecTerminology> | null = null
       try {
-        const parsedSpec = studySpecSchema.safeParse(target.spec)
         if (parsedSpec.success) {
           terminologyAnnotations = extractSpecTerminology(parsedSpec.data)
         }
@@ -76,12 +116,19 @@ export async function POST(_req: Request, { params }: RouteParams) {
         metadata: {
           version: target.version,
           terminologyCount: terminologyAnnotations?.length ?? 0,
+          ...(partialGroups.length > 0 ? { acknowledgedGroups: partialGroups } : {}),
         },
       })
     })
 
     return NextResponse.json({ ok: true })
   } catch (err) {
+    if (err instanceof SpecIncompleteError) {
+      return NextResponse.json(
+        { error: 'spec_incomplete', groups: err.groups },
+        { status: 409 },
+      )
+    }
     if (err instanceof AccessError) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: err.status })
     }
