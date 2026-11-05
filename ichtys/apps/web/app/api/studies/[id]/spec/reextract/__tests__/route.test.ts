@@ -6,11 +6,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   validateStudyAccess: vi.fn(),
-  handleApiError: vi
-    .fn<(err: unknown) => Response>()
-    .mockReturnValue(new Response('Internal Server Error', { status: 500 })),
+  handleApiError: vi.fn<(err: unknown) => Response>((err: unknown) => {
+    if (err instanceof Error && err.name === 'AccessError' && 'status' in err) {
+      const status = (err as { status: number }).status
+      if (status === 401 || status === 403 || status === 404) {
+        const body = status === 401 ? 'Unauthorized' : status === 403 ? 'Forbidden' : 'Not Found'
+        return new Response(body, { status })
+      }
+    }
+    return new Response('Internal Server Error', { status: 500 })
+  }),
   enforceSlidingWindowRateLimit: vi.fn(),
-  getSpecReextractRateLimitConfig: vi.fn().mockReturnValue({ limit: 3, windowSeconds: 60 }),
+  getSpecReextractRateLimitConfig: vi.fn().mockReturnValue({ limit: 3, orgLimit: 12, windowSeconds: 60 }),
   rateLimitResponse: vi.fn(
     (retryAfterSeconds: number) =>
       new Response(JSON.stringify({ error: 'rate_limited' }), {
@@ -26,10 +33,22 @@ const mocks = vi.hoisted(() => ({
   reextractStudySpec: vi.fn(),
 }))
 
-vi.mock('@ichtys/auth', () => ({
-  validateStudyAccess: mocks.validateStudyAccess,
-  handleApiError: mocks.handleApiError,
-}))
+vi.mock('@ichtys/auth', async () => {
+  const roles = await vi.importActual<typeof import('@ichtys/auth/roles')>('@ichtys/auth/roles')
+  return {
+    validateStudyAccess: mocks.validateStudyAccess,
+    handleApiError: mocks.handleApiError,
+    canManageDocuments: roles.canManageDocuments,
+    AccessError: class AccessError extends Error {
+      readonly status: 401 | 403 | 404
+      constructor(message: string, status: 401 | 403 | 404) {
+        super(message)
+        this.name = 'AccessError'
+        this.status = status
+      }
+    },
+  }
+})
 
 vi.mock('@ichtys/db', () => ({
   getQuotaStatus: mocks.getQuotaStatus,
@@ -54,6 +73,11 @@ vi.mock('../../../../../../../lib/security/rate-limit', () => ({
   enforceSlidingWindowRateLimit: mocks.enforceSlidingWindowRateLimit,
   getSpecReextractRateLimitConfig: mocks.getSpecReextractRateLimitConfig,
   rateLimitResponse: mocks.rateLimitResponse,
+  rateLimitUnavailableResponse: () =>
+    Response.json(
+      { error: 'rate_limit_unavailable', message: 'No se pudo verificar el cupo. Probá de nuevo en unos minutos.' },
+      { status: 503, headers: { 'Retry-After': '60' } },
+    ),
 }))
 
 import { POST } from '../route'
@@ -78,9 +102,13 @@ function callPost(query = ''): Promise<Response> {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.validateStudyAccess.mockResolvedValue({ orgId: ORG_ID, userId: USER_ID })
+  mocks.validateStudyAccess.mockResolvedValue({
+    orgId: ORG_ID,
+    userId: USER_ID,
+    role: 'site_coordinator',
+  })
   mocks.enforceSlidingWindowRateLimit.mockResolvedValue({ limited: false })
-  mocks.getSpecReextractRateLimitConfig.mockReturnValue({ limit: 3, windowSeconds: 60 })
+  mocks.getSpecReextractRateLimitConfig.mockReturnValue({ limit: 3, orgLimit: 12, windowSeconds: 60 })
   mocks.getQuotaStatus.mockResolvedValue({ state: 'ok' })
   mocks.getOrgLlmApiKeys.mockResolvedValue({})
   mocks.getOrgLlmKeySource.mockReturnValue('platform')
@@ -113,10 +141,26 @@ describe('POST /api/studies/[id]/spec/reextract — rate limit', () => {
     await callPost()
 
     expect(mocks.enforceSlidingWindowRateLimit).toHaveBeenCalledWith({
-      key: `spec-reextract:${USER_ID}:${STUDY_ID}`,
+      key: `spec-reextract:${ORG_ID}:${USER_ID}:${STUDY_ID}`,
       limit: 3,
       windowSeconds: 60,
+      orgKey: `spec-reextract-org:${ORG_ID}`,
+      orgLimit: 12,
     })
+  })
+
+  it('responde 503 y no llama al modelo si no se puede verificar el cupo', async () => {
+    mocks.enforceSlidingWindowRateLimit.mockResolvedValue({
+      limited: true,
+      retryAfterSeconds: 60,
+      reason: 'unavailable',
+    })
+
+    const res = await callPost('?force=1')
+
+    expect(res.status).toBe(503)
+    expect(mocks.reextractStudySpec).not.toHaveBeenCalled()
+    expect(mocks.getQuotaStatus).not.toHaveBeenCalled()
   })
 })
 
@@ -169,5 +213,75 @@ describe('POST /api/studies/[id]/spec/reextract — cupo agotado', () => {
       documentVersionId: 'dv-1',
       userId: USER_ID,
     })
+  })
+})
+
+describe('POST /api/studies/[id]/spec/reextract — gestión documental (S1)', () => {
+  it.each(['read_only_monitor', 'principal_investigator'])(
+    'rechaza a %s antes de gastar la extracción',
+    async (role) => {
+      mocks.validateStudyAccess.mockResolvedValue({
+        orgId: ORG_ID,
+        userId: USER_ID,
+        role,
+      })
+
+      const res = await callPost('?force=1')
+
+      expect(res.status).toBe(403)
+      expect(await res.text()).toBe('Forbidden')
+      expect(mocks.reextractStudySpec).not.toHaveBeenCalled()
+      expect(mocks.enforceSlidingWindowRateLimit).not.toHaveBeenCalled()
+    },
+  )
+})
+
+const PROVIDER_SENTINEL = 'sk-ant-provider-raw-ficticio-NO-LOG'
+
+function flattenLogValue(value: unknown): string {
+  if (value instanceof Error) return `${value.name} ${value.message} ${value.stack ?? ''}`
+  if (Array.isArray(value)) return value.map(flattenLogValue).join(' ')
+  if (value && typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
+function loggedText(spy: { mock: { calls: unknown[][] } }): string {
+  return spy.mock.calls.map((args) => args.map(flattenLogValue).join(' ')).join('\n')
+}
+
+describe('POST /api/studies/[id]/spec/reextract — S8 mensaje crudo', () => {
+  it('la respuesta y el log no repiten el mensaje del proveedor', async () => {
+    mocks.reextractStudySpec.mockRejectedValue(new Error(PROVIDER_SENTINEL))
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      const res = await callPost('?force=1')
+      const body = (await res.json()) as { error: string }
+      const logged = loggedText(spy)
+
+      expect(res.status).toBe(422)
+      expect(JSON.stringify(body)).not.toContain(PROVIDER_SENTINEL)
+      expect(body.error).toBe('No se pudo reextraer el protocolo. Probá de nuevo en unos minutos.')
+      expect(logged).not.toContain(PROVIDER_SENTINEL)
+      expect(logged).toContain('reextract_failed')
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('el lookup de cupo no registra el error crudo', async () => {
+    mocks.getQuotaStatus.mockRejectedValue(new Error(PROVIDER_SENTINEL))
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      const res = await callPost()
+      const logged = loggedText(spy)
+
+      expect(res.status).toBe(402)
+      expect(logged).not.toContain(PROVIDER_SENTINEL)
+      expect(logged).toContain('quota_lookup_failed')
+    } finally {
+      spy.mockRestore()
+    }
   })
 })

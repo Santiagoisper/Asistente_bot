@@ -14,6 +14,7 @@ import {
   enforceSlidingWindowRateLimit,
   getChatRateLimitConfig,
   rateLimitResponse,
+  rateLimitUnavailableResponse,
 } from '../../../lib/security/rate-limit'
 import { getOrCreateRequestId, log, makeRecord } from '../../../lib/observability/logger'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../lib/api/body-limit'
@@ -41,17 +42,9 @@ import { chatInput } from '../../../lib/api/input-schemas'
 
 export const runtime = 'nodejs'
 
-async function devLogError(step: string, err: unknown): Promise<void> {
+async function devLogError(step: string): Promise<void> {
   if (process.env.NODE_ENV !== 'development') return
-  const msg = err instanceof Error ? `${err.message}\n${err.stack ?? ''}` : String(err)
-  const line = `[chat:500] step=${step} ${new Date().toISOString()} | ${msg}\n`
-  console.error(line)
-  try {
-    const { appendFile } = await import('node:fs/promises')
-    const { join } = await import('node:path')
-    const { tmpdir } = await import('node:os')
-    await appendFile(join(tmpdir(), 'ichtys-rag-scores.log'), line)
-  } catch { /* non-critical */ }
+  console.error('[chat:500]', { step, code: 'chat_internal_error' })
 }
 
 const FORBIDDEN_ORG_FIELDS = ['orgId', 'organizationId', 'organization_id'] as const
@@ -113,11 +106,17 @@ export async function POST(req: Request): Promise<Response> {
 
   const chatRlConfig = getChatRateLimitConfig()
   const rateLimit = await enforceSlidingWindowRateLimit({
-    key: `chat:${userId}:${studyId}`,
+    key: `chat:${orgId}:${userId}:${studyId}`,
     limit: chatRlConfig.limit,
     windowSeconds: chatRlConfig.windowSeconds,
+    orgKey: `chat-org:${orgId}`,
+    orgLimit: chatRlConfig.orgLimit,
   })
   if (rateLimit.limited) {
+    if (rateLimit.reason === 'unavailable') {
+      log(makeRecord({ requestId, level: 'warn', event: 'api.rate_limit.blocked', endpoint: '/api/chat', method: 'POST', userId, statusCode: 503 }))
+      return rateLimitUnavailableResponse()
+    }
     log(makeRecord({ requestId, level: 'warn', event: 'api.rate_limit.blocked', endpoint: '/api/chat', method: 'POST', userId, statusCode: 429 }))
     return rateLimitResponse(rateLimit.retryAfterSeconds)
   }
@@ -141,8 +140,8 @@ export async function POST(req: Request): Promise<Response> {
   let conversationHistory: Awaited<ReturnType<typeof loadConversationHistory>>
   try {
     conversationHistory = await loadConversationHistory({ conversationId, orgId, studyId })
-  } catch (err) {
-    await devLogError('loadConversationHistory', err)
+  } catch {
+    await devLogError('loadConversationHistory')
     return new Response('Internal Server Error', { status: 500 })
   }
 
@@ -150,8 +149,8 @@ export async function POST(req: Request): Promise<Response> {
   let userMessageId: string
   try {
     userMessageId = await persistUserMessage({ conversationId, orgId, studyId, question })
-  } catch (err) {
-    await devLogError('persistUserMessage', err)
+  } catch {
+    await devLogError('persistUserMessage')
     return new Response('Internal Server Error', { status: 500 })
   }
 
@@ -170,8 +169,8 @@ export async function POST(req: Request): Promise<Response> {
         historyTurns: conversationHistory.length,
       },
     })
-  } catch (err) {
-    await devLogError('writeAuditLog_requested', err)
+  } catch {
+    await devLogError('writeAuditLog_requested')
     return new Response('Internal Server Error', { status: 500 })
   }
 
@@ -180,7 +179,8 @@ export async function POST(req: Request): Promise<Response> {
   try {
     result = await generateAnswerForStudy({ studyId, question, documentType, topK, conversationHistory })
   } catch (ragErr) {
-    console.error('[POST /api/chat] generateAnswerForStudy failed:', ragErr)
+    const code = ragErr instanceof AnswerOrchestratorError ? ragErr.code : 'answer_failed'
+    console.error('[POST /api/chat] generateAnswerForStudy failed', { code })
     try {
       await writeAuditLog({
         action: 'rag.answer.failed',
@@ -189,7 +189,7 @@ export async function POST(req: Request): Promise<Response> {
         userId,
         resourceType: 'conversation',
         resourceId: conversationId,
-        metadata: { error: ragErr instanceof Error ? ragErr.message : 'wrapper_error' },
+        metadata: { error: code },
       })
     } catch {
       // audit write failure non-fatal
@@ -224,8 +224,8 @@ export async function POST(req: Request): Promise<Response> {
       confidence: result.confidence,
       evidences: result.evidences,
     })
-  } catch (err) {
-    await devLogError('persistAssistantMessageAndCitations', err)
+  } catch {
+    await devLogError('persistAssistantMessageAndCitations')
     return new Response('Internal Server Error', { status: 500 })
   }
 
@@ -244,8 +244,8 @@ export async function POST(req: Request): Promise<Response> {
         retrievalCount: result.retrievalCount,
       },
     })
-  } catch (err) {
-    await devLogError('writeAuditLog_completed', err)
+  } catch {
+    await devLogError('writeAuditLog_completed')
     return new Response('Internal Server Error', { status: 500 })
   }
 

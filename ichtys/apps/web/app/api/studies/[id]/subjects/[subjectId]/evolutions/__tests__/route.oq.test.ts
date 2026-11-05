@@ -262,3 +262,24 @@ describe('OQ-003 — cifrado at-rest en POST', () => {
     expect(mocks.encryptClinicalContent).toHaveBeenCalledWith(CLINICAL_TEXT)
   })
 })
+
+describe('S4 — evoluciones comparan el estudio de la URL', () => {
+  it('GET y POST pasan el id de la URL antes de leer o escribir', async () => {
+    const otherStudyId = crypto.randomUUID()
+    mocks.validateSubjectAccess.mockResolvedValue(subjectContext())
+    const params = { params: Promise.resolve({ id: otherStudyId, subjectId: mocks.SUBJECT_ID }) }
+
+    await GET(new Request('http://localhost/api/evolutions'), params)
+    await POST(
+      new Request('http://localhost/api/evolutions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: 'Nota ficticia sin datos de paciente.' }),
+      }),
+      { params: Promise.resolve({ id: otherStudyId, subjectId: mocks.SUBJECT_ID }) },
+    )
+
+    expect(mocks.validateSubjectAccess).toHaveBeenNthCalledWith(1, mocks.SUBJECT_ID, otherStudyId)
+    expect(mocks.validateSubjectAccess).toHaveBeenNthCalledWith(2, mocks.SUBJECT_ID, otherStudyId)
+  })
+})

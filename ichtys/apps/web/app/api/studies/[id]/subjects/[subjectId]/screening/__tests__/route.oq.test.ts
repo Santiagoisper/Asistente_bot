@@ -272,3 +272,16 @@ describe('OQ-SCR06 — screening determinista (no LLM)', () => {
     )
   })
 })
+
+describe('S4 — screening compara el estudio de la URL', () => {
+  it('pasa el id de la URL antes de evaluar', async () => {
+    const otherStudyId = crypto.randomUUID()
+    mocks.validateSubjectAccess.mockResolvedValue(subjectContext())
+
+    await GET(new Request('http://localhost/api/screening'), {
+      params: Promise.resolve({ id: otherStudyId, subjectId: mocks.SUBJECT_ID }),
+    })
+
+    expect(mocks.validateSubjectAccess).toHaveBeenCalledWith(mocks.SUBJECT_ID, otherStudyId)
+  })
+})

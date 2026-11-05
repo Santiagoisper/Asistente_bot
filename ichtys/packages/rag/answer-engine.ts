@@ -246,6 +246,21 @@ function sanitizeLLMError(err: unknown): AnswerEngineError {
   return new AnswerEngineError('llm_provider_error', 'Answer generation failed')
 }
 
+/** Código estable para logs. Nunca incluye el mensaje del proveedor. */
+function llmLogCode(err: unknown): string {
+  if (err instanceof AnswerEngineError) return err.code
+  if (
+    err instanceof StreamTimeoutError ||
+    (err instanceof Error && ['AbortError', 'TimeoutError', 'LlmCallTimeoutError'].includes(err.name))
+  ) {
+    return 'llm_timeout'
+  }
+  const status = statusFromError(err)
+  if (status === 429) return 'llm_rate_limited'
+  if (status === 401 || status === 403) return 'provider_auth_failed'
+  return 'llm_provider_error'
+}
+
 /**
  * Trunca un excerpt a EXCERPT_MAX_CHARS caracteres en límite de palabra.
  * Si el chunk es suficientemente corto, devuelve el contenido completo.
@@ -639,10 +654,10 @@ async function evaluateStreamedAnswerConfidence(
       confidence: result,
       usageEvent: { kind: 'chat_eval', provider, model: modelId, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, keySource },
     }
-  } catch (err) {
+  } catch {
     // Fail-open deliberado: la respuesta ya se streameó al usuario; un fallo
-    // del evaluador no puede tirarla. Pero no en silencio: queda en los logs.
-    console.warn('[answer-engine] confidence eval failed — keeping streamed answer (confidence=medium):', err)
+    // del evaluador no puede tirarla. El log lleva sólo el código.
+    console.warn('[answer-engine] confidence eval failed — keeping streamed answer', { code: 'confidence_eval_failed' })
     return { confidence: 'medium', usageEvent: null }
   }
 }
@@ -851,11 +866,11 @@ export async function* answerEngineStream(
       const fallbackAble = err instanceof StreamTimeoutError || isProviderFallbackError(err)
       const canFallback = !isLast && fallbackAble && !streamed
       if (canFallback) {
-        console.warn(`[answer-engine] ${provider} failed — trying next provider (${(err as Error).message?.slice(0, 120)})`)
+        console.warn('[answer-engine] provider failed — trying next', { code: 'provider_failed', provider })
         fullAnswer = ''
         continue
       }
-      console.error('[answer-engine] stream error:', err)
+      console.error('[answer-engine] stream error', { code: llmLogCode(err), provider })
       // Cadena de 1 (preferencia explícita de proveedor): sin red a la que
       // caer, el mensaje tiene que decir QUÉ proveedor falló y dónde se cambia.
       // Excepción: 429/cuota/overload es saturación transitoria, no "elegí

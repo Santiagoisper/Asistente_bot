@@ -21,10 +21,10 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string; subjectId: string }> },
 ): Promise<Response> {
-  const { subjectId } = await params
+  const { id: routeStudyId, subjectId } = await params
 
   try {
-    const { orgId, userId, study, subject } = await validateSubjectAccess(subjectId)
+    const { orgId, userId, study, subject } = await validateSubjectAccess(subjectId, routeStudyId)
 
     const rows = await db.query.clinicalEvolutions.findMany({
       where: and(
@@ -66,13 +66,13 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string; subjectId: string }> },
 ): Promise<Response> {
-  const { subjectId } = await params
+  const { id: routeStudyId, subjectId } = await params
 
   // Auth primero: subjectId viene de params, no del body (vuelta 2 del
   // delta zod). Tope de bytes antes del parse (413, H7).
   let access: Awaited<ReturnType<typeof validateSubjectAccess>>
   try {
-    access = await validateSubjectAccess(subjectId)
+    access = await validateSubjectAccess(subjectId, routeStudyId)
   } catch (err) {
     return handleApiError(err)
   }

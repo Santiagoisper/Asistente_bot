@@ -1,10 +1,11 @@
 import { after } from 'next/server'
-import { handleApiError, validateDocumentVersionAccess } from '@ichtys/auth'
+import { AccessError, canManageDocuments, handleApiError, validateDocumentVersionAccess } from '@ichtys/auth'
 import { runIngestion } from '@ichtys/ingestion'
 import {
   enforceSlidingWindowRateLimit,
   getIngestionRateLimitConfig,
   rateLimitResponse,
+  rateLimitUnavailableResponse,
 } from '../../../../lib/security/rate-limit'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../lib/api/body-limit'
 import { triggerInput } from '../../../../lib/api/input-schemas'
@@ -49,18 +50,27 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   try {
-    const { userId, orgId, studyId, document, documentVersion } =
-      await validateDocumentVersionAccess(parsed.data.documentVersionId)
+    const access = await validateDocumentVersionAccess(parsed.data.documentVersionId)
+    if (!canManageDocuments(access.role)) {
+      throw new AccessError('Forbidden', 403)
+    }
+    const { userId, orgId, studyId, document, documentVersion } = access
 
     // Tope de gasto: cada POST re-lanza la extracción de spec con Opus (~60-120 s) y el
     // cliente puede repetirlo. Sin esto era un bypass del tope de /spec/reextract.
     const rlConfig = getIngestionRateLimitConfig()
     const rateLimit = await enforceSlidingWindowRateLimit({
-      key: `ingestion:${userId}:${documentVersion.id}`,
+      key: `ingestion:${orgId}:${userId}:${documentVersion.id}`,
       limit: rlConfig.limit,
       windowSeconds: rlConfig.windowSeconds,
+      orgKey: `ingestion-org:${orgId}`,
+      orgLimit: rlConfig.orgLimit,
     })
-    if (rateLimit.limited) return rateLimitResponse(rateLimit.retryAfterSeconds)
+    if (rateLimit.limited) {
+      return rateLimit.reason === 'unavailable'
+        ? rateLimitUnavailableResponse()
+        : rateLimitResponse(rateLimit.retryAfterSeconds)
+    }
 
     // Encolar el trabajo en background. after() garantiza que el Lambda
     // continúa corriendo después de que la respuesta HTTP es enviada —
@@ -74,8 +84,8 @@ export async function POST(req: Request): Promise<Response> {
           documentId: document.id,
           documentVersionId: documentVersion.id,
         })
-      } catch (err) {
-        console.error('[ingestion/run] after() error:', err)
+      } catch {
+        console.error('[ingestion/run] after() error', { code: 'ingestion_failed' })
       }
     })
 

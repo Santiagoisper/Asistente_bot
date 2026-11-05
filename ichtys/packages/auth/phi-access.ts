@@ -41,7 +41,7 @@ export async function validatePhiStudyAccess(studyId: string): Promise<StudyAcce
     throw new AccessError('Study not found or access denied', 404)
   }
 
-  return { userId, orgId: org.id, study }
+  return { userId, orgId: org.id, study, role }
 }
 
 export interface SubjectAccessContext extends StudyAccessContext {
@@ -49,9 +49,13 @@ export interface SubjectAccessContext extends StudyAccessContext {
 }
 
 /**
- * Valida que el sujeto pertenece a org + study activos.
+ * Valida que el sujeto pertenece a la org activa y al estudio de la URL.
+ * `expectedStudyId` es obligatorio: sin él no se lee el sujeto.
  */
-export async function validateSubjectAccess(subjectId: string): Promise<SubjectAccessContext> {
+export async function validateSubjectAccess(
+  subjectId: string,
+  expectedStudyId: string,
+): Promise<SubjectAccessContext> {
   const { userId, orgId: clerkOrgId, orgRole } = await auth()
 
   if (!userId || !clerkOrgId) {
@@ -61,6 +65,10 @@ export async function validateSubjectAccess(subjectId: string): Promise<SubjectA
   const role = normalizeRole(orgRole)
   if (!canAccessPhiData(role)) {
     throw new AccessError('Forbidden', 403)
+  }
+
+  if (!expectedStudyId) {
+    throw new AccessError('Not Found', 404)
   }
 
   const org = await db.query.organizations.findFirst({
@@ -79,6 +87,11 @@ export async function validateSubjectAccess(subjectId: string): Promise<SubjectA
     throw new AccessError('Not Found', 404)
   }
 
+  // El [id] de la URL tiene que ser el estudio del sujeto antes de leer, escribir o auditar.
+  if (subject.studyId !== expectedStudyId) {
+    throw new AccessError('Not Found', 404)
+  }
+
   const study = await db.query.studies.findFirst({
     where: and(eq(studies.id, subject.studyId), eq(studies.organizationId, org.id)),
   })
@@ -87,5 +100,5 @@ export async function validateSubjectAccess(subjectId: string): Promise<SubjectA
     throw new AccessError('Not Found', 404)
   }
 
-  return { userId, orgId: org.id, study, subject }
+  return { userId, orgId: org.id, study, subject, role }
 }

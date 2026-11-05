@@ -1,16 +1,28 @@
 export type RateLimitResult =
   | { limited: false }
-  | { limited: true; retryAfterSeconds: number }
+  | { limited: true; retryAfterSeconds: number; reason?: 'quota' | 'unavailable' }
 
 export type RateLimitParams = {
   key: string
   limit: number
   windowSeconds: number
+  /** Cupo compartido por organización. Si viene, orgLimit tiene que ser un entero positivo. */
+  orgKey?: string
+  orgLimit?: number
+  /**
+   * `deny` (default): si falta Redis o falla, la operación se bloquea.
+   * `allow`: solo lecturas. Sin Redis, el request sigue.
+   * `memory`: ráfaga dentro de este proceso. No reemplaza el cupo compartido.
+   * El modo memory no descuenta el cupo de la organización: las rutas caras no lo usan.
+   */
+  onRedisUnavailable?: 'deny' | 'allow' | 'memory'
 }
 
 export interface RateLimitConfig {
   limit: number
   windowSeconds: number
+  /** Ausente en lecturas. En operaciones caras es el tope agregado de la organización. */
+  orgLimit?: number
 }
 
 type RedisRestResponse = {
@@ -19,24 +31,46 @@ type RedisRestResponse = {
 }
 
 const SLIDING_WINDOW_SCRIPT = `
-local key = KEYS[1]
 local now = tonumber(ARGV[1])
 local window = tonumber(ARGV[2])
 local limit = tonumber(ARGV[3])
-redis.call("ZREMRANGEBYSCORE", key, 0, now - window)
-local count = redis.call("ZCARD", key)
-if count >= limit then
+local org_limit = tonumber(ARGV[4])
+
+local function retry_after(key)
   local oldest = redis.call("ZRANGE", key, 0, 0, "WITHSCORES")
   local retry = math.ceil(window / 1000)
   if oldest[2] then
     retry = math.max(1, math.ceil((tonumber(oldest[2]) + window - now) / 1000))
   end
-  return {0, retry}
+  return retry
 end
-local seq = redis.call("INCR", key .. ":seq")
-redis.call("ZADD", key, now, tostring(now) .. "-" .. tostring(seq))
-redis.call("PEXPIRE", key, window)
-redis.call("PEXPIRE", key .. ":seq", window)
+
+local function count_hits(key)
+  redis.call("ZREMRANGEBYSCORE", key, 0, now - window)
+  return redis.call("ZCARD", key)
+end
+
+local function add_hit(key)
+  local seq = redis.call("INCR", key .. ":seq")
+  redis.call("ZADD", key, now, tostring(now) .. "-" .. tostring(seq))
+  redis.call("PEXPIRE", key, window)
+  redis.call("PEXPIRE", key .. ":seq", window)
+end
+
+local actor = KEYS[1]
+if count_hits(actor) >= limit then
+  return {0, retry_after(actor)}
+end
+
+local org = KEYS[2]
+if org and org_limit and count_hits(org) >= org_limit then
+  return {0, retry_after(org)}
+end
+
+add_hit(actor)
+if org and org_limit then
+  add_hit(org)
+end
 return {1, 0}
 `
 
@@ -46,13 +80,15 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
 }
 
 export function isRateLimitEnabled(): boolean {
+  // En producción el cupo no se apaga con una variable. Solo test y desarrollo
+  // pueden desactivarlo, y tienen que hacerlo explícito.
+  if (process.env.NODE_ENV === 'production') return true
   return process.env.RATE_LIMIT_ENABLED !== 'false'
 }
 
 /**
- * El rate limiting es fail-open a propósito (Redis caído no debe tumbar prod),
- * pero un fail-open silencioso deja los topes de gasto inertes sin que nadie se
- * entere. Avisamos UNA vez por cold start y por motivo, no en cada request.
+ * Aviso único cuando una lectura explícita sigue sin cupo. Las operaciones que
+ * gastan no usan este camino: si Redis no responde, se bloquean.
  */
 const disabledWarnings = new Set<string>()
 
@@ -67,9 +103,68 @@ export function resetRateLimitWarningsForTests(): void {
   disabledWarnings.clear()
 }
 
+const memoryHits = new Map<string, number[]>()
+
+/** Solo para tests: aísla la cuota en memoria entre casos. */
+export function resetMemoryRateLimitForTests(): void {
+  memoryHits.clear()
+}
+
+function enforceMemoryQuota(params: RateLimitParams): RateLimitResult {
+  const now = Date.now()
+  const windowMs = params.windowSeconds * 1000
+  const hits = (memoryHits.get(params.key) ?? []).filter((ts) => now - ts < windowMs)
+  if (hits.length >= params.limit) {
+    const oldest = hits[0] ?? now
+    memoryHits.set(params.key, hits)
+    return {
+      limited: true,
+      retryAfterSeconds: Math.max(1, Math.ceil((oldest + windowMs - now) / 1000)),
+    }
+  }
+  hits.push(now)
+  memoryHits.set(params.key, hits)
+  return { limited: false }
+}
+
+function denyUnavailable(): RateLimitResult {
+  return { limited: true, retryAfterSeconds: 60, reason: 'unavailable' }
+}
+
+function whenRedisUnavailable(params: RateLimitParams, failureCode: string): RateLimitResult {
+  if (params.onRedisUnavailable === 'memory') {
+    if (failureCode !== 'redis_unconfigured') logRateLimitFailure(failureCode)
+    return enforceMemoryQuota(params)
+  }
+  if (params.onRedisUnavailable === 'allow') {
+    if (failureCode === 'redis_unconfigured') {
+      warnRateLimitDisabledOnce('falta config Redis REST (UPSTASH_REDIS_REST_URL/TOKEN)')
+    } else {
+      logRateLimitFailure(failureCode)
+    }
+    return { limited: false }
+  }
+  logRateLimitFailure(failureCode)
+  return denyUnavailable()
+}
+
+/**
+ * Cupos por minuto. Cada operación cara tiene el tope del actor y, aparte,
+ * el de la organización: lo comparten todos los usuarios de esa org y se
+ * descuenta en la misma operación. Si la org ya llegó, el actor no se
+ * descuenta. Historial y citas no tienen cupo de organización. answer-test
+ * se cuenta solo por IP.
+ *
+ * chat/stream: actor 30 (RATE_LIMIT_CHAT_PER_MINUTE), org 120 (RATE_LIMIT_CHAT_ORG_PER_MINUTE)
+ * upload: actor 10 (RATE_LIMIT_UPLOAD_PER_MINUTE), org 40 (RATE_LIMIT_UPLOAD_ORG_PER_MINUTE)
+ * bulk-import: actor 10 (RATE_LIMIT_BULK_PER_MINUTE), org 40 (RATE_LIMIT_BULK_ORG_PER_MINUTE)
+ * ingestion: actor 5 (RATE_LIMIT_INGESTION_PER_MINUTE), org 20 (RATE_LIMIT_INGESTION_ORG_PER_MINUTE)
+ * spec reextract: actor 3 (RATE_LIMIT_SPEC_REEXTRACT_PER_MINUTE), org 12 (RATE_LIMIT_SPEC_REEXTRACT_ORG_PER_MINUTE)
+ */
 export function getChatRateLimitConfig(): RateLimitConfig {
   return {
     limit: parsePositiveInt(process.env.RATE_LIMIT_CHAT_PER_MINUTE, 30),
+    orgLimit: parsePositiveInt(process.env.RATE_LIMIT_CHAT_ORG_PER_MINUTE, 120),
     windowSeconds: 60,
   }
 }
@@ -77,6 +172,15 @@ export function getChatRateLimitConfig(): RateLimitConfig {
 export function getUploadRateLimitConfig(): RateLimitConfig {
   return {
     limit: parsePositiveInt(process.env.RATE_LIMIT_UPLOAD_PER_MINUTE, 10),
+    orgLimit: parsePositiveInt(process.env.RATE_LIMIT_UPLOAD_ORG_PER_MINUTE, 40),
+    windowSeconds: 60,
+  }
+}
+
+export function getBulkRateLimitConfig(): RateLimitConfig {
+  return {
+    limit: parsePositiveInt(process.env.RATE_LIMIT_BULK_PER_MINUTE, 10),
+    orgLimit: parsePositiveInt(process.env.RATE_LIMIT_BULK_ORG_PER_MINUTE, 40),
     windowSeconds: 60,
   }
 }
@@ -88,6 +192,7 @@ export function getUploadRateLimitConfig(): RateLimitConfig {
 export function getIngestionRateLimitConfig(): RateLimitConfig {
   return {
     limit: parsePositiveInt(process.env.RATE_LIMIT_INGESTION_PER_MINUTE, 5),
+    orgLimit: parsePositiveInt(process.env.RATE_LIMIT_INGESTION_ORG_PER_MINUTE, 20),
     windowSeconds: 60,
   }
 }
@@ -100,6 +205,7 @@ export function getIngestionRateLimitConfig(): RateLimitConfig {
 export function getSpecReextractRateLimitConfig(): RateLimitConfig {
   return {
     limit: parsePositiveInt(process.env.RATE_LIMIT_SPEC_REEXTRACT_PER_MINUTE, 3),
+    orgLimit: parsePositiveInt(process.env.RATE_LIMIT_SPEC_REEXTRACT_ORG_PER_MINUTE, 12),
     windowSeconds: 60,
   }
 }
@@ -126,15 +232,26 @@ export async function enforceSlidingWindowRateLimit(
     return { limited: false }
   }
 
+  const orgKey = params.orgKey?.trim() ?? ''
+  if (orgKey.length > 0 && (!Number.isInteger(params.orgLimit) || (params.orgLimit ?? 0) <= 0)) {
+    logRateLimitFailure('org_limit_missing')
+    return denyUnavailable()
+  }
+
   const redis = getRedisRestConfig()
   if (!redis) {
-    warnRateLimitDisabledOnce('falta config Redis REST (UPSTASH_REDIS_REST_URL/TOKEN)')
-    return { limited: false }
+    return whenRedisUnavailable(params, 'redis_unconfigured')
   }
 
   try {
     const now = Date.now()
     const windowMs = params.windowSeconds * 1000
+    const keys = [`rl:${params.key}`]
+    const args = [String(now), String(windowMs), String(params.limit)]
+    if (orgKey.length > 0) {
+      keys.push(`rl:${orgKey}`)
+      args.push(String(params.orgLimit))
+    }
     const response = await fetch(redis.url, {
       method: 'POST',
       headers: {
@@ -144,38 +261,42 @@ export async function enforceSlidingWindowRateLimit(
       body: JSON.stringify([
         'EVAL',
         SLIDING_WINDOW_SCRIPT,
-        '1',
-        `rl:${params.key}`,
-        String(now),
-        String(windowMs),
-        String(params.limit),
+        String(keys.length),
+        ...keys,
+        ...args,
       ]),
     })
 
     if (!response.ok) {
-      logRateLimitFailure('redis_http_error')
-      return { limited: false }
+      return whenRedisUnavailable(params, 'redis_http_error')
     }
 
     const payload = (await response.json()) as RedisRestResponse
     if (payload.error) {
-      logRateLimitFailure('redis_command_error')
-      return { limited: false }
+      return whenRedisUnavailable(params, 'redis_command_error')
     }
 
     const tuple = parseRedisTuple(payload.result)
     if (!tuple) {
-      logRateLimitFailure('redis_invalid_response')
-      return { limited: false }
+      return whenRedisUnavailable(params, 'redis_invalid_response')
     }
 
     return tuple.allowed
       ? { limited: false }
       : { limited: true, retryAfterSeconds: tuple.retryAfterSeconds }
   } catch {
-    logRateLimitFailure('rate_limit_internal_error')
-    return { limited: false }
+    return whenRedisUnavailable(params, 'rate_limit_internal_error')
   }
+}
+
+export function rateLimitUnavailableResponse(): Response {
+  return Response.json(
+    {
+      error: 'rate_limit_unavailable',
+      message: 'No se pudo verificar el cupo. Probá de nuevo en unos minutos.',
+    },
+    { status: 503, headers: { 'Retry-After': '60' } },
+  )
 }
 
 export function rateLimitResponse(retryAfterSeconds: number): Response {

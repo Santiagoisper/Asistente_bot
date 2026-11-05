@@ -24,6 +24,37 @@ export interface ParsedDocument {
 export type PdfParseErrorCode =
   | 'pdf_text_extraction_failed'
   | 'pdf_contains_no_extractable_text'
+  | 'pdf_complexity_limit'
+
+/** Protocolos reales superan las 200 páginas. 300 corta un PDF hostil sin rechazar un protocolo largo. */
+const MAX_PDF_PAGES = 300
+/** Tope de CPU del pagerender. pdf-parse llama este hook en serie, página por página. */
+const MAX_PDF_PARSE_MS = 30_000
+/** Una página de protocolo cabe holgada. Por encima es expansión hostil, no texto clínico. */
+const MAX_PAGE_TEXT_CHARS = 100_000
+/** 300 páginas densas, con margen, sin conservar un volcado de memoria. */
+const MAX_DOCUMENT_TEXT_CHARS = 3_000_000
+
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new PdfParseError(
+        'pdf_complexity_limit',
+        'PDF exceeds the page or extraction-time limit',
+      ))
+    }, ms)
+    work.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (err) => {
+        clearTimeout(timer)
+        reject(err)
+      },
+    )
+  })
+}
 
 export class PdfParseError extends Error {
   constructor(
@@ -46,10 +77,16 @@ function isPdfTextItem(item: unknown): item is PdfTextItem {
 }
 
 function normalizePageText(items: readonly unknown[]): string {
-  return items
-    .filter(isPdfTextItem)
-    .map((item) => (item.hasEOL ? `${item.str}\n` : item.str))
-    .join(' ')
+  let raw = ''
+  for (const item of items) {
+    if (!isPdfTextItem(item)) continue
+    const piece = item.hasEOL ? `${item.str}\n` : `${item.str} `
+    if (raw.length + piece.length > MAX_PAGE_TEXT_CHARS) {
+      throw new PdfParseError('pdf_complexity_limit', 'PDF exceeds the extracted-text limit')
+    }
+    raw += piece
+  }
+  return raw
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n[ \t]+/g, '\n')
     .replace(/[ \t]{2,}/g, ' ')
@@ -61,24 +98,59 @@ function normalizePageText(items: readonly unknown[]): string {
  */
 export async function parsePdf(data: Buffer | Uint8Array): Promise<ParsedDocument> {
   try {
-    const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data)
+    const source = Buffer.isBuffer(data) ? data : Buffer.from(data)
+    // pdf.js 1.10 misreads a small Buffer (pooled or cloned). A fresh Uint8Array
+    // is the view this build of pdf-parse actually parses.
+    const buffer = new Uint8Array(source.byteLength)
+    buffer.set(source)
     const pages: ParsedPage[] = []
     let pageCounter = 0
+    let totalChars = 0
+    let limitHit = false
+    const startedAt = Date.now()
+    const noteLimit = (): string => {
+      limitHit = true
+      return ''
+    }
 
-    await pdfParse(buffer, {
-      // pagerender is called sequentially for each page (1..numpages).
-      // Capture per-page text via closure; return value is appended to result.text.
+    // pdf-parse@1.1.4 does `.catch(() => "")` around each page, so a throw
+    // inside pagerender never reaches us. The flag and the real numpages do.
+    const result = await pdfParse(buffer as unknown as Buffer, {
+      max: MAX_PDF_PAGES,
       pagerender: (pageData: { getTextContent: (opts?: object) => Promise<{ items: unknown[] }> }) => {
+        const elapsed = Date.now() - startedAt
+        if (pageCounter >= MAX_PDF_PAGES || elapsed >= MAX_PDF_PARSE_MS) return noteLimit()
         const currentPage = ++pageCounter
-        return pageData
-          .getTextContent({ normalizeWhitespace: false, disableCombineTextItems: false })
-          .then((textContent) => {
-            const rawText = normalizePageText(textContent.items)
+        const budgetMs = Math.max(1, MAX_PDF_PARSE_MS - elapsed)
+        return withTimeout(
+          pageData.getTextContent({ normalizeWhitespace: false, disableCombineTextItems: false }),
+          budgetMs,
+        ).then(
+          (textContent) => {
+            let rawText: string
+            try {
+              rawText = normalizePageText(textContent.items)
+            } catch (err) {
+              if (err instanceof PdfParseError && err.code === 'pdf_complexity_limit') return noteLimit()
+              throw err
+            }
+            if (totalChars + rawText.length > MAX_DOCUMENT_TEXT_CHARS) return noteLimit()
+            totalChars += rawText.length
             pages.push({ pageNumber: currentPage, rawText })
             return rawText
-          })
+          },
+          () => noteLimit(),
+        )
       },
     })
+
+    const reportedPages = typeof result?.numpages === 'number' ? result.numpages : pages.length
+    if (limitHit || reportedPages > MAX_PDF_PAGES || reportedPages !== pages.length) {
+      throw new PdfParseError(
+        'pdf_complexity_limit',
+        'PDF exceeds the page or extraction-time limit',
+      )
+    }
 
     if (!pages.some((page) => page.rawText.trim().length > 0)) {
       throw new PdfParseError(

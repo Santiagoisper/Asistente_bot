@@ -22,6 +22,7 @@ import {
   enforceSlidingWindowRateLimit,
   getChatRateLimitConfig,
   rateLimitResponse,
+  rateLimitUnavailableResponse,
 } from '../../../../lib/security/rate-limit'
 import { getOrCreateRequestId, log, makeRecord } from '../../../../lib/observability/logger'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../lib/api/body-limit'
@@ -110,11 +111,17 @@ export async function POST(req: Request): Promise<Response> {
   // 5. Rate limit.
   const chatRlConfig = getChatRateLimitConfig()
   const rateLimit = await enforceSlidingWindowRateLimit({
-    key: `chat:${userId}:${studyId}`,
+    key: `chat:${orgId}:${userId}:${studyId}`,
     limit: chatRlConfig.limit,
     windowSeconds: chatRlConfig.windowSeconds,
+    orgKey: `chat-org:${orgId}`,
+    orgLimit: chatRlConfig.orgLimit,
   })
   if (rateLimit.limited) {
+    if (rateLimit.reason === 'unavailable') {
+      log(makeRecord({ requestId, level: 'warn', event: 'api.rate_limit.blocked', endpoint: '/api/chat/stream', method: 'POST', userId, statusCode: 503 }))
+      return rateLimitUnavailableResponse()
+    }
     log(makeRecord({ requestId, level: 'warn', event: 'api.rate_limit.blocked', endpoint: '/api/chat/stream', method: 'POST', userId, statusCode: 429 }))
     return rateLimitResponse(rateLimit.retryAfterSeconds)
   }
@@ -165,17 +172,17 @@ export async function POST(req: Request): Promise<Response> {
   //     (orden del Foreman 2026-10-22): quotaLookupFailed bloquea la platform key.
   let quotaLookupFailed = false
   const [orgRagConfig, orgLlmApiKeys, quotaStatus] = await Promise.all([
-    getOrgRagConfig(orgId).catch((err) => {
-      console.warn(`[stream:${requestId}] getOrgRagConfig failed — using system defaults`, err)
+    getOrgRagConfig(orgId).catch(() => {
+      console.warn(`[stream:${requestId}] getOrgRagConfig failed — using system defaults`, { code: 'rag_config_unavailable' })
       return null
     }),
-    getOrgLlmApiKeys(orgId).catch((err) => {
-      console.warn(`[stream:${requestId}] getOrgLlmApiKeys failed — env keys only`, err)
+    getOrgLlmApiKeys(orgId).catch(() => {
+      console.warn(`[stream:${requestId}] getOrgLlmApiKeys failed — env keys only`, { code: 'llm_keys_unavailable' })
       return {}
     }),
-    getQuotaStatus(orgId).catch((err) => {
+    getQuotaStatus(orgId).catch(() => {
       quotaLookupFailed = true
-      console.error(`[stream:${requestId}] getQuotaStatus failed — failing closed (platform key blocked)`, err)
+      console.error(`[stream:${requestId}] getQuotaStatus failed — failing closed (platform key blocked)`, { code: 'quota_lookup_failed' })
       return null
     }),
   ])
@@ -398,7 +405,8 @@ export async function POST(req: Request): Promise<Response> {
           }
         }
       } catch (err) {
-        console.error('[POST /api/chat/stream] error:', err)
+        const code = err instanceof AnswerEngineError ? err.code : 'stream_failed'
+        console.error('[POST /api/chat/stream] error', { code })
         if (err instanceof AnswerEngineError && err.code === 'quota_exceeded') {
           enqueue({
             type: 'error',

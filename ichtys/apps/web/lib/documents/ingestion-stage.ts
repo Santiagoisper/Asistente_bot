@@ -82,6 +82,8 @@ const INGESTION_ERROR_MESSAGES: Readonly<Record<string, string>> = {
     'No pudimos leer el texto del PDF. Si es una imagen escaneada, exportá primero un PDF con texto.',
   pdf_contains_no_extractable_text:
     'El PDF no tiene texto extraíble (parece escaneado). Se necesita un PDF con texto real.',
+  pdf_complexity_limit:
+    'El PDF es demasiado largo o tardó demasiado en leerse. Dividilo o subí una versión más corta.',
   embedding_config_missing:
     'Falta configurar el servicio de indexación. Escribinos para resolverlo.',
   embedding_dimension_mismatch:

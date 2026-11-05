@@ -54,6 +54,11 @@ vi.mock('../../../../../lib/security/rate-limit', () => ({
   clientIpRateLimitKey: mocks.clientIpRateLimitKey,
   enforceSlidingWindowRateLimit: mocks.enforceSlidingWindowRateLimit,
   rateLimitResponse: mocks.rateLimitResponse,
+  rateLimitUnavailableResponse: () =>
+    Response.json(
+      { error: 'rate_limit_unavailable', message: 'No se pudo verificar el cupo. Probá de nuevo en unos minutos.' },
+      { status: 503, headers: { 'Retry-After': '60' } },
+    ),
 }))
 
 // ---------------------------------------------------------------------------
@@ -175,6 +180,19 @@ describe('POST /api/rag/answer-test — feature flag enabled', () => {
       limit: 20,
       windowSeconds: 60,
     })
+    expect(mocks.generateAnswerForStudy).not.toHaveBeenCalled()
+  })
+
+  it('returns 503 and does not call the model when the quota cannot be checked', async () => {
+    mocks.enforceSlidingWindowRateLimit.mockResolvedValueOnce({
+      limited: true,
+      retryAfterSeconds: 60,
+      reason: 'unavailable',
+    })
+
+    const res = await POST(makeRequest({ studyId: STUDY_ID, question: 'test' }))
+
+    expect(res.status).toBe(503)
     expect(mocks.generateAnswerForStudy).not.toHaveBeenCalled()
   })
 

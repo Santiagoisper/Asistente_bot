@@ -27,4 +27,25 @@ describe('putPrivateDocumentPdf (SEC-01)', () => {
     expect(options.allowOverwrite).toBe(false)
     expect(stored.pathname).toBe('k/x.pdf')
   })
+
+  it('no escribe el error crudo del SDK cuando put falla', async () => {
+    const sentinel = 'protocolo-ficticio-PHI.pdf'
+    vi.stubEnv('BLOB_READ_WRITE_TOKEN', 'token-sintetico')
+    putMock.mockRejectedValue(new Error(`https://store.private.blob.vercel-storage.com/${sentinel}`))
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const file = new File([new Uint8Array([37, 80, 68, 70])], sentinel, { type: 'application/pdf' })
+
+    try {
+      await expect(putPrivateDocumentPdf({ blobKey: 'k/x.pdf', file })).rejects.toThrow('blob_upload_failed')
+      const logged = spy.mock.calls.map((args) => args.map((value) => {
+        if (value instanceof Error) return `${value.message} ${value.stack ?? ''}`
+        if (value && typeof value === 'object') return JSON.stringify(value)
+        return String(value)
+      }).join(' ')).join('\n')
+      expect(logged).not.toContain(sentinel)
+      expect(logged).toContain('blob_upload_failed')
+    } finally {
+      spy.mockRestore()
+    }
+  })
 })

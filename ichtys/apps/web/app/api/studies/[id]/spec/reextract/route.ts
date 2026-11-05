@@ -1,4 +1,4 @@
-import { handleApiError, validateStudyAccess } from '@ichtys/auth'
+import { AccessError, canManageDocuments, handleApiError, validateStudyAccess } from '@ichtys/auth'
 import { canUsePlatformKey, getOrgLlmApiKeys, getOrgLlmKeySource, getQuotaStatus } from '@ichtys/db'
 import { getLatestSpecAttempt, isMeaningfulSpec, specRichness, studySpecSchema } from '@ichtys/ingestion'
 import {
@@ -9,20 +9,21 @@ import {
   enforceSlidingWindowRateLimit,
   getSpecReextractRateLimitConfig,
   rateLimitResponse,
+  rateLimitUnavailableResponse,
 } from '../../../../../../lib/security/rate-limit'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
 function formatReextractError(err: unknown): string {
-  const msg = err instanceof Error ? err.message : String(err)
+  const msg = err instanceof Error ? err.message : ''
   if (/invalid x-api-key|authentication|401|403/i.test(msg)) {
     return 'El servicio de IA rechazó la credencial de la plataforma. Avisale al administrador.'
   }
   if (/usage limits|rate limit|429|quota/i.test(msg)) {
     return 'El servicio de IA está saturado o sin cupo en este momento. Probá de nuevo en unos minutos.'
   }
-  return msg
+  return 'No se pudo reextraer el protocolo. Probá de nuevo en unos minutos.'
 }
 
 /**
@@ -38,18 +39,28 @@ export async function POST(
   const force = new URL(req.url).searchParams.get('force') === '1'
 
   try {
-    const { orgId, userId } = await validateStudyAccess(studyId)
+    const access = await validateStudyAccess(studyId)
+    if (!canManageDocuments(access.role)) {
+      throw new AccessError('Forbidden', 403)
+    }
+    const { orgId, userId } = access
 
     // Tope de gasto: cada corrida es una extracción con Opus sobre hasta 150 páginas
     // (maxDuration 300 s) y `?force=1` saltea el dedupe. Sin esto un usuario podía
     // encadenar extracciones ilimitadas sobre la clave de la plataforma.
     const rlConfig = getSpecReextractRateLimitConfig()
     const rateLimit = await enforceSlidingWindowRateLimit({
-      key: `spec-reextract:${userId}:${studyId}`,
+      key: `spec-reextract:${orgId}:${userId}:${studyId}`,
       limit: rlConfig.limit,
       windowSeconds: rlConfig.windowSeconds,
+      orgKey: `spec-reextract-org:${orgId}`,
+      orgLimit: rlConfig.orgLimit,
     })
-    if (rateLimit.limited) return rateLimitResponse(rateLimit.retryAfterSeconds)
+    if (rateLimit.limited) {
+      return rateLimit.reason === 'unavailable'
+        ? rateLimitUnavailableResponse()
+        : rateLimitResponse(rateLimit.retryAfterSeconds)
+    }
 
     // Cupo mensual: la extracción siempre prefiere Anthropic (clave de la org o de la
     // plataforma). Si la org no tiene clave propia y la cuota está agotada, no se llama
@@ -63,8 +74,8 @@ export async function POST(
       ])
       orgKeys = keys
       platformKeyBlocked = !canUsePlatformKey(quotaStatus)
-    } catch (err) {
-      console.error('[spec/reextract] quota lookup failed — failing closed', err)
+    } catch {
+      console.error('[spec/reextract] quota lookup failed — failing closed', { code: 'quota_lookup_failed' })
     }
     if (platformKeyBlocked && getOrgLlmKeySource('anthropic', orgKeys) === 'platform') {
       return Response.json(
@@ -123,7 +134,7 @@ export async function POST(
         message: `Spec v${result.version} guardado (${result.richness} ítems). Actualizá la página para verlo.`,
       })
     } catch (err) {
-      console.error(`[spec/reextract] failed study=${studyId}:`, err)
+      console.error('[spec/reextract] failed', { code: 'reextract_failed', studyId })
       return Response.json(
         { error: formatReextractError(err) },
         { status: 422 },

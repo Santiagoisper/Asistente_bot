@@ -53,6 +53,7 @@ export async function GET(req: Request, { params }: RouteContext): Promise<Respo
       key: `history:${userId}:${orgId}`,
       limit: historyRlConfig.limit,
       windowSeconds: historyRlConfig.windowSeconds,
+      onRedisUnavailable: 'allow',
     })
     if (rateLimit.limited) {
       log(makeRecord({ requestId, level: 'warn', event: 'api.rate_limit.blocked', endpoint: '/api/conversations/[conversationId]/messages', method: 'GET', userId, conversationId, statusCode: 429 }))

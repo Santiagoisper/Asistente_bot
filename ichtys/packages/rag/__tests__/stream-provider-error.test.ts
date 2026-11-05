@@ -305,3 +305,81 @@ describe('sanitize del camino no-streaming: fallback.run "no configurado" → pr
     })
   })
 })
+
+const PROVIDER_SENTINEL = 'sk-ant-provider-raw-ficticio-NO-LOG'
+
+function flattenLogValue(value: unknown): string {
+  if (value instanceof Error) return `${value.name} ${value.message} ${value.stack ?? ''}`
+  if (Array.isArray(value)) return value.map(flattenLogValue).join(' ')
+  if (value && typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
+function loggedText(spy: { mock: { calls: unknown[][] } }): string {
+  return spy.mock.calls.map((args) => args.map(flattenLogValue).join(' ')).join('\n')
+}
+
+describe('answerEngineStream — S8 el log no lleva el mensaje del proveedor', () => {
+  it('el fallo final no imprime el objeto ni el mensaje crudo', async () => {
+    mocks.resolveProviderChain.mockReturnValue(['glm'])
+    streamTextFailingWith(new Error(PROVIDER_SENTINEL))
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      const { error } = await collectStream(makeInput({ llmProviderPreference: 'glm' }))
+      const logged = loggedText(spy)
+
+      expect(error).toBeInstanceOf(AnswerEngineError)
+      expect((error as AnswerEngineError).message).not.toContain(PROVIDER_SENTINEL)
+      expect(logged).not.toContain(PROVIDER_SENTINEL)
+      expect(logged).toContain('llm_provider_error')
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('el reintento con otro proveedor no copia el mensaje crudo', async () => {
+    mocks.resolveProviderChain.mockReturnValue(['anthropic', 'openai'])
+    mocks.isProviderFallbackError.mockReturnValue(true)
+    let calls = 0
+    mocks.streamText.mockImplementation((opts: { onError?: (e: { error: unknown }) => void }) => {
+      calls += 1
+      if (calls === 1) {
+        opts.onError?.({ error: new Error(PROVIDER_SENTINEL) })
+        return { textStream: emptyStream() }
+      }
+      async function* healthy(): AsyncGenerator<string> { yield 'Linea ficticia del protocolo [1]' }
+      return { textStream: healthy() }
+    })
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      const { error } = await collectStream(makeInput({ llmProviderPreference: 'auto' }))
+      const logged = loggedText(spy)
+
+      expect(error).toBeNull()
+      expect(logged).not.toContain(PROVIDER_SENTINEL)
+      expect(logged).toContain('provider_failed')
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('la evaluación de confianza no imprime el error del proveedor', async () => {
+    async function* healthy(): AsyncGenerator<string> { yield 'Linea ficticia del protocolo [1]' }
+    mocks.streamText.mockReturnValue({ textStream: healthy() })
+    mocks.generateObject.mockRejectedValue(new Error(PROVIDER_SENTINEL))
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      const { error } = await collectStream(makeInput())
+      const logged = loggedText(spy)
+
+      expect(error).toBeNull()
+      expect(logged).not.toContain(PROVIDER_SENTINEL)
+      expect(logged).toContain('confidence_eval_failed')
+    } finally {
+      spy.mockRestore()
+    }
+  })
+})

@@ -1223,10 +1223,25 @@ describe('document upload registry', () => {
     const file = createPdfFile(fixture.document.name)
     const form = createUploadForm(fixture, file)
     mockActiveOrgAndStudy(fixture)
+    mocks.auth.mockResolvedValue({
+      userId: fixture.userId,
+      orgId: fixture.clerkOrgId,
+      orgRole: 'org:site_coordinator',
+    })
     mockBlobUpload(fixture)
     mockUploadTransaction(fixture)
 
-    const response = await documentUploadPost(createUploadRequest(form))
+    // Esta prueba mira el org de las filas. Sin Redis el cupo cierra la subida;
+    // en test se apaga explícito. El 503 vive en la prueba de la ruta.
+    const previousRateLimit = process.env.RATE_LIMIT_ENABLED
+    process.env.RATE_LIMIT_ENABLED = 'false'
+    let response: Response
+    try {
+      response = await documentUploadPost(createUploadRequest(form))
+    } finally {
+      if (previousRateLimit === undefined) delete process.env.RATE_LIMIT_ENABLED
+      else process.env.RATE_LIMIT_ENABLED = previousRateLimit
+    }
     const body: unknown = await response.json()
 
     expect(response.status).toBe(202)
@@ -1287,5 +1302,43 @@ describe('document upload registry', () => {
         resourceId: fixture.documentId,
       }),
     })
+  })
+})
+
+describe('document upload — gestión documental (S1)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.insertedValues.length = 0
+  })
+
+  async function postPdfAs(orgRole: string): Promise<Response> {
+    const fixture = createTenantFixture()
+    const form = createUploadForm(fixture, createPdfFile())
+    mockActiveOrgAndStudy(fixture)
+    mocks.auth.mockResolvedValue({
+      userId: fixture.userId,
+      orgId: fixture.clerkOrgId,
+      orgRole,
+    })
+    mockBlobUpload(fixture)
+    mockUploadTransaction(fixture)
+    return documentUploadPost(createUploadRequest(form))
+  }
+
+  it('rechaza al monitor de solo lectura antes de guardar el PDF', async () => {
+    const response = await postPdfAs('org:read_only_monitor')
+
+    expect(response.status).toBe(403)
+    expect(await response.text()).toBe('Forbidden')
+    expect(mocks.put).not.toHaveBeenCalled()
+    expect(mocks.transaction).not.toHaveBeenCalled()
+  })
+
+  it('rechaza al investigador principal antes de guardar el PDF', async () => {
+    const response = await postPdfAs('org:principal_investigator')
+
+    expect(response.status).toBe(403)
+    expect(await response.text()).toBe('Forbidden')
+    expect(mocks.put).not.toHaveBeenCalled()
   })
 })

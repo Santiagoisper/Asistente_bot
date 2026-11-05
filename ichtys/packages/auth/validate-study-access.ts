@@ -27,6 +27,8 @@ export interface StudyAccessContext {
    */
   orgId: string
   study: Study
+  /** Rol normalizado del token. La gestión documental lo vuelve a evaluar. */
+  role: Role
 }
 
 /**
@@ -68,5 +70,5 @@ export async function validateStudyAccess(
     throw new AccessError('Insufficient role', 403)
   }
 
-  return { userId, orgId: org.id, study }
+  return { userId, orgId: org.id, study, role: normalizeRole(orgRole) }
 }

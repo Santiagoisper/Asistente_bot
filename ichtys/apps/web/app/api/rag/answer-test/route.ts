@@ -7,6 +7,7 @@ import {
   clientIpRateLimitKey,
   enforceSlidingWindowRateLimit,
   rateLimitResponse,
+  rateLimitUnavailableResponse,
 } from '../../../../lib/security/rate-limit'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../lib/api/body-limit'
 import { answerTestInput } from '../../../../lib/api/input-schemas'
@@ -53,7 +54,9 @@ export async function POST(req: Request): Promise<Response> {
     windowSeconds: 60,
   })
   if (rateLimit.limited) {
-    return rateLimitResponse(rateLimit.retryAfterSeconds)
+    return rateLimit.reason === 'unavailable'
+      ? rateLimitUnavailableResponse()
+      : rateLimitResponse(rateLimit.retryAfterSeconds)
   }
 
   // 3. Parse body — tope de bytes ANTES de parsear (413, H7 vuelta 2). El

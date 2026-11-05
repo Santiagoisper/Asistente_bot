@@ -1,21 +1,63 @@
 import { after } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { resolveOrProvisionOrganization } from '@ichtys/auth'
+import { canAdministerStudy, normalizeRole, resolveOrProvisionOrganization } from '@ichtys/auth'
 import { auditLogs, db, documents, documentVersions, ingestionJobs, studies } from '@ichtys/db'
 import { runSingleIngestionJobById } from '@ichtys/ingestion/ingestion-jobs'
 import { putPrivateDocumentPdf } from '../../documents/upload/blob-storage'
 import {
   enforceSlidingWindowRateLimit,
-  getUploadRateLimitConfig,
+  getBulkRateLimitConfig,
   rateLimitResponse,
+  rateLimitUnavailableResponse,
 } from '../../../../lib/security/rate-limit'
 import { getOrCreateRequestId, log, makeRecord } from '../../../../lib/observability/logger'
+import { validatePdfUpload } from '../../../../lib/documents/pdf-upload-validation'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
-const MAX_PDF_BYTES = 50 * 1024 * 1024
 const MAX_FILES_PER_BATCH = 25
+const MAX_PDF_FILE_BYTES = 50 * 1024 * 1024
+/** Tope del cuerpo medido en bytes reales. El Content-Length no alcanza: se puede falsificar. */
+const MAX_BULK_BODY_BYTES = 100 * 1024 * 1024
+
+function declaredBodyTooLarge(req: Request): boolean {
+  const raw = req.headers.get('content-length')
+  if (raw === null) return false
+  if (!/^\d+$/.test(raw)) return true
+  const size = Number(raw)
+  return !Number.isSafeInteger(size) || size > MAX_BULK_BODY_BYTES
+}
+
+async function formDataWithinCap(req: Request): Promise<FormData | 'too_large'> {
+  if (declaredBodyTooLarge(req)) return 'too_large'
+  if (req.body === null) return req.formData()
+
+  const reader = req.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    if (!value || value.byteLength === 0) continue
+    if (total + value.byteLength > MAX_BULK_BODY_BYTES) {
+      await reader.cancel().catch(() => undefined)
+      return 'too_large'
+    }
+    chunks.push(value)
+    total += value.byteLength
+  }
+
+  const body = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    body.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  const headers = new Headers(req.headers)
+  headers.set('content-length', String(total))
+  return new Request(req.url, { method: 'POST', headers, body }).formData()
+}
 
 function studyNameFromFileName(fileName: string): string {
   const base = fileName.replace(/\.pdf$/i, '').trim()
@@ -54,12 +96,32 @@ export async function POST(req: Request): Promise<Response> {
   const requestId = getOrCreateRequestId(req)
   log(makeRecord({ requestId, level: 'info', event: 'api.request.started', endpoint: '/api/studies/bulk-import', method: 'POST' }))
 
-  const { userId, orgId: clerkOrgId } = await auth()
+  const { userId, orgId: clerkOrgId, orgRole } = await auth()
   if (!userId || !clerkOrgId) return new Response('Unauthorized', { status: 401 })
+  // El lote crea estudios: hace falta administrar el estudio, no solo subir documentos.
+  if (!canAdministerStudy(normalizeRole(orgRole))) {
+    return new Response('Forbidden', { status: 403 })
+  }
+
+  const bulkRlConfig = getBulkRateLimitConfig()
+  const rateLimit = await enforceSlidingWindowRateLimit({
+    key: `bulk-import:${clerkOrgId}:${userId}`,
+    limit: bulkRlConfig.limit,
+    windowSeconds: bulkRlConfig.windowSeconds,
+    orgKey: `bulk-import-org:${clerkOrgId}`,
+    orgLimit: bulkRlConfig.orgLimit,
+  })
+  if (rateLimit.limited) {
+    return rateLimit.reason === 'unavailable'
+      ? rateLimitUnavailableResponse()
+      : rateLimitResponse(rateLimit.retryAfterSeconds)
+  }
 
   let form: FormData
   try {
-    form = await req.formData()
+    const loaded = await formDataWithinCap(req)
+    if (loaded === 'too_large') return new Response('Payload Too Large', { status: 413 })
+    form = loaded
   } catch {
     return new Response('Bad Request', { status: 400 })
   }
@@ -74,14 +136,6 @@ export async function POST(req: Request): Promise<Response> {
     return new Response(`Too many files (max ${MAX_FILES_PER_BATCH})`, { status: 413 })
   }
 
-  const uploadRlConfig = getUploadRateLimitConfig()
-  const rateLimit = await enforceSlidingWindowRateLimit({
-    key: `bulk-import:${userId}:${clerkOrgId}`,
-    limit: uploadRlConfig.limit,
-    windowSeconds: uploadRlConfig.windowSeconds,
-  })
-  if (rateLimit.limited) return rateLimitResponse(rateLimit.retryAfterSeconds)
-
   const org = await resolveOrProvisionOrganization(clerkOrgId)
   if (!org) {
     return new Response('Internal Server Error', { status: 500 })
@@ -94,9 +148,12 @@ export async function POST(req: Request): Promise<Response> {
   for (const file of files) {
     const fileName = file.name.trim().length > 0 ? file.name : 'document.pdf'
 
-    const isPdf =
-      file.type === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')
-    if (!isPdf) {
+    const pdfVerdict = await validatePdfUpload(file)
+    if (pdfVerdict !== 'ok') {
+      const errorMessage =
+        pdfVerdict === 'too_large'
+          ? `El archivo supera el máximo de ${MAX_PDF_FILE_BYTES / (1024 * 1024)} MB.`
+          : 'Solo se procesan archivos PDF.'
       const [errJob] = await db
         .insert(ingestionJobs)
         .values({
@@ -105,7 +162,7 @@ export async function POST(req: Request): Promise<Response> {
           userId,
           fileName,
           status: 'error',
-          errorMessage: 'Solo se procesan archivos PDF.',
+          errorMessage,
           completedAt: new Date(),
         })
         .returning({ id: ingestionJobs.id })
@@ -116,31 +173,7 @@ export async function POST(req: Request): Promise<Response> {
         documentId: null,
         documentVersionId: null,
         status: 'error',
-        error: 'Solo se procesan archivos PDF.',
-      })
-      continue
-    }
-    if (file.size > MAX_PDF_BYTES) {
-      const [errJob] = await db
-        .insert(ingestionJobs)
-        .values({
-          organizationId: org.id,
-          batchId,
-          userId,
-          fileName,
-          status: 'error',
-          errorMessage: 'El archivo supera el máximo de 50 MB.',
-          completedAt: new Date(),
-        })
-        .returning({ id: ingestionJobs.id })
-      results.push({
-        jobId: errJob?.id ?? null,
-        fileName,
-        studyId: null,
-        documentId: null,
-        documentVersionId: null,
-        status: 'error',
-        error: 'El archivo supera el máximo de 50 MB.',
+        error: errorMessage,
       })
       continue
     }
@@ -232,8 +265,8 @@ export async function POST(req: Request): Promise<Response> {
         status: 'queued',
         error: null,
       })
-    } catch (err) {
-      console.error('[bulk-import] item failed:', err)
+    } catch {
+      console.error('[bulk-import] item failed', { code: 'bulk_item_failed' })
       const [errJob] = await db
         .insert(ingestionJobs)
         .values({
@@ -267,8 +300,8 @@ export async function POST(req: Request): Promise<Response> {
       after(async () => {
         try {
           await runSingleIngestionJobById(jobId, org.id)
-        } catch (err) {
-          console.error(`[bulk-import] job ${jobId} error:`, err)
+        } catch {
+          console.error('[bulk-import] job error', { code: 'bulk_job_failed', jobId })
         }
       })
     }
