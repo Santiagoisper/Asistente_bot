@@ -3,6 +3,7 @@ import {
   CONDITION_KINDS,
   VISIT_TYPES,
   adaptLegacyVisits,
+  alignTables,
   normalizeLabel,
   scoreSchedule,
   similarity,
@@ -210,6 +211,28 @@ describe('calificador de cronogramas', () => {
     const report = scoreSchedule(source, candidate)
     expect(report.visits).toEqual({ tp: 3, fp: 0, fn: 0 })
     expect(report.printedIds.inexact).toBe(1)
+  })
+
+  it('desempata dos tablas de las mismas páginas por el rango vertical de las visitas', () => {
+    const tables = [
+      { key: 'T1', pages: [3, 4] },
+      { key: 'T2', pages: [3, 4] },
+    ]
+    const high = [{ page: 3, y0: 500, y1: 520 }]
+    const low = [{ page: 3, y0: 400, y1: 420 }]
+    const geometry = {
+      gold: new Map([['T1', high], ['T2', low]]),
+      candidate: new Map([['T1', low], ['T2', high]]),
+    }
+    const map = alignTables(tables, tables, geometry)
+    expect(map.get('T1')).toBe('T2')
+    expect(map.get('T2')).toBe('T1')
+    const sameName = alignTables(tables, tables, {
+      gold: new Map([['T1', high], ['T2', low]]),
+      candidate: new Map([['T1', high], ['T2', low]]),
+    })
+    expect(sameName.get('T1')).toBe('T1')
+    expect(sameName.get('T2')).toBe('T2')
   })
 
   it('alinea tablas por páginas aunque el candidato las llame distinto', () => {

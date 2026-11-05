@@ -51,4 +51,15 @@ describe('gold contra sí mismo', () => {
       expectPerfect(scoreSchedule(clone(gold), clone(gold)), id)
     })
   }
+
+  it('F7 con las claves del candidato invertidas da el mismo puntaje', () => {
+    const gold = JSON.parse(readFileSync(resolve(FIXTURES, 'F7.gold.json'), 'utf8')) as ScheduleDoc
+    const straight = scoreSchedule(clone(gold), clone(gold))
+    const swapped = clone(gold)
+    const flip = (key: string | null | undefined) => (key === 'T1' ? 'T2' : key === 'T2' ? 'T1' : key)
+    for (const table of swapped.tables ?? []) table.key = flip(table.key) ?? table.key
+    for (const visit of swapped.visits ?? []) visit.tableKey = flip(visit.tableKey) ?? null
+    for (const note of swapped.notes ?? []) note.tableKey = flip(note.tableKey) ?? note.tableKey
+    expect(scoreSchedule(clone(gold), swapped)).toEqual(straight)
+  })
 })

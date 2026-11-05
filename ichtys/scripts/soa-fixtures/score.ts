@@ -287,6 +287,82 @@ function normId(printedId: string | null | undefined): string {
   return normalizeLabel(printedId)
 }
 
+interface VerticalRange {
+  page: number
+  y0: number
+  y1: number
+}
+
+/** Cajas de visita agrupadas por tabla. El rango es el lado vertical. */
+export interface TableGeometry {
+  gold: Map<string, VerticalRange[]>
+  candidate: Map<string, VerticalRange[]>
+}
+
+function rangesOf(entries: Array<{ key: string; page: number | null | undefined; bbox: BBox | null | undefined }>): Map<string, VerticalRange[]> {
+  const map = new Map<string, VerticalRange[]>()
+  for (const entry of entries) {
+    if (!entry.key || entry.page == null || !entry.bbox) continue
+    const y0 = Math.min(entry.bbox[1], entry.bbox[3])
+    const y1 = Math.max(entry.bbox[1], entry.bbox[3])
+    const list = map.get(entry.key) ?? []
+    list.push({ page: entry.page, y0, y1 })
+    map.set(entry.key, list)
+  }
+  return map
+}
+
+function visitRanges(visits: VisitRec[] | undefined): Map<string, VerticalRange[]> {
+  return rangesOf((visits ?? []).map((visit) => ({ key: visit.tableKey ?? '', page: visit.page, bbox: visit.bbox })))
+}
+
+function columnRanges(tables: RawTable[]): Map<string, VerticalRange[]> {
+  const entries: Array<{ key: string; page: number; bbox: BBox | undefined }> = []
+  for (const table of tables) {
+    for (const column of table.columns ?? []) {
+      entries.push({ key: table.key, page: column.page, bbox: column.headerBBox })
+    }
+  }
+  return rangesOf(entries)
+}
+
+function mergedByPage(ranges: VerticalRange[]): Map<number, Array<[number, number]>> {
+  const byPage = new Map<number, Array<[number, number]>>()
+  for (const range of ranges) {
+    const list = byPage.get(range.page) ?? []
+    list.push([range.y0, range.y1])
+    byPage.set(range.page, list)
+  }
+  for (const [page, list] of byPage) {
+    list.sort((a, b) => a[0] - b[0] || a[1] - b[1])
+    const merged: Array<[number, number]> = []
+    for (const [y0, y1] of list) {
+      const last = merged[merged.length - 1]
+      if (last && y0 <= last[1]) last[1] = Math.max(last[1], y1)
+      else merged.push([y0, y1])
+    }
+    byPage.set(page, merged)
+  }
+  return byPage
+}
+
+/** Largo del solapamiento vertical, sumado en las páginas donde ambas tablas tienen cajas. */
+function verticalOverlap(left: VerticalRange[], right: VerticalRange[]): number {
+  const other = mergedByPage(right)
+  let total = 0
+  for (const [page, spans] of mergedByPage(left)) {
+    const peers = other.get(page)
+    if (!peers) continue
+    for (const [a0, a1] of spans) {
+      for (const [b0, b1] of peers) {
+        const hit = Math.min(a1, b1) - Math.max(a0, b0)
+        if (hit > 0) total += hit
+      }
+    }
+  }
+  return total
+}
+
 /** Día de estudio. Una semana son 7 días. Sin valor o sin unidad no hay día. */
 export function canonicalDay(visit: VisitRec): number | null {
   const value = visit.timing?.value
@@ -297,16 +373,22 @@ export function canonicalDay(visit: VisitRec): number | null {
   return null
 }
 
-export function alignTables(gold: TableRec[], candidate: TableRec[]): Map<string, string> {
-  const ranked: Array<{ gold: string; candidate: string; overlap: number }> = []
+export function alignTables(gold: TableRec[], candidate: TableRec[], geometry?: TableGeometry): Map<string, string> {
+  const ranked: Array<{ gold: string; candidate: string; overlap: number; geom: number }> = []
   for (const left of gold) {
     const pages = new Set(left.pages ?? [])
     for (const right of candidate) {
       const overlap = (right.pages ?? []).filter((page) => pages.has(page)).length
-      if (overlap > 0) ranked.push({ gold: left.key, candidate: right.key, overlap })
+      if (overlap <= 0) continue
+      // Misma página no alcanza: dos tiras apiladas comparten páginas y la clave
+      // alfabética las cruzaría. Desempata el rango vertical de las visitas.
+      const geom = geometry
+        ? verticalOverlap(geometry.gold.get(left.key) ?? [], geometry.candidate.get(right.key) ?? [])
+        : 0
+      ranked.push({ gold: left.key, candidate: right.key, overlap, geom })
     }
   }
-  ranked.sort((a, b) => b.overlap - a.overlap || a.gold.localeCompare(b.gold) || a.candidate.localeCompare(b.candidate))
+  ranked.sort((a, b) => b.overlap - a.overlap || b.geom - a.geom || a.gold.localeCompare(b.gold) || a.candidate.localeCompare(b.candidate))
   const usedGold = new Set<string>()
   const usedCandidate = new Set<string>()
   const map = new Map<string, string>()
@@ -437,7 +519,10 @@ function take(bag: Map<string, number>, key: string): boolean {
 }
 
 export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreReport {
-  const aligned = withAlignedTables(candidate, alignTables(gold.tables ?? [], candidate.tables ?? []))
+  const aligned = withAlignedTables(candidate, alignTables(gold.tables ?? [], candidate.tables ?? [], {
+    gold: visitRanges(gold.visits),
+    candidate: visitRanges(candidate.visits),
+  }))
   const goldVisits = gold.visits ?? []
   const candVisits = aligned.visits ?? []
   const visitMatch = matchVisits(goldVisits, candVisits)
@@ -921,7 +1006,10 @@ function scoreNoteCalls(gold: ScheduleDoc, rawTables: RawTable[]): Counts {
 
 export function scoreGrid(gold: ScheduleDoc, raw: RawSchedule): GridScore {
   const rawTables = candidateTables(raw)
-  const tableMap = alignTables(gold.tables ?? [], rawTables)
+  const tableMap = alignTables(gold.tables ?? [], rawTables, {
+    gold: visitRanges(gold.visits),
+    candidate: columnRanges(rawTables),
+  })
   return {
     pages: scorePages(gold, raw),
     tables: scoreTables(gold.tables ?? [], rawTables, tableMap),

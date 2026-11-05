@@ -11,8 +11,8 @@ Semillas fijas: F1 `1001`, F2 `1002`, F3 `1003`, F4 `1004`, F5 `1005`, F6 `1006`
 | F3 | 90 | 49 | 572 | 27 | 3 |
 | F4 | 8 | 2 | 45 | 5 | 2 |
 | F5 | 40 | 6 | 198 | 10 | 3 |
-| F6 | 24 | 22 | 486 | 0 | 0 |
-| F7 | 7 | 5 | 293 | 0 | 0 |
+| F6 | 24 | 22 | 513 | 0 | 0 |
+| F7 | 7 | 5 | 256 | 0 | 0 |
 
 Esas cifras son el inventario del gold, no una medición del extractor. F6 y F7 no plantan inconsistencias: el rasgo que miden está en la geometría del encabezado.
 
@@ -23,8 +23,8 @@ Esas cifras son el inventario del gold, no una medición del extractor. F6 y F7 
 - F3. Grilla muy partida: 2 o 3 filas por página, una continuación de columnas, tres columnas sin número y una fila duplicada. Pasa el tope de 30 páginas del extractor actual a propósito. Cuatro rótulos dicen el brazo o el subgrupo. La dispensación sin número queda solo para el brazo A, y V4 solo para el brazo B.
 - F4. Ocho páginas. El índice, la sinopsis y la lista de tablas citan «1.3 Cronograma de actividades» antes de la grilla. La fila de ventana se llama «Margen de visita».
 - F5. Inglés. La primera página de la segunda tabla se dibuja apaisada y después lleva `/Rotate 90`. Las cajas del gold quedan en el espacio sin rotar. El encabezado de esa tabla tiene dos niveles. Tres rótulos dicen el brazo o el subgrupo.
-- F6. Generador `1.3.0`. 22 páginas apaisadas de una sola grilla. Encabezado numérico sin prefijo: la fila se llama «Número de visita» y las fichas son enteros crecientes, con dos guiones como columnas sin número. Encima hay tres períodos agrupados (Selección, Tratamiento, Seguimiento). Debajo, una fila «Día». A la derecha, una tira de comentarios que no es visita. El encabezado se repite en cada página. Cada página trae entre 2 y 6 filas de datos. La columna de etiquetas no es una visita. El gold lo deja en `header`.
-- F7. Generador `1.3.0`. 5 páginas apaisadas. Cada una trae dos tiras apiladas: 20 columnas con prefijo `V` y 24 con prefijo `W`. La ficha de cada columna está partida en dos filas contiguas: el prefijo de letras arriba (7 pt) y el número abajo (9 pt). Las filas de datos cuelgan de su tira, no de la otra. El encabezado de las dos tiras se repite en cada página. La columna de etiquetas no es una visita (`labelColumn.countsAsVisit` es false). El gold lo deja en `strips` (tiras y columnas) y en `cells` (marcas).
+- F6. Generador `1.3.0`. 22 páginas apaisadas de una sola grilla. Encabezado numérico sin prefijo y sin etiqueta en la fila de enteros. Las fichas son enteros crecientes con tres guiones, en la secuencia `4 - 5 6 - 7 - 8`. Encima hay tres períodos agrupados (Selección, Tratamiento, Seguimiento). En otra banda, debajo, una fila «Día». A la derecha, una tira de comentarios que no es visita. El encabezado se repite en cada página. Cada página trae entre 2 y 6 filas de datos. La columna de etiquetas no es una visita. El gold lo deja en `header`.
+- F7. Generador `1.3.0`. 5 páginas apaisadas. Cada una trae dos tiras apiladas: 20 columnas con prefijo `V` desde x = 237 y 24 con prefijo `W` desde x = 213. No hay etiquetas «Serie» ni «Ficha». La ficha está partida: la letra a 7 pt y, 9 pt debajo, el número a 9 pt. La primera ficha de la tira W es `1/`. Las etiquetas de datos salen en x = 82. Hay 45 pt entre las filas de letras, 6 pt hasta la primera fila de datos de la tira V y 18 pt en la tira W. La tira V lleva 2 filas de datos y la W lleva 4: con 45 pt no caben más filas arriba sin pisar la tira de abajo. El encabezado de las dos tiras se repite en cada página. La columna de etiquetas no es una visita (`labelColumn.countsAsVisit` es false). El gold lo deja en `strips` (tiras y columnas) y en `cells` (marcas).
 
 El relleno no contiene «cronograma de actividades», «schedule of assessments», «plan de visitas» ni «SoA». Esas frases están solo en los falsos aciertos y en el encabezado de cada grilla.
 
@@ -49,7 +49,7 @@ Salida: `ichtys/fixtures/soa/F{n}.pdf`, `F{n}.gold.json` y `F{n}.render/pagina-{
 
 ## Calificar
 
-El calificador compara una salida contra el gold. Las visitas con tiempo emparejan por la tabla alineada y el día canónico: una semana son 7 días, con tolerancia de un día. Las visitas sin tiempo emparejan por el id impreso normalizado, dentro de la tabla. El tipo de visita se mide solo en `types`. Antes de emparejar, las tablas se alinean por las páginas que comparten. Los procedimientos empatan por etiqueta normalizada, por la tabla de alias del gold, o por similitud de al menos 0,85. `prn_range` se cuenta aparte. La salida son solo contadores. Con `--private` no hay etiquetas ni texto de protocolo. `--legacy` adapta la forma plana de visitas del extractor de `090e506`.
+El calificador compara una salida contra el gold. Las visitas con tiempo emparejan por la tabla alineada y el día canónico: una semana son 7 días, con tolerancia de un día. Las visitas sin tiempo emparejan por el id impreso normalizado, dentro de la tabla. El tipo de visita se mide solo en `types`. Antes de emparejar, las tablas se alinean por las páginas que comparten. Si empatan en páginas, desempata el solapamiento vertical de las cajas de las visitas; la clave alfabética queda última. Los procedimientos empatan por etiqueta normalizada, por la tabla de alias del gold, o por similitud de al menos 0,85. `prn_range` se cuenta aparte. La salida son solo contadores. Con `--private` no hay etiquetas ni texto de protocolo. `--legacy` adapta la forma plana de visitas del extractor de `090e506`.
 
 `scoreGrid` califica la geometría cruda, sin modelo: páginas del cronograma, tablas, columnas, celdas marcadas, celdas combinadas y llamadas a nota. Una columna repetida en una página siguiente es acierto si su centro x cae en la caja de alguna visita de esa tabla. Para no perder la visita hace falta una columna en la página de su caja. `--grid` usa ese calificador. `--private` sigue devolviendo solo números.
 

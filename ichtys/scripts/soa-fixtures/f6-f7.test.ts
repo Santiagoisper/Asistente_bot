@@ -19,17 +19,18 @@ interface F6Column {
   dash: boolean
   glyph: string
   fontSize: number
+  baseline: number
 }
 
 interface F6Page {
   page: number
   rows: number
-  label: { text: string }
+  label: { text: string } | null
   labelColumn: { countsAsVisit: boolean }
   commentsStrip: { countsAsVisit: boolean }
   columns: F6Column[]
   periods: Array<{ label: string; start: number; end: number }>
-  timeRow: { label: string }
+  timeRow: { label: string; baseline: number }
 }
 
 interface F6Gold {
@@ -39,7 +40,8 @@ interface F6Gold {
   document: { pages: number; sopPages: number[]; falseHitPages: number[]; gridOrientation: string; gridPageSize: number[] }
   header: {
     kind: string
-    label: string
+    label: string | null
+    integerRowLabeled: boolean
     repeatedOnEveryGridPage: boolean
     rowsPerPage: number[]
     tokens: Array<{ text: string; dash: boolean }>
@@ -61,8 +63,13 @@ interface F7Column {
 interface F7Page {
   page: number
   visitColumns: number
+  dataLabelX: number
+  cardX: number
+  prefixBaseline: number
+  numberBaseline: number
+  firstDataBaseline: number
   labelColumn: { countsAsVisit: boolean }
-  headerRows: Array<{ role: string; fontSize: number }>
+  headerRows: Array<{ role: string; fontSize: number; baseline: number }>
   prefixRow: Box
   numberRow: Box
   columns: F7Column[]
@@ -107,22 +114,28 @@ describe('F6 — encabezado numérico sin prefijo', () => {
     expect(load<{ generatorVersion: string }>('F1').generatorVersion).toBe('1.1.0')
   })
 
-  it('repite etiqueta, guiones, períodos y entre 2 y 6 filas en cada página', () => {
+  it('repite la fila de enteros sin etiqueta, con tres guiones y entre 2 y 6 filas', () => {
     expect(gold.header.kind).toBe('numeric_visit')
-    expect(gold.header.label).toBe('Número de visita')
+    expect(gold.header.label).toBeNull()
+    expect(gold.header.integerRowLabeled).toBe(false)
     expect(gold.header.timeRowLabel).toBe('Día')
     expect(gold.header.repeatedOnEveryGridPage).toBe(true)
     expect(gold.header.periods.map((period) => period.label)).toEqual(['Selección', 'Tratamiento', 'Seguimiento'])
     for (const period of gold.header.periods) expect(period.end - period.start).toBeGreaterThanOrEqual(2)
     const dashes = gold.header.tokens.filter((token) => token.dash)
-    expect(dashes).toHaveLength(2)
+    expect(dashes.length).toBeGreaterThanOrEqual(3)
+    const dashAt = gold.header.tokens.flatMap((token, index) => (token.dash ? [index] : []))
+    expect(dashAt.some((index, position) => dashAt[position + 1] === index + 2)).toBe(true)
+    const printed = gold.header.tokens.map((token) => (token.dash ? '-' : token.text)).join(' ')
+    expect(printed).toContain('4 - 5 6 - 7 - 8')
     const integers = gold.header.tokens.filter((token) => !token.dash).map((token) => Number(token.text))
     expect(integers).toEqual([...integers].sort((a, b) => a - b))
     expect(new Set(integers).size).toBe(integers.length)
     expect(gold.header.pages.map((page) => page.page)).toEqual(gold.document.sopPages)
     for (const page of gold.header.pages) {
-      expect(page.label.text).toBe('Número de visita')
+      expect(page.label).toBeNull()
       expect(page.timeRow.label).toBe('Día')
+      expect(page.columns[0]!.baseline - page.timeRow.baseline).toBeGreaterThanOrEqual(14)
       expect(page.labelColumn.countsAsVisit).toBe(false)
       expect(page.commentsStrip.countsAsVisit).toBe(false)
       expect(page.rows).toBeGreaterThanOrEqual(2)
@@ -131,7 +144,7 @@ describe('F6 — encabezado numérico sin prefijo', () => {
     }
     expect(gold.header.rowsPerPage).toContain(6)
     expect(gold.visits.filter((visit) => visit.printedId != null).every((visit) => /^\d+$/.test(visit.printedId!))).toBe(true)
-    expect(gold.visits.filter((visit) => visit.printedId == null).length).toBe(2)
+    expect(gold.visits.filter((visit) => visit.printedId == null).length).toBe(dashes.length)
     expect(gold.cells.length).toBeGreaterThan(0)
   })
 })
@@ -154,16 +167,23 @@ describe('F7 — dos tiras con la ficha partida', () => {
     const shared = gold.strips[0]!.pages.map((page) => page.page)
     expect(shared).toEqual(gold.document.sopPages)
     expect(gold.strips[1]!.pages.map((page) => page.page)).toEqual(shared)
-    for (const strip of gold.strips) {
+    expect(JSON.stringify(gold.strips)).not.toContain('Serie')
+    expect(JSON.stringify(gold.strips)).not.toContain('Ficha')
+    const gaps = [6, 18]
+    const cardX = [237, 213]
+    expect(gold.strips[0]!.pages[0]!.prefixBaseline - gold.strips[1]!.pages[0]!.prefixBaseline).toBe(45)
+    for (const [index, strip] of gold.strips.entries()) {
       expect(strip.repeatedOnEveryGridPage).toBe(true)
       expect(strip.labelColumnCountsAsVisit).toBe(false)
       for (const page of strip.pages) {
         expect(page.headerRows).toEqual([
-          { role: 'prefix', fontSize: 7 },
-          { role: 'number', fontSize: 9 },
+          { role: 'prefix', fontSize: 7, baseline: page.prefixBaseline },
+          { role: 'number', fontSize: 9, baseline: page.numberBaseline },
         ])
-        expect(page.prefixRow.bbox[1]).toBe(page.numberRow.bbox[3])
-        expect(page.dataRows[0]!.bbox[3]).toBe(page.numberRow.bbox[1])
+        expect(page.prefixBaseline - page.numberBaseline).toBe(9)
+        expect(page.numberBaseline - page.firstDataBaseline).toBe(gaps[index])
+        expect(page.dataLabelX).toBe(82)
+        expect(page.cardX).toBe(cardX[index])
         expect(page.labelColumn.countsAsVisit).toBe(false)
         expect(page.columns).toHaveLength(strip.visitColumns)
         for (const column of page.columns) {
@@ -173,6 +193,7 @@ describe('F7 — dos tiras con la ficha partida', () => {
         }
       }
     }
+    expect(gold.strips[1]!.pages.every((page) => page.columns[0]!.number === '1/')).toBe(true)
     const marked = new Set(gold.cells.filter((cell) => cell.mark === 'x').map((cell) => cell.visitKey))
     expect(gold.visits.every((visit) => marked.has(visit.key))).toBe(true)
   })
