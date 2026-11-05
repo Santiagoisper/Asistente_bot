@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { OrigenPanel } from './origen-panel'
+import { PrintSheets, SemanaView } from './semana-view'
 import { checklistKey, readChecklist, writeChecklist } from '../../lib/cabina/checklist'
 import { demoStudy } from '../../lib/cabina/demo-data'
 import { buildSheet, type SheetItem } from '../../lib/cabina/filter'
@@ -55,6 +56,7 @@ export function CabinaApp() {
   const [quoteEdits, setQuoteEdits] = useState<Record<string, string>>({})
   const [panelKey, setPanelKey] = useState<string | null>(null)
   const [approved, setApproved] = useState(false)
+  const [view, setView] = useState<'cabina' | 'semana'>('cabina')
 
   useEffect(() => {
     const now = startOfDay(new Date())
@@ -127,12 +129,21 @@ export function CabinaApp() {
             <span className="text-alphi-navy"> · Paciente {patient.code}</span>
             <span className="text-alphi-navy"> · Visita {visit.printedId}</span>
           </p>
-          <h1 className="mt-1 text-2xl font-semibold">Cabina de visita</h1>
+          <h1 className="mt-1 text-2xl font-semibold">{view === 'cabina' ? 'Cabina de visita' : 'Semana del sitio'}</h1>
+          <div className="mt-3 flex gap-2">
+            <button type="button" className={viewButton(view === 'cabina')} aria-pressed={view === 'cabina'} onClick={() => setView('cabina')}>
+              Cabina
+            </button>
+            <button type="button" className={viewButton(view === 'semana')} aria-pressed={view === 'semana'} onClick={() => setView('semana')}>
+              Semana
+            </button>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="inline-flex min-h-11 items-center rounded-full bg-[#DDF0E6] px-4 text-sm font-semibold text-[#0E4D33]">
             Protocolo ficticio
           </span>
+          {view === 'cabina' ? (
           <button
             type="button"
             className={`inline-flex min-h-11 items-center rounded-lg bg-[#0F5E73] px-4 text-sm font-semibold text-white disabled:opacity-50 ${focusRing}`}
@@ -142,28 +153,32 @@ export function CabinaApp() {
           >
             {approved ? 'Aprobada' : 'Aprobar'}
           </button>
+          ) : null}
           <button
             type="button"
             className={`inline-flex min-h-11 items-center rounded-lg border-[1.5px] border-[#0F5E73] px-4 text-sm font-semibold text-[#0A4455] disabled:opacity-50 ${focusRing}`}
-            disabled={blocked}
-            aria-describedby={blocked ? 'cabina-bloqueo-aprobacion' : undefined}
+            disabled={view === 'cabina' && blocked}
+            aria-describedby={view === 'cabina' && blocked ? 'cabina-bloqueo-aprobacion' : undefined}
             onClick={() => window.print()}
           >
             Imprimir
           </button>
-          {blocked ? (
+          {view === 'cabina' && blocked ? (
             <button type="button" className={`inline-flex min-h-11 items-center rounded-lg bg-[#FFF1D6] px-4 text-sm font-semibold text-[#6B4200] ${focusRing}`} onClick={() => setReviewed((current) => Array.from(new Set([...current, ...doubts])))}>
               Revisar
             </button>
           ) : null}
         </div>
       </div>
-      {blocked ? (
+      {view === 'cabina' && blocked ? (
         <p id="cabina-bloqueo-aprobacion" className="text-sm text-[#6B4200]" role="status">
           Hay {doubts.length === 1 ? 'una casilla con duda' : `${doubts.length} casillas con duda`}. Hay que revisarlas antes de aprobar o imprimir.
         </p>
       ) : null}
 
+      {view === 'semana' ? <SemanaView today={today} /> : null}
+      {view === 'cabina' ? (
+      <>
       <section className={`${cardClass} grid gap-6 lg:grid-cols-[1.1fr_1.6fr_1fr] lg:items-center`} aria-label="Visita y ventana">
         <div className="flex flex-col gap-3">
           <label className="block text-sm font-semibold" htmlFor="demo-visit">
@@ -391,7 +406,9 @@ export function CabinaApp() {
       </div>
 
       <p className="text-center text-sm text-alphi-muted">Datos ficticios. Verificar siempre con el protocolo original.</p>
-      {panelItem?.cell ? (
+      </>
+      ) : null}
+      {view === 'cabina' && panelItem?.cell ? (
         <>
           <button type="button" className="fixed inset-0 z-40 bg-[#17222D]/40" aria-label="Cerrar el texto de la página" onClick={() => setPanelKey(null)} />
           <OrigenPanel
@@ -410,8 +427,28 @@ export function CabinaApp() {
           />
         </>
       ) : null}
+      <PrintSheets today={today} />
+      <style>{printCss}</style>
     </div>
   )
+}
+
+const printCss = `
+.cabina-print { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+@media print {
+  @page { size: A4 landscape; margin: 12mm; }
+  body * { visibility: hidden; }
+  .cabina-print, .cabina-print * { visibility: visible; }
+  .cabina-print { position: absolute; left: 0; top: 0; width: 100%; height: auto; margin: 0; overflow: visible; clip: auto; white-space: normal; }
+  .cabina-sheet { break-after: page; page-break-after: always; }
+  .cabina-sheet:last-child { break-after: auto; page-break-after: auto; }
+  .cabina-sheet h1 { font-size: 22px; margin: 0 0 8px; }
+  .cabina-sheet p, .cabina-sheet li { font-size: 14px; line-height: 1.4; }
+}
+`
+
+function viewButton(active: boolean): string {
+  return `inline-flex min-h-11 items-center rounded-lg px-4 text-sm font-semibold ${focusRing} ${active ? 'bg-[#0F5E73] text-white' : 'border border-alphi-border bg-white text-alphi-navy'}`
 }
 
 function WindowCard({
