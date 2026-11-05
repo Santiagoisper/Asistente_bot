@@ -43,12 +43,12 @@
  * 'validation_failed:<id>' cuando fallan.
  */
 import {
+  countByRole,
   findNumericHeader,
   findNumericHeaders,
   LABEL_WINDOW,
   MARK_STRINGS,
   normalizeNumericToken,
-  VISIT_TOKEN,
 } from './header'
 import type {
   BBox,
@@ -329,9 +329,17 @@ function readTable(
     // una banda) o sin tiras reconocibles, la región es la página entera
     // (comportamiento previo a P2c).
     let prefixedBandHits = 0
-    for (const band of textBands(srcPage.items)) {
-      const hits = band.items.filter((i) => VISIT_TOKEN.test(i.str.trim())).length
-      if (hits > prefixedBandHits) prefixedBandHits = hits
+    {
+      // G18 §3.2: el camino con prefijo se activa por fichas de ID; el tiempo
+      // solo cuando no hay ids en ninguna banda (F5 replica R3).
+      let bestIds = 0
+      let bestTimes = 0
+      for (const band of textBands(srcPage.items)) {
+        const { ids, times } = countByRole(band.items.map((i) => i.str.trim()))
+        if (ids > bestIds) bestIds = ids
+        if (times > bestTimes) bestTimes = times
+      }
+      prefixedBandHits = bestIds > 0 ? bestIds : bestTimes
     }
     const regions: Array<{ yTop: number; yBottom: number }> = []
     if (prefixedBandHits >= 2) {
@@ -414,11 +422,33 @@ function readTable(
     const bands = textBands(page.items)
     let headerY = 0
     let headerHits = 0
-    for (const band of bands) {
-      const hits = band.items.filter((i) => VISIT_TOKEN.test(i.str.trim())).length
-      if (hits > headerHits) {
-        headerHits = hits
-        headerY = band.y
+    {
+      // G18 §3.2: la banda de encabezado es la de más IDS de visita; la de
+      // tiempo (S…, W…, D…) solo cuando ninguna banda tiene ids — en el
+      // protocolo de 46 columnas la fila de semanas (17–21 fichas) le ganaba
+      // a la de ids partida en varias líneas y las columnas salían del
+      // TIEMPO, no de las visitas.
+      let bestIdY = 0
+      let bestIdHits = 0
+      let bestTimeY = 0
+      let bestTimeHits = 0
+      for (const band of bands) {
+        const { ids, times } = countByRole(band.items.map((i) => i.str.trim()))
+        if (ids > bestIdHits) {
+          bestIdHits = ids
+          bestIdY = band.y
+        }
+        if (times > bestTimeHits) {
+          bestTimeHits = times
+          bestTimeY = band.y
+        }
+      }
+      if (bestIdHits > 0) {
+        headerHits = bestIdHits
+        headerY = bestIdY
+      } else if (bestTimeHits > 0) {
+        headerHits = bestTimeHits
+        headerY = bestTimeY
       }
     }
     // Plan B (P2b): sin al menos 2 fichas con prefijo, el encabezado puede ser

@@ -18,7 +18,7 @@
  * El texto de la página (`headerSignature`, subtítulos) se devuelve pero
  * nunca se loguea (S8).
  */
-import { findNumericHeaders, MARK_STRINGS, normalizeNumericToken, VISIT_TOKEN } from './header'
+import { countByRole, findNumericHeaders, MARK_STRINGS, normalizeNumericToken } from './header'
 import type { HeaderSource, PageGeom, ScheduleLocation, TextItem } from './types'
 
 /** Título de la sección del cronograma (banda de sección). */
@@ -160,14 +160,34 @@ function scorePage(p: PageGeom): ScoredPage {
   const bands = bandsOf(p.items)
   const contentBands = bands.filter((b) => !FOLIO_RE.test(b.tokens[0] ?? ''))
 
-  // Mejor banda de encabezado de visitas (la que más fichas de visita tiene).
+  // Mejor banda de encabezado de visitas (G18 §3.2): la que más fichas de ID
+  // tiene; la de TIEMPO solo cuenta si ninguna banda tiene ids (F5 replica
+  // R3: semanas como identidad). Así una fila de semanas bajo la fila de ids
+  // ya no se lleva la señal de encabezado.
   let headerBand: Band | null = null
   let headerCount = 0
-  for (const band of bands) {
-    const n = band.tokens.filter((t) => VISIT_TOKEN.test(t)).length
-    if (n > headerCount) {
-      headerCount = n
-      headerBand = band
+  {
+    let bestIds: Band | null = null
+    let bestIdCount = 0
+    let bestTimes: Band | null = null
+    let bestTimeCount = 0
+    for (const band of bands) {
+      const { ids, times } = countByRole(band.tokens)
+      if (ids > bestIdCount) {
+        bestIdCount = ids
+        bestIds = band
+      }
+      if (times > bestTimeCount) {
+        bestTimeCount = times
+        bestTimes = band
+      }
+    }
+    if (bestIdCount > 0) {
+      headerBand = bestIds
+      headerCount = bestIdCount
+    } else if (bestTimeCount > 0) {
+      headerBand = bestTimes
+      headerCount = bestTimeCount
     }
   }
   // Plan B (P2b): encabezado numérico etiquetado (mismo detector que grid).

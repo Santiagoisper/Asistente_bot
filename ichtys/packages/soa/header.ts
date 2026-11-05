@@ -4,8 +4,12 @@
  * encabezado, grid tiene que encontrarle las mismas columnas).
  *
  * Dos formas de encabezado:
- *   1. CON PREFIJO — fichas tipo V1, S3, W12, SCR… (`VISIT_TOKEN`). Gana
- *      siempre que haya al menos 2.
+ *   1. CON PREFIJO — fichas de ID de visita (V1, VR3, SCR, DT…). Gana
+ *      siempre que haya al menos 2. Las fichas de TIEMPO (S12, W3, D-14)
+ *      NUNCA definen columnas cuando hay fila de ids (G18 §3.2, extensión de
+ *      K2: el tiempo nunca es id de visita); si la fila de tiempo es la
+ *      ÚNICA del encabezado, esa fila es la línea de ids (F5 replica R3:
+ *      semanas como identidad de visita).
  *   2. NUMÉRICO — una fila con ETIQUETA ("Número de visita", "Visit
  *      number", "Día"…) seguida de enteros sin prefijo (1, 2, 3 … 16) donde
  *      un guion ("-", "–", "—") es una columna sin número. Se repite en cada
@@ -24,9 +28,28 @@
  */
 import type { TextItem } from './types'
 
-/** Fichas de visita con prefijo en el encabezado (V1, VR3, W12, SCR, DT, FA, SEL…). */
-export const VISIT_TOKEN =
-  /^(V|VR|S|W|D)\d+$|^(SCR|DT|FA|SEL|ET|FU|EOS|EOT|VNP|VF|VME\d+|VDT|VME)$/i
+/** Fichas de ID de visita en el encabezado (V1, VR3, SCR, DT, FA, SEL…): definen columnas (G18 §3.2). */
+export const VISIT_ID_TOKEN = /^(V|VR)\d+$|^(SCR|DT|FA|SEL|ET|FU|EOS|EOT|VNP|VF|VME\d*|VDT)$/i
+
+/**
+ * Fichas de TIEMPO (S12, W3, D-14): nunca definen columnas cuando hay fila
+ * de ids; son `timing` proyectado por x (G18 §3.2).
+ */
+export const TIME_TOKEN = /^(S|W)\d+$|^D[+-]?\d+$/i
+
+/**
+ * Cuenta las fichas de una banda por rol (G18 §3.2). La banda con más IDS es
+ * el encabezado; el tiempo solo es candidato cuando ninguna banda tiene ids.
+ */
+export function countByRole(tokens: string[]): { ids: number; times: number } {
+  let ids = 0
+  let times = 0
+  for (const t of tokens) {
+    if (VISIT_ID_TOKEN.test(t)) ids++
+    else if (TIME_TOKEN.test(t)) times++
+  }
+  return { ids, times }
+}
 
 /**
  * Marcas de celda que pueden aparecer en la capa de texto (K1, G12): la «X»
