@@ -154,6 +154,30 @@ function normalizeText(text: string): string {
   return normalizeNumericToken(text)
 }
 
+/** Entero suelto de 1 a 3 cifras (R-35 y la 1.ª visita de R-46). */
+const BARE_INTEGER_CHIP_RE = /^\d{1,3}$/
+/** Columna sin número, en cualquiera de las formas impresas. */
+const DASH_CHIP_RE = /^[-–—]$/
+/**
+ * Prefijo y número en la misma ficha, juntos o partidos por groupTexts
+ * ("V12", "V 12", "12 V"). Un entero solo no entra: lo cubre el otro caso.
+ */
+const COMPOSED_CHIP_RE =
+  /^(?:[A-Za-zÀ-ÿ]{1,8}\s+)+\d{1,3}$|^\d{1,3}(?:\s+[A-Za-zÀ-ÿ]{1,8})+$|^[A-Za-zÀ-ÿ]{1,8}\d{1,3}$/
+
+/**
+ * G22 §3 C1(a): una ficha es de columna si es id de visita, tiempo, entero
+ * de 1–3 cifras, guion, o un prefijo+número compuesto. El texto no alcanza
+ * para decidir la etiqueta: eso lo cierra la ausencia de marcas.
+ */
+function isColumnChip(text: string): boolean {
+  const t = text.trim()
+  if (t.length === 0) return false
+  if (VISIT_ID_TOKEN.test(t) || TIME_TOKEN.test(t)) return true
+  if (BARE_INTEGER_CHIP_RE.test(t) || DASH_CHIP_RE.test(t)) return true
+  return COMPOSED_CHIP_RE.test(t)
+}
+
 interface ItemBand {
   y: number
   items: TextItem[]
@@ -507,15 +531,34 @@ function readTable(
             .filter((i) => i.str.trim().length > 0 && i.fontSize >= 4),
         )
 
-    // G18 §3.5: los grupos a la IZQUIERDA de la primera ficha son la
-    // etiqueta del bloque (x≈82 en R-46, alineada con la línea del número:
-    // cae dentro de la ventana ±8 pero no es visita) — nunca columnas. La
-    // zona de la derecha (p. ej. «Comentarios») se conserva.
-    const firstChipIdx = headerGroups.findIndex((g) => {
-      const t = g.text.trim()
-      return VISIT_ID_TOKEN.test(t) || TIME_TOKEN.test(t)
-    })
-    const chipGroups = firstChipIdx > 0 ? headerGroups.slice(firstChipIdx) : headerGroups
+    // G22 §3 C1: la columna de etiquetas no se decide solo por el texto.
+    // (a) ficha de columna: id, tiempo, entero de 1–3 cifras, guion o
+    //     prefijo+número compuesto.
+    // (b) un grupo a la izquierda es etiqueta solo si su banda x no tiene
+    //     marcas en las filas de esta página. Con marcas, es columna.
+    // (c) no se corta un grupo que queda a la derecha de una ficha de columna
+    //     (la zona derecha, p. ej. «Comentarios», se conserva).
+    const markInColumnBand = (group: TextGroup): boolean => {
+      const cx = (group.x0 + group.x1) / 2
+      const band = bandsX.find(([x0, x1]) => cx >= x0 - 0.5 && cx <= x1 + 0.5)
+      const x0 = band?.[0] ?? group.x0
+      const x1 = band?.[1] ?? group.x1
+      return page.items.some((item) => {
+        if (!MARK_STRINGS.has(item.str.trim()) || item.fontSize < MIN_MARK_FONT) return false
+        const mx = (item.bbox[0] + item.bbox[2]) / 2
+        const my = (item.bbox[1] + item.bbox[3]) / 2
+        if (mx < x0 - 0.5 || mx > x1 + 0.5) return false
+        // Debajo del encabezado: las filas de la tabla, no la propia ficha.
+        return my < headerY - 8
+      })
+    }
+    let labelCut = 0
+    for (let i = 0; i < headerGroups.length; i++) {
+      const group = headerGroups[i]!
+      if (isColumnChip(group.text) || markInColumnBand(group)) break
+      labelCut = i + 1
+    }
+    const chipGroups = headerGroups.slice(labelCut)
 
     // --- Bandas de columna efectivas: los bordes V no siempre llegan por
     // columna (F1 T2 y F5 T1 dejan zonas sin bordes intermedios), así que una
