@@ -49,7 +49,10 @@ export interface ScheduleLocation {
   /** Todas las páginas con score > 0, con sus señales, para auditar. */
   candidates: Array<{ page: number; score: number; signals: Record<string, number> }>
   tables: Array<{ key: string; pages: number[]; notePages: number[]; headerSignature: string[] }>
-  rejected: Array<{ page: number; reason: 'toc' | 'list_of_tables' | 'synopsis_prose' | 'low_density' }>
+  rejected: Array<{
+    page: number
+    reason: 'toc' | 'list_of_tables' | 'synopsis_prose' | 'low_density' | 'no_header'
+  }>
 }
 
 /** Columna cruda detectada por geometría. */

@@ -42,6 +42,10 @@ export interface DocSpec {
   timeRow?: { label: string; values: number[] }
   /** Imprime "Comentarios" sobre la tira (por defecto sí). En la ruta con prefijo ese texto entra como columna: comportamiento previo a P2b, fuera de alcance. */
   commentsHeader?: boolean
+  /** Número de la primera página del bloque (por defecto 1). */
+  firstPage?: number
+  /** Dibuja las marcas "X" (por defecto sí). Sin marcas la grilla es solo estructura y encabezado. */
+  withMarks?: boolean
 }
 
 export function build(spec: DocSpec): { pages: PageGeom[]; marks: number } {
@@ -50,7 +54,7 @@ export function build(spec: DocSpec): { pages: PageGeom[]; marks: number } {
   const stripX1 = stripX0 + 54
   let marks = 0
   const pages = spec.rowsPerPage.map((nRows, p): PageGeom => {
-    const page = p + 1
+    const page = (spec.firstPage ?? 1) + p
     const items: TextItem[] = []
     const rules: RuleLine[] = []
     items.push(text(page, `Página ${page}`, 24, 584, 8))
@@ -88,7 +92,7 @@ export function build(spec: DocSpec): { pages: PageGeom[]; marks: number } {
     for (let r = 0; r < nRows; r++) {
       items.push(text(page, `Procedimiento ${page}-${r + 1}`, LABEL_X0 + 2, rowTop - 6))
       for (let c = 0; c < columns; c++) {
-        if (c % nRows === r || (c * 2 + 1) % nRows === r) {
+        if (spec.withMarks !== false && (c % nRows === r || (c * 2 + 1) % nRows === r)) {
           items.push(centered(page, 'X', COL_X0 + c * COL_W + COL_W / 2, rowTop - 5, 7))
           marks++
         }
@@ -113,3 +117,8 @@ export function build(spec: DocSpec): { pages: PageGeom[]; marks: number } {
 
 /** 1..16 con dos guiones como columnas sin número (18 columnas). */
 export const NUMERIC_VALUES: Array<number | null> = [1, 2, 3, null, 4, 5, 6, 7, 8, null, 9, 10, 11, 12, 13, 14, 15, 16]
+
+/** Página en blanco (sin texto ni bordes): separa los bloques para que no se fusionen en una racha. */
+export function blankPage(page: number): PageGeom {
+  return { page, width: PAGE_W, height: PAGE_H, rotate: 0, items: [], rules: [] }
+}

@@ -65,6 +65,14 @@ const MIN_MARKS = 3
 const MIN_HEADER_TOKENS = 2
 /** Columnas distintas para el ajuste fino del puntaje. */
 const MIN_GRID_COLS = 4
+/**
+ * Densidad de una RACHA sin encabezado reconocible (P2b b): con al menos
+ * estas marcas en total y MIN_GRID_COLS columnas de marcas en alguna página,
+ * la racha parece un cronograma cuyo encabezado no se entiende, no ruido — se
+ * conserva como tabla (la lectura la marca `failed`, visible) en vez de
+ * desaparecer.
+ */
+const DENSE_RUN_MARKS = 12
 
 interface Band {
   y: number
@@ -226,6 +234,10 @@ function keywordsOf(text: string): Set<string> {
 interface TableAcc {
   key: string
   pages: number[]
+  /** Evidencia de la racha (P2b b): marcas totales, páginas con encabezado, máx. columnas de marcas. */
+  marks: number
+  headerPages: number
+  maxGridCols: number
   notePages: number[]
   subtitle: string
   subtitleKeywords: Set<string>
@@ -293,6 +305,9 @@ export function locateSchedule(pages: PageGeom[]): ScheduleLocation {
       tables.push({
         key: `T${tables.length + 1}`,
         pages: [],
+        marks: 0,
+        headerPages: 0,
+        maxGridCols: 0,
         notePages: [],
         subtitle: s.subtitle,
         subtitleKeywords: keywordsOf(s.subtitle),
@@ -301,12 +316,40 @@ export function locateSchedule(pages: PageGeom[]): ScheduleLocation {
     }
     const table = tables[tables.length - 1]!
     table.pages.push(s.page)
+    table.marks += s.signals.marks ?? 0
+    table.maxGridCols = Math.max(table.maxGridCols, s.signals.gridCols ?? 0)
+    if ((s.signals.headerTokens ?? 0) >= MIN_HEADER_TOKENS) table.headerPages++
     // Firma de encabezado: unión en orden de primera aparición (auditoría;
     // en F3 las tiras de columnas de una misma tabla se suman acá).
     for (const token of s.headerTokens) {
       if (!table.headerSignature.includes(token)) table.headerSignature.push(token)
     }
     previousAccepted = s.page
+  }
+
+  // Precisión (P2b b): una racha sin ningún encabezado (con prefijo o
+  // numérico) y sin densidad de marcas es ruido — una tabla con bordes y
+  // alguna «X» que no es cronograma. Se descarta con razón EXPLÍCITA en
+  // `rejected`, nunca en silencio. Una racha con encabezado pero sin marcas
+  // (tabla de abreviaturas con fichas V1…) es 'low_density'. Una racha DENSA
+  // sin encabezado reconocible se conserva: es una tabla real ilegible y
+  // tiene que salir `failed`, no desaparecer.
+  const kept: TableAcc[] = []
+  for (const table of tables) {
+    const hasHeader = table.headerPages > 0
+    const dense = table.marks >= DENSE_RUN_MARKS && table.maxGridCols >= MIN_GRID_COLS
+    if ((hasHeader && table.marks >= MIN_MARKS) || dense) {
+      kept.push(table)
+      continue
+    }
+    const reason: ScheduleLocation['rejected'][number]['reason'] = hasHeader ? 'low_density' : 'no_header'
+    for (const page of table.pages) rejected.push({ page, reason })
+  }
+  // Claves contiguas tras el descarte.
+  tables.length = 0
+  for (const [i, table] of kept.entries()) {
+    table.key = `T${i + 1}`
+    tables.push(table)
   }
 
   // Páginas de notas dedicadas (sin grilla) → su tabla, en tandas
@@ -327,6 +370,8 @@ export function locateSchedule(pages: PageGeom[]): ScheduleLocation {
     }
     assignNoteBatch(batch, tables)
   }
+
+  rejected.sort((a, b) => a.page - b.page)
 
   return {
     candidates,
