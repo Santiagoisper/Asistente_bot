@@ -47,3 +47,12 @@ export {
   type AlignedLab,
   type AlignLabResult,
 } from './numeric-criteria'
+export {
+  computeVisitWindow,
+  normalizeVisitWindow,
+  visitWindowInputFromSpec,
+  VISIT_WINDOW_VERSION,
+  type VisitWindow,
+  type NormalizedVisitWindow,
+  type SpecVisitWindowInput,
+} from './visit-window'
