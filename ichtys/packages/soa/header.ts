@@ -49,8 +49,12 @@ const NUMERIC_TOKEN_RE = /^(\d{1,3}|[-–—])$/
 const MIN_NUMERIC_COLUMNS = 3
 /** Tolerancia de techo de caja para considerar dos fichas de la misma línea (pt). */
 const SAME_LINE_TOLERANCE = 1.5
-/** Ventana vertical (pt) alrededor de la línea de fichas donde se busca la etiqueta. */
-const LABEL_WINDOW = 9
+/**
+ * Ventana vertical (pt) alrededor de la línea de fichas donde se busca la
+ * etiqueta. También es la tolerancia con la que el techo de una región de
+ * grilla cubre el bloque completo de su encabezado (G18 §1).
+ */
+export const LABEL_WINDOW = 9
 /** Separación x mínima entre fichas distintas (pt): menos es un solape, no dos columnas. */
 const MIN_TOKEN_GAP = 1
 

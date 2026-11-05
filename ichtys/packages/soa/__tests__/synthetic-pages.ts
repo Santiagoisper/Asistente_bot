@@ -48,6 +48,12 @@ export interface DocSpec {
   withMarks?: boolean
   /** Glifo de las marcas (por defecto "X"): K1 prueba glifos dentro y fuera del conjunto reconocido. */
   markGlyph?: string
+  /**
+   * Desplaza la ETIQUETA del encabezado hacia arriba (pt), sin mover las
+   * fichas: en el protocolo difícil (G18 §1) la etiqueta vive ~11 pt por
+   * encima de la línea de enteros, no en la misma línea.
+   */
+  labelOffsetY?: number
 }
 
 export function build(spec: DocSpec): { pages: PageGeom[]; marks: number } {
@@ -69,7 +75,8 @@ export function build(spec: DocSpec): { pages: PageGeom[]; marks: number } {
     items.push(centered(page, 'Tratamiento', COL_X0 + third * COL_W + ((columns - third) * COL_W) / 2, 534))
 
     // Encabezado repetido en cada página.
-    if (spec.header.label !== null) items.push(text(page, spec.header.label, LABEL_X0 + 2, 512))
+    if (spec.header.label !== null)
+      items.push(text(page, spec.header.label, LABEL_X0 + 2, 512 + (spec.labelOffsetY ?? 0)))
     spec.header.values.forEach((v, c) => {
       const cx = COL_X0 + c * COL_W + COL_W / 2
       const str = v === null ? '-' : String(v)

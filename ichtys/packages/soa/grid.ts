@@ -42,7 +42,14 @@
  * pequeño no consumido) bajan la tabla a 'partial' con
  * 'validation_failed:<id>' cuando fallan.
  */
-import { findNumericHeader, findNumericHeaders, MARK_STRINGS, normalizeNumericToken, VISIT_TOKEN } from './header'
+import {
+  findNumericHeader,
+  findNumericHeaders,
+  LABEL_WINDOW,
+  MARK_STRINGS,
+  normalizeNumericToken,
+  VISIT_TOKEN,
+} from './header'
 import type {
   BBox,
   HeaderSource,
@@ -335,9 +342,22 @@ function readTable(
         regions.push({ yTop: Infinity, yBottom: -Infinity })
       } else {
         for (const [k, strip] of strips.entries()) {
+          // G18 §1: el techo de la región cubre TODO el bloque del encabezado
+          // de la tira — fichas, letras y su ETIQUETA de fila, que en el
+          // protocolo difícil vive ~11 pt POR ENCIMA de las fichas. Con el
+          // techo en las fichas la etiqueta quedaba fuera de la franja y
+          // findNumericHeader, que exige etiqueta, no veía encabezado DENTRO
+          // de la región: 0 columnas (regresión de C1b, medida G18). La
+          // PRIMERA región sube hasta el techo de la página: encima del
+          // primer encabezado viven los períodos y la propia etiqueta.
+          // (La etiqueta elevada de una tira INTERIOR cae además en la franja
+          // de la región anterior: el rediseño por bloque de G18 §4 lo
+          // resuelve; ningún fixture actual lo ejercita.)
+          const labelTop = strip.labelItems.reduce((top, l) => Math.max(top, l.bbox[3]), -Infinity)
+          const yTop = k === 0 ? Infinity : Math.max(strip.yTop, labelTop) + LABEL_WINDOW
           // La franja de una tira llega hasta el techo de la siguiente; la
           // última, hasta el fondo de la página.
-          regions.push({ yTop: strip.yTop, yBottom: strips[k + 1]?.yTop ?? -Infinity })
+          regions.push({ yTop, yBottom: strips[k + 1]?.yTop ?? -Infinity })
         }
       }
     }
