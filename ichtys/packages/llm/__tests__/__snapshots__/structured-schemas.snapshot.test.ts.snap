@@ -1434,9 +1434,30 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
       "items": {
         "additionalProperties": false,
         "properties": {
-          "armOnly": {
-            "maxLength": 64,
-            "type": "string",
+          "armOnlySpan": {
+            "anyOf": [
+              {
+                "additionalItems": false,
+                "items": [
+                  {
+                    "maximum": 119,
+                    "minimum": 0,
+                    "type": "integer",
+                  },
+                  {
+                    "maximum": 120,
+                    "minimum": 1,
+                    "type": "integer",
+                  },
+                ],
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array",
+              },
+              {
+                "type": "null",
+              },
+            ],
           },
           "col": {
             "maximum": 199,
@@ -1479,8 +1500,8 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
                 "type": "string",
               },
               "value": {
-                "maximum": 900,
-                "minimum": -60,
+                "maximum": 3700,
+                "minimum": -400,
                 "type": "integer",
               },
             },
@@ -1505,11 +1526,54 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
             ],
             "type": "string",
           },
+          "windowIfUnparsed": {
+            "additionalProperties": false,
+            "properties": {
+              "after": {
+                "anyOf": [
+                  {
+                    "maximum": 180,
+                    "minimum": 0,
+                    "type": "integer",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+              },
+              "before": {
+                "anyOf": [
+                  {
+                    "maximum": 180,
+                    "minimum": 0,
+                    "type": "integer",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+              },
+              "unit": {
+                "enum": [
+                  "day",
+                  "week",
+                ],
+                "type": "string",
+              },
+            },
+            "required": [
+              "before",
+              "after",
+              "unit",
+            ],
+            "type": "object",
+          },
         },
         "required": [
           "col",
           "printedIdSpan",
           "type",
+          "armOnlySpan",
         ],
         "type": "object",
       },
@@ -1545,7 +1609,12 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
                   "type": "string",
                 },
                 "doseTiming": {
-                  "maxLength": 120,
+                  "enum": [
+                    "pre",
+                    "post",
+                    "between",
+                    "other",
+                  ],
                   "type": "string",
                 },
                 "expr": {
@@ -1570,12 +1639,12 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
                   "additionalProperties": false,
                   "properties": {
                     "after": {
-                      "maximum": 60,
+                      "maximum": 180,
                       "minimum": 0,
                       "type": "integer",
                     },
                     "before": {
-                      "maximum": 30,
+                      "maximum": 180,
                       "minimum": 0,
                       "type": "integer",
                     },

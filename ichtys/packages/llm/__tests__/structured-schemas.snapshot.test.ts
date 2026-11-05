@@ -294,13 +294,14 @@ describe('veredictos de validación sin cambio (ADR-8 M7)', () => {
     // P3: salidas de las 4 llamadas del normalizador (orden B-P3 §2).
     soaHeadersOutput: {
       headers: [
-        { col: 0, printedIdSpan: [0, 2], type: 'screening' },
+        { col: 0, printedIdSpan: [0, 2], type: 'screening', armOnlySpan: null },
         {
           col: 1,
           printedIdSpan: null,
           type: 'unscheduled',
           timingIfUnparsed: { value: 15, unit: 'day' },
-          armOnly: 'A',
+          armOnlySpan: [6, 7],
+          windowIfUnparsed: { before: 1, after: 3, unit: 'day' },
         },
       ],
     },
@@ -329,6 +330,7 @@ describe('veredictos de validación sin cambio (ADR-8 M7)', () => {
               kind: 'dose_timing',
               expr: 'Ventana propia',
               appliesTo: 'row',
+              doseTiming: 'post',
               procedureWindow: { before: 4, after: 2, unit: 'week' },
             },
           ],

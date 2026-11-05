@@ -14,7 +14,14 @@
  * usan 2 como máximo. Nada de esto se loguea con contenido (S8).
  */
 import { z } from 'zod'
-import { conditionKindSchema, unitSchema, visitTypeSchema } from '../schedule-contract'
+import {
+  conditionKindSchema,
+  TIMING_VALUE_MAX,
+  TIMING_VALUE_MIN,
+  unitSchema,
+  visitTypeSchema,
+  WINDOW_MARGIN_MAX,
+} from '../schedule-contract'
 
 // ── Entradas (validación + límites de tamaño por llamada) ────────────────
 
@@ -60,8 +67,14 @@ export interface RowsInput {
 export interface NotesInput {
   notes: Array<{ ref: string; text: string; calledFrom: Array<{ row: number; col?: number }> }>
 }
+/**
+ * G23-K4: el modelo recibe el catálogo de columnas de la tabla dentro del
+ * documento — affectsVisits solo puede citar índices de ESA lista; el
+ * ensamblado descarta cualquier otro.
+ */
 export interface RulesInput {
   paragraphs: Array<{ index: number; text: string }>
+  visits: Array<{ col: number; headerText: string }>
 }
 
 // ── Salidas (viajan al proveedor como output schema — M4/M5) ────────────
@@ -80,9 +93,23 @@ export const headersOutputSchema = z.object({
         printedIdSpan: spanSchema.nullable(),
         type: visitTypeSchema,
         timingIfUnparsed: z
-          .object({ value: z.number().int().min(-60).max(900), unit: unitSchema })
+          .object({
+            value: z.number().int().min(TIMING_VALUE_MIN).max(TIMING_VALUE_MAX),
+            unit: unitSchema,
+          })
           .optional(),
-        armOnly: z.string().max(64).optional(),
+        /** G23-K5: el brazo citado como span del `headerText`, no texto libre. */
+        armOnlySpan: spanSchema.nullable(),
+        /** G23-K6: solo cuando parseWindow dio null sobre un windowText NO
+         *  vacío — la ventana no se pierde en silencio; el ensamblado la
+         *  marca «a revisar». */
+        windowIfUnparsed: z
+          .object({
+            before: z.number().int().min(0).max(WINDOW_MARGIN_MAX).nullable(),
+            after: z.number().int().min(0).max(WINDOW_MARGIN_MAX).nullable(),
+            unit: unitSchema,
+          })
+          .optional(),
       }),
     )
     .max(200),
@@ -125,11 +152,12 @@ export const notesOutputSchema = z.object({
               kind: conditionKindSchema,
               expr: z.string().max(300),
               appliesTo: z.enum(['row', 'cells']),
-              doseTiming: z.string().max(120).optional(),
+              /** G23-K5: enum cerrado, no texto libre. */
+              doseTiming: z.enum(['pre', 'post', 'between', 'other']).optional(),
               procedureWindow: z
                 .object({
-                  before: z.number().int().min(0).max(30),
-                  after: z.number().int().min(0).max(60),
+                  before: z.number().int().min(0).max(WINDOW_MARGIN_MAX),
+                  after: z.number().int().min(0).max(WINDOW_MARGIN_MAX),
                   unit: z.enum(['day', 'week', 'hour']),
                 })
                 .optional(),

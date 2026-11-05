@@ -22,8 +22,18 @@ Reglas fijas:
 - Si algo no está en el documento, respondé null o omití el campo según el esquema. La ausencia es una respuesta válida.
 - Respondé únicamente lo que pide el esquema de salida.`
 
+/**
+ * Neutraliza intentos de cerrar el delimitador desde el propio documento
+ * (condición del Reviewer suscripta por el Architect en G24): los brackets
+ * del tag se vuelven tipográficos y el cierre falso deja de existir. El
+ * texto sigue legible para el modelo.
+ */
+function escapeDelimiters(text: string): string {
+  return text.replace(/<\/?documento>/gi, (tag) => tag.replace(/[<>]/g, (c) => (c === '<' ? '‹' : '›')))
+}
+
 function fence(inner: string): string {
-  return `<documento>\n${inner}\n</documento>`
+  return `<documento>\n${escapeDelimiters(inner)}\n</documento>`
 }
 
 /** Encabezados de columnas → id impreso (span), tipo y atributos. */
@@ -42,7 +52,8 @@ Por CADA columna, respondé en el esquema:
 - printedIdSpan: span [inicio, fin) del id impreso de la visita DENTRO de "encabezado" (ej.: "V2 – Día 15" → span de "V2"). null si la columna no tiene id.
 - type: el tipo de visita del enum.
 - timingIfUnparsed: solo si "tiempo" no es un tiempo parseable y la columna es una visita con tiempo (valor + unidad).
-- armOnly: solo si la columna aplica exclusivamente a un brazo, con el nombre del brazo tal como aparece.`
+- armOnlySpan: solo si la columna aplica exclusivamente a un brazo: span del nombre del brazo DENTRO de "encabezado". null si no.
+- windowIfUnparsed: solo si "ventana" NO está vacía y no es una ventana parseable (antes/después con unidad); si la ventana está vacía o ya parsea, omití el campo.`
 }
 
 /** Filas → clase (procedimiento / atributo / sección / regla) y condiciones. */
@@ -74,7 +85,7 @@ export function buildNotesPrompt(input: NotesInput): string {
 Por CADA nota, respondé en el esquema:
 - conditions: condiciones que expresa la nota, con kind del enum y expr como frase corta del documento.
 - appliesTo: "row" si la condición aplica a la fila completa, "cells" si aplica a las celdas que la citan.
-- doseTiming: solo para condiciones de momento respecto de la dosis, transcripción corta.
+- doseTiming: para condiciones de momento respecto de la dosis: pre, post, between u other.
 - procedureWindow: solo si la nota define ventana propia del procedimiento (antes/después con unidad).`
 }
 
@@ -83,10 +94,15 @@ export function buildRulesPrompt(input: RulesInput): string {
   const paragraphs = input.paragraphs
     .map((p) => `parrafo=${p.index} | texto=${JSON.stringify(p.text)}`)
     .join('\n')
-  return `${fence(paragraphs)}
+  const visits = input.visits
+    .map((v) => `col=${v.col} | encabezado=${JSON.stringify(v.headerText)}`)
+    .join('\n')
+  return `${fence(
+    `${paragraphs}\ncolumnas_de_visita:\n${visits}`,
+  )}
 
 Por CADA párrafo que exprese una regla del cronograma, respondé en el esquema:
 - paragraph: el ÍNDICE del párrafo (nunca su texto).
 - conditions: condiciones del enum con expr como frase corta del documento.
-- affectsVisits: índices de columnas de visita afectadas, o "all".`
+- affectsVisits: índices de la lista "columnas_de_visita" que afecta, o "all". Un índice fuera de esa lista no existe.`
 }
