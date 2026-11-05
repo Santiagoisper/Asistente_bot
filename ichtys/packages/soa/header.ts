@@ -11,6 +11,14 @@
  *      un guion ("-", "–", "—") es una columna sin número. Se repite en cada
  *      página. Sin etiqueta una fila de enteros NO es encabezado: es dato.
  *
+ * P2c — TIRAS y FICHA PARTIDA (protocolo real de 46 columnas): una página
+ * puede apilar VARIAS tiras de encabezado, cada una con su etiqueta y sus
+ * filas de datos colgando; la ficha se imprime PARTIDA en dos filas — el
+ * prefijo (letras) unos puntos ARRIBA del número, alineado en x. El plural
+ * (`findNumericHeaders`) devuelve todas las tiras de la página, de arriba a
+ * abajo; una banda de eje temporal («Día», «Semana») bajo una tira de visitas
+ * es estructura de esa grilla, no una tira propia.
+ *
  * El texto del documento (etiquetas, fichas) se devuelve al llamador pero
  * nunca se loguea (S8).
  */
@@ -46,6 +54,12 @@ const LABEL_WINDOW = 9
 /** Separación x mínima entre fichas distintas (pt): menos es un solape, no dos columnas. */
 const MIN_TOKEN_GAP = 1
 
+/** Letra de ficha partida: prefijo alfabético corto ('V', 'S', 'SCR'…), sin dígitos ni espacios. */
+const LETTER_RE = /^[A-Za-zÀ-ÿ]{1,5}$/
+/** Franja vertical donde vive la fila de letras: 2–15 pt SOBRE el techo de los números (pt). */
+const LETTERS_ABOVE_MIN = 2
+const LETTERS_ABOVE_MAX = 15
+
 /** Etiquetas de visita (prioridad alta): normalizadas sin tildes ni puntuación. */
 const VISIT_LABEL_RES: RegExp[] = [
   /^(numero|num|nro|n|no)( de)? visita$/,
@@ -61,12 +75,18 @@ const TIME_LABEL_RES: RegExp[] = [
 ]
 
 export interface NumericHeader {
-  /** Techo de caja de la línea de fichas (comparable con `band.y` de las bandas de texto). */
+  /** Techo de caja de la línea de NÚMEROS (comparable con `band.y` de las bandas de texto). */
   y: number
+  /** Techo de la envolvente de la tira: la fila de letras si la hay, si no `y`. */
+  yTop: number
   /** 'visit' (etiqueta de visita) o 'time' (Día / Semana): la primera gana a la segunda. */
   kind: 'visit' | 'time'
-  /** Fichas de la fila en orden x: enteros y guiones (cada una con su caja propia). */
+  /** Fila de números en orden x: enteros y guiones (cada una con su caja propia). */
   tokens: TextItem[]
+  /** Fila de letras (prefijos de la ficha partida) en orden x, alineadas en x con su número; [] si la ficha no está partida. */
+  letters: TextItem[]
+  /** Ficha por columna: prefijo + número ('V1'), número ('12') o '—' (columna sin número). */
+  chips: string[]
   /** Ítems de la etiqueta de fila (se excluyen de las columnas). */
   labelItems: TextItem[]
   /** Los enteros en orden de lectura (estrictamente crecientes). */
@@ -141,12 +161,15 @@ function labelKindOf(left: TextItem[]): 'visit' | 'time' | null {
 }
 
 /**
- * Busca el encabezado numérico de una página: la fila etiquetada de
- * enteros crecientes con guiones como columnas sin número. Prioridad: una
- * etiqueta de visita gana a una de eje temporal; a igualdad, la fila de más
- * arriba. Determinista y puro.
+ * Busca TODAS las tiras de encabezado numérico de una página (P2c): cada
+ * fila etiquetada de enteros crecientes con guiones es una tira, con la
+ * ficha PARTIDA en dos filas (prefijo arriba, número abajo) compuesta en
+ * `chips`. La banda de eje temporal («Día», «Semana») bajo una tira de
+ * visitas es estructura de esa grilla, no una tira propia: si hay al menos
+ * una tira de visitas, las de eje temporal se excluyen. Orden: de arriba a
+ * abajo. Determinista y puro.
  */
-export function findNumericHeader(items: TextItem[]): NumericHeader | null {
+export function findNumericHeaders(items: TextItem[]): NumericHeader[] {
   const tokens = items
     .filter((i) => i.fontSize >= 4 && !i.rotated && i.str.trim().length > 0)
     .flatMap(splitNumericItem)
@@ -161,7 +184,7 @@ export function findNumericHeader(items: TextItem[]): NumericHeader | null {
     else lines.push([token])
   }
 
-  let best: NumericHeader | null = null
+  const candidates: NumericHeader[] = []
   for (const line of lines) {
     const row = [...line].sort((a, b) => a.bbox[0] - b.bbox[0])
     const integers = row
@@ -185,14 +208,44 @@ export function findNumericHeader(items: TextItem[]): NumericHeader | null {
     const kind = labelKindOf(labelItems)
     if (kind === null) continue
 
-    const candidate: NumericHeader = { y: top, kind, tokens: row, labelItems, integers }
-    if (
-      best === null ||
-      (candidate.kind === 'visit' && best.kind === 'time') ||
-      (candidate.kind === best.kind && candidate.y > best.y)
-    ) {
-      best = candidate
-    }
+    // Fila de letras de la ficha partida: prefijos cortos en la franja
+    // 2–15 pt sobre el techo de los números, alcanzando la zona de fichas
+    // (la etiqueta de fila vive a la izquierda) y alineados en x con su
+    // número. Las bandas agrupadas («Selección») están más arriba y no
+    // entran; las letras de OTRA tira están fuera de la franja.
+    const letters = items
+      .filter((i) => {
+        const s = i.str.trim()
+        if (s.length === 0 || !LETTER_RE.test(s) || i.rotated || i.fontSize < 4) return false
+        if (i.bbox[2] <= firstX - 4) return false
+        return i.bbox[1] >= top + LETTERS_ABOVE_MIN && i.bbox[3] <= top + LETTERS_ABOVE_MAX
+      })
+      .sort((a, b) => a.bbox[0] - b.bbox[0])
+      .filter((l) => row.some((t) => t.bbox[0] < l.bbox[2] && t.bbox[2] > l.bbox[0]))
+
+    const chips = row.map((t) => {
+      const num = normalizeNumericToken(t.str)
+      if (num === DASH_TOKEN) return num
+      const letter = letters.find((l) => l.bbox[0] < t.bbox[2] && l.bbox[2] > t.bbox[0])
+      return letter ? `${letter.str.trim()}${num}` : num
+    })
+    const yTop = letters.length > 0 ? Math.max(top, ...letters.map((l) => l.bbox[3])) : top
+    candidates.push({ y: top, yTop, kind, tokens: row, letters, chips, labelItems, integers })
   }
-  return best
+
+  // «Día»/«Semana» bajo una tira de visitas: estructura, no tira.
+  const visitOnly = candidates.some((c) => c.kind === 'visit')
+  const kept = visitOnly ? candidates.filter((c) => c.kind === 'visit') : candidates
+  return kept.sort((a, b) => b.yTop - a.yTop)
+}
+
+/**
+ * La MEJOR tira de la página (una): prioridad de etiqueta de visita sobre
+ * eje temporal; a igualdad, la de más arriba. Compatibilidad con locate/grid
+ * mientras grid pasa a leer tiras (P2c C1b).
+ */
+export function findNumericHeader(items: TextItem[]): NumericHeader | null {
+  const strips = findNumericHeaders(items)
+  if (strips.length === 0) return null
+  return strips.find((s) => s.kind === 'visit') ?? strips[0]!
 }

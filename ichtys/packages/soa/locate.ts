@@ -18,7 +18,7 @@
  * El texto de la página (`headerSignature`, subtítulos) se devuelve pero
  * nunca se loguea (S8).
  */
-import { findNumericHeader, MARK_STRINGS, normalizeNumericToken, VISIT_TOKEN } from './header'
+import { findNumericHeaders, MARK_STRINGS, VISIT_TOKEN } from './header'
 import type { HeaderSource, PageGeom, ScheduleLocation, TextItem } from './types'
 
 /** Título de la sección del cronograma (banda de sección). */
@@ -152,14 +152,17 @@ function scorePage(p: PageGeom): ScoredPage {
   }
   // Plan B (P2b): encabezado numérico etiquetado (mismo detector que grid).
   // K2: se registra de qué tipo salió (visita vs. eje temporal).
+  // P2c: TODAS las tiras de la página suman — cada una con su etiqueta y sus
+  // fichas (partidas o no, compuestas en `chips`) — para que la firma de la
+  // tabla vea la tabla completa y no solo la primera tira.
   let numericTokens: string[] | null = null
   let headerKind: HeaderSource | null = headerCount >= MIN_HEADER_TOKENS ? 'prefixed' : null
   if (headerCount < MIN_HEADER_TOKENS) {
-    const numeric = findNumericHeader(p.items)
-    if (numeric) {
-      headerCount = numeric.integers.length
-      numericTokens = numeric.tokens.map((t) => normalizeNumericToken(t.str))
-      headerKind = numeric.kind === 'visit' ? 'numeric_visit' : 'numeric_time'
+    const strips = findNumericHeaders(p.items)
+    if (strips.length > 0) {
+      headerCount = strips.reduce((acc, s) => acc + s.integers.length, 0)
+      numericTokens = strips.flatMap((s) => s.chips)
+      headerKind = strips.some((s) => s.kind === 'visit') ? 'numeric_visit' : 'numeric_time'
     }
   }
 
