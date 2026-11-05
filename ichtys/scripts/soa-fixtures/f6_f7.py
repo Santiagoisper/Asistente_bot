@@ -1,9 +1,13 @@
-"""Fixtures sintéticos F6, F7 y F8. Generador 1.3.0.
+"""Fixtures sintéticos F6, F6b, F7 y F8. Generador 1.3.0.
 
 F6: encabezado numérico sin prefijo y sin etiqueta en la fila de enteros.
 Tres guiones, dos de ellos separados por un solo entero (4 - 5 6 - 7 - 8).
 Períodos agrupados arriba y una fila «Día» en otra banda. 22 páginas de
 cronograma apaisadas; el encabezado se repite en cada una.
+
+F6b: el mismo F6, con la etiqueta de la fila de enteros. Dos palabras, la
+misma fuente que las fichas. El techo de la etiqueta queda 11,5 pt sobre
+el techo de las fichas, y el texto queda a la izquierda de la primera.
 
 F7: un solo encabezado de varias líneas. Períodos arriba. Fila de ids de
 visita en celdas de dos líneas: las fichas largas partidas (prefijo arriba,
@@ -11,7 +15,7 @@ número 9 pt abajo, mismo x) y 5 fichas cortas enteras, centradas en altura.
 Etiqueta «Visita» en x = 82, en la línea del número. Primera ficha en
 x = 220. Fila de semanas 39 pt abajo, con fichas S… partidas si son largas.
 26 columnas, 4 páginas, encabezado repetido. Antes, una página de figura:
-21 fichas S… con 6 pt entre sí y sin marcas.
+21 fichas S… cuyo origen queda a 6 pt del siguiente, sin marcas.
 
 F8: control de dos tablas apiladas de verdad. Hay filas de datos entre los
 dos encabezados. El calificador las desempata por geometría.
@@ -55,6 +59,11 @@ F6_VALUES = [1, 2, 3, 4, None, 5, 6, None, 7, None, 8, 9, 10, 11, 12, 13, 14, 15
 F6_PERIODS = ((0, 7, "Selección"), (7, 13, "Tratamiento"), (13, 19, "Seguimiento"))
 F6_ROWS_PER_PAGE = [2, 6, 5, 4, 3] + [2] * 17
 F6_DAY_GAP = 16.0
+F6_CARD_FONT = 7
+# El techo que arma pdfjs es baseline + tamaño. Con la misma fuente, subir
+# la línea de base 11,5 pt sube el techo 11,5 pt.
+F6B_LABEL_RISE = 11.5
+F6B_LABEL_WORDS = ("Visita", "número")
 
 # Baselines en espacio de usuario (origen abajo a la izquierda). Las distancias
 # son las que midió el Architect: 9 pt entre letras y números, 45 pt entre
@@ -138,7 +147,7 @@ def f6_layout():
         require_fit(label, "DejaVu", 6, (end - start) * vw, f"F6 período {label}")
     for value in F6_VALUES:
         glyph = "-" if value is None else str(value)
-        require_fit(glyph, "DejaVu", 7, vw, "F6 ficha")
+        require_fit(glyph, "DejaVu", F6_CARD_FONT, vw, "F6 ficha")
     return {
         "left": left,
         "proc_w": proc_w,
@@ -150,7 +159,7 @@ def f6_layout():
     }
 
 
-def draw_f6_page(doc, table, r0, r1, layout):
+def draw_f6_page(doc, table, r0, r1, layout, row_label=None):
     def drawer(c, page, size):
         paint_title(c, doc, page, size, "Encabezado numérico, períodos agrupados.")
         left = layout["left"]
@@ -198,19 +207,49 @@ def draw_f6_page(doc, table, r0, r1, layout):
             center(c, label, vx(start), vx(end) - vx(start), period_bottom + 3, 6)
             periods.append({"label": label, "start": start, "end": end, "bbox": box(vx(start), period_bottom, vx(end), period_top)})
 
-        # La fila de enteros no lleva etiqueta. «Día» vive en la banda de abajo.
+        # «Día» vive en la banda de abajo. La etiqueta de los enteros, si va,
+        # no comparte esa línea: su techo queda 11,5 pt sobre el de las fichas.
         number_y = header_bottom + 3
         day_y = day_bottom + 3
         if abs((number_y - day_y) - F6_DAY_GAP) > 0.01:
             raise SystemExit("F6 la fila Día no queda separada de los enteros")
         left_text(c, "Día", left + 2, day_y, 6)
         center(c, "Comentarios", comment_x, right - comment_x, header_bottom + 4, 6)
+        label_record = None
+        if row_label is not None:
+            size = row_label["fontSize"]
+            if size != F6_CARD_FONT:
+                raise SystemExit("F6b la etiqueta no usa la fuente de las fichas")
+            label_y = number_y + row_label["rise"]
+            label_x = left + 2.0
+            cursor_x = label_x
+            space = pdfmetrics.stringWidth(" ", "DejaVu", size)
+            pieces = []
+            for index, word in enumerate(row_label["words"]):
+                if index:
+                    cursor_x += space
+                left_text(c, word, cursor_x, label_y, size)
+                width = pdfmetrics.stringWidth(word, "DejaVu", size)
+                pieces.append({"text": word, "x": round(cursor_x, 2), "width": round(width, 2)})
+                cursor_x += width
+            if cursor_x >= vx(0) - 1:
+                raise SystemExit("F6b la etiqueta pisa la primera ficha")
+            label_record = {
+                "text": " ".join(row_label["words"]),
+                "words": [piece["text"] for piece in pieces],
+                "x": round(label_x, 2),
+                "baseline": round(label_y, 2),
+                "fontSize": size,
+                "rise": row_label["rise"],
+                "glyphTop": round(label_y + size, 2),
+                "bbox": box(label_x, label_y, cursor_x, label_y + size),
+            }
 
         columns = []
         days = []
         for index, value in enumerate(F6_VALUES):
             glyph = "-" if value is None else str(value)
-            center(c, glyph, vx(index), vw, number_y, 7)
+            center(c, glyph, vx(index), vw, number_y, F6_CARD_FONT)
             day = str((index + 1) * 7)
             center(c, day, vx(index), vw, day_y, 6)
             number_box = box(vx(index), header_bottom, vx(index) + vw, header_top)
@@ -219,7 +258,7 @@ def draw_f6_page(doc, table, r0, r1, layout):
                 "glyph": glyph,
                 "dash": value is None,
                 "text": "—" if value is None else str(value),
-                "fontSize": 7,
+                "fontSize": F6_CARD_FONT,
                 "baseline": number_y,
                 "bbox": number_box,
             })
@@ -256,7 +295,7 @@ def draw_f6_page(doc, table, r0, r1, layout):
                 "page": page,
                 "rows": r1 - r0,
                 "periods": periods,
-                "label": None,
+                "label": label_record,
                 "labelColumn": {"countsAsVisit": False, "bbox": box(left, body_bottom, left + proc_w, header_top)},
                 "columns": columns,
                 "timeRow": {
@@ -277,6 +316,18 @@ def draw_f6_page(doc, table, r0, r1, layout):
 
 
 def build_f6():
+    return build_numeric("F6", 1006, None)
+
+
+def build_f6b():
+    return build_numeric("F6b", 1009, {
+        "words": F6B_LABEL_WORDS,
+        "rise": F6B_LABEL_RISE,
+        "fontSize": F6_CARD_FONT,
+    })
+
+
+def build_numeric(fixture, seed, row_label):
     if F6_ROWS_PER_PAGE != [2, 6, 5, 4, 3] + [2] * 17:
         raise SystemExit("F6: el plan de filas no es el declarado")
     if sum(F6_ROWS_PER_PAGE) != 54 or len(F6_ROWS_PER_PAGE) != 22:
@@ -284,7 +335,7 @@ def build_f6():
     if any(not 2 <= count <= 6 for count in F6_ROWS_PER_PAGE):
         raise SystemExit("F6: una página se sale de 2 a 6 filas")
     labels = catalog_es()
-    rows = make_procedures(labels[:54], "F6")
+    rows = make_procedures(labels[:54], fixture)
     visits = []
     for index, value in enumerate(F6_VALUES):
         printed = None if value is None else str(value)
@@ -309,17 +360,21 @@ def build_f6():
         "pages": [],
         "headerPages": [],
     }
-    doc = Doc("F6", 1006, 24, "es")
+    doc = Doc(fixture, seed, 24, "es")
     doc.tables.append(table)
     layout = f6_layout()
     doc.add(draw_cover(doc), (612.0, 792.0), "cover")
     doc.false_hit_pages.append(doc.add(draw_synopsis(doc, lambda: table["pages"][0]), (612.0, 792.0), "false"))
     cursor = 0
     for count in F6_ROWS_PER_PAGE:
-        table["pages"].append(doc.add(draw_f6_page(doc, table, cursor, cursor + count, layout), LANDSCAPE, "grid"))
+        table["pages"].append(doc.add(
+            draw_f6_page(doc, table, cursor, cursor + count, layout, row_label),
+            LANDSCAPE,
+            "grid",
+        ))
         cursor += count
     if len(doc.items) != doc.n_pages:
-        raise SystemExit(f"F6 páginas {len(doc.items)} != {doc.n_pages}")
+        raise SystemExit(f"{fixture} páginas {len(doc.items)} != {doc.n_pages}")
     doc.f6_table = table
     return doc, []
 
@@ -629,6 +684,14 @@ def check_common(pdf, doc):
 
 
 def check_f6(pdf, doc, gold):
+    check_numeric(pdf, doc, gold, labeled=False)
+
+
+def check_f6b(pdf, doc, gold):
+    check_numeric(pdf, doc, gold, labeled=True)
+
+
+def check_numeric(pdf, doc, gold, labeled):
     check_common(pdf, doc)
     header = gold["header"]
     pages = header["pages"]
@@ -646,7 +709,18 @@ def check_f6(pdf, doc, gold):
     token_text = " ".join("-" if column["dash"] else column["text"] for column in pages[0]["columns"])
     if "4 - 5 6 - 7 - 8" not in token_text:
         raise SystemExit(f"F6 la secuencia no es 4 - 5 6 - 7 - 8: {token_text}")
-    if header["label"] is not None or header["integerRowLabeled"]:
+    card = pages[0]["columns"][0]
+    if labeled:
+        label = header["label"]
+        if not header["integerRowLabeled"] or label is None:
+            raise SystemExit("F6b la fila de enteros no está etiquetada")
+        if tuple(label["words"]) != F6B_LABEL_WORDS or label["fontSize"] != card["fontSize"]:
+            raise SystemExit("F6b la etiqueta no son dos palabras de la misma fuente")
+        close(label["baseline"] - card["baseline"], F6B_LABEL_RISE, "F6b línea de la etiqueta")
+        close(label["glyphTop"] - (card["baseline"] + card["fontSize"]), F6B_LABEL_RISE, "F6b techo de la etiqueta")
+        if label["bbox"][2] >= card["bbox"][0]:
+            raise SystemExit("F6b la etiqueta no queda a la izquierda de la primera ficha")
+    elif header["label"] is not None or header["integerRowLabeled"]:
         raise SystemExit("F6 la fila de enteros sigue etiquetada")
     for period in header["periods"]:
         if period["end"] - period["start"] < 2:
@@ -654,7 +728,10 @@ def check_f6(pdf, doc, gold):
     for page in pages:
         if [column["glyph"] for column in page["columns"]] != glyphs:
             raise SystemExit(f"F6 página {page['page']} no repite el encabezado")
-        if page["label"] is not None:
+        if labeled:
+            if page["label"] is None or page["label"]["text"] != header["label"]["text"]:
+                raise SystemExit(f"{doc.fixture} página {page['page']} no repite la etiqueta")
+        elif page["label"] is not None:
             raise SystemExit("F6 la fila de enteros tiene etiqueta")
         if page["timeRow"]["label"] != "Día":
             raise SystemExit("F6 perdió la fila Día")
@@ -685,7 +762,27 @@ def check_f6(pdf, doc, gold):
             raise SystemExit(f"F6 página {item['page']} el PDF no repite {header_glyphs}")
         left_of = [run for run in runs if abs(run[1] - header_y) < 0.2 and run[0] < header_runs[0][0] - 1]
         if left_of:
-            raise SystemExit(f"F6 página {item['page']} tiene texto a la izquierda de los enteros")
+            raise SystemExit(f"{doc.fixture} página {item['page']} tiene texto a la izquierda de los enteros")
+        if labeled:
+            label = gold["header"]["label"]
+            # La ó sale por ToUnicode: extract_text la ve, el literal del
+            # content stream no. La geometría se mide por la línea de base.
+            if any(word not in text for word in label["words"]):
+                raise SystemExit(f"F6b página {item['page']} no muestra las dos palabras")
+            found = sorted(
+                (
+                    run for run in runs
+                    if abs(run[1] - (header_y + label["rise"])) < 0.05
+                    and run[2] == label["fontSize"]
+                    and run[0] < header_runs[0][0] - 1
+                ),
+                key=lambda run: run[0],
+            )
+            if len(found) != 2 or found[0][3] != label["words"][0]:
+                raise SystemExit(f"F6b página {item['page']} la etiqueta no son dos palabras a 11,5 pt")
+            close(found[0][0], label["x"], "F6b primera palabra")
+            if found[1][0] <= found[0][0]:
+                raise SystemExit(f"F6b página {item['page']} las palabras no se leen en orden")
         day_runs = [run for run in numeric if run[1] < header_y - 14 and run[3].isdigit()]
         if not day_runs:
             raise SystemExit(f"F6 página {item['page']} no tiene la fila Día debajo")
@@ -767,8 +864,8 @@ def attach_f6(doc, gold):
     pages = table["headerPages"]
     gold["header"] = {
         "kind": "numeric_visit",
-        "label": None,
-        "integerRowLabeled": False,
+        "label": pages[0]["label"],
+        "integerRowLabeled": pages[0]["label"] is not None,
         "repeatedOnEveryGridPage": True,
         "rowsPerPage": [page["rows"] for page in pages],
         "tokens": [
@@ -842,7 +939,9 @@ F7_COLUMNS = 26
 F7_GRID_PAGES = 4
 F7_ROWS_PER_PAGE = 4
 F7_FIGURE_CARDS = 21
-F7_FIGURE_GAP = 6.0
+# Paso entre orígenes. Un hueco de 6 pt entre bordes deja 16–21 pt entre
+# orígenes, que es lo que midió el Architect y no ejercita el corte de < 10 pt.
+F7_FIGURE_STEP = 6.0
 F7_SHORT = {0: "V1", 8: "ET", 14: "FA", 20: "VDT", 25: "EOS"}
 F7_PERIODS = ((0, 8, "Selección"), (8, 18, "Tratamiento"), (18, 26, "Seguimiento"))
 
@@ -917,10 +1016,10 @@ def draw_f7_figure(doc, cards):
             width = pdfmetrics.stringWidth(card, "DejaVu", 8)
             left_text(c, card, x, y, 8)
             placed.append({"text": card, "x": round(x, 2), "y": y, "width": round(width, 2)})
-            x += width + F7_FIGURE_GAP
+            x += F7_FIGURE_STEP
         if x > size[0] - 24:
             raise SystemExit("F7 la figura no entra en la página")
-        doc.f7_figure = {"page": page, "y": y, "gap": F7_FIGURE_GAP, "cards": placed}
+        doc.f7_figure = {"page": page, "y": y, "gap": F7_FIGURE_STEP, "separation": "origin", "cards": placed}
 
     return drawer
 
@@ -1194,8 +1293,7 @@ def check_f7(pdf, doc, gold):
     if b"(X)" in page_content(figure_page):
         raise SystemExit("F7 la figura tiene marcas")
     for previous, nxt in zip(figure_runs, figure_runs[1:]):
-        width = pdfmetrics.stringWidth(previous[3], "DejaVu", 8)
-        close(nxt[0] - (previous[0] + width), F7_FIGURE_GAP, "F7 separación de la figura", 0.2)
+        close(nxt[0] - previous[0], F7_FIGURE_STEP, "F7 separación de la figura", 0.2)
     for item in doc.items:
         if item["kind"] != "grid":
             continue
@@ -1265,6 +1363,7 @@ def attach_f7(doc, gold):
         "page": figure["page"],
         "cards": len(figure["cards"]),
         "gap": figure["gap"],
+        "separation": figure["separation"],
         "marks": 0,
         "timeline": figure["cards"],
     }
@@ -1274,6 +1373,7 @@ def attach_f7(doc, gold):
 def emit_named(names):
     builders = {
         "F6": (build_f6, attach_f6, check_f6),
+        "F6b": (build_f6b, attach_f6, check_f6b),
         "F7": (build_f7, attach_f7, check_f7),
         "F8": (build_f8, attach_f8, check_f8),
     }
@@ -1285,4 +1385,4 @@ def emit_named(names):
 
 if __name__ == "__main__":
     import sys
-    emit_named(sys.argv[1:] or ["F6", "F7", "F8"])
+    emit_named(sys.argv[1:] or ["F6", "F6b", "F7", "F8"])

@@ -1,5 +1,5 @@
 /**
- * Contrato del generador 1.3.0. F6, F7 y F8 son la verdad sintética para el
+ * Contrato del generador 1.3.0. F6, F6b, F7 y F8 son la verdad sintética para el
  * lector: el test mira el gold, no una medición del extractor.
  */
 import { readFileSync } from 'node:fs'
@@ -119,7 +119,7 @@ interface F7Gold {
     firstCardX: number
     pages: F7Page[]
   }
-  figure: { page: number; cards: number; gap: number; marks: number; timeline: Array<{ text: string }> }
+  figure: { page: number; cards: number; gap: number; separation: string; marks: number; timeline: Array<{ text: string; x: number }> }
   cells: Array<{ visitKey: string; mark: string }>
   visits: Array<{ key: string; printedId: string }>
 }
@@ -218,6 +218,60 @@ describe('F6 — encabezado numérico sin prefijo', () => {
   })
 })
 
+interface F6bLabel {
+  text: string
+  words: string[]
+  x: number
+  baseline: number
+  fontSize: number
+  rise: number
+  glyphTop: number
+  bbox: number[]
+}
+
+interface F6bPage extends F6Page {
+  label: F6bLabel
+  columns: Array<F6Column & { fontSize: number; bbox: number[] }>
+}
+
+describe('F6b — la etiqueta va 11,5 pt sobre las fichas', () => {
+  const gold = load<F6Gold & { header: F6Gold['header'] & { label: F6bLabel; pages: F6bPage[] } }>('F6b')
+
+  it('repite el F6 etiquetado, con dos palabras de la misma fuente a la izquierda', () => {
+    expect(gold.fixture).toBe('F6b')
+    expect(gold.seed).toBe(1009)
+    expect(gold.generatorVersion).toBe('1.3.0')
+    expect(gold.document.sopPages).toHaveLength(22)
+    expect(gold.document.falseHitPages).toEqual([2])
+    expect(gold.header.kind).toBe('numeric_visit')
+    expect(gold.header.integerRowLabeled).toBe(true)
+    expect(gold.header.timeRowLabel).toBe('Día')
+    const printed = gold.header.tokens.map((token) => (token.dash ? '-' : token.text)).join(' ')
+    expect(printed).toContain('4 - 5 6 - 7 - 8')
+    expect(gold.header.tokens).toHaveLength(19)
+    const label = gold.header.label
+    expect(label.text).toBe('Visita número')
+    expect(label.words).toEqual(['Visita', 'número'])
+    expect(label.words).toHaveLength(2)
+    const card = gold.header.pages[0]!.columns[0]!
+    expect(label.fontSize).toBe(card.fontSize)
+    expect(label.baseline - card.baseline).toBe(11.5)
+    expect(label.glyphTop - (card.baseline + card.fontSize)).toBe(11.5)
+    expect(label.bbox[2]).toBeLessThan(card.bbox[0]!)
+    expect(gold.header.pages.map((page) => page.page)).toEqual(gold.document.sopPages)
+    for (const page of gold.header.pages) {
+      expect(page.label.text).toBe(label.text)
+      expect(page.label.fontSize).toBe(page.columns[0]!.fontSize)
+      expect(page.label.glyphTop - (page.columns[0]!.baseline + page.columns[0]!.fontSize)).toBe(11.5)
+      expect(page.label.bbox[2]).toBeLessThan(page.columns[0]!.bbox[0]!)
+      expect(page.columns[0]!.baseline - page.timeRow.baseline).toBeGreaterThanOrEqual(14)
+      expect(page.labelColumn.countsAsVisit).toBe(false)
+    }
+    expect(gold.cells).toHaveLength(513)
+    expect(gold.visits).toHaveLength(19)
+  })
+})
+
 describe('F7 — encabezado de varias líneas y página de figura', () => {
   const gold = load<F7Gold>('F7')
 
@@ -242,9 +296,13 @@ describe('F7 — encabezado de varias líneas y página de figura', () => {
     expect(gold.document.sopPages).not.toContain(gold.figure.page)
     expect(gold.figure.cards).toBe(21)
     expect(gold.figure.gap).toBe(6)
+    expect(gold.figure.separation).toBe('origin')
     expect(gold.figure.marks).toBe(0)
     expect(gold.figure.timeline).toHaveLength(21)
     expect(gold.figure.timeline.every((card) => /^S\d+$/.test(card.text))).toBe(true)
+    for (let index = 1; index < gold.figure.timeline.length; index++) {
+      expect(gold.figure.timeline[index]!.x - gold.figure.timeline[index - 1]!.x).toBe(6)
+    }
     expect(header.periods.map((period) => period.label)).toEqual(['Selección', 'Tratamiento', 'Seguimiento'])
     expect(header.label).toEqual({ text: 'Visita', x: 82, baseline: header.numberBaseline })
     expect(header.firstCardX).toBe(220)
