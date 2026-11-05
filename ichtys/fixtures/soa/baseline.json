@@ -1,0 +1,12 @@
+{
+  "status": "not_run",
+  "reason": "NO VERIFICADO",
+  "detail": "No hay ANTHROPIC_API_KEY en el entorno ni en ichtys/.env.local. El árbol de ingestion no es el de 090e506: NO COMPARABLE. No se inventaron contadores.",
+  "extractorSha": "090e506c90775e9c6dba0478477405a0106192c1",
+  "extractorTree": "e82694c92e739b4e8e558f05ffd42de5ff58e487",
+  "extractorTreeMatches": false,
+  "comparability": "NO COMPARABLE",
+  "spendCapUsd": 3,
+  "visitsOnly": true,
+  "fixtures": null
+}

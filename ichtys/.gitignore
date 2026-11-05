@@ -42,3 +42,6 @@ Thumbs.db
 # Drizzle
 packages/db/drizzle/
 .vercel
+
+# Renders de los fixtures SoA. El generador los vuelve a escribir iguales.
+fixtures/soa/*.render/

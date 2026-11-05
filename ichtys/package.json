@@ -17,6 +17,7 @@
     "test:e2e": "node scripts/e2e-general.mjs",
     "test:leakage": "turbo run test:leakage",
     "test:oq": "pnpm --filter @ichtys/web test:oq",
+    "test:fixtures": "pnpm --filter @ichtys/web exec vitest run --config \"$(pwd)/scripts/soa-fixtures/vitest.config.mjs\" --maxWorkers=1",
     "test:integration": "pnpm --filter @ichtys/web test:integration",
     "db:generate": "pnpm --filter @ichtys/db db:generate",
     "db:migrate": "pnpm --filter @ichtys/db db:migrate",
