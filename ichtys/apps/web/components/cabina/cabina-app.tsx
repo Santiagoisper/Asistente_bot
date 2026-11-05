@@ -63,6 +63,7 @@ export function CabinaApp() {
   const [reply, setReply] = useState<{ text: string; page: number | null } | null>(null)
   const [moreOpen, setMoreOpen] = useState(false)
   const askRef = useRef<HTMLInputElement>(null)
+  const desktopPanel = useDesktopPanel()
 
   useEffect(() => {
     const now = startOfDay(new Date())
@@ -113,7 +114,6 @@ export function CabinaApp() {
     const next = on ? Array.from(new Set([...checked, procedureKey])) : checked.filter((item) => item !== procedureKey)
     setChecked(next)
     writeChecklist(safeStorage(), checklistKey(patientId, visitKey), next)
-    setPanelKey(procedureKey)
   }
 
   function markDoubt(procedureKey: string) {
@@ -330,12 +330,13 @@ export function CabinaApp() {
           <ol aria-label="Checklist del día">
             {day.map((item) => (
               <li key={item.procedure.key} className={`flex gap-3 border-t border-alphi-border py-3 text-sm first:border-t-0 ${doubts.includes(item.procedure.key) ? 'rounded-lg border border-dashed border-[#B7791F] px-2' : ''}`}>
-                <label className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center">
+                <label className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center" onClick={(event) => event.stopPropagation()}>
                   <input
                     type="checkbox"
                     className={`h-11 w-11 accent-[#0F5E73] ${focusRing}`}
                     checked={checked.includes(item.procedure.key)}
                     aria-label={`Hecho: ${item.procedure.label}`}
+                    onClick={(event) => event.stopPropagation()}
                     onChange={(event) => toggleCheck(item.procedure.key, event.target.checked)}
                   />
                 </label>
@@ -344,6 +345,18 @@ export function CabinaApp() {
                 </span>
                 <span>
                   <span className="font-semibold">{item.procedure.label}</span>: {item.procedure.detail} <ConditionTags item={item} /> {chip(item)}
+                  {item.cell ? (
+                    <button
+                      type="button"
+                      className={`ml-1 inline-flex min-h-11 items-center rounded-md px-2 text-sm font-semibold text-[#0F5E73] ${focusRing}`}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setPanelKey(item.procedure.key)
+                      }}
+                    >
+                      Ver cita
+                    </button>
+                  ) : null}
                 </span>
               </li>
             ))}
@@ -453,7 +466,9 @@ export function CabinaApp() {
       ) : null}
       {view === 'cabina' && panelItem?.cell ? (
         <>
-          <button type="button" className="fixed inset-0 z-40 bg-[#17222D]/40" aria-label="Cerrar el texto de la página" onClick={() => setPanelKey(null)} />
+          {desktopPanel ? null : (
+            <button type="button" className="fixed inset-0 z-40 bg-[#17222D]/40" aria-label="Cerrar el texto de la página" onClick={() => setPanelKey(null)} />
+          )}
           <OrigenPanel
             visitLabel={`${visit.printedId} · ${visit.label}`}
             procedureLabel={panelItem.procedure.label}
@@ -464,6 +479,7 @@ export function CabinaApp() {
             sourceLabel={panelItem.cell.sourceLabel}
             low={panelItem.cell.certainty === 'low' || doubted.includes(panelItem.procedure.key)}
             reviewed={reviewed.includes(panelItem.procedure.key)}
+            modal={!desktopPanel}
             onClose={() => setPanelKey(null)}
             onDoubt={() => markDoubt(panelItem.procedure.key)}
             onSaveQuote={(quote) => setQuoteEdits((current) => ({ ...current, [`${visit.key}:${panelItem.procedure.key}`]: quote }))}
@@ -673,7 +689,10 @@ function PageChip({ item, marked, onOpen }: { item: SheetItem; marked: boolean; 
     <button
       type="button"
       className={`inline-flex min-h-11 items-center rounded-md px-2 font-mono text-[11px] font-medium ${focusRing} ${marked ? 'border border-dashed border-[#B7791F] bg-[#FFF1D6] text-[#6B4200]' : 'bg-[#E2F0F4] text-[#0A4455]'}`}
-      onClick={() => onOpen(item.procedure.key)}
+      onClick={(event) => {
+        event.stopPropagation()
+        onOpen(item.procedure.key)
+      }}
     >
       p. {item.cell.page}
     </button>
@@ -703,6 +722,18 @@ function ToneChip({ tone, label }: { tone: 'red' | 'amber' | 'violet' | 'green' 
     teal: 'bg-[#E2F0F4] text-[#0A4455]',
   }[tone]
   return <span className={`inline-flex h-7 shrink-0 items-center rounded-full px-2 text-xs font-semibold ${color}`}>{label}</span>
+}
+
+function useDesktopPanel(): boolean {
+  const [desktop, setDesktop] = useState(false)
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 768px)')
+    const apply = () => setDesktop(media.matches)
+    apply()
+    media.addEventListener('change', apply)
+    return () => media.removeEventListener('change', apply)
+  }, [])
+  return desktop
 }
 
 function VisitFlag({ on, label, tone = 'teal' }: { on: boolean; label: string; tone?: 'teal' | 'amber' | 'grey' }) {

@@ -15,6 +15,7 @@ export function OrigenPanel({
   sourceLabel,
   low,
   reviewed,
+  modal,
   onClose,
   onDoubt,
   onSaveQuote,
@@ -28,11 +29,13 @@ export function OrigenPanel({
   sourceLabel: string
   low: boolean
   reviewed: boolean
+  modal: boolean
   onClose: () => void
   onDoubt: () => void
   onSaveQuote: (quote: string) => void
 }) {
   const closeRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLElement>(null)
   const quoteRef = useRef<HTMLQuoteElement>(null)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(quote)
@@ -44,17 +47,38 @@ export function OrigenPanel({
   }, [])
 
   useEffect(() => {
+    const root = panelRef.current
     function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (!modal || event.key !== 'Tab' || !root) return
+      const items = [...root.querySelectorAll<HTMLElement>('button, textarea, input, select, a[href]')].filter(
+        (node) => !node.hasAttribute('disabled'),
+      )
+      const first = items[0]
+      const last = items[items.length - 1]
+      if (!first || !last) return
+      const active = document.activeElement
+      const outside = !(active instanceof Node) || !root.contains(active)
+      if (event.shiftKey && (active === first || outside)) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && (active === last || outside)) {
+        event.preventDefault()
+        first.focus()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [modal, onClose])
 
   return (
     <aside
+      ref={panelRef}
       role="dialog"
-      aria-modal="true"
+      aria-modal={modal}
       aria-labelledby="origen-title"
       className="fixed inset-x-0 bottom-0 z-50 flex max-h-[85vh] flex-col gap-3 overflow-y-auto rounded-t-2xl border border-alphi-border bg-white p-5 shadow-alphi-modal md:inset-x-auto md:bottom-4 md:right-4 md:top-20 md:max-h-[calc(100vh-6rem)] md:w-[400px] md:rounded-2xl"
     >
