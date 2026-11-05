@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "fixtures" / "soa"
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 FONTB_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 PORTRAIT = (612.0, 792.0)
 LANDSCAPE = (792.0, 612.0)
 SECTION_ES = "1.3 Cronograma de actividades"
@@ -1231,6 +1231,15 @@ def build_f2():
     for note in notes[:16]:
         if note.get("row") is not None:
             t2["commentByRow"][note["row"]] = f"{note['ref']} {note['text']}"
+    # La condición vive en Comentarios. Estas filas no traían nota, así que el texto entra.
+    def qualify_comment(row_index, kind, expr):
+        rows2[row_index]["conditions"] = [cond(kind, expr)]
+        current = t2["commentByRow"].get(row_index, "")
+        t2["commentByRow"][row_index] = f"{current} {expr}".strip()
+
+    qualify_comment(12, "population", "solo subgrupo X")
+    qualify_comment(14, "arm", "solo brazo A")
+    qualify_comment(15, "arm", "solo brazo B")
     doc.rules = [
         {"text": "La prosa dice que la regla aplica después de V7.", "page": None, "conditions": [cond("order", "después de V7")]},
         {"text": "El analito X1 se considera alto si es > 10.", "page": None, "conditions": [cond("population", "Analito X1 alto si es > 10")]},
@@ -1306,6 +1315,17 @@ def build_f3():
     set_cell(t1["grid"], t1["cells"], 18, 3, rows1, v1, "x", [cond("arm", "Solo en participantes del brazo A")])
     set_cell(t1["grid"], t1["cells"], 19, 3, rows1, v1, "x", [cond("arm", "Solo en participantes del brazo B")])
     copy_row(t1["grid"], t1["cells"], 18, 59, rows1, v1)
+    # Después de copiar la fila 18: el duplicado conserva el rótulo original.
+    def qualify_label(index, suffix, kind, expr):
+        rows[index]["label"] = f"{rows[index]['label']}{suffix}"
+        rows[index]["conditions"] = [cond(kind, expr)]
+
+    qualify_label(14, " — solo brazo A", "arm", "solo brazo A")
+    qualify_label(15, " — solo brazo B", "arm", "solo brazo B")
+    qualify_label(12, " (solo subgrupo X)", "population", "solo subgrupo X")
+    qualify_label(16, " (solo subgrupo X)", "population", "solo subgrupo X")
+    v1[17]["attributes"]["armOnly"] = "A"
+    v1[3]["attributes"]["armOnly"] = "B"
     # Marca en el seguimiento V800 que falta en el fin V26.
     set_cell(t2["grid"], t2["cells"], 5, 9, rows2, v2, None)
     set_cell(t2["grid"], t2["cells"], 5, 11, rows2, v2, "x")
@@ -1387,6 +1407,14 @@ def build_f5():
     rows = make_procedures(labels, "G")
     rows1 = rows[:25]
     rows2 = rows[:20]
+
+    def qualify_en(index, suffix, kind, expr):
+        rows[index]["label"] = f"{rows[index]['label']}{suffix}"
+        rows[index]["conditions"] = [cond(kind, expr)]
+
+    qualify_en(14, " — arm A only", "arm", "arm A only")
+    qualify_en(15, " — arm B only", "arm", "arm B only")
+    qualify_en(12, " (subgroup X only)", "population", "subgroup X only")
     specs = [
         ("SCR", "Screening", "scheduled", -14, "day", "screening", W(None, 7, "day")),
         ("D1", "Day 1", "scheduled", 1, "day", "standard", W(1, 1, "day")),
@@ -1469,6 +1497,7 @@ def check_text(pdf_bytes, doc):
     reader = PdfReader(io.BytesIO(pdf_bytes))
     pages = [(page.extract_text() or "") for page in reader.pages]
     folded = "\n".join(pages).casefold()
+    flat = " ".join(folded.split())
     for word in FORBIDDEN:
         if word in folded:
             raise SystemExit(f"{doc.fixture} contiene un término prohibido: {word}")
@@ -1485,13 +1514,13 @@ def check_text(pdf_bytes, doc):
             raise SystemExit(f"{doc.fixture} página {item['page']} ({item['kind']}) no tiene el localizador")
     expected = {
         "F1": ("SEL", "Consentimiento informado", "híbridas son V4"),
-        "F2": ("V600", "Panel de laboratorio A", "después de V7"),
-        "F3": ("V800", "Panel de laboratorio A", "después de V7"),
+        "F2": ("V600", "Panel de laboratorio A", "después de V7", "solo brazo A", "solo brazo B", "solo subgrupo X"),
+        "F3": ("V800", "Panel de laboratorio A", "después de V7", "solo brazo A", "solo brazo B", "solo subgrupo X"),
         "F4": ("V0", "Consentimiento informado", "híbridas son V1"),
-        "F5": ("SCR", "Informed consent", "after W12"),
+        "F5": ("SCR", "Informed consent", "after W12", "arm A only", "arm B only", "subgroup X only"),
     }
     for token in expected[doc.fixture]:
-        if token.casefold() not in folded:
+        if token.casefold() not in flat:
             raise SystemExit(f"{doc.fixture} no muestra {token!r} en la capa de texto")
     if doc.fixture == "F5":
         rotated = [i for i, page in enumerate(reader.pages, start=1) if page.get("/Rotate") == 90]
@@ -1551,9 +1580,25 @@ def emit(doc, extra):
 
 def main():
     builders = [build_f1, build_f2, build_f3, assemble_f4, build_f5]
+    golds = []
     for builder in builders:
         doc, extra = builder()
-        emit(doc, extra)
+        golds.append(emit(doc, extra))
+    counts = {
+        gold["fixture"]: sum(1 for proc in gold["procedures"] if proc.get("conditions"))
+        for gold in golds
+        if gold["fixture"] in {"F2", "F3", "F5"}
+    }
+    total = sum(counts.values())
+    if any(counts[name] < 1 for name in ("F2", "F3", "F5")) or not (3 <= total <= 10):
+        raise SystemExit(f"filas condicionadas {counts}")
+    arms = [
+        visit for visit in next(gold for gold in golds if gold["fixture"] == "F3")["visits"]
+        if visit["attributes"].get("armOnly")
+    ]
+    if len(arms) < 2:
+        raise SystemExit(f"F3 armOnly {len(arms)}")
+    print(f"condiciones {counts} total {total} F3 armOnly {len(arms)}")
 
 
 if __name__ == "__main__":

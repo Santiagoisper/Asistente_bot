@@ -2,7 +2,7 @@
 
 Cinco PDF inventados, F1 a F5, y el JSON de verdad que sale del mismo generador. No hay patrocinador, fármaco, código de estudio ni analito real. Sirven para medir un extractor de cronogramas. No son un protocolo.
 
-Semillas fijas: F1 `1001`, F2 `1002`, F3 `1003`, F4 `1004`, F5 `1005`. Versión del generador: `1.0.0`.
+Semillas fijas: F1 `1001`, F2 `1002`, F3 `1003`, F4 `1004`, F5 `1005`. Versión del generador: `1.1.0`.
 
 | Fixture | Páginas | Páginas de grilla | Celdas | Notas | Inconsistencias plantadas |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -17,10 +17,10 @@ Esas cifras son el inventario del gold, no una medición del extractor.
 ## Qué trae cada trampa
 
 - F1. Grilla densa por ramas. Ventanas combinadas, tokens partidos (`Hast` + `a` + `42` + `d`, `V` + `12`), columna sombreada con la X en el borde superior, notas en la página siguiente. La prosa corta el seguimiento en S104 y la grilla de rescate sigue con VR9 a VR12.
-- F2. Varias páginas, filas de ayuno y de visita a la clínica (no son celdas) y ocho filas «según necesidad». V14 no tiene marca de clínica y sí tiene panel de laboratorio.
-- F3. Grilla muy partida: 2 o 3 filas por página, una continuación de columnas, tres columnas sin número y una fila duplicada. Pasa el tope de 30 páginas del extractor actual a propósito.
+- F2. Varias páginas, filas de ayuno y de visita a la clínica (no son celdas) y ocho filas «según necesidad». V14 no tiene marca de clínica y sí tiene panel de laboratorio. Tres filas llevan la condición en Comentarios: subgrupo X, brazo A y brazo B.
+- F3. Grilla muy partida: 2 o 3 filas por página, una continuación de columnas, tres columnas sin número y una fila duplicada. Pasa el tope de 30 páginas del extractor actual a propósito. Cuatro rótulos dicen el brazo o el subgrupo. La dispensación sin número queda solo para el brazo A, y V4 solo para el brazo B.
 - F4. Ocho páginas. El índice, la sinopsis y la lista de tablas citan «1.3 Cronograma de actividades» antes de la grilla. La fila de ventana se llama «Margen de visita».
-- F5. Inglés. La primera página de la segunda tabla se dibuja apaisada y después lleva `/Rotate 90`. Las cajas del gold quedan en el espacio sin rotar. El encabezado de esa tabla tiene dos niveles.
+- F5. Inglés. La primera página de la segunda tabla se dibuja apaisada y después lleva `/Rotate 90`. Las cajas del gold quedan en el espacio sin rotar. El encabezado de esa tabla tiene dos niveles. Tres rótulos dicen el brazo o el subgrupo.
 
 El relleno no contiene «cronograma de actividades», «schedule of assessments», «plan de visitas» ni «SoA». Esas frases están solo en los falsos aciertos y en el encabezado de cada grilla.
 

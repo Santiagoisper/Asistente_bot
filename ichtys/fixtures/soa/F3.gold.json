@@ -1,7 +1,7 @@
 {
   "fixture": "F3",
   "seed": 1003,
-  "generatorVersion": "1.0.0",
+  "generatorVersion": "1.1.0",
   "document": {
     "pages": 90,
     "sopPages": [
@@ -283,7 +283,7 @@
       "attributes": {
         "fasting": true,
         "onSite": null,
-        "armOnly": null
+        "armOnly": "B"
       },
       "page": 13,
       "bbox": [
@@ -849,7 +849,7 @@
       "attributes": {
         "fasting": null,
         "onSite": null,
-        "armOnly": null
+        "armOnly": "A"
       },
       "page": 14,
       "bbox": [
@@ -1691,10 +1691,18 @@
     },
     {
       "key": "E13",
-      "label": "Prueba de embarazo en orina",
+      "label": "Prueba de embarazo en orina (solo subgrupo X)",
       "section": null,
       "kind": "procedure",
-      "conditions": [],
+      "conditions": [
+        {
+          "kind": "population",
+          "expr": "solo subgrupo X",
+          "sourceRef": "",
+          "page": 1,
+          "confidence": 1
+        }
+      ],
       "aliases": [],
       "page": 18,
       "bbox": [
@@ -1739,10 +1747,18 @@
     },
     {
       "key": "E15",
-      "label": "Dispensación de producto",
+      "label": "Dispensación de producto — solo brazo A",
       "section": null,
       "kind": "procedure",
-      "conditions": [],
+      "conditions": [
+        {
+          "kind": "arm",
+          "expr": "solo brazo A",
+          "sourceRef": "",
+          "page": 1,
+          "confidence": 1
+        }
+      ],
       "aliases": [],
       "page": 18,
       "bbox": [
@@ -1763,10 +1779,18 @@
     },
     {
       "key": "E16",
-      "label": "Devolución de producto",
+      "label": "Devolución de producto — solo brazo B",
       "section": null,
       "kind": "procedure",
-      "conditions": [],
+      "conditions": [
+        {
+          "kind": "arm",
+          "expr": "solo brazo B",
+          "sourceRef": "",
+          "page": 1,
+          "confidence": 1
+        }
+      ],
       "aliases": [],
       "page": 19,
       "bbox": [
@@ -1787,10 +1811,18 @@
     },
     {
       "key": "E17",
-      "label": "Adherencia",
+      "label": "Adherencia (solo subgrupo X)",
       "section": null,
       "kind": "procedure",
-      "conditions": [],
+      "conditions": [
+        {
+          "kind": "population",
+          "expr": "solo subgrupo X",
+          "sourceRef": "",
+          "page": 1,
+          "confidence": 1
+        }
+      ],
       "aliases": [],
       "page": 19,
       "bbox": [

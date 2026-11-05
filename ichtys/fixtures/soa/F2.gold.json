@@ -1,7 +1,7 @@
 {
   "fixture": "F2",
   "seed": 1002,
-  "generatorVersion": "1.0.0",
+  "generatorVersion": "1.1.0",
   "document": {
     "pages": 50,
     "sopPages": [
@@ -1809,7 +1809,15 @@
       "label": "Prueba de embarazo en orina",
       "section": null,
       "kind": "procedure",
-      "conditions": [],
+      "conditions": [
+        {
+          "kind": "population",
+          "expr": "solo subgrupo X",
+          "sourceRef": "",
+          "page": 1,
+          "confidence": 1
+        }
+      ],
       "aliases": [],
       "page": 12,
       "bbox": [
@@ -1857,7 +1865,15 @@
       "label": "Dispensación de producto",
       "section": null,
       "kind": "procedure",
-      "conditions": [],
+      "conditions": [
+        {
+          "kind": "arm",
+          "expr": "solo brazo A",
+          "sourceRef": "",
+          "page": 1,
+          "confidence": 1
+        }
+      ],
       "aliases": [],
       "page": 12,
       "bbox": [
@@ -1881,7 +1897,15 @@
       "label": "Devolución de producto",
       "section": null,
       "kind": "procedure",
-      "conditions": [],
+      "conditions": [
+        {
+          "kind": "arm",
+          "expr": "solo brazo B",
+          "sourceRef": "",
+          "page": 1,
+          "confidence": 1
+        }
+      ],
       "aliases": [],
       "page": 12,
       "bbox": [

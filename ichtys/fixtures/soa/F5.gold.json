@@ -1,7 +1,7 @@
 {
   "fixture": "F5",
   "seed": 1005,
-  "generatorVersion": "1.0.0",
+  "generatorVersion": "1.1.0",
   "document": {
     "pages": 40,
     "sopPages": [
@@ -1159,10 +1159,18 @@
     },
     {
       "key": "G13",
-      "label": "Urine pregnancy test",
+      "label": "Urine pregnancy test (subgroup X only)",
       "section": null,
       "kind": "procedure",
-      "conditions": [],
+      "conditions": [
+        {
+          "kind": "population",
+          "expr": "subgroup X only",
+          "sourceRef": "",
+          "page": 1,
+          "confidence": 1
+        }
+      ],
       "aliases": [],
       "page": 16,
       "bbox": [
@@ -1207,10 +1215,18 @@
     },
     {
       "key": "G15",
-      "label": "Study product dispensation",
+      "label": "Study product dispensation — arm A only",
       "section": null,
       "kind": "procedure",
-      "conditions": [],
+      "conditions": [
+        {
+          "kind": "arm",
+          "expr": "arm A only",
+          "sourceRef": "",
+          "page": 1,
+          "confidence": 1
+        }
+      ],
       "aliases": [],
       "page": 17,
       "bbox": [
@@ -1231,10 +1247,18 @@
     },
     {
       "key": "G16",
-      "label": "Study product return",
+      "label": "Study product return — arm B only",
       "section": null,
       "kind": "procedure",
-      "conditions": [],
+      "conditions": [
+        {
+          "kind": "arm",
+          "expr": "arm B only",
+          "sourceRef": "",
+          "page": 1,
+          "confidence": 1
+        }
+      ],
       "aliases": [],
       "page": 17,
       "bbox": [
