@@ -15,7 +15,9 @@ número 9 pt abajo, mismo x) y 5 fichas cortas enteras, centradas en altura.
 Etiqueta «Visita» en x = 82, en la línea del número. Primera ficha en
 x = 220. Fila de semanas 39 pt abajo, con fichas S… partidas si son largas.
 26 columnas, 4 páginas, encabezado repetido. Antes, una página de figura:
-21 fichas S… cuyo origen queda a 6 pt del siguiente, sin marcas.
+17 fichas S… a 5 pt, origen cada 18,4 pt y hueco de caja de 13,4 pt, sin
+marcas. El mismo subtítulo que la grilla: las separa la regla de marcas,
+no el hueco.
 
 F8: control de dos tablas apiladas de verdad. Hay filas de datos entre los
 dos encabezados. El calificador las desempata por geometría.
@@ -642,6 +644,18 @@ def pdf_runs(content):
     return runs
 
 
+def figure_runs_of(content):
+    """Origen en el cm (la caja va escalada) y letra en el Tf."""
+    runs = []
+    pattern = re.compile(
+        rb"([0-9.]+) 0 0 1 ([0-9.]+) ([0-9.]+) cm[\s\S]{0,240}?/F\S+ ([0-9.]+) Tf[\s\S]{0,40}?\((.*?)\) Tj"
+    )
+    for match in pattern.finditer(content):
+        _scale, x, y, size, raw = match.groups()
+        runs.append((float(x), float(y), float(size), pdf_literal(raw)))
+    return runs
+
+
 def close(value, target, where, tol=0.05):
     if abs(value - target) > tol:
         raise SystemExit(f"{where}: medí {value} y tenía que ser {target}")
@@ -943,10 +957,14 @@ F7_PERIOD_GAP = 18.0
 F7_COLUMNS = 26
 F7_GRID_PAGES = 4
 F7_ROWS_PER_PAGE = 4
-F7_FIGURE_CARDS = 21
-# Paso entre orígenes. Un hueco de 6 pt entre bordes deja 16–21 pt entre
-# orígenes, que es lo que midió el Architect y no ejercita el corte de < 10 pt.
-F7_FIGURE_STEP = 6.0
+F7_FIGURE_CARDS = 17
+F7_FIGURE_FONT = 5
+# G22 §3: la figura real mide 5 pt, 18,4 pt entre orígenes y 13,4 pt de
+# hueco. La caja se fuerza a 5 pt (18,4 − 13,4) para que el hueco no dependa
+# del ancho natural de «S10».
+F7_FIGURE_STEP = 18.4
+F7_FIGURE_BOX = 5.0
+F7_FIGURE_EDGE_GAP = 13.4
 F7_SHORT = {0: "V1", 8: "ET", 14: "FA", 20: "VDT", 25: "EOS"}
 F7_PERIODS = ((0, 8, "Selección"), (8, 18, "Tratamiento"), (18, 26, "Seguimiento"))
 
@@ -1013,18 +1031,53 @@ def f7_layout():
 
 def draw_f7_figure(doc, cards):
     def drawer(c, page, size):
-        paint_title(c, doc, page, size, "Línea de tiempo. Sin grilla.")
+        # Mismo subtítulo que la grilla: si se separan, no es por el texto.
+        paint_title(c, doc, page, size, "Encabezado de varias líneas.")
         y = 360.0
         x = 48.0
         placed = []
         for card in cards:
-            width = pdfmetrics.stringWidth(card, "DejaVu", 8)
-            left_text(c, card, x, y, 8)
-            placed.append({"text": card, "x": round(x, 2), "y": y, "width": round(width, 2)})
+            # Una sola operación de texto por ficha. El ancho natural de
+            # DejaVu a 5 pt no da el hueco de 13,4, así que la caja se escala
+            # en x hasta 5 pt. Sin esto pdfjs parte «S1» en letras sueltas y
+            # la página deja de tener encabezado.
+            natural = pdfmetrics.stringWidth(card, "DejaVu", F7_FIGURE_FONT)
+            c.saveState()
+            c.transform(F7_FIGURE_BOX / natural, 0, 0, 1, x, y)
+            text = c.beginText()
+            text.setTextOrigin(0, 0)
+            text.setFont("DejaVu", F7_FIGURE_FONT)
+            text.textOut(card)
+            c.drawText(text)
+            c.restoreState()
+            placed.append({
+                "text": card,
+                "x": round(x, 2),
+                "y": y,
+                "width": F7_FIGURE_BOX,
+                "fontSize": F7_FIGURE_FONT,
+            })
             x += F7_FIGURE_STEP
-        if x > size[0] - 24:
+        if abs((F7_FIGURE_STEP - F7_FIGURE_BOX) - F7_FIGURE_EDGE_GAP) > 0.001:
+            raise SystemExit("F7 el hueco de la figura no es 13,4")
+        right = x - F7_FIGURE_STEP + F7_FIGURE_BOX + 8
+        if right > size[0] - 16:
             raise SystemExit("F7 la figura no entra en la página")
-        doc.f7_figure = {"page": page, "y": y, "gap": F7_FIGURE_STEP, "separation": "origin", "cards": placed}
+        top = y + F7_FIGURE_FONT + 8
+        bottom = y - 8
+        hline(c, 36, right, top)
+        hline(c, 36, right, bottom)
+        vline(c, 36, bottom, top)
+        vline(c, right, bottom, top)
+        doc.f7_figure = {
+            "page": page,
+            "y": y,
+            "gap": F7_FIGURE_STEP,
+            "edgeGap": F7_FIGURE_EDGE_GAP,
+            "fontSize": F7_FIGURE_FONT,
+            "separation": "origin",
+            "cards": placed,
+        }
 
     return drawer
 
@@ -1239,8 +1292,10 @@ def check_f7(pdf, doc, gold):
     if gold["document"]["sopPages"] != [page["page"] for page in header["pages"]]:
         raise SystemExit("F7 el cronograma no son solo las 4 páginas de grilla")
     figure = gold["figure"]
-    if figure["page"] in gold["document"]["sopPages"] or figure["cards"] != 21 or figure["marks"] != 0:
+    if figure["page"] in gold["document"]["sopPages"] or figure["cards"] != F7_FIGURE_CARDS or figure["marks"] != 0:
         raise SystemExit("F7 la figura no queda fuera del cronograma")
+    if figure["fontSize"] != F7_FIGURE_FONT or figure["edgeGap"] != F7_FIGURE_EDGE_GAP:
+        raise SystemExit("F7 la figura no tiene la letra ni el hueco medidos")
     if figure["page"] != gold["document"]["sopPages"][0] - 1:
         raise SystemExit("F7 la figura no es la página anterior")
     shorts = [column for column in header["columns"] if not column["split"]]
@@ -1290,15 +1345,17 @@ def check_f7(pdf, doc, gold):
     reader = PdfReader(io.BytesIO(pdf))
     figure_page = reader.pages[figure["page"] - 1]
     figure_runs = sorted(
-        (run for run in pdf_runs(page_content(figure_page)) if run[3].startswith("S") and run[3][1:].isdigit()),
+        (run for run in figure_runs_of(page_content(figure_page)) if run[3].startswith("S") and run[3][1:].isdigit()),
         key=lambda run: run[0],
     )
-    if len(figure_runs) != 21:
+    if len(figure_runs) != F7_FIGURE_CARDS:
         raise SystemExit(f"F7 la figura tiene {len(figure_runs)} fichas S")
     if b"(X)" in page_content(figure_page):
         raise SystemExit("F7 la figura tiene marcas")
+    for run in figure_runs:
+        close(run[2], F7_FIGURE_FONT, "F7 letra de la figura", 0.05)
     for previous, nxt in zip(figure_runs, figure_runs[1:]):
-        close(nxt[0] - previous[0], F7_FIGURE_STEP, "F7 separación de la figura", 0.2)
+        close(nxt[0] - previous[0], F7_FIGURE_STEP, "F7 origen de la figura", 0.05)
     for item in doc.items:
         if item["kind"] != "grid":
             continue
@@ -1368,6 +1425,8 @@ def attach_f7(doc, gold):
         "page": figure["page"],
         "cards": len(figure["cards"]),
         "gap": figure["gap"],
+        "edgeGap": figure["edgeGap"],
+        "fontSize": figure["fontSize"],
         "separation": figure["separation"],
         "marks": 0,
         "timeline": figure["cards"],

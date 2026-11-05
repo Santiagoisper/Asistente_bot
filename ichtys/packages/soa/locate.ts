@@ -60,15 +60,6 @@ const MIN_SIGNAL_RULE_LENGTH = 6
 /** Cantidad mínima de marcas / fichas de encabezado para aceptar una página. */
 const MIN_MARKS = 3
 const MIN_HEADER_TOKENS = 2
-/**
- * G18 §3.4 — página de figura: por debajo de esta mediana de separación (pt)
- * entre las fichas de la banda de encabezado, la banda es una línea de
- * tiempo apiñada del diseño del estudio, no un encabezado de tabla. (El
- * segundo criterio de G18 §3.4, "sin filas con marcas", NO se aplica: una
- * tabla legítima marcada con un glifo fuera del conjunto reconocido tiene 0
- * marcas y conservar su encabezado es K1.)
- */
-const FIGURE_HEADER_GAP = 10
 /** Columnas distintas para el ajuste fino del puntaje. */
 const MIN_GRID_COLS = 4
 /**
@@ -93,12 +84,32 @@ const DENSE_RUN_MARKS = 12
  * conservación se decide al final por la densidad ACUMULADA de la racha
  * (una tabla sin encabezado legible y 2–6 filas por página solo cruza el
  * umbral entre todas sus páginas).
+ *
+ * G22 §3 C3: el hueco entre fichas no distingue una figura de una fila de
+ * semanas (la figura real queda a ~13 pt, la semana a ~11). Una página con
+ * encabezado y 0 marcas, seguida de una página con encabezado propio y
+ * marcas, no se une a esa racha. Queda como tabla aparte: la lectura la
+ * marca failed/no_marks y K1 la sigue viendo.
  */
-const joinsRun = (s: ScoredPage, current: TableAcc | undefined): boolean =>
-  current === undefined ||
-  current.headerPages === 0 ||
-  (s.signals.headerTokens ?? 0) >= MIN_HEADER_TOKENS ||
-  ((s.signals.marks ?? 0) >= DENSE_RUN_MARKS && (s.signals.gridCols ?? 0) >= MIN_GRID_COLS)
+const joinsRun = (s: ScoredPage, current: TableAcc | undefined): boolean => {
+  const incomingHeader = (s.signals.headerTokens ?? 0) >= MIN_HEADER_TOKENS
+  const incomingMarks = (s.signals.marks ?? 0) > 0
+  if (
+    current !== undefined &&
+    current.headerPages > 0 &&
+    current.marks === 0 &&
+    incomingHeader &&
+    incomingMarks
+  ) {
+    return false
+  }
+  return (
+    current === undefined ||
+    current.headerPages === 0 ||
+    incomingHeader ||
+    ((s.signals.marks ?? 0) >= DENSE_RUN_MARKS && (s.signals.gridCols ?? 0) >= MIN_GRID_COLS)
+  )
+}
 
 interface Band {
   y: number
@@ -197,24 +208,6 @@ function scorePage(p: PageGeom): ScoredPage {
     } else if (bestTimeCount > 0) {
       headerBand = bestTimes
       headerCount = bestTimeCount
-    }
-  }
-  // G18 §3.4 — página de figura: si la mediana de separación entre las
-  // fichas de la banda ganadora es de una línea de tiempo apiñada, la banda
-  // NO es un encabezado. La página pierde su señal de fichas: si no le queda
-  // ni densidad de grilla, queda rejected (visible) y no puede iniciar ni
-  // extender una racha — en R-46 la p23 entraba así a la tabla 1 con 13
-  // columnas falsas.
-  if (headerBand !== null) {
-    const sorted = [...headerBand.items].sort((a, b) => a.bbox[0] - b.bbox[0])
-    const gaps: number[] = []
-    for (let i = 1; i < sorted.length; i++) gaps.push(sorted[i]!.bbox[0] - sorted[i - 1]!.bbox[2])
-    if (gaps.length > 0) {
-      const median = [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length / 2)]!
-      if (median < FIGURE_HEADER_GAP) {
-        headerBand = null
-        headerCount = 0
-      }
     }
   }
   // Plan B (P2b): encabezado numérico etiquetado (mismo detector que grid).
