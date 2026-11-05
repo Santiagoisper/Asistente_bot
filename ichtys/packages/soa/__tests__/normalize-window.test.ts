@@ -44,4 +44,27 @@ describe('T2 — parser de ventanas sin modelo (catálogo completo)', () => {
       expect(parseWindow(text), text).toBeNull()
     }
   })
+
+  it('G23-K2: dos signos iguales no son ventana before/after → null', () => {
+    // «+3/+7»: todo después del día; «−7/−1»: todo antes. Ventana entera de
+    // un lado: duda para el ensamblado, no un before/after inventado.
+    expect(parseWindow('+3/+7 d')).toBeNull()
+    expect(parseWindow('−7/−1')).toBeNull()
+    expect(parseWindow('±3/+7')).toBeNull()
+    // Las válidas siguen igual: −antes/+después, ±0/+después, ambas sin signo.
+    expect(parseWindow('−2/+3')).toEqual({ before: 2, after: 3, unit: 'day' })
+    expect(parseWindow('±0/+7 d')).toEqual({ before: 0, after: 7, unit: 'day' })
+    expect(parseWindow('2/3')).toEqual({ before: 2, after: 3, unit: 'day' })
+  })
+
+  it('G23-K3: tope de abuso compartido con el contrato (±180 pasa, ±181 no)', () => {
+    expect(parseWindow('±180 d')).toEqual({ before: 180, after: 180, unit: 'day' })
+    expect(parseWindow('±181 d')).toBeNull()
+    expect(parseWindow('hasta 999 d')).toBeNull()
+  })
+
+  it('G23 menor: «+/- 3 days» es la simétrica ±3 d', () => {
+    expect(parseWindow('+/- 3 days')).toEqual({ before: 3, after: 3, unit: 'day' })
+    expect(parseWindow('+/-2 d')).toEqual({ before: 2, after: 2, unit: 'day' })
+  })
 })

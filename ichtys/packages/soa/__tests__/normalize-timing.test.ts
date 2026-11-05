@@ -100,4 +100,22 @@ describe('T1 — parser de tiempo sin modelo (F1–F5 al 100 %)', () => {
       expect(parseTiming(text), text).toBeNull()
     }
   })
+
+  it('G23-K1: entero pelado solo con la unidad de la fila, nunca día por defecto', () => {
+    // Sin rowUnit: un entero suelto es número de visita en los reales — no
+    // se inventa unidad.
+    expect(parseTiming('12')).toBeNull()
+    expect(parseTiming('15')).toBeNull()
+    // Con la unidad de la etiqueta de la fila («Semanas» 1, 8, 15…).
+    expect(parseTiming('12', { rowUnit: 'week' })).toEqual({ kind: 'scheduled', value: 12, unit: 'week' })
+    expect(parseTiming('15', { rowUnit: 'day' })).toEqual({ kind: 'scheduled', value: 15, unit: 'day' })
+    // La unidad escrita en el texto sigue mandando sobre la de la fila.
+    expect(parseTiming('12 w', { rowUnit: 'day' })).toEqual({ kind: 'scheduled', value: 12, unit: 'week' })
+  })
+
+  it('G23-K3: fuera de los topes de abuso del contrato → null sin throw', () => {
+    expect(parseTiming('S400')).toEqual({ kind: 'scheduled', value: 400, unit: 'week' })
+    expect(parseTiming('S5000')).toBeNull()
+    expect(parseTiming('D-99999')).toBeNull()
+  })
 })

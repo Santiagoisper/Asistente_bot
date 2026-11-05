@@ -478,12 +478,12 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
                 "additionalProperties": false,
                 "properties": {
                   "after": {
-                    "maximum": 60,
+                    "maximum": 180,
                     "minimum": 0,
                     "type": "integer",
                   },
                   "before": {
-                    "maximum": 30,
+                    "maximum": 180,
                     "minimum": 0,
                     "type": "integer",
                   },
@@ -564,7 +564,7 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
         ],
         "type": "object",
       },
-      "maxItems": 6000,
+      "maxItems": 60000,
       "type": "array",
     },
     "inconsistencies": {
@@ -585,7 +585,7 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
               "minimum": 1,
               "type": "integer",
             },
-            "maxItems": 40,
+            "maxItems": 60,
             "minItems": 1,
             "type": "array",
           },
@@ -606,7 +606,7 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
         ],
         "type": "object",
       },
-      "maxItems": 50,
+      "maxItems": 200,
       "type": "array",
     },
     "notes": {
@@ -689,7 +689,7 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
         ],
         "type": "object",
       },
-      "maxItems": 200,
+      "maxItems": 500,
       "type": "array",
     },
     "outOfTableRules": {
@@ -762,7 +762,7 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
         ],
         "type": "object",
       },
-      "maxItems": 50,
+      "maxItems": 200,
       "type": "array",
     },
     "procedures": {
@@ -890,7 +890,7 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
         ],
         "type": "object",
       },
-      "maxItems": 500,
+      "maxItems": 12000,
       "type": "array",
     },
     "tables": {
@@ -926,7 +926,7 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
               "minimum": 1,
               "type": "integer",
             },
-            "maxItems": 40,
+            "maxItems": 60,
             "minItems": 1,
             "type": "array",
           },
@@ -965,7 +965,7 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
         ],
         "type": "object",
       },
-      "maxItems": 8,
+      "maxItems": 24,
       "type": "array",
     },
     "visits": {
@@ -1146,8 +1146,8 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
               "value": {
                 "anyOf": [
                   {
-                    "maximum": 900,
-                    "minimum": -60,
+                    "maximum": 3700,
+                    "minimum": -400,
                     "type": "integer",
                   },
                   {
@@ -1188,7 +1188,7 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
                   "after": {
                     "anyOf": [
                       {
-                        "maximum": 60,
+                        "maximum": 180,
                         "minimum": 0,
                         "type": "integer",
                       },
@@ -1200,7 +1200,7 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
                   "before": {
                     "anyOf": [
                       {
-                        "maximum": 30,
+                        "maximum": 180,
                         "minimum": 0,
                         "type": "integer",
                       },
@@ -1251,7 +1251,7 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
         ],
         "type": "object",
       },
-      "maxItems": 200,
+      "maxItems": 1500,
       "type": "array",
     },
   },

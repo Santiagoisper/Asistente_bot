@@ -11,6 +11,19 @@
  */
 import { z } from 'zod'
 
+/**
+ * Topes de ABUSO compartidos por el contrato y los parsers (G23-K3): lo que
+ * no entra acá no es cronograma y se descarta sin throw. La plausibilidad
+ * fina (valor raro pero posible) es decisión del ENSAMBLADO: null +
+ * inconsistencia, nunca excepción. Medido sobre reales: 5 años ≈ 1825 días,
+ * un protocolo ya trae 6 tablas de hasta 46 columnas.
+ */
+export const TIMING_VALUE_MIN = -400
+export const TIMING_VALUE_MAX = 3700
+export const WINDOW_MARGIN_MAX = 180
+export const MAX_TABLES = 24
+export const MAX_TABLE_PAGES = 60
+
 // — primitivas con cota —
 const Page = z.number().int().min(1).max(999)
 const Confidence = z.number().min(0).max(1)
@@ -47,7 +60,7 @@ export const unitSchema = z.enum(['day', 'week'])
 
 export const timingSchema = z.object({
   kind: z.enum(['scheduled', 'event', 'recurrent']),
-  value: z.number().int().min(-60).max(900).nullable(),
+  value: z.number().int().min(TIMING_VALUE_MIN).max(TIMING_VALUE_MAX).nullable(),
   unit: unitSchema.nullable(),
   anchor: z.string().max(32).nullable(),
   recurrence: z
@@ -61,15 +74,15 @@ export const timingSchema = z.object({
 export type Timing = z.infer<typeof timingSchema>
 
 export const windowSchema = z.object({
-  before: z.number().int().min(0).max(30).nullable(),
-  after: z.number().int().min(0).max(60).nullable(),
+  before: z.number().int().min(0).max(WINDOW_MARGIN_MAX).nullable(),
+  after: z.number().int().min(0).max(WINDOW_MARGIN_MAX).nullable(),
   unit: unitSchema.nullable(),
 })
 export type VisitWindow = z.infer<typeof windowSchema>
 
 export const procedureWindowSchema = z.object({
-  before: z.number().int().min(0).max(30),
-  after: z.number().int().min(0).max(60),
+  before: z.number().int().min(0).max(WINDOW_MARGIN_MAX),
+  after: z.number().int().min(0).max(WINDOW_MARGIN_MAX),
   unit: z.enum(['day', 'week', 'hour']),
 })
 export type ProcedureWindow = z.infer<typeof procedureWindowSchema>
@@ -111,7 +124,7 @@ export const tableSchema = z.object({
   title: z.string().max(200),
   branch: z.string().max(64).nullable(),
   phase: z.string().max(32).nullable(),
-  pages: z.array(Page).min(1).max(40),
+  pages: z.array(Page).min(1).max(MAX_TABLE_PAGES),
   outcome: z.enum(['complete', 'partial', 'failed']),
   reasons: z.array(z.string().max(64)).max(16),
 })
@@ -159,18 +172,19 @@ export type OutOfTableRule = z.infer<typeof outOfTableRuleSchema>
 export const inconsistencySchema = z.object({
   kind: z.string().max(48),
   description: z.string().max(500),
-  pages: z.array(Page).min(1).max(40),
+  pages: z.array(Page).min(1).max(MAX_TABLE_PAGES),
   status: z.enum(['open', 'seen', 'asked_sponsor']),
 })
 export type Inconsistency = z.infer<typeof inconsistencySchema>
 
+// Arreglos: MAX_TABLES tablas × ~46 columnas / ~500 filas reales, con margen.
 export const scheduleSchema = z.object({
-  tables: z.array(tableSchema).max(8),
-  visits: z.array(visitSchema).max(200),
-  procedures: z.array(procedureSchema).max(500),
-  cells: z.array(cellSchema).max(6000),
-  notes: z.array(noteSchema).max(200),
-  outOfTableRules: z.array(outOfTableRuleSchema).max(50),
-  inconsistencies: z.array(inconsistencySchema).max(50),
+  tables: z.array(tableSchema).max(MAX_TABLES),
+  visits: z.array(visitSchema).max(1500),
+  procedures: z.array(procedureSchema).max(12000),
+  cells: z.array(cellSchema).max(60000),
+  notes: z.array(noteSchema).max(500),
+  outOfTableRules: z.array(outOfTableRuleSchema).max(200),
+  inconsistencies: z.array(inconsistencySchema).max(200),
 })
 export type Schedule = z.infer<typeof scheduleSchema>
