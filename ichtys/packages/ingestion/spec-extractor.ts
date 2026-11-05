@@ -532,6 +532,11 @@ async function extractGroup<T>(
   return { data: object, modelId }
 }
 
+/** Código de defecto + índice. Nunca el name ni otro campo del modelo. */
+function visitDefect(index: number, code: string): string {
+  return `visits: ${code} index=${index}`
+}
+
 function validateExtractedVisits(
   result: { visits: StudySpec['visits'] },
   pages: ParsedPage[],
@@ -547,26 +552,26 @@ function validateExtractedVisits(
     if (previous !== undefined) {
       invalid.add(previous)
       invalid.add(index)
-      warnings.push(`visits: duplicate visit name "${visit.name}"`)
+      warnings.push(`visits: duplicate_visit_name index=${previous},${index}`)
     } else {
       seenNames.set(key, index)
     }
 
     if (visit.procedures.every((procedure) => !procedure.trim())) {
       invalid.add(index)
-      warnings.push(`visits: "${visit.name}" has no procedures`)
+      warnings.push(visitDefect(index, 'no_procedures'))
     } else if (visit.procedures.some((procedure) => !procedure.trim())) {
       invalid.add(index)
-      warnings.push(`visits: "${visit.name}" contains an empty procedure`)
+      warnings.push(visitDefect(index, 'empty_procedure'))
     }
 
     if (visit.day !== null && !Number.isInteger(visit.day)) {
       invalid.add(index)
-      warnings.push(`visits: "${visit.name}" has a non-integer study day`)
+      warnings.push(visitDefect(index, 'non_integer_day'))
     }
     if (visit.windowDays !== null && (!Number.isInteger(visit.windowDays) || visit.windowDays < 0)) {
       invalid.add(index)
-      warnings.push(`visits: "${visit.name}" has an invalid visit window`)
+      warnings.push(visitDefect(index, 'invalid_visit_window'))
     }
   }
 
@@ -575,7 +580,7 @@ function validateExtractedVisits(
     if (visit.day === null) continue
     if (previousDay !== null && visit.day < previousDay) {
       invalid.add(index)
-      warnings.push(`visits: visits are not ordered by day near "${visit.name}"`)
+      warnings.push(visitDefect(index, 'day_order'))
     }
     previousDay = visit.day
   }

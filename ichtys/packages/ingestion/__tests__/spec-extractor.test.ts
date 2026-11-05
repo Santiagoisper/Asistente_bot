@@ -324,13 +324,61 @@ describe('extractStudySpec', () => {
     const result = await extractStudySpec(makeProtocolPages())
 
     expect(result.warnings).toEqual(expect.arrayContaining([
-      expect.stringContaining('duplicate visit name'),
-      expect.stringContaining('not ordered by day'),
-      expect.stringContaining('has no procedures'),
+      expect.stringContaining('duplicate_visit_name'),
+      expect.stringContaining('day_order'),
+      expect.stringContaining('no_procedures'),
       expect.stringContaining('has an invalid visit window'),
     ]))
+    expect(result.warnings.join('\n')).not.toContain('Visita 4')
     expect(result.spec.visits.map((visit) => visit.confidence)).toEqual(['low', 'low'])
     expect(result.spec.visits[1]?.windowDays).toBeNull()
+  })
+
+  it('no copia el nombre de la visita (ni un salto de línea) a warnings ni a extractionWarnings', async () => {
+    mockExtractionByPrompt()
+    const marker = 'PACIENTE_FICTICIO_123_INYECCION_LOG'
+    const poisoned = `${marker}\nLINEA_INYECTADA`
+    const original = mocks.generateObject.getMockImplementation()!
+    mocks.generateObject.mockImplementation((args: { prompt: string }) => {
+      if (args.prompt.includes('schedule of activities')) {
+        return Promise.resolve({
+          object: {
+            visits: [
+              {
+                name: poisoned,
+                label: 'Semana 12',
+                day: 85,
+                windowDays: 3,
+                procedures: ['HbA1c'],
+                sourcePages: [19],
+                confidence: 'high',
+              },
+              {
+                name: poisoned,
+                label: 'Semana 2',
+                day: 14,
+                windowDays: 1,
+                procedures: [],
+                sourcePages: [19],
+                confidence: 'high',
+              },
+            ],
+          },
+        })
+      }
+      return original(args)
+    })
+
+    const result = await extractStudySpec(makeProtocolPages())
+    const extractionWarnings = result.warnings
+
+    expect(result.spec.visits.some((visit) => visit.name.includes(marker))).toBe(true)
+    expect(result.warnings.join('\n')).not.toContain(marker)
+    expect(result.warnings.join('\n')).not.toContain('LINEA_INYECTADA')
+    expect(extractionWarnings.join('\n')).not.toContain(marker)
+    expect(extractionWarnings.join('\n')).not.toContain('LINEA_INYECTADA')
+    expect(result.warnings.some((warning) => warning.includes('duplicate_visit_name') && warning.includes('index='))).toBe(true)
+    expect(result.warnings.some((warning) => warning.includes('\n'))).toBe(false)
   })
 
   it('does not treat prose "v 12" as a visit label or lower every visit on count mismatch', async () => {
