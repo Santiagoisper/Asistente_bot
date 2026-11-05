@@ -15,6 +15,10 @@ import {
 } from '../../ingestion/spec-extractor'
 import { llmFactsSchema } from '../../../apps/web/lib/subjects/patient-profile-service'
 import { labObservationSchema } from '../../clinical/profile-schema'
+// P3 (ADR-10 §3): el contrato Schedule del paquete soa. Sus sub-esquemas
+// viajan al modelo en las llamadas del normalizador; el contrato completo
+// registra aquí su forma (M4) y su cuenta de opcionales (M5, tope 10).
+import { scheduleSchema } from '../../soa/schedule-contract'
 // Esquema y tope REALES de la ruta labs/confirm (Architect, vuelta 3): el M9
 // no usa una copia local — si alguien cambia el tope, este test lo sigue.
 import { labOcrConfirmSchema } from '../../../apps/web/lib/subjects/schemas'
@@ -38,6 +42,7 @@ const STRUCTURED_SCHEMAS = {
   confidenceOnly: confidenceOnlySchema,
   answer: answerSchema,
   llmFacts: llmFactsSchema,
+  scheduleContract: scheduleSchema,
 } as const
 
 // Misma regla que @ai-sdk/anthropic 4.0.96 dist/index.js:3826-3845.
@@ -153,6 +158,128 @@ describe('veredictos de validación sin cambio (ADR-8 M7)', () => {
       labs: [{ name: 'HbA1c', value: 8.2, unit: '%' }],
       medications: [{ name: 'Metformina', dose: '850 mg' }],
       conditions: ['Diabetes tipo 2'],
+    },
+    // P3: Schedule mínimo que toca todas las ramas del contrato (ADR-10 §3).
+    scheduleContract: {
+      tables: [
+        {
+          key: 'T1',
+          title: 'Cronograma de la rama principal',
+          branch: null,
+          phase: null,
+          pages: [2, 3],
+          outcome: 'complete',
+          reasons: [],
+        },
+      ],
+      visits: [
+        {
+          key: 'T1-C01',
+          tableKey: 'T1',
+          printedId: 'V1',
+          label: 'Día 1',
+          timing: { kind: 'scheduled', value: 1, unit: 'day', anchor: null, recurrence: null },
+          window: { before: 2, after: 2, unit: 'day' },
+          type: 'standard',
+          attributes: { fasting: null, onSite: true, armOnly: null },
+          source: { page: 2, bbox: [100, 400, 120, 412] },
+          confidence: 1,
+        },
+        {
+          key: 'T1-C02',
+          tableKey: 'T1',
+          printedId: 'VR1',
+          label: 'Rescate 1',
+          timing: {
+            kind: 'recurrent',
+            value: 12,
+            unit: 'week',
+            anchor: null,
+            recurrence: { every: 12, unit: 'week', until: 'S104' },
+          },
+          window: null,
+          type: 'follow_up',
+          attributes: { fasting: null, onSite: null, armOnly: 'A' },
+          source: { page: 2, bbox: [122, 400, 142, 412] },
+          confidence: 0.9,
+        },
+      ],
+      procedures: [
+        {
+          key: 'P01',
+          label: 'Analítica de laboratorio',
+          section: null,
+          kind: 'procedure',
+          conditions: [],
+          source: { page: 2, bbox: [40, 380, 90, 390] },
+        },
+      ],
+      cells: [
+        {
+          visitKey: 'T1-C01',
+          procedureKey: 'P01',
+          mark: 'x',
+          noteRefs: ['1'],
+          conditions: [],
+          procedureWindow: null,
+          source: { page: 2, bbox: [100, 380, 120, 390] },
+          confidence: 1,
+          reviewed: false,
+        },
+        {
+          visitKey: 'T1-C02',
+          procedureKey: 'P01',
+          mark: 'prn_range',
+          noteRefs: [],
+          conditions: [
+            {
+              kind: 'dose_timing',
+              expr: 'Entre 1 y 2 horas después de la dosis',
+              sourceRef: '2',
+              page: 2,
+              confidence: 1,
+            },
+          ],
+          procedureWindow: { before: 4, after: 2, unit: 'week' },
+          source: { page: 2, bbox: [122, 380, 142, 390] },
+          confidence: 0.8,
+          reviewed: false,
+        },
+      ],
+      notes: [
+        {
+          ref: '1',
+          tableKey: 'T1',
+          text: 'Solo en participantes del brazo A',
+          page: 2,
+          conditions: [
+            { kind: 'arm', expr: 'brazo A', sourceRef: '1', page: 2, confidence: 1 },
+          ],
+        },
+      ],
+      outOfTableRules: [
+        {
+          text: 'Ventana propia: −4/+2 semanas',
+          page: 1,
+          conditions: [
+            {
+              kind: 'dose_timing',
+              expr: 'ventana propia −4/+2 semanas',
+              sourceRef: '',
+              page: 1,
+              confidence: 1,
+            },
+          ],
+        },
+      ],
+      inconsistencies: [
+        {
+          kind: 'hybrid_set_mismatch',
+          description: 'La fila hibrida no coincide con las marcas de la grilla',
+          pages: [2, 3],
+          status: 'open',
+        },
+      ],
     },
   }
 

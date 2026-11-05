@@ -389,6 +389,885 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
 }
 `;
 
+exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) > jsonSchema de scheduleContract coincide con la instantánea 1`] = `
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "cells": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "conditions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "confidence": {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number",
+                },
+                "expr": {
+                  "maxLength": 300,
+                  "type": "string",
+                },
+                "kind": {
+                  "enum": [
+                    "population",
+                    "arm",
+                    "dose_timing",
+                    "consent",
+                    "country",
+                    "event",
+                    "dependency",
+                    "order",
+                    "fasting",
+                  ],
+                  "type": "string",
+                },
+                "page": {
+                  "maximum": 999,
+                  "minimum": 1,
+                  "type": "integer",
+                },
+                "sourceRef": {
+                  "maxLength": 16,
+                  "type": "string",
+                },
+              },
+              "required": [
+                "kind",
+                "expr",
+                "sourceRef",
+                "page",
+                "confidence",
+              ],
+              "type": "object",
+            },
+            "maxItems": 16,
+            "type": "array",
+          },
+          "confidence": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number",
+          },
+          "mark": {
+            "enum": [
+              "x",
+              "prn_range",
+              "conditional",
+            ],
+            "type": "string",
+          },
+          "noteRefs": {
+            "items": {
+              "maxLength": 16,
+              "type": "string",
+            },
+            "maxItems": 8,
+            "type": "array",
+          },
+          "procedureKey": {
+            "maxLength": 32,
+            "type": "string",
+          },
+          "procedureWindow": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "after": {
+                    "maximum": 60,
+                    "minimum": 0,
+                    "type": "integer",
+                  },
+                  "before": {
+                    "maximum": 30,
+                    "minimum": 0,
+                    "type": "integer",
+                  },
+                  "unit": {
+                    "enum": [
+                      "day",
+                      "week",
+                      "hour",
+                    ],
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "before",
+                  "after",
+                  "unit",
+                ],
+                "type": "object",
+              },
+              {
+                "type": "null",
+              },
+            ],
+          },
+          "reviewed": {
+            "type": "boolean",
+          },
+          "source": {
+            "additionalProperties": false,
+            "properties": {
+              "bbox": {
+                "additionalItems": false,
+                "items": [
+                  {
+                    "type": "number",
+                  },
+                  {
+                    "type": "number",
+                  },
+                  {
+                    "type": "number",
+                  },
+                  {
+                    "type": "number",
+                  },
+                ],
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array",
+              },
+              "page": {
+                "maximum": 999,
+                "minimum": 1,
+                "type": "integer",
+              },
+            },
+            "required": [
+              "page",
+              "bbox",
+            ],
+            "type": "object",
+          },
+          "visitKey": {
+            "maxLength": 32,
+            "type": "string",
+          },
+        },
+        "required": [
+          "visitKey",
+          "procedureKey",
+          "mark",
+          "noteRefs",
+          "conditions",
+          "procedureWindow",
+          "source",
+          "confidence",
+          "reviewed",
+        ],
+        "type": "object",
+      },
+      "maxItems": 6000,
+      "type": "array",
+    },
+    "inconsistencies": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "maxLength": 500,
+            "type": "string",
+          },
+          "kind": {
+            "maxLength": 48,
+            "type": "string",
+          },
+          "pages": {
+            "items": {
+              "maximum": 999,
+              "minimum": 1,
+              "type": "integer",
+            },
+            "maxItems": 40,
+            "minItems": 1,
+            "type": "array",
+          },
+          "status": {
+            "enum": [
+              "open",
+              "seen",
+              "asked_sponsor",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "kind",
+          "description",
+          "pages",
+          "status",
+        ],
+        "type": "object",
+      },
+      "maxItems": 50,
+      "type": "array",
+    },
+    "notes": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "conditions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "confidence": {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number",
+                },
+                "expr": {
+                  "maxLength": 300,
+                  "type": "string",
+                },
+                "kind": {
+                  "enum": [
+                    "population",
+                    "arm",
+                    "dose_timing",
+                    "consent",
+                    "country",
+                    "event",
+                    "dependency",
+                    "order",
+                    "fasting",
+                  ],
+                  "type": "string",
+                },
+                "page": {
+                  "maximum": 999,
+                  "minimum": 1,
+                  "type": "integer",
+                },
+                "sourceRef": {
+                  "maxLength": 16,
+                  "type": "string",
+                },
+              },
+              "required": [
+                "kind",
+                "expr",
+                "sourceRef",
+                "page",
+                "confidence",
+              ],
+              "type": "object",
+            },
+            "maxItems": 16,
+            "type": "array",
+          },
+          "page": {
+            "maximum": 999,
+            "minimum": 1,
+            "type": "integer",
+          },
+          "ref": {
+            "maxLength": 16,
+            "type": "string",
+          },
+          "tableKey": {
+            "maxLength": 32,
+            "type": "string",
+          },
+          "text": {
+            "maxLength": 1000,
+            "type": "string",
+          },
+        },
+        "required": [
+          "ref",
+          "tableKey",
+          "text",
+          "page",
+          "conditions",
+        ],
+        "type": "object",
+      },
+      "maxItems": 200,
+      "type": "array",
+    },
+    "outOfTableRules": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "conditions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "confidence": {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number",
+                },
+                "expr": {
+                  "maxLength": 300,
+                  "type": "string",
+                },
+                "kind": {
+                  "enum": [
+                    "population",
+                    "arm",
+                    "dose_timing",
+                    "consent",
+                    "country",
+                    "event",
+                    "dependency",
+                    "order",
+                    "fasting",
+                  ],
+                  "type": "string",
+                },
+                "page": {
+                  "maximum": 999,
+                  "minimum": 1,
+                  "type": "integer",
+                },
+                "sourceRef": {
+                  "maxLength": 16,
+                  "type": "string",
+                },
+              },
+              "required": [
+                "kind",
+                "expr",
+                "sourceRef",
+                "page",
+                "confidence",
+              ],
+              "type": "object",
+            },
+            "maxItems": 16,
+            "type": "array",
+          },
+          "page": {
+            "maximum": 999,
+            "minimum": 1,
+            "type": "integer",
+          },
+          "text": {
+            "maxLength": 1000,
+            "type": "string",
+          },
+        },
+        "required": [
+          "text",
+          "page",
+          "conditions",
+        ],
+        "type": "object",
+      },
+      "maxItems": 50,
+      "type": "array",
+    },
+    "procedures": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "conditions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "confidence": {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number",
+                },
+                "expr": {
+                  "maxLength": 300,
+                  "type": "string",
+                },
+                "kind": {
+                  "enum": [
+                    "population",
+                    "arm",
+                    "dose_timing",
+                    "consent",
+                    "country",
+                    "event",
+                    "dependency",
+                    "order",
+                    "fasting",
+                  ],
+                  "type": "string",
+                },
+                "page": {
+                  "maximum": 999,
+                  "minimum": 1,
+                  "type": "integer",
+                },
+                "sourceRef": {
+                  "maxLength": 16,
+                  "type": "string",
+                },
+              },
+              "required": [
+                "kind",
+                "expr",
+                "sourceRef",
+                "page",
+                "confidence",
+              ],
+              "type": "object",
+            },
+            "maxItems": 16,
+            "type": "array",
+          },
+          "key": {
+            "maxLength": 32,
+            "type": "string",
+          },
+          "kind": {
+            "enum": [
+              "procedure",
+              "narrative_rule",
+            ],
+            "type": "string",
+          },
+          "label": {
+            "maxLength": 200,
+            "type": "string",
+          },
+          "section": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string",
+              },
+              {
+                "type": "null",
+              },
+            ],
+          },
+          "source": {
+            "additionalProperties": false,
+            "properties": {
+              "bbox": {
+                "additionalItems": false,
+                "items": [
+                  {
+                    "type": "number",
+                  },
+                  {
+                    "type": "number",
+                  },
+                  {
+                    "type": "number",
+                  },
+                  {
+                    "type": "number",
+                  },
+                ],
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array",
+              },
+              "page": {
+                "maximum": 999,
+                "minimum": 1,
+                "type": "integer",
+              },
+            },
+            "required": [
+              "page",
+              "bbox",
+            ],
+            "type": "object",
+          },
+        },
+        "required": [
+          "key",
+          "label",
+          "section",
+          "kind",
+          "conditions",
+          "source",
+        ],
+        "type": "object",
+      },
+      "maxItems": 500,
+      "type": "array",
+    },
+    "tables": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "branch": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string",
+              },
+              {
+                "type": "null",
+              },
+            ],
+          },
+          "key": {
+            "maxLength": 32,
+            "type": "string",
+          },
+          "outcome": {
+            "enum": [
+              "complete",
+              "partial",
+              "failed",
+            ],
+            "type": "string",
+          },
+          "pages": {
+            "items": {
+              "maximum": 999,
+              "minimum": 1,
+              "type": "integer",
+            },
+            "maxItems": 40,
+            "minItems": 1,
+            "type": "array",
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string",
+              },
+              {
+                "type": "null",
+              },
+            ],
+          },
+          "reasons": {
+            "items": {
+              "maxLength": 64,
+              "type": "string",
+            },
+            "maxItems": 16,
+            "type": "array",
+          },
+          "title": {
+            "maxLength": 200,
+            "type": "string",
+          },
+        },
+        "required": [
+          "key",
+          "title",
+          "branch",
+          "phase",
+          "pages",
+          "outcome",
+          "reasons",
+        ],
+        "type": "object",
+      },
+      "maxItems": 8,
+      "type": "array",
+    },
+    "visits": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "attributes": {
+            "additionalProperties": false,
+            "properties": {
+              "armOnly": {
+                "anyOf": [
+                  {
+                    "maxLength": 64,
+                    "type": "string",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+              },
+              "fasting": {
+                "type": [
+                  "boolean",
+                  "null",
+                ],
+              },
+              "onSite": {
+                "type": [
+                  "boolean",
+                  "null",
+                ],
+              },
+            },
+            "required": [
+              "fasting",
+              "onSite",
+              "armOnly",
+            ],
+            "type": "object",
+          },
+          "confidence": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number",
+          },
+          "key": {
+            "maxLength": 32,
+            "type": "string",
+          },
+          "label": {
+            "maxLength": 120,
+            "type": "string",
+          },
+          "printedId": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string",
+              },
+              {
+                "type": "null",
+              },
+            ],
+          },
+          "source": {
+            "additionalProperties": false,
+            "properties": {
+              "bbox": {
+                "additionalItems": false,
+                "items": [
+                  {
+                    "type": "number",
+                  },
+                  {
+                    "type": "number",
+                  },
+                  {
+                    "type": "number",
+                  },
+                  {
+                    "type": "number",
+                  },
+                ],
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array",
+              },
+              "page": {
+                "maximum": 999,
+                "minimum": 1,
+                "type": "integer",
+              },
+            },
+            "required": [
+              "page",
+              "bbox",
+            ],
+            "type": "object",
+          },
+          "tableKey": {
+            "maxLength": 32,
+            "type": "string",
+          },
+          "timing": {
+            "additionalProperties": false,
+            "properties": {
+              "anchor": {
+                "anyOf": [
+                  {
+                    "maxLength": 32,
+                    "type": "string",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+              },
+              "kind": {
+                "enum": [
+                  "scheduled",
+                  "event",
+                  "recurrent",
+                ],
+                "type": "string",
+              },
+              "recurrence": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "every": {
+                        "maximum": 52,
+                        "minimum": 1,
+                        "type": "integer",
+                      },
+                      "unit": {
+                        "const": "week",
+                        "type": "string",
+                      },
+                      "until": {
+                        "anyOf": [
+                          {
+                            "maxLength": 12,
+                            "type": "string",
+                          },
+                          {
+                            "type": "null",
+                          },
+                        ],
+                      },
+                    },
+                    "required": [
+                      "every",
+                      "unit",
+                      "until",
+                    ],
+                    "type": "object",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+              },
+              "unit": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "day",
+                      "week",
+                    ],
+                    "type": "string",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "maximum": 900,
+                    "minimum": -60,
+                    "type": "integer",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+              },
+            },
+            "required": [
+              "kind",
+              "value",
+              "unit",
+              "anchor",
+              "recurrence",
+            ],
+            "type": "object",
+          },
+          "type": {
+            "enum": [
+              "standard",
+              "pk_only",
+              "dispense_only",
+              "hybrid",
+              "remote",
+              "screening",
+              "end_of_study",
+              "early_termination",
+              "unscheduled",
+              "follow_up",
+            ],
+            "type": "string",
+          },
+          "window": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "after": {
+                    "anyOf": [
+                      {
+                        "maximum": 60,
+                        "minimum": 0,
+                        "type": "integer",
+                      },
+                      {
+                        "type": "null",
+                      },
+                    ],
+                  },
+                  "before": {
+                    "anyOf": [
+                      {
+                        "maximum": 30,
+                        "minimum": 0,
+                        "type": "integer",
+                      },
+                      {
+                        "type": "null",
+                      },
+                    ],
+                  },
+                  "unit": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "day",
+                          "week",
+                        ],
+                        "type": "string",
+                      },
+                      {
+                        "type": "null",
+                      },
+                    ],
+                  },
+                },
+                "required": [
+                  "before",
+                  "after",
+                  "unit",
+                ],
+                "type": "object",
+              },
+              {
+                "type": "null",
+              },
+            ],
+          },
+        },
+        "required": [
+          "key",
+          "tableKey",
+          "printedId",
+          "label",
+          "timing",
+          "window",
+          "type",
+          "attributes",
+          "source",
+          "confidence",
+        ],
+        "type": "object",
+      },
+      "maxItems": 200,
+      "type": "array",
+    },
+  },
+  "required": [
+    "tables",
+    "visits",
+    "procedures",
+    "cells",
+    "notes",
+    "outOfTableRules",
+    "inconsistencies",
+  ],
+  "type": "object",
+}
+`;
+
 exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) > jsonSchema de sectionMap coincide con la instantánea 1`] = `
 {
   "$schema": "http://json-schema.org/draft-07/schema#",

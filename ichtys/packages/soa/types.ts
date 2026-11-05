@@ -132,3 +132,6 @@ export interface RawSchedule {
   tables: RawTable[]
   location: ScheduleLocation
 }
+
+/** Contrato de salida de la normalización (P3, ADR-10 §3). */
+export type { Schedule, Condition } from './schedule-contract'
