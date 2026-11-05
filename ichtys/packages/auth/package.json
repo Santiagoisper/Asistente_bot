@@ -19,7 +19,7 @@
     "test:leakage": "vitest run --dir tests/leakage"
   },
   "dependencies": {
-    "@clerk/nextjs": "^7.9.10",
+    "@clerk/nextjs": "^7.9.23",
     "@ichtys/db": "workspace:*",
     "drizzle-orm": "^0.45.3"
   },
