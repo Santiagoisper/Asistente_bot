@@ -1,8 +1,8 @@
 # Fixtures sintéticos de cronograma (ADR-10, P1)
 
-Siete PDF inventados, F1 a F7, y el JSON de verdad que sale del mismo generador. No hay patrocinador, fármaco, código de estudio ni analito real. Sirven para medir un extractor de cronogramas. No son un protocolo.
+Ocho PDF inventados, F1 a F8, y el JSON de verdad que sale del mismo generador. No hay patrocinador, fármaco, código de estudio ni analito real. Sirven para medir un extractor de cronogramas. No son un protocolo.
 
-Semillas fijas: F1 `1001`, F2 `1002`, F3 `1003`, F4 `1004`, F5 `1005`, F6 `1006`, F7 `1007`. F1 a F5 salen del generador `1.1.0`. F6 y F7 salen del generador `1.3.0`.
+Semillas fijas: F1 `1001`, F2 `1002`, F3 `1003`, F4 `1004`, F5 `1005`, F6 `1006`, F7 `1007`, F8 `1008`. F1 a F5 salen del generador `1.1.0`. F6, F7 y F8 salen del generador `1.3.0`.
 
 | Fixture | Páginas | Páginas de grilla | Celdas | Notas | Inconsistencias plantadas |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -12,9 +12,10 @@ Semillas fijas: F1 `1001`, F2 `1002`, F3 `1003`, F4 `1004`, F5 `1005`, F6 `1006`
 | F4 | 8 | 2 | 45 | 5 | 2 |
 | F5 | 40 | 6 | 198 | 10 | 3 |
 | F6 | 24 | 22 | 513 | 0 | 0 |
-| F7 | 7 | 5 | 256 | 0 | 0 |
+| F7 | 6 | 4 | 208 | 0 | 0 |
+| F8 | 7 | 5 | 256 | 0 | 0 |
 
-Esas cifras son el inventario del gold, no una medición del extractor. F6 y F7 no plantan inconsistencias: el rasgo que miden está en la geometría del encabezado.
+Esas cifras son el inventario del gold, no una medición del extractor. F6, F7 y F8 no plantan inconsistencias: el rasgo que miden está en la geometría del encabezado.
 
 ## Qué trae cada trampa
 
@@ -24,13 +25,14 @@ Esas cifras son el inventario del gold, no una medición del extractor. F6 y F7 
 - F4. Ocho páginas. El índice, la sinopsis y la lista de tablas citan «1.3 Cronograma de actividades» antes de la grilla. La fila de ventana se llama «Margen de visita».
 - F5. Inglés. La primera página de la segunda tabla se dibuja apaisada y después lleva `/Rotate 90`. Las cajas del gold quedan en el espacio sin rotar. El encabezado de esa tabla tiene dos niveles. Tres rótulos dicen el brazo o el subgrupo.
 - F6. Generador `1.3.0`. 22 páginas apaisadas de una sola grilla. Encabezado numérico sin prefijo y sin etiqueta en la fila de enteros. Las fichas son enteros crecientes con tres guiones, en la secuencia `4 - 5 6 - 7 - 8`. Encima hay tres períodos agrupados (Selección, Tratamiento, Seguimiento). En otra banda, debajo, una fila «Día». A la derecha, una tira de comentarios que no es visita. El encabezado se repite en cada página. Cada página trae entre 2 y 6 filas de datos. La columna de etiquetas no es una visita. El gold lo deja en `header`.
-- F7. Generador `1.3.0`. 5 páginas apaisadas. Cada una trae dos tiras apiladas: 20 columnas con prefijo `V` desde x = 237 y 24 con prefijo `W` desde x = 213. No hay etiquetas «Serie» ni «Ficha». La ficha está partida: la letra a 7 pt y, 9 pt debajo, el número a 9 pt. La primera ficha de la tira W es `1/`. Las etiquetas de datos salen en x = 82. Hay 45 pt entre las filas de letras, 6 pt hasta la primera fila de datos de la tira V y 18 pt en la tira W. La tira V lleva 2 filas de datos y la W lleva 4: con 45 pt no caben más filas arriba sin pisar la tira de abajo. El encabezado de las dos tiras se repite en cada página. La columna de etiquetas no es una visita (`labelColumn.countsAsVisit` es false). El gold lo deja en `strips` (tiras y columnas) y en `cells` (marcas).
+- F7. Generador `1.3.0`. Un solo encabezado de varias líneas, 26 columnas, repetido en 4 páginas apaisadas. Arriba, tres períodos (Selección, Tratamiento, Seguimiento). Después, la fila de ids de visita en celdas de dos líneas: las fichas largas van partidas (prefijo `V` arriba, número a 9 pt y en el mismo x, ± 1 pt) y 5 fichas cortas (`V1`, `ET`, `FA`, `VDT`, `EOS`) van enteras, centradas en altura. La etiqueta «Visita» sale en x = 82, en la línea del número. La primera ficha está en x = 220 (dentro de 213–237). Unos 39 pt más abajo hay una fila de semanas `S1`–`S26`; las largas (`S10` en adelante) también van partidas. Esas semanas son el tiempo de las mismas 26 columnas, no otra tabla ni más visitas. La columna de la etiqueta no es una visita. Antes de la grilla hay una página de figura: una línea de tiempo con 21 fichas `S…` a 6 pt entre sí, sin marcas. El gold lo deja en `header` (`kind: multiline_visit`) y en `figure`.
+- F8. Generador `1.3.0`. Control de dos tablas apiladas de verdad. 5 páginas apaisadas. Cada una trae dos encabezados: 20 columnas con prefijo `V` desde x = 237 y 24 con prefijo `W` desde x = 213. No hay etiquetas «Serie» ni «Ficha». La ficha está partida: la letra a 7 pt y, 9 pt debajo, el número a 9 pt. La primera ficha de la tira W es `1/`. Las etiquetas de datos salen en x = 82. Hay 45 pt entre las filas de letras, 6 pt hasta la primera fila de datos de la tira V y 18 pt en la tira W. Entre los dos encabezados hay filas de datos con marcas. La tira V lleva 2 filas y la W lleva 4. El encabezado de las dos tiras se repite en cada página. La columna de etiquetas no es una visita (`labelColumn.countsAsVisit` es false). El gold lo deja en `strips` y en `cells`. El calificador, si las dos tablas comparten páginas, desempata por el solapamiento vertical de las cajas de las visitas.
 
-El relleno no contiene «cronograma de actividades», «schedule of assessments», «plan de visitas» ni «SoA». Esas frases están solo en los falsos aciertos y en el encabezado de cada grilla.
+El relleno no contiene «cronograma de actividades», «schedule of assessments», «plan de visitas» ni «SoA». Esas frases están solo en los falsos aciertos, en el encabezado de cada grilla y, en F7, en la página de figura.
 
 ## Glifos perdidos
 
-`difficulty.glyphLoss` es `false` en los siete. ReportLab no puede emitir un ToUnicode roto sin editar la capa de texto a mano, y eso está prohibido. F5 no incluye ese rasgo.
+`difficulty.glyphLoss` es `false` en los ocho. ReportLab no puede emitir un ToUnicode roto sin editar la capa de texto a mano, y eso está prohibido. F5 no incluye ese rasgo.
 
 ## Regenerar
 
@@ -40,10 +42,10 @@ Hace falta Python 3 y las librerías de `ichtys/scripts/soa-fixtures/requirement
 python3 -m venv /tmp/soa-venv
 /tmp/soa-venv/bin/pip install -r ichtys/scripts/soa-fixtures/requirements.txt
 /tmp/soa-venv/bin/python ichtys/scripts/soa-fixtures/generate.py
-/tmp/soa-venv/bin/python ichtys/scripts/soa-fixtures/generate.py F6 F7
+/tmp/soa-venv/bin/python ichtys/scripts/soa-fixtures/generate.py F6 F7 F8
 ```
 
-Sin argumentos se reescriben F1 a F5. Con `F6` y `F7` solo salen esos dos, en el generador `1.3.0`.
+Sin argumentos se reescriben F1 a F5. Con `F6`, `F7` y `F8` solo salen esos tres, en el generador `1.3.0`.
 
 Salida: `ichtys/fixtures/soa/F{n}.pdf`, `F{n}.gold.json` y `F{n}.render/pagina-{k}.png` a 72 dpi. El PDF y el gold quedan en el repositorio. Los PNG no: `ichtys/.gitignore` ignora `fixtures/soa/*.render/` y el generador los vuelve a escribir iguales. El PNG de la página rotada de F5 es la página como la muestra un visor. Las cajas del JSON siguen el espacio de usuario sin rotar.
 
