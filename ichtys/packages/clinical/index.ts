@@ -28,3 +28,22 @@ export {
   type MergedExtraction,
 } from './extract-merge'
 export { assessScreening, screeningSummary, type ScreeningInput } from './screening-engine'
+export {
+  parseAnalyteBounds,
+  compareWithBounds,
+  alignLabToBounds,
+  describeBoundComparison,
+  normalizeDecimalCommas,
+  ifccMmolToNgsp,
+  ngspToIfccMmol,
+  formatClinicalNumber,
+  textMentionsAnalyte,
+  NGSP_FROM_IFCC_SLOPE,
+  NGSP_FROM_IFCC_INTERCEPT,
+  type AnalyteId,
+  type AnalyteUnit,
+  type AnalyteBounds,
+  type NumericBound,
+  type AlignedLab,
+  type AlignLabResult,
+} from './numeric-criteria'

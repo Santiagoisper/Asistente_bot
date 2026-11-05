@@ -1,4 +1,12 @@
-import type { CriterionAssessment, PatientProfile } from './profile-schema'
+import type { CriterionAssessment, LabObservation, PatientProfile } from './profile-schema'
+import {
+  alignLabToBounds,
+  compareWithBounds,
+  describeBoundComparison,
+  formatClinicalNumber,
+  parseAnalyteBounds,
+  textMentionsAnalyte,
+} from './numeric-criteria'
 
 interface EligibilityCriterionInput {
   number: string
@@ -11,25 +19,8 @@ export interface ScreeningInput {
   exclusionCriteria: EligibilityCriterionInput[]
 }
 
-function getLabValue(profile: PatientProfile, name: string): number | undefined {
-  const lab = profile.labs.find((l) => l.name.toLowerCase() === name.toLowerCase())
-  return lab?.value
-}
-
-function parseHbA1cRange(text: string): { min?: number; max?: number } | null {
-  const normalized = text.replace(',', '.')
-  const rangeMatch = normalized.match(
-    /HbA1c[^0-9]*(?:≥|>=|>)\s*(\d+(?:\.\d+)?)[^0-9]*(?:y|<|≤|<=)\s*(\d+(?:\.\d+)?)/i,
-  )
-  if (rangeMatch) {
-    return {
-      min: Number.parseFloat(rangeMatch[1] ?? '0'),
-      max: Number.parseFloat(rangeMatch[2] ?? '0'),
-    }
-  }
-  const minOnly = normalized.match(/HbA1c[^0-9]*(?:≥|>=|>)\s*(\d+(?:\.\d+)?)/i)
-  if (minOnly) return { min: Number.parseFloat(minOnly[1] ?? '0') }
-  return null
+function findHbA1cLab(profile: PatientProfile): LabObservation | undefined {
+  return profile.labs.find((lab) => textMentionsAnalyte(lab.name, 'HbA1c'))
 }
 
 function assessHbA1cCriterion(
@@ -37,61 +28,56 @@ function assessHbA1cCriterion(
   kind: 'inclusion' | 'exclusion',
   profile: PatientProfile,
 ): CriterionAssessment | null {
-  if (!/HbA1c/i.test(criterion.text)) return null
+  if (!textMentionsAnalyte(criterion.text, 'HbA1c')) return null
 
-  const range = parseHbA1cRange(criterion.text)
-  const value = getLabValue(profile, 'HbA1c')
+  const bounds = parseAnalyteBounds(criterion.text, 'HbA1c')
+  const lab = findHbA1cLab(profile)
 
-  if (value === undefined) {
+  const base = {
+    criterionNumber: criterion.number,
+    criterionText: criterion.text,
+    kind,
+    sourcePages: criterion.sourcePages,
+  }
+
+  if (!lab) {
     return {
-      criterionNumber: criterion.number,
-      criterionText: criterion.text,
-      kind,
+      ...base,
       status: 'unknown',
       reason: 'HbA1c no documentado en el perfil del sujeto.',
-      sourcePages: criterion.sourcePages,
     }
   }
 
-  if (!range) {
+  if (!bounds) {
     return {
-      criterionNumber: criterion.number,
-      criterionText: criterion.text,
-      kind,
+      ...base,
       status: 'unknown',
-      reason: `HbA1c ${value}% registrado; no se pudo parsear el rango del criterio automáticamente.`,
-      sourcePages: criterion.sourcePages,
+      reason: `HbA1c ${formatClinicalNumber(lab.value)} registrado; no se pudo parsear el rango del criterio automáticamente.`,
     }
   }
 
-  const withinMin = range.min === undefined || value >= range.min
-  const withinMax =
-    range.max === undefined ||
-    (/<=\s*\d|≤\s*\d/i.test(criterion.text) ? value <= range.max : value < range.max)
-  const passesRange = withinMin && withinMax
+  const aligned = alignLabToBounds(lab.value, lab.unit, bounds)
+  if ('unknown' in aligned) {
+    return { ...base, status: 'unknown', reason: aligned.unknown }
+  }
+
+  const satisfies = compareWithBounds(aligned.value, bounds)
+  const citation = describeBoundComparison('HbA1c', aligned.value, bounds, satisfies)
 
   if (kind === 'inclusion') {
     return {
-      criterionNumber: criterion.number,
-      criterionText: criterion.text,
-      kind,
-      status: passesRange ? 'pass' : 'fail',
-      reason: passesRange
-        ? `HbA1c ${value}% dentro del rango esperado.`
-        : `HbA1c ${value}% fuera del rango del criterio.`,
-      sourcePages: criterion.sourcePages,
+      ...base,
+      status: satisfies ? 'pass' : 'fail',
+      reason: satisfies ? citation : `${citation} no se cumple`,
     }
   }
 
   return {
-    criterionNumber: criterion.number,
-    criterionText: criterion.text,
-    kind,
-    status: passesRange ? 'fail' : 'pass',
-    reason: passesRange
-      ? `HbA1c ${value}% activaría este criterio de exclusión.`
-      : `HbA1c ${value}% no activa este criterio de exclusión.`,
-    sourcePages: criterion.sourcePages,
+    ...base,
+    status: satisfies ? 'fail' : 'pass',
+    reason: satisfies
+      ? `${citation}: activaría este criterio de exclusión.`
+      : `${citation} no activa este criterio de exclusión.`,
   }
 }
 
