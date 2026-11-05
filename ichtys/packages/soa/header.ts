@@ -188,15 +188,15 @@ function labelKindOf(left: TextItem[]): 'visit' | 'time' | null {
 }
 
 /**
- * Busca TODAS las tiras de encabezado numérico de una página (P2c): cada
- * fila etiquetada de enteros crecientes con guiones es una tira, con la
- * ficha PARTIDA en dos filas (prefijo arriba, número abajo) compuesta en
- * `chips`. La banda de eje temporal («Día», «Semana») bajo una tira de
- * visitas es estructura de esa grilla, no una tira propia: si hay al menos
- * una tira de visitas, las de eje temporal se excluyen. Orden: de arriba a
- * abajo. Determinista y puro.
+ * TODAS las candidatas de tira de encabezado numérico de una página (P2c):
+ * cada fila etiquetada de enteros crecientes con guiones es una tira, con
+ * la ficha PARTIDA en dos filas (prefijo arriba, número abajo) compuesta en
+ * `chips`. SIN el filtro visitOnly: el discriminador de regiones de G18 §4
+ * (grid) necesita ver la tira de eje temporal de una tabla apilada debajo
+ * aunque haya tira de visitas arriba — filtrarla aquí la haría invisible
+ * al corte por marcas. Orden: de arriba a abajo. Determinista y puro.
  */
-export function findNumericHeaders(items: TextItem[]): NumericHeader[] {
+export function findNumericHeaderCandidates(items: TextItem[]): NumericHeader[] {
   const tokens = items
     .filter((i) => i.fontSize >= 4 && !i.rotated && i.str.trim().length > 0)
     .flatMap(splitNumericItem)
@@ -261,10 +261,20 @@ export function findNumericHeaders(items: TextItem[]): NumericHeader[] {
     candidates.push({ y: top, yTop, kind, tokens: row, letters, chips, labelItems, integers })
   }
 
-  // «Día»/«Semana» bajo una tira de visitas: estructura, no tira.
+  return candidates.sort((a, b) => b.yTop - a.yTop)
+}
+
+/**
+ * Las tiras de encabezado de la página SIN las de eje temporal cuando hay
+ * tira de visitas: la banda «Día»/«Semana» bajo una tira de visitas es
+ * estructura de esa grilla, no una tira propia. Comportamiento previo a
+ * G18 §4 (locate firma la página con esto); grid corta regiones sobre las
+ * candidatas completas.
+ */
+export function findNumericHeaders(items: TextItem[]): NumericHeader[] {
+  const candidates = findNumericHeaderCandidates(items)
   const visitOnly = candidates.some((c) => c.kind === 'visit')
-  const kept = visitOnly ? candidates.filter((c) => c.kind === 'visit') : candidates
-  return kept.sort((a, b) => b.yTop - a.yTop)
+  return visitOnly ? candidates.filter((c) => c.kind === 'visit') : candidates
 }
 
 /**

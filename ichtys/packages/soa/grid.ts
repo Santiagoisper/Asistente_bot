@@ -45,12 +45,13 @@
 import {
   countByRole,
   findNumericHeader,
-  findNumericHeaders,
+  findNumericHeaderCandidates,
   LABEL_WINDOW,
   MARK_STRINGS,
   normalizeNumericToken,
   TIME_TOKEN,
 } from './header'
+import type { NumericHeader } from './header'
 import type {
   BBox,
   HeaderSource,
@@ -346,27 +347,52 @@ function readTable(
     if (prefixedBandHits >= 2) {
       regions.push({ yTop: Infinity, yBottom: -Infinity })
     } else {
-      const strips = findNumericHeaders(srcPage.items)
+      // G18 §3.1/§4: corte por regiones SOLO con discriminador de marcas.
+      // Las candidatas completas (sin visitOnly: la tira de eje temporal de
+      // una tabla apilada debajo tiene que ser visible para el corte) se
+      // AGRUPAN: dos tiras seguidas SIN filas de datos con marcas entre
+      // ambas son filas del MISMO bloque de encabezado — una región que las
+      // cubre (dentro de ella, findNumericHeader elige la tira de visitas y
+      // la de eje temporal no crea columnas). CON marcas entre ambas son
+      // dos tablas apiladas: región por grupo y la de abajo lee por su
+      // propio encabezado (F8).
+      const strips = findNumericHeaderCandidates(srcPage.items)
       if (strips.length === 0) {
         regions.push({ yTop: Infinity, yBottom: -Infinity })
       } else {
-        for (const [k, strip] of strips.entries()) {
+        const marksBetween = (upper: NumericHeader, lower: NumericHeader): boolean => {
+          const upperBottom = Math.min(...upper.tokens.map((t) => t.bbox[1]))
+          const cy = (i: TextItem) => (i.bbox[1] + i.bbox[3]) / 2
+          return srcPage.items.some(
+            (i) =>
+              MARK_STRINGS.has(i.str.trim()) &&
+              i.fontSize >= MIN_MARK_FONT &&
+              cy(i) < upperBottom &&
+              cy(i) > lower.yTop,
+          )
+        }
+        const groups: NumericHeader[][] = [[strips[0]!]]
+        for (let k = 1; k < strips.length; k++) {
+          const current = groups[groups.length - 1]!
+          const prev = current[current.length - 1]!
+          if (marksBetween(prev, strips[k]!)) groups.push([strips[k]!])
+          else current.push(strips[k]!)
+        }
+        for (const [g, group] of groups.entries()) {
+          const first = group[0]!
           // G18 §1: el techo de la región cubre TODO el bloque del encabezado
-          // de la tira — fichas, letras y su ETIQUETA de fila, que en el
+          // del grupo — fichas, letras y su ETIQUETA de fila, que en el
           // protocolo difícil vive ~11 pt POR ENCIMA de las fichas. Con el
           // techo en las fichas la etiqueta quedaba fuera de la franja y
           // findNumericHeader, que exige etiqueta, no veía encabezado DENTRO
           // de la región: 0 columnas (regresión de C1b, medida G18). La
           // PRIMERA región sube hasta el techo de la página: encima del
           // primer encabezado viven los períodos y la propia etiqueta.
-          // (La etiqueta elevada de una tira INTERIOR cae además en la franja
-          // de la región anterior: el rediseño por bloque de G18 §4 lo
-          // resuelve; ningún fixture actual lo ejercita.)
-          const labelTop = strip.labelItems.reduce((top, l) => Math.max(top, l.bbox[3]), -Infinity)
-          const yTop = k === 0 ? Infinity : Math.max(strip.yTop, labelTop) + LABEL_WINDOW
-          // La franja de una tira llega hasta el techo de la siguiente; la
-          // última, hasta el fondo de la página.
-          regions.push({ yTop, yBottom: strips[k + 1]?.yTop ?? -Infinity })
+          const labelTop = first.labelItems.reduce((top, l) => Math.max(top, l.bbox[3]), -Infinity)
+          const yTop = g === 0 ? Infinity : Math.max(first.yTop, labelTop) + LABEL_WINDOW
+          // La franja de un grupo llega hasta el techo del siguiente; el
+          // último, hasta el fondo de la página.
+          regions.push({ yTop, yBottom: groups[g + 1]?.[0]?.yTop ?? -Infinity })
         }
       }
     }
