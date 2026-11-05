@@ -6,7 +6,8 @@
  *   (b) `readGrid` — grilla cruda por tabla con chequeos G1–G5, llamadas de
  *       nota y outcome (grid.ts).
  */
-export { loadPageGeometry } from './pdf-text'
+export { loadPageGeometry, PdfLimitError } from './pdf-text'
+export type { PdfLimitCode } from './pdf-text'
 export { locateSchedule } from './locate'
 export { readGrid } from './grid'
 export type {

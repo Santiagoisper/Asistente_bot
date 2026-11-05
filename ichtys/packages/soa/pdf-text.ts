@@ -20,6 +20,43 @@ const AXIS_EPSILON = 0.5
 /** Un borde más corto que esto es ruido (guiones, subrayados), no línea de tabla. */
 const MIN_RULE_LENGTH = 2
 
+/**
+ * Topes de lectura (S5, paridad con ingestion — evidencia/B4-sicario.md):
+ * se aplican ANTES de leer contenido, con rechazo controlado (fail-closed).
+ */
+const MAX_PDF_BYTES = 50 * 1024 * 1024 // subida máxima: 50 MB por archivo
+const MAX_PAGES = 300 // páginas por documento
+const PAGE_TIMEOUT_MS = 10_000 // cuelgue por página hostil
+
+export type PdfLimitCode = 'file_too_large' | 'too_many_pages' | 'page_timeout'
+
+/** Rechazo por tope de lectura: código estable para manejo upstream. */
+export class PdfLimitError extends Error {
+  readonly code: PdfLimitCode
+
+  constructor(code: PdfLimitCode, detail: string) {
+    super(`pdf_${code}: ${detail}`)
+    this.name = 'PdfLimitError'
+    this.code = code
+  }
+}
+
+/** Carrera contra el reloj: una página hostil que cuelga corta con código. */
+async function withPageTimeout<T>(work: Promise<T>, pageNumber: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new PdfLimitError('page_timeout', `página ${pageNumber} excede ${PAGE_TIMEOUT_MS} ms`)),
+      PAGE_TIMEOUT_MS,
+    )
+  })
+  try {
+    return await Promise.race([work, timeout])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /** Normaliza la rotación de página a 0/90/180/270. */
 function normalizeRotate(raw: number): 0 | 90 | 180 | 270 {
   const mod = ((raw % 360) + 360) % 360
@@ -170,17 +207,36 @@ async function pageGeometry(page: PDFPageProxy, pageNumber: number): Promise<Pag
  * Carga la geometría de todas las páginas de un PDF. Sin red, sin modelo.
  * Todos los valores quedan en el espacio de usuario SIN rotar, igual que las
  * cajas del gold; la rotación de página se reporta aparte en `rotate`.
+ *
+ * Topes S5 antes de leer (K3): buffer, cantidad de páginas y tiempo por
+ * página; sobre el tope lanza `PdfLimitError` (código estable), nunca un
+ * cuelgue ni un crash. `getDocument` endurecido: sin fuentes del sistema ni
+ * de documento (solo se lee texto/posición, no se renderiza) y sin logs de
+ * la librería. `isEvalSupported` no se pasa: pdfjs-dist 6 lo eliminó de la
+ * API junto con el eval de font programs (el endurecimiento ya viene de
+ * fábrica en la versión fijada).
  */
 export async function loadPageGeometry(pdf: Uint8Array): Promise<PageGeom[]> {
+  if (pdf.byteLength > MAX_PDF_BYTES) {
+    throw new PdfLimitError('file_too_large', `${pdf.byteLength} bytes > ${MAX_PDF_BYTES}`)
+  }
   // pdfjs transfiere el buffer al worker (lo desconecta): copia defensiva.
-  const task = getDocument({ data: new Uint8Array(pdf), useSystemFonts: true })
+  const task = getDocument({
+    data: new Uint8Array(pdf),
+    disableFontFace: true,
+    useSystemFonts: false,
+    verbosity: 0,
+  })
   try {
     const doc = await task.promise
+    if (doc.numPages > MAX_PAGES) {
+      throw new PdfLimitError('too_many_pages', `${doc.numPages} páginas > ${MAX_PAGES}`)
+    }
     const pages: PageGeom[] = []
     for (let n = 1; n <= doc.numPages; n++) {
-      const page = await doc.getPage(n)
+      const page = await withPageTimeout(doc.getPage(n), n)
       try {
-        pages.push(await pageGeometry(page, n))
+        pages.push(await withPageTimeout(pageGeometry(page, n), n))
       } finally {
         page.cleanup()
       }
