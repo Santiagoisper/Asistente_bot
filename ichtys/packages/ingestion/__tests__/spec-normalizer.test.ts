@@ -4,12 +4,14 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
+  capExtractionWarnings,
   normalizeCriterion,
   normalizeEligibilityGroup,
   normalizeIdentification,
   normalizeStudySpec,
   normalizeVisit,
   normalizeVisitsGroup,
+  warningCodeSummary,
 } from '../spec-normalizer'
 import {
   emptyStudySpec,
@@ -257,3 +259,130 @@ describe('normalizeStudySpec', () => {
     expect(warnings.some((w) => w.includes('advertencias recortadas'))).toBe(true)
   })
 })
+
+describe('warningCodeSummary — lista blanca de códigos (H1)', () => {
+  it('agrupa sólo los códigos conocidos por su prefijo', () => {
+    expect(
+      warningCodeSummary([
+        'visits: duplicate_visit_name index=1,2',
+        'visits: visita #3: recortado',
+        'eligibility: exclusion: ausente o inválido en la salida del modelo — 0 ítems',
+        'extractionWarnings: 250 advertencias recortadas al tope de 200',
+      ]),
+    ).toBe('visits×2, eligibility×1, extractionWarnings×1')
+  })
+
+  it('un prefijo desconocido se agrupa como «otros» y nunca se loguea el texto', () => {
+    const summary = warningCodeSummary([
+      'PACIENTE_FICTICIO_123: detalle clínico',
+      'otro prefijo libre: más texto',
+      'sin dos puntos',
+    ])
+    expect(summary).toBe('otros×3')
+    expect(summary).not.toContain('PACIENTE_FICTICIO_123')
+    expect(summary).not.toContain('detalle clínico')
+  })
+})
+
+describe('capExtractionWarnings — prioridad y segundo recorte (observaciones del Architect)', () => {  it('conserva una lista «ausente o inválido» aunque esté al final de >200', () => {
+    const list = [
+      ...Array.from({ length: 250 }, (_, i) => `visits: advertencia ${i + 1}`),
+      'eligibility: exclusion: ausente o inválido en la salida del modelo — 0 ítems',
+    ]
+
+    const out = capExtractionWarnings(list)
+
+    expect(out).toHaveLength(MAX_SPEC_EXTRACTION_WARNINGS)
+    expect(out.some((warning) => warning.includes('ausente o inválido'))).toBe(true)
+    expect(out.at(-1)).toMatch(/^… y \d+ advertencias? más$/)
+  })
+
+  it('un segundo recorte no duplica el resumen y suma lo ya omitido', () => {
+    const first = capExtractionWarnings(
+      Array.from({ length: 250 }, (_, i) => `visits: advertencia ${i + 1}`),
+    )
+    expect(first.at(-1)).toBe('… y 51 advertencias más')
+
+    const second = capExtractionWarnings([
+      ...first,
+      'eligibility: exclusion: ausente o inválido en la salida del modelo — 0 ítems',
+    ])
+
+    const summaries = second.filter((warning) => /^… y \d+ advertencias? más$/.test(warning))
+    expect(summaries).toHaveLength(1)
+    expect(summaries[0]).toBe('… y 52 advertencias más')
+    expect(second).toHaveLength(MAX_SPEC_EXTRACTION_WARNINGS)
+  })
+})
+
+describe('groupOutcomes — un grupo tocado por el normalizador queda invalid_output (ADR-3)', () => {
+  it('un criterio reparado marca eligibility', () => {
+    const out = normalizeStudySpec(
+      {
+        ...emptyStudySpec(),
+        inclusionCriteria: [
+          {
+            number: '1',
+            text: 'x'.repeat(MAX_SPEC_TEXT_CHARS + 1),
+            sourcePages: [1],
+            confidence: 'high',
+          },
+        ],
+      },
+      [],
+    )
+    expect(out.groupOutcomes?.eligibility).toEqual({
+      status: 'invalid_output',
+      code: 'item_repaired',
+    })
+  })
+
+  it('un criterio descartado marca eligibility con item_discarded', () => {
+    const out = normalizeStudySpec(
+      {
+        ...emptyStudySpec(),
+        inclusionCriteria: [
+          { number: '1', text: 'sin procedencia', sourcePages: [], confidence: 'high' },
+        ],
+      },
+      [],
+    )
+    expect(out.groupOutcomes?.eligibility).toEqual({
+      status: 'invalid_output',
+      code: 'item_discarded',
+    })
+  })
+
+  it('una lista ausente marca el grupo con missing_or_invalid', () => {
+    const out = normalizeStudySpec(
+      { ...emptyStudySpec(), inclusionCriteria: undefined },
+      [],
+    )
+    expect(out.groupOutcomes?.eligibility).toEqual({
+      status: 'invalid_output',
+      code: 'missing_or_invalid',
+    })
+  })
+
+  it('un provider_error previo no se degrada y un spec limpio no agrega grupo', () => {
+    const withProviderError = normalizeStudySpec(
+      {
+        ...emptyStudySpec(),
+        groupOutcomes: { visits: { status: 'provider_error', code: 'llm_rate_limited' } },
+        inclusionCriteria: [
+          { number: '1', text: 'sin procedencia', sourcePages: [], confidence: 'high' },
+        ],
+      },
+      [],
+    )
+    expect(withProviderError.groupOutcomes?.visits).toEqual({
+      status: 'provider_error',
+      code: 'llm_rate_limited',
+    })
+    expect(withProviderError.groupOutcomes?.eligibility?.status).toBe('invalid_output')
+
+    expect(normalizeStudySpec(emptyStudySpec(), [])).toEqual(emptyStudySpec())
+  })
+})
+
+

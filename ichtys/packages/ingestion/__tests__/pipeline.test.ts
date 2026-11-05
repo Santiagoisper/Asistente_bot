@@ -679,6 +679,45 @@ describe('runIngestion: reintentos y paralelismo', () => {
     })
   })
 
+  it('ADR-3: el SoA reemplaza el resultado de visits y conserva los demás grupos', async () => {
+    const fixture = arrange('soa')
+    specMocks.getLatestMeaningfulStudySpec.mockResolvedValue({
+      documentVersionId: 'protocol-version-1',
+      spec: {
+        identification: { protocolCode: 'ABC-101', title: 'Estudio', phase: '3', sourcePages: [1] },
+        inclusionCriteria: [{ number: '1', text: 'Mayores de edad', sourcePages: [10], confidence: 'high' }],
+        exclusionCriteria: [],
+        endpoints: [],
+        visits: [{ name: 'Visita previa', label: null, day: 1, windowDays: null, procedures: ['ECG'], sourcePages: [30], confidence: 'high' }],
+        groupOutcomes: {
+          visits: { status: 'invalid_output', code: 'item_discarded' },
+          eligibility: { status: 'provider_error', code: 'llm_timeout' },
+        },
+      },
+    })
+    specMocks.extractStudySpec.mockResolvedValue({
+      spec: {
+        identification: { protocolCode: null, title: null, phase: null, sourcePages: [] },
+        inclusionCriteria: [],
+        exclusionCriteria: [],
+        endpoints: [],
+        visits: [{ name: 'Visita SoA', label: null, day: 28, windowDays: 2, procedures: ['PK'], sourcePages: [3], confidence: 'high' }],
+        groupOutcomes: { visits: { status: 'invalid_output', code: 'item_repaired' } },
+      },
+      warnings: [],
+      extractionModel: 'modelo-sintetico',
+      detectedLanguage: null,
+    })
+    mocks.indexDocumentVersionChunks.mockResolvedValue({ embeddedChunkCount: 2 })
+
+    await runIngestion(fixture.input)
+
+    expect(specMocks.saveStudySpec.mock.calls[0]?.[0].spec.groupOutcomes).toEqual({
+      visits: { status: 'invalid_output', code: 'item_repaired' },
+      eligibility: { status: 'provider_error', code: 'llm_timeout' },
+    })
+  })
+
   it('SoA sin spec meaningful previo guarda solo visitas con visitsSource', async () => {
     const fixture = arrange('soa')
     specMocks.extractStudySpec.mockResolvedValue({

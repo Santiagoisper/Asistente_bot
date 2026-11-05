@@ -15,7 +15,10 @@ import {
   MAX_SPEC_PROCEDURE_CHARS,
   MAX_SPEC_EXTRACTION_WARNINGS,
   MAX_SPEC_WARNING_CHARS,
+  SPEC_GROUP_NAMES,
   type EligibilityCriterion,
+  type SpecGroupName,
+  type SpecGroupOutcome,
   type StudyEndpoint,
   type StudyIdentification,
   type StudySpec,
@@ -318,41 +321,142 @@ export function normalizeVisitsGroup(
   }
 }
 
-/** ¿Advertencia de descarte o recuperación? Se priorizan al recortar (B2). */
+/** Línea resumen que este módulo agrega al recortar; nunca es contenido. */
+const WARNING_SUMMARY_RE = /^… y (\d+) advertencias? más$/
+
+function warningSummaryLine(omitted: number): string {
+  return `… y ${omitted} advertencia${omitted === 1 ? '' : 's'} más`
+}
+
+/**
+ * ¿Advertencia de descarte, recuperación o lista ausente? Se priorizan al
+ * recortar (B2): son las que el revisor clínico debe ver sí o sí.
+ */
 function isPriorityWarning(warning: string): boolean {
-  return warning.includes('descartado') || warning.includes('recuperada')
+  return (
+    warning.includes('descartado') ||
+    warning.includes('recuperada') ||
+    warning.includes('ausente o inválido')
+  )
 }
 
 /**
  * Cierra la lista de advertencias a las cotas (B2, vuelta 5): recorta cada
- * una a 1000 chars y, si hay más de 200, conserva primero descartes y
- * recuperaciones (las que el revisor clínico debe ver sí o sí) y deja la
- * última entrada como «… y N advertencias más». Antes el recorte conservaba
- * las primeras 200 — justo las de descarte, que se agregan al final, se
- * perdían.
+ * una a 1000 chars y, si hay más de 200, conserva primero descartes,
+ * recuperaciones y listas ausentes (las que el revisor clínico debe ver sí o
+ * sí) y deja la última entrada como «… y N advertencias más». Antes el
+ * recorte conservaba las primeras 200 — justo las de descarte, que se agregan
+ * al final, se perdían.
+ *
+ * Un segundo recorte (spec-store suma los ajustes del guardado) puede recibir
+ * la línea resumen del primero. Se separa y su conteo se suma al nuevo: la
+ * línea nunca cuenta como advertencia ni se persiste duplicada, y el total de
+ * omitidas no se reinicia.
  */
 export function capExtractionWarnings(list: readonly unknown[]): string[] {
   const clipped = list
     .map((warning) => clipString(warning, MAX_SPEC_WARNING_CHARS) ?? '')
     .filter((warning) => warning.length > 0)
-  if (clipped.length <= MAX_SPEC_EXTRACTION_WARNINGS) return clipped
+
+  let carriedOmitted = 0
+  const warnings = clipped.filter((warning) => {
+    const summary = WARNING_SUMMARY_RE.exec(warning)
+    if (!summary) return true
+    carriedOmitted += Number(summary[1])
+    return false
+  })
+
+  if (warnings.length + (carriedOmitted > 0 ? 1 : 0) <= MAX_SPEC_EXTRACTION_WARNINGS) {
+    if (carriedOmitted > 0) warnings.push(warningSummaryLine(carriedOmitted))
+    return warnings
+  }
+
   const kept = [
-    ...clipped.filter(isPriorityWarning),
-    ...clipped.filter((warning) => !isPriorityWarning(warning)),
+    ...warnings.filter(isPriorityWarning),
+    ...warnings.filter((warning) => !isPriorityWarning(warning)),
   ].slice(0, MAX_SPEC_EXTRACTION_WARNINGS - 1)
-  const omitted = clipped.length - kept.length
-  kept.push(`… y ${omitted} advertencia${omitted === 1 ? '' : 's'} más`)
+  kept.push(warningSummaryLine(warnings.length - kept.length + carriedOmitted))
   return kept
 }
+
+/**
+ * Códigos que este módulo (y el extractor) generan antes de los dos puntos.
+ * La lista es blanca a propósito: un prefijo desconocido puede ser texto del
+ * modelo o del documento, y los logs sólo llevan códigos y conteos (G4-S1).
+ */
+const WARNING_CODE_WHITELIST: ReadonlySet<string> = new Set([
+  'identification',
+  'eligibility',
+  'endpoints',
+  'visits',
+  'locator',
+  'section-location',
+  'extractionWarnings',
+])
 
 /** Resumen «código×N» de advertencias para logs: conteos y códigos, sin contenido (G4-S1). */
 export function warningCodeSummary(warnings: string[]): string {
   const counts = new Map<string, number>()
   for (const warning of warnings) {
-    const code = (warning.split(':')[0] ?? '').trim() || 'sin-código'
+    const rawCode = (warning.split(':', 1)[0] ?? '').trim()
+    const code = WARNING_CODE_WHITELIST.has(rawCode) ? rawCode : 'otros'
     counts.set(code, (counts.get(code) ?? 0) + 1)
   }
   return Array.from(counts.entries()).map(([code, count]) => `${code}×${count}`).join(', ')
+}
+
+const GROUP_OUTCOME_STATUSES: ReadonlySet<string> = new Set([
+  'ok',
+  'provider_error',
+  'invalid_output',
+  'not_located',
+  'skipped',
+])
+
+/**
+ * Un grupo queda en `invalid_output` si cualquiera de sus ítems se reparó o
+ * descartó, o si la lista vino ausente: la spec es `partial` y hay que
+ * reconocerlo para aprobarla (ADR-3 §2.4). El código es fijo, nunca texto
+ * del modelo.
+ */
+function groupOutcomeFromWarnings(groupWarnings: readonly string[]): SpecGroupOutcome | null {
+  if (groupWarnings.length === 0) return null
+  if (groupWarnings.some((warning) => warning.includes('descartado'))) {
+    return { status: 'invalid_output', code: 'item_discarded' }
+  }
+  if (groupWarnings.some((warning) => warning.includes('ausente o inválido'))) {
+    return { status: 'invalid_output', code: 'missing_or_invalid' }
+  }
+  return { status: 'invalid_output', code: 'item_repaired' }
+}
+
+/** Conserva sólo resultados con forma válida; un `provider_error` previo manda. */
+function mergeGroupOutcomes(
+  raw: unknown,
+  computed: Partial<Record<SpecGroupName, SpecGroupOutcome>>,
+): Partial<Record<SpecGroupName, SpecGroupOutcome>> {
+  const merged: Partial<Record<SpecGroupName, SpecGroupOutcome>> = {}
+  if (typeof raw === 'object' && raw !== null) {
+    const record = raw as Record<string, unknown>
+    for (const group of SPEC_GROUP_NAMES) {
+      const value = record[group]
+      if (typeof value !== 'object' || value === null) continue
+      const outcome = value as Record<string, unknown>
+      if (typeof outcome.status !== 'string' || !GROUP_OUTCOME_STATUSES.has(outcome.status)) continue
+      merged[group] = {
+        status: outcome.status as SpecGroupOutcome['status'],
+        ...(typeof outcome.code === 'string' && outcome.code.length <= 64
+          ? { code: outcome.code }
+          : {}),
+      }
+    }
+  }
+  for (const [group, outcome] of Object.entries(computed) as Array<
+    [SpecGroupName, SpecGroupOutcome]
+  >) {
+    if (merged[group]?.status !== 'provider_error') merged[group] = outcome
+  }
+  return merged
 }
 
 /**
@@ -375,23 +479,42 @@ export function normalizeStudySpec(raw: unknown, warnings: string[]): StudySpec 
     )
   }
 
-  const identification = normalizeIdentification(spec.identification, warnings)
+  // Advertencias por grupo: además del banner, deciden el `groupOutcomes`.
+  const groupWarnings: Record<'identification' | 'eligibility' | 'endpoints' | 'visits', string[]> = {
+    identification: [],
+    eligibility: [],
+    endpoints: [],
+    visits: [],
+  }
+
+  const identification = normalizeIdentification(spec.identification, groupWarnings.identification)
+  warnings.push(...groupWarnings.identification)
   const inclusionCriteria = normalizeList(
     spec.inclusionCriteria, MAX_SPEC_ITEMS, 'eligibility: inclusion',
-    (item, index, w) => normalizeCriterion(item, `eligibility: inclusión criterio #${index + 1}`, w), warnings,
+    (item, index, w) => normalizeCriterion(item, `eligibility: inclusión criterio #${index + 1}`, w), groupWarnings.eligibility,
   )
   const exclusionCriteria = normalizeList(
     spec.exclusionCriteria, MAX_SPEC_ITEMS, 'eligibility: exclusion',
-    (item, index, w) => normalizeCriterion(item, `eligibility: exclusión criterio #${index + 1}`, w), warnings,
+    (item, index, w) => normalizeCriterion(item, `eligibility: exclusión criterio #${index + 1}`, w), groupWarnings.eligibility,
   )
+  warnings.push(...groupWarnings.eligibility)
   const endpoints = normalizeList(
     spec.endpoints, MAX_SPEC_ITEMS, 'endpoints',
-    (item, index, w) => normalizeEndpoint(item, `endpoints: endpoint #${index + 1}`, w), warnings,
+    (item, index, w) => normalizeEndpoint(item, `endpoints: endpoint #${index + 1}`, w), groupWarnings.endpoints,
   )
+  warnings.push(...groupWarnings.endpoints)
   const visits = normalizeList(
     spec.visits, MAX_SPEC_ITEMS, 'visits',
-    (item, index, w) => normalizeVisit(item, `visits: visita #${index + 1}`, w), warnings,
+    (item, index, w) => normalizeVisit(item, `visits: visita #${index + 1}`, w), groupWarnings.visits,
   )
+  warnings.push(...groupWarnings.visits)
+
+  const computedOutcomes: Partial<Record<SpecGroupName, SpecGroupOutcome>> = {}
+  for (const group of ['identification', 'eligibility', 'endpoints', 'visits'] as const) {
+    const outcome = groupOutcomeFromWarnings(groupWarnings[group])
+    if (outcome) computedOutcomes[group] = outcome
+  }
+  const groupOutcomes = mergeGroupOutcomes(spec.groupOutcomes, computedOutcomes)
 
   const normalized = {
     identification,
@@ -399,6 +522,7 @@ export function normalizeStudySpec(raw: unknown, warnings: string[]): StudySpec 
     exclusionCriteria,
     endpoints,
     visits,
+    ...(Object.keys(groupOutcomes).length > 0 ? { groupOutcomes } : {}),
     ...(typeof spec.visitsSource === 'object' && spec.visitsSource !== null
       ? { visitsSource: spec.visitsSource }
       : {}),

@@ -306,7 +306,7 @@ async function persistSpecDraft(
       : null
     const previousSpec = previousMeaningful ? studySpecSchema.parse(previousMeaningful.spec) : null
     const specToSave = options.documentType === 'soa'
-      ? { ...mergeSoaVisits(previousSpec, spec.visits, input.documentVersionId), extractionWarnings: warnings }
+      ? { ...mergeSoaVisits(previousSpec, spec.visits, input.documentVersionId, spec.groupOutcomes?.visits), extractionWarnings: warnings }
       : { ...spec, extractionWarnings: warnings }
     const specDocumentVersionId = options.documentType === 'soa'
       ? previousMeaningful?.documentVersionId ?? input.documentVersionId
