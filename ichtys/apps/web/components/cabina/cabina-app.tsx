@@ -1,8 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { OrigenPanel } from './origen-panel'
+import { checklistKey, readChecklist, writeChecklist } from '../../lib/cabina/checklist'
 import { demoStudy } from '../../lib/cabina/demo-data'
 import { buildSheet, type SheetItem } from '../../lib/cabina/filter'
+import { unresolvedKeys } from '../../lib/cabina/origen'
 import { addDays, diffDays, parseISODate, planVisit, startOfDay, toISODate, type VisitPlan } from '../../lib/cabina/schedule'
 import type { PatientConditions, PatientDef, SheetSection, VisitDef } from '../../lib/cabina/types'
 
@@ -46,6 +49,12 @@ export function CabinaApp() {
   const [showHidden, setShowHidden] = useState(false)
   const [consultKey, setConsultKey] = useState<string | null>(null)
   const [manualLoaded, setManualLoaded] = useState<Record<string, boolean>>({})
+  const [checked, setChecked] = useState<string[]>([])
+  const [reviewed, setReviewed] = useState<string[]>([])
+  const [doubted, setDoubted] = useState<string[]>([])
+  const [quoteEdits, setQuoteEdits] = useState<Record<string, string>>({})
+  const [panelKey, setPanelKey] = useState<string | null>(null)
+  const [approved, setApproved] = useState(false)
 
   useEffect(() => {
     const now = startOfDay(new Date())
@@ -58,7 +67,15 @@ export function CabinaApp() {
     setShowHidden(false)
     setConsultKey(null)
     setManualLoaded({})
+    setReviewed([])
+    setDoubted([])
+    setPanelKey(null)
+    setApproved(false)
   }, [patientId])
+
+  useEffect(() => {
+    setChecked(readChecklist(window.localStorage, checklistKey(patientId, visitKey)))
+  }, [patientId, visitKey])
 
   const patient = demoStudy.patients.find((item) => item.id === patientId) ?? demoStudy.patients[0]
   const visit = demoStudy.visits.find((item) => item.key === visitKey) ?? demoStudy.visits[0]
@@ -76,6 +93,30 @@ export function CabinaApp() {
   const undefinedCount = itemsOf(sheet.shown, 'undefined').length
   const sponsorCount = itemsOf(sheet.shown, 'sponsor').length
   const tables = [...new Set(demoStudy.visits.map((item) => item.tableKey))]
+  const doubts = unresolvedKeys(
+    sheet.shown.map((item) => ({ procedureKey: item.procedure.key, certainty: item.cell?.certainty ?? null })),
+    new Set(reviewed),
+    new Set(doubted),
+  )
+  const blocked = doubts.length > 0
+  const panelItem = sheet.shown.find((item) => item.procedure.key === panelKey) ?? null
+
+  function toggleCheck(procedureKey: string, on: boolean) {
+    const next = on ? Array.from(new Set([...checked, procedureKey])) : checked.filter((item) => item !== procedureKey)
+    setChecked(next)
+    writeChecklist(window.localStorage, checklistKey(patientId, visitKey), next)
+    setPanelKey(procedureKey)
+  }
+
+  function markDoubt(procedureKey: string) {
+    setDoubted((current) => (current.includes(procedureKey) ? current : [...current, procedureKey]))
+    setReviewed((current) => current.filter((item) => item !== procedureKey))
+    setApproved(false)
+  }
+
+  function chip(item: SheetItem) {
+    return <PageChip item={item} marked={doubts.includes(item.procedure.key)} onOpen={setPanelKey} />
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 text-alphi-navy">
@@ -88,10 +129,40 @@ export function CabinaApp() {
           </p>
           <h1 className="mt-1 text-2xl font-semibold">Cabina de visita</h1>
         </div>
-        <span className="inline-flex min-h-11 items-center rounded-full bg-[#DDF0E6] px-4 text-sm font-semibold text-[#0E4D33]">
-          Protocolo ficticio
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex min-h-11 items-center rounded-full bg-[#DDF0E6] px-4 text-sm font-semibold text-[#0E4D33]">
+            Protocolo ficticio
+          </span>
+          <button
+            type="button"
+            className={`inline-flex min-h-11 items-center rounded-lg bg-[#0F5E73] px-4 text-sm font-semibold text-white disabled:opacity-50 ${focusRing}`}
+            disabled={blocked}
+            aria-describedby={blocked ? 'cabina-bloqueo-aprobacion' : undefined}
+            onClick={() => setApproved(true)}
+          >
+            {approved ? 'Aprobada' : 'Aprobar'}
+          </button>
+          <button
+            type="button"
+            className={`inline-flex min-h-11 items-center rounded-lg border-[1.5px] border-[#0F5E73] px-4 text-sm font-semibold text-[#0A4455] disabled:opacity-50 ${focusRing}`}
+            disabled={blocked}
+            aria-describedby={blocked ? 'cabina-bloqueo-aprobacion' : undefined}
+            onClick={() => window.print()}
+          >
+            Imprimir
+          </button>
+          {blocked ? (
+            <button type="button" className={`inline-flex min-h-11 items-center rounded-lg bg-[#FFF1D6] px-4 text-sm font-semibold text-[#6B4200] ${focusRing}`} onClick={() => setReviewed((current) => Array.from(new Set([...current, ...doubts])))}>
+              Revisar
+            </button>
+          ) : null}
+        </div>
       </div>
+      {blocked ? (
+        <p id="cabina-bloqueo-aprobacion" className="text-sm text-[#6B4200]" role="status">
+          Hay {doubts.length === 1 ? 'una casilla con duda' : `${doubts.length} casillas con duda`}. Hay que revisarlas antes de aprobar o imprimir.
+        </p>
+      ) : null}
 
       <section className={`${cardClass} grid gap-6 lg:grid-cols-[1.1fr_1.6fr_1fr] lg:items-center`} aria-label="Visita y ventana">
         <div className="flex flex-col gap-3">
@@ -106,6 +177,10 @@ export function CabinaApp() {
               setVisitKey(event.target.value)
               setConsultKey(null)
               setManualLoaded({})
+              setReviewed([])
+              setDoubted([])
+              setPanelKey(null)
+              setApproved(false)
             }}
           >
             {tables.map((tableKey) => {
@@ -213,7 +288,7 @@ export function CabinaApp() {
                   {item.procedure.whenLabel}
                 </span>
                 <span>
-                  {item.procedure.detail} <ConditionTags item={item} /> <PageChip item={item} />
+                  {item.procedure.detail} <ConditionTags item={item} /> {chip(item)}
                 </span>
               </li>
             ))}
@@ -224,14 +299,23 @@ export function CabinaApp() {
           <h2 id="cabina-dia" className="mb-2 text-base font-semibold">
             El día, en orden
           </h2>
-          <ol>
+          <ol aria-label="Checklist del día">
             {day.map((item) => (
-              <li key={item.procedure.key} className="flex gap-3 border-t border-alphi-border py-3 text-sm first:border-t-0">
+              <li key={item.procedure.key} className={`flex gap-3 border-t border-alphi-border py-3 text-sm first:border-t-0 ${doubts.includes(item.procedure.key) ? 'rounded-lg border border-dashed border-[#B7791F] px-2' : ''}`}>
+                <label className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center">
+                  <input
+                    type="checkbox"
+                    className={`h-11 w-11 accent-[#0F5E73] ${focusRing}`}
+                    checked={checked.includes(item.procedure.key)}
+                    aria-label={`Hecho: ${item.procedure.label}`}
+                    onChange={(event) => toggleCheck(item.procedure.key, event.target.checked)}
+                  />
+                </label>
                 <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#0F5E73] text-xs font-semibold text-white">
                   {item.procedure.order < 20 ? item.procedure.order : '·'}
                 </span>
                 <span>
-                  <span className="font-semibold">{item.procedure.label}</span>: {item.procedure.detail} <ConditionTags item={item} /> <PageChip item={item} />
+                  <span className="font-semibold">{item.procedure.label}</span>: {item.procedure.detail} <ConditionTags item={item} /> {chip(item)}
                 </span>
               </li>
             ))}
@@ -246,6 +330,8 @@ export function CabinaApp() {
               item={item}
               consultOpen={consultKey === item.procedure.key}
               manualLoaded={manualLoaded[item.procedure.key] === true}
+              marked={doubts.includes(item.procedure.key)}
+              onOpen={setPanelKey}
               onConsult={() => setConsultKey((current) => (current === item.procedure.key ? null : item.procedure.key))}
               onManual={() => setManualLoaded((current) => ({ ...current, [item.procedure.key]: true }))}
             />
@@ -261,7 +347,7 @@ export function CabinaApp() {
           <ul className="flex flex-wrap gap-2">
             {labs.map((item) => (
               <li key={item.procedure.key} className="inline-flex min-h-11 items-center rounded-full bg-[#EDF0F3] px-3 text-sm font-semibold text-[#33424F]">
-                {item.procedure.label} <ConditionTags item={item} />
+                {item.procedure.label} <ConditionTags item={item} /> {chip(item)}
               </li>
             ))}
           </ul>
@@ -279,7 +365,7 @@ export function CabinaApp() {
               <li key={item.procedure.key} className="flex gap-3 border-t border-alphi-border py-3 text-sm first:border-t-0">
                 <ToneChip tone={item.procedure.tone ?? 'grey'} label={item.procedure.label} />
                 <span>
-                  {item.procedure.detail} <PageChip item={item} />
+                  {item.procedure.detail} {chip(item)}
                 </span>
               </li>
             ))}
@@ -305,6 +391,25 @@ export function CabinaApp() {
       </div>
 
       <p className="text-center text-sm text-alphi-muted">Datos ficticios. Verificar siempre con el protocolo original.</p>
+      {panelItem?.cell ? (
+        <>
+          <button type="button" className="fixed inset-0 z-40 bg-[#17222D]/40" aria-label="Cerrar el texto de la página" onClick={() => setPanelKey(null)} />
+          <OrigenPanel
+            visitLabel={`${visit.printedId} · ${visit.label}`}
+            procedureLabel={panelItem.procedure.label}
+            page={panelItem.cell.page}
+            quote={quoteEdits[`${visit.key}:${panelItem.procedure.key}`] ?? panelItem.cell.quote}
+            highlights={panelItem.cell.highlights}
+            howRead={panelItem.cell.howRead}
+            sourceLabel={panelItem.cell.sourceLabel}
+            low={panelItem.cell.certainty === 'low' || doubted.includes(panelItem.procedure.key)}
+            reviewed={reviewed.includes(panelItem.procedure.key)}
+            onClose={() => setPanelKey(null)}
+            onDoubt={() => markDoubt(panelItem.procedure.key)}
+            onSaveQuote={(quote) => setQuoteEdits((current) => ({ ...current, [`${visit.key}:${panelItem.procedure.key}`]: quote }))}
+          />
+        </>
+      ) : null}
     </div>
   )
 }
@@ -379,12 +484,16 @@ function AlertCard({
   item,
   consultOpen,
   manualLoaded,
+  marked,
+  onOpen,
   onConsult,
   onManual,
 }: {
   item: SheetItem
   consultOpen: boolean
   manualLoaded: boolean
+  marked: boolean
+  onOpen: (key: string) => void
   onConsult: () => void
   onManual: () => void
 }) {
@@ -397,7 +506,7 @@ function AlertCard({
       <p>
         <span className="font-semibold">{item.procedure.label}.</span> {item.procedure.detail}
       </p>
-      <PageChip item={item} />
+      <PageChip item={item} marked={marked} onOpen={onOpen} />
       {item.procedure.action === 'consult' && item.procedure.consultDraft ? (
         <>
           <button type="button" className={`inline-flex min-h-11 w-fit items-center rounded-lg border-[1.5px] border-current px-3 text-sm font-semibold ${focusRing}`} aria-expanded={consultOpen} onClick={onConsult}>
@@ -421,9 +530,17 @@ function AlertCard({
   )
 }
 
-function PageChip({ item }: { item: SheetItem }) {
+function PageChip({ item, marked, onOpen }: { item: SheetItem; marked: boolean; onOpen: (key: string) => void }) {
   if (!item.cell) return null
-  return <span className="inline-block rounded-md bg-[#E2F0F4] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#0A4455]">p. {item.cell.page}</span>
+  return (
+    <button
+      type="button"
+      className={`inline-flex min-h-11 items-center rounded-md px-2 font-mono text-[11px] font-medium ${focusRing} ${marked ? 'border border-dashed border-[#B7791F] bg-[#FFF1D6] text-[#6B4200]' : 'bg-[#E2F0F4] text-[#0A4455]'}`}
+      onClick={() => onOpen(item.procedure.key)}
+    >
+      p. {item.cell.page}
+    </button>
+  )
 }
 
 function ConditionTags({ item }: { item: SheetItem }) {
