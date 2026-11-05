@@ -5,18 +5,39 @@
  * Con clave, corre solo el grupo de visitas (visitsOnly) y corta antes
  * del fixture siguiente si el gasto estimado llega a 3 USD.
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { performance } from 'node:perf_hooks'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ICHTYS = resolve(HERE, '../..')
+const REPO_ROOT = resolve(ICHTYS, '..')
 const FIXTURES = resolve(ICHTYS, 'fixtures/soa')
 const OUT = resolve(FIXTURES, 'baseline.json')
-const EXTRACTOR_SHA = '090e506c90775e9c6dba0478477405a0106192c1'
+export const EXTRACTOR_SHA = '090e506c90775e9c6dba0478477405a0106192c1'
+/** Árbol git de ichtys/packages/ingestion en EXTRACTOR_SHA. El checkout lo compara sin traer ese commit. */
+export const EXTRACTOR_TREE = '60521881832d2545f214b46477819651d849c8c9'
 const SPEND_CAP_USD = 3
 const IDS = ['F1', 'F2', 'F3', 'F4', 'F5'] as const
+
+export function extractorTreeMatches(expectedTree = EXTRACTOR_TREE, repoRoot = REPO_ROOT): boolean {
+  if (!/^[0-9a-f]{40}$/.test(expectedTree)) return false
+  try {
+    execFileSync('git', ['diff', '--quiet', 'HEAD', '--', 'ichtys/packages/ingestion'], {
+      cwd: repoRoot,
+      stdio: 'ignore',
+    })
+    const tree = execFileSync('git', ['rev-parse', '--verify', 'HEAD:ichtys/packages/ingestion'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    }).trim()
+    return tree === expectedTree
+  } catch {
+    return false
+  }
+}
 
 interface UsageCall {
   inputTokens: number
@@ -171,9 +192,29 @@ async function measure(full: boolean): Promise<void> {
   }, null, 2)}\n`)
 }
 
-const full = process.argv.includes('--full')
-if (!loadKey()) writeNotRun()
-measure(full).catch((error: unknown) => {
-  process.stderr.write(`baseline: ${error instanceof Error ? error.name : 'error'}\n`)
+function isDirectRun(): boolean {
+  const entry = process.argv[1]
+  if (!entry) return false
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(resolve(entry))
+  } catch {
+    return false
+  }
+}
+
+function refuseMismatchedTree(): never {
+  process.stderr.write(
+    `baseline: ichtys/packages/ingestion no coincide con el árbol de ${EXTRACTOR_SHA}. No se escribió baseline.json.\n`,
+  )
   process.exit(1)
-})
+}
+
+if (isDirectRun()) {
+  if (!extractorTreeMatches()) refuseMismatchedTree()
+  const full = process.argv.includes('--full')
+  if (!loadKey()) writeNotRun()
+  measure(full).catch((error: unknown) => {
+    process.stderr.write(`baseline: ${error instanceof Error ? error.name : 'error'}\n`)
+    process.exit(1)
+  })
+}

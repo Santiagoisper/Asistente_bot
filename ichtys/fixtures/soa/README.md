@@ -38,7 +38,7 @@ python3 -m venv /tmp/soa-venv
 /tmp/soa-venv/bin/python ichtys/scripts/soa-fixtures/generate.py
 ```
 
-Salida: `ichtys/fixtures/soa/F{n}.pdf`, `F{n}.gold.json` y `F{n}.render/pagina-{k}.png` a 72 dpi. El PNG de la página rotada de F5 es la página como la muestra un visor. Las cajas del JSON siguen el espacio de usuario sin rotar.
+Salida: `ichtys/fixtures/soa/F{n}.pdf`, `F{n}.gold.json` y `F{n}.render/pagina-{k}.png` a 72 dpi. El PDF y el gold quedan en el repositorio. Los PNG no: `ichtys/.gitignore` ignora `fixtures/soa/*.render/` y el generador los vuelve a escribir iguales. El PNG de la página rotada de F5 es la página como la muestra un visor. Las cajas del JSON siguen el espacio de usuario sin rotar.
 
 ## Calificar
 
@@ -56,6 +56,8 @@ npx --yes tsx scripts/soa-fixtures/score.ts --grid --gold fixtures/soa/F4.gold.j
 
 Sale 0 aunque el puntaje sea malo. Sale 2 si faltan argumentos.
 
+En CI, después de `pnpm install`, corre `pnpm test:fixtures`. Usa el vitest ya instalado en `@ichtys/web` y el mismo config. No entra en `pnpm test`.
+
 ## Línea de base
 
 El extractor de `090e506c90775e9c6dba0478477405a0106192c1` solo llama a Anthropic. Esta copia no tiene `ANTHROPIC_API_KEY` en el entorno ni en `ichtys/.env.local`. `baseline.json` queda en `not_run` / `NO VERIFICADO`. No hay contadores inventados.
@@ -65,6 +67,13 @@ cd ichtys
 node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/soa-fixtures/baseline.ts
 ```
 
-Ese comando sale con código 2 cuando no hay clave: escribe `baseline.json` y no llama a la red. Node avisa si se omite `--disable-warning`, porque `ichtys/package.json` no declara `"type": "module"`. No hace falta tocarlo.
+Ese comando sale con código 2 cuando no hay clave: escribe `baseline.json` y no llama a la red. Node avisa si se omite `--disable-warning`, porque `ichtys/package.json` no declara `"type": "module"`. No hace falta tocarlo. Antes de escribir, comprueba que el árbol `ichtys/packages/ingestion` es el de `090e506c90775e9c6dba0478477405a0106192c1`. Si no coincide, sale con código 1 y no escribe `baseline.json`.
 
-Con clave, el mismo comando usa `tsx` (los imports del extractor no llevan extensión) y corre `visitsOnly: true`, que es el camino de cronograma y cabe en el tope de 3 USD. `--full` también pide criterios y endpoints. No se pasa `orgId`, así que no se escribe consumo en la base. Si el gasto estimado llega a 3 USD, el fixture siguiente no arranca.
+Con clave, Node plano no puede importar el extractor: los imports relativos no llevan extensión. El comando es este:
+
+```bash
+cd ichtys
+npx --yes tsx scripts/soa-fixtures/baseline.ts
+```
+
+Corre `visitsOnly: true`, que es el camino de cronograma y cabe en el tope de 3 USD. `--full` también pide criterios y endpoints. No se pasa `orgId`, así que no se escribe consumo en la base. Si el gasto estimado llega a 3 USD, el fixture siguiente no arranca.
