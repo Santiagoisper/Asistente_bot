@@ -11,10 +11,19 @@
  * por mutación de texto: `groupTexts` une fichas con gap ≤6 pt y la
  * subdivisión de bandas corta por puntos medios entre fichas, así que dos
  * bandas vecinas con sendas fichas quedan con centros a ≥ gap/2 ≥ 3 pt.
- * El test clava ese invariante: dos fichas a 6.01 pt (el mínimo que el
- * agrupador NO une) registran dos columnas nuevas con centros a ≥3 pt y G5
- * sigue en pass. G5 queda como red de seguridad si el agrupador se
- * relaja (subir TEXT_GROUP_GAP o cambiar los cortes).
+ * El invariante se aserta con dos fichas a 6.01 pt (el mínimo que el
+ * agrupador NO une) y, además, la rama de falla del chequeo se prueba
+ * DIRECTO sobre `columnCenterCollisions` (extraído de grid.ts justo para
+ * eso) con columnas sintéticas: si el invariante se rompe algún día
+ * (relajar el agrupador o los cortes), ese chequeo es el que baja la
+ * tabla, y acá se ve fallar.
+ *
+ * G1 es POR PÁGINA (R5/G10, ADR-10 §d-1): una columna vacía SOLO en una
+ * página, con contenido en todas las demás donde tiene ficha, es una
+ * página desincronizada — la mutación de G10 (columna 0 de F1 vaciada en
+ * p21) tiene que dar partial con p21 en el detail. Las columnas que el
+ * documento llena parcialmente (las tiras de F3 rotan qué visitas tienen
+ * procedimiento por página) no disparan.
  *
  * R7: si readGrid recibe un location que referencia una página que ya no
  * está entre las páginas leídas (un pipeline que recorta entre locate y
@@ -29,8 +38,8 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { loadPageGeometry, locateSchedule, readGrid } from '../index'
-import type { BBox, PageGeom, RawSchedule, RawTable } from '../types'
+import { columnCenterCollisions, loadPageGeometry, locateSchedule, readGrid } from '../index'
+import type { BBox, PageGeom, RawColumn, RawSchedule, RawTable } from '../types'
 
 const FIXTURES_DIR = fileURLToPath(new URL('../../../fixtures/soa/', import.meta.url))
 
@@ -64,6 +73,29 @@ function expectIndexesConsistent(table: RawTable): void {
     expect(table.pages).toContain(cell.page)
     expect(table.columns[cell.colIndex]!.index).toBe(cell.colIndex)
     expect(table.rows[cell.rowIndex]!.index).toBe(cell.rowIndex)
+    // Correspondencia geométrica (G10: una permutación sistemática de
+    // índices pasa el chequeo de rango): la celda tiene que caer en la
+    // banda de SU fila, y en la de su columna cuando la columna nació en
+    // esa página (en páginas de continuación las tiras re-escalan).
+    const row = table.rows[cell.rowIndex]!
+    expect(row.page, `f${cell.rowIndex} en p${row.page} por celda en p${cell.page}`).toBe(cell.page)
+    const cy = (cell.bbox[1] + cell.bbox[3]) / 2
+    expect(cy).toBeGreaterThanOrEqual(row.y0 - 0.6)
+    expect(cy).toBeLessThanOrEqual(row.y1 + 0.6)
+    const col = table.columns[cell.colIndex]!
+    if (col.page === cell.page) {
+      if (cell.kind === 'mark') {
+        // La marca cae EN una columna: su centro dentro de la banda.
+        const cx = (cell.bbox[0] + cell.bbox[2]) / 2
+        expect(cx, `c${cell.colIndex} x=[${col.x0},${col.x1}] marca cx=${cx}`).toBeGreaterThanOrEqual(col.x0 - 1)
+        expect(cx).toBeLessThanOrEqual(col.x1 + 1)
+      } else {
+        // Combinada/texto: su caja CRUZA columnas por diseño — que
+        // solape la banda de su columna de anclaje.
+        expect(cell.bbox[0], `c${cell.colIndex} x=[${col.x0},${col.x1}] caja`).toBeLessThanOrEqual(col.x1 + 1)
+        expect(cell.bbox[2]).toBeGreaterThanOrEqual(col.x0 - 1)
+      }
+    }
   }
   const seen = new Set<string>()
   for (const cell of table.cells) {
@@ -91,6 +123,34 @@ describe('R1 — cada chequeo G1–G5 detecta su defecto', () => {
       }),
     }))
     expectPartialWith(readMutated(mutated), 'G1')
+  })
+
+  it('G1 por página (R5/G10): columna 0 de F1 vaciada SOLO en p21 → partial con p21 en el detail', async () => {
+    // La mutación del Reviewer: la columna tiene celdas en p22–p24, así
+    // que el recuento POR TABLA la daba por cubierta y G1 pasaba. Con el
+    // recuento por página, p21 queda como página desincronizada.
+    const f1 = await loadPageGeometry(new Uint8Array(readFileSync(`${FIXTURES_DIR}F1.pdf`)))
+    const base1 = readGrid(f1, locateSchedule(f1)).tables[0]!
+    expect(base1.outcome).toBe('complete')
+    const col = base1.columns[0]!
+    expect(col.page).toBe(21)
+    const mutated = f1.map((p) =>
+      p.page !== 21
+        ? p
+        : {
+            ...p,
+            items: p.items.filter((i) => {
+              if (!MARKS.has(i.str.trim())) return true
+              const cx = (i.bbox[0] + i.bbox[2]) / 2
+              return !(cx >= col.x0 - 1 && cx <= col.x1 + 1)
+            }),
+          },
+    )
+    const table = readGrid(mutated, locateSchedule(mutated)).tables[0]!
+    expect(table.outcome).toBe('partial')
+    expect(table.reasons).toContain('validation_failed:G1')
+    expect(table.checks.find((c) => c.id === 'G1')?.detail).toContain('p21')
+    expectIndexesConsistent(table)
   })
 
   it('G2: la fila de ventana con una celda sin cubrir es partial con validation_failed:G2', () => {
@@ -206,8 +266,50 @@ describe('R1 — cada chequeo G1–G5 detecta su defecto', () => {
     expect(table.checks.find((c) => c.id === 'G5')?.pass).toBe(true)
   })
 
+  it('G5 (rama de falla): el chequeo extraído detecta columnas a <3 pt de centro en la misma página', () => {
+    // Por mutación de ENTRADA G5 no es alcanzable (agrupador ≤6 pt +
+    // cortes por puntos medios ⇒ centros ≥3 pt, invariante asertado en el
+    // test de fichas a 6.01 pt). La rama de falla se prueba directo sobre
+    // el chequeo extraído, con columnas sintéticas — si el invariante se
+    // rompe algún día, este es el código que baja la tabla a partial.
+    const col = (index: number, page: number, xCenter: number): RawColumn => ({
+      index,
+      page,
+      xCenter,
+      x0: xCenter - 17,
+      x1: xCenter + 17,
+      headerText: `V${index}`,
+      headerBBox: box(xCenter - 4, 700, xCenter + 4, 714),
+    })
+    // Dos columnas de la misma página a 2 pt de centro: colisión.
+    expect(columnCenterCollisions([col(0, 6, 200), col(1, 6, 202)])).toBe('p6')
+    // A 3 pt o más, o en páginas distintas: nada.
+    expect(columnCenterCollisions([col(0, 6, 200), col(1, 6, 203)])).toBeNull()
+    expect(columnCenterCollisions([col(0, 6, 200), col(1, 7, 201)])).toBeNull()
+    // Tres columnas donde dos se pisan en otra página: lista todas.
+    expect(columnCenterCollisions([col(0, 6, 200), col(1, 6, 203), col(2, 8, 100), col(3, 8, 101)])).toBe('p8')
+  })
+
   it('R1: la tabla sana de F4 tiene índices colIndex/rowIndex consistentes', () => {
     expectIndexesConsistent(base)
+  })
+
+  it('R1: una permutación sistemática de índices (colIndex+1, rowIndex+1) NO pasa la verificación', () => {
+    // M6 del Reviewer: con solo rango+biyección+unicidad, permutar TODOS
+    // los índices de forma consistente pasa el test. La correspondencia
+    // geométrica es lo que la pesca: cada celda queda apuntando a una
+    // fila/columna cuya página o banda no es la suya.
+    const nCols = base.columns.length
+    const nRows = base.rows.length
+    const permuted: RawTable = {
+      ...base,
+      cells: base.cells.map((c) => ({
+        ...c,
+        colIndex: (c.colIndex + 1) % nCols,
+        rowIndex: (c.rowIndex + 1) % nRows,
+      })),
+    }
+    expect(() => expectIndexesConsistent(permuted)).toThrow()
   })
 })
 

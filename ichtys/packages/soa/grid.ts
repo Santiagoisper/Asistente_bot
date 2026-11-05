@@ -254,6 +254,9 @@ function readTable(
   const windowRowIndexes = new Set<number>()
   const markStats: Array<{ page: number; present: number; attr: number; assigned: number }> = []
   const windowCoverage: Array<{ page: number; covered: number; local: number; hasText: boolean }> = []
+  // G1 por página (ADR-10 §d-1): columnas de tabla con ficha de encabezado
+  // en cada página, para exigirles contenido en ESA página.
+  const headerColsByPage = new Map<number, Set<number>>()
   const firstColByPage = new Map<number, number>()
   const windowBandByPage = new Map<number, [number, number]>()
   // Estado para G6/G7 (K1, R2): texto pequeño no consumido y texto rotado
@@ -541,6 +544,14 @@ function readTable(
       }
       return tableCol >= 0 ? tableCol : local >= 0 ? local : 0
     }
+
+    // G1: qué columnas de tabla tienen ficha de encabezado en esta página.
+    const pageHeaderCols = new Set<number>()
+    for (const lc of localColumns) {
+      if (lc.token === null) continue
+      pageHeaderCols.add(tableColOfBand(lc.band))
+    }
+    headerColsByPage.set(pageNumber, pageHeaderCols)
 
     // --- Celdas: cada marca cae en una columna (centro-x) y una fila (base de caja).
     // G3 ("ninguna marca sin dueño") compara TODAS las marcas de la página
@@ -854,16 +865,62 @@ function readTable(
   // sin texto del documento.
   const checks: RawTable['checks'] = []
 
-  // G1: toda columna registrada tiene al menos una celda fuera de la(s)
-  // fila(s) de ventana.
-  const contentCols = new Set(
-    cells.filter((c) => !windowRowIndexes.has(c.rowIndex)).map((c) => c.colIndex),
-  )
-  const emptyCols = columns.filter((c) => !contentCols.has(c.index)).length
+  // G1 (por página, ADR-10 §d-1 y R5/G10): las columnas con ficha de
+  // encabezado tienen contenido. Dos lecturas, ambas por página:
+  // - una columna sin contenido en NINGUNA página es fallo de la tabla;
+  // - una columna vacía SOLO en UNA página, con contenido en todas las
+  //   demás donde tiene ficha, es una página desincronizada (R5/G10:
+  //   F1 p21 con la columna 0 vaciada; el agregado por tabla lo escondía).
+  // Las columnas que el documento llena parcialmente — las tiras de F3
+  // rotan qué visitas tienen procedimiento en cada página, verificado
+  // contra el gold: p22 tiene 13 de 19 — NO disparan: no están llenas en
+  // todas las demás. El contenido cuenta fuera de la fila de ventana
+  // (G2 la controla aparte) e incluye lo que cubre una combinada.
+  const coveredByPage = new Map<number, Set<number>>()
+  for (const cell of cells) {
+    if (windowRowIndexes.has(cell.rowIndex)) continue
+    const covered = coveredByPage.get(cell.page) ?? new Set<number>()
+    covered.add(cell.colIndex)
+    for (const sc of cell.spanCols) covered.add(sc)
+    coveredByPage.set(cell.page, covered)
+  }
+  const headerCount = new Map<number, number>()
+  const filledCount = new Map<number, number>()
+  for (const [page, cols] of headerColsByPage) {
+    const covered = coveredByPage.get(page)
+    for (const c of cols) {
+      headerCount.set(c, (headerCount.get(c) ?? 0) + 1)
+      if (covered?.has(c)) filledCount.set(c, (filledCount.get(c) ?? 0) + 1)
+    }
+  }
+  const neverFilled = [...headerCount.entries()]
+    .filter(([c, headers]) => (filledCount.get(c) ?? 0) === 0 && headers > 0)
+    .map(([c]) => c)
+    .sort((a, b) => a - b)
+  const g1bad: string[] = []
+  for (const [page, cols] of headerColsByPage) {
+    const covered = coveredByPage.get(page)
+    const desync = [...cols]
+      .filter(
+        (c) =>
+          !covered?.has(c) &&
+          (filledCount.get(c) ?? 0) === (headerCount.get(c) ?? 1) - 1,
+      )
+      .sort((a, b) => a - b)
+    if (desync.length > 0) g1bad.push(`p${page}: c${desync.join(',c')}`)
+  }
+  const g1pass = neverFilled.length === 0 && g1bad.length === 0
   checks.push({
     id: 'G1',
-    pass: emptyCols === 0,
-    detail: `columnas ${columns.length}, sin contenido ${emptyCols}`,
+    pass: g1pass,
+    detail: g1pass
+      ? `contenido en ${headerColsByPage.size} pág., ${columns.length} columnas`
+      : [
+          neverFilled.length > 0 ? `columnas sin contenido: c${neverFilled.join(',c')}` : null,
+          g1bad.length > 0 ? `vacía solo en ${g1bad.join('; ')}` : null,
+        ]
+          .filter((s) => s !== null)
+          .join(' · '),
   })
 
   // G2: en cada página con textos de ventana, la ventana cubre todas las
@@ -948,26 +1005,11 @@ function readTable(
   })
 
   // G5: sin dos columnas de la misma página a menos de 3 pt de centro.
-  const centersByPage = new Map<number, number[]>()
-  for (const col of columns) {
-    const arr = centersByPage.get(col.page)
-    if (arr) arr.push(col.xCenter)
-    else centersByPage.set(col.page, [col.xCenter])
-  }
-  const g5bad: string[] = []
-  for (const [page, centers] of centersByPage) {
-    centers.sort((a, b) => a - b)
-    for (let i = 0; i + 1 < centers.length; i++) {
-      if (centers[i + 1]! - centers[i]! < 3) {
-        g5bad.push(`p${page}`)
-        break
-      }
-    }
-  }
+  const g5detail = columnCenterCollisions(columns)
   checks.push({
     id: 'G5',
-    pass: g5bad.length === 0,
-    detail: g5bad.length === 0 ? 'sin columnas superpuestas' : g5bad.join(', '),
+    pass: g5detail === null,
+    detail: g5detail ?? 'sin columnas superpuestas',
   })
 
   // G6 (K1): toda llamada de nota de una celda tiene texto de nota — los
@@ -1050,6 +1092,36 @@ function readTable(
     outcome,
     reasons,
   }
+}
+
+/**
+ * G5 (§4-5): sin dos columnas de la MISMA página a menos de 3 pt de centro.
+ * Extraído como función pura porque por mutación de ENTRADA no es
+ * alcanzable: `groupTexts` une fichas a ≤6 pt y la subdivisión de bandas
+ * corta por puntos medios, así que dos columnas vecinas con sendas fichas
+ * quedan a ≥3 pt SIEMPRE (el invariante está asertado en tests con fichas
+ * a 6.01 pt). Este chequeo es la red si ese invariante se rompe — relajar
+ * el agrupador o los cortes — y su rama de falla se prueba acá directo,
+ * con columnas sintéticas.
+ */
+export function columnCenterCollisions(columns: RawColumn[]): string | null {
+  const centersByPage = new Map<number, number[]>()
+  for (const col of columns) {
+    const arr = centersByPage.get(col.page)
+    if (arr) arr.push(col.xCenter)
+    else centersByPage.set(col.page, [col.xCenter])
+  }
+  const bad: string[] = []
+  for (const [page, centers] of centersByPage) {
+    centers.sort((a, b) => a - b)
+    for (let i = 0; i + 1 < centers.length; i++) {
+      if (centers[i + 1]! - centers[i]! < 3) {
+        bad.push(`p${page}`)
+        break
+      }
+    }
+  }
+  return bad.length === 0 ? null : bad.join(', ')
 }
 
 /**

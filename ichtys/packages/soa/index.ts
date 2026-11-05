@@ -9,7 +9,7 @@
 export { loadPageGeometry, PdfLimitError } from './pdf-text'
 export type { PdfLimitCode } from './pdf-text'
 export { locateSchedule } from './locate'
-export { readGrid } from './grid'
+export { columnCenterCollisions, readGrid } from './grid'
 export type {
   BBox,
   PageGeom,
