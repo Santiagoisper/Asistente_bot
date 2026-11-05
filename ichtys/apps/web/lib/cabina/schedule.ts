@@ -30,7 +30,7 @@ const OPEN_AMBER_DAYS = 7
 
 export function parseISODate(iso: string): Date {
   const [year, month, day] = iso.split('-').map(Number)
-  return new Date(year, (month ?? 1) - 1, day ?? 1)
+  return new Date(year ?? 1970, (month ?? 1) - 1, day ?? 1)
 }
 
 export function startOfDay(date: Date): Date {
