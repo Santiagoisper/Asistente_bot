@@ -19,7 +19,9 @@
     "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
     "NEXT_PUBLIC_APP_URL",
     "PHI_ENCRYPTION_KEY",
-    "CRON_SECRET"
+    "CRON_SECRET",
+    "ALPHI_CABINA",
+    "VERCEL_ENV"
   ],
   "tasks": {
     "build": {
