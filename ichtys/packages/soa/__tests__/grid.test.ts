@@ -42,6 +42,7 @@ interface Gold {
   document: { sopPages: number[]; falseHitPages: number[] }
   visits: GoldVisit[]
   cells: GoldCell[]
+  difficulty: { splitTokens: number }
 }
 
 const FIXTURES = ['F1', 'F2', 'F3', 'F4', 'F5'] as const
@@ -155,10 +156,10 @@ describe('T4 — celdas marcadas por centro dentro de la caja gold', () => {
   for (const fixture of FIXTURES) {
     it(`${fixture}: P ≥ 98 %, R ≥ 97 % por fixture`, async () => {
       const { gold, schedule } = await loadFixture(fixture)
-      // F2: los rangos "según necesidad" (prn_range) son celdas combinadas
-      // del commit 4; el umbral de T4 no los cuenta.
+      // F2: los rangos "según necesidad" (prn_range) son celdas de texto
+      // del commit 4 (T5); el umbral de T4 cuenta marcas.
       const goldCells = gold.cells.filter((c) => c.mark !== 'prn_range')
-      const mine = schedule.tables.flatMap((t) => t.cells)
+      const mine = schedule.tables.flatMap((t) => t.cells).filter((c) => c.kind === 'mark')
       const { pairs, goldUnmatched, mineUnmatched } = matchBoxes(goldCells, mine)
       const precision = pairs / (pairs + mineUnmatched)
       const recall = pairs / (pairs + goldUnmatched)
@@ -200,6 +201,108 @@ describe('T8 — columnas sombreadas con la marca en otra operación de texto', 
       expect(matched).toBe(total)
     })
   }
+})
+
+describe('T5 — combinadas y rangos', () => {
+  it('F1: fila de ventana de T1 — 8 textos cubren las 26 columnas (100 %)', async () => {
+    const { schedule } = await loadFixture('F1')
+    const t1 = schedule.tables[0]!
+    expect(t1.columns).toHaveLength(26)
+    expect(t1.windowRow).not.toBeNull()
+    const windowCells = t1.windowRow!.cells
+    expect(windowCells).toHaveLength(8)
+    expect(windowCells.every((c) => c.kind === 'merged' || c.kind === 'text')).toBe(true)
+    const covered = new Set(windowCells.flatMap((c) => c.spanCols))
+    expect(covered.size).toBe(26)
+  })
+
+  it('F2: los rangos "según necesidad" del gold, 100 % de columnas cubiertas', async () => {
+    const { gold, schedule } = await loadFixture('F2')
+    const prn = gold.cells.filter((c) => c.mark === 'prn_range')
+    expect(prn).toHaveLength(80)
+    // El gold lista UNA celda por columna de la corrida; el generador no
+    // dibuja la caja de la corrida, así que la grilla entrega UNA celda
+    // combinada por corrida. Cobertura (orden B-P2 §5 T5): el centro de
+    // cada celda gold queda dentro de una celda de rango en su página.
+    const windowRows = new Set(
+      schedule.tables.map((t) => t.windowRow?.rowIndex).filter((r): r is number => r !== undefined),
+    )
+    const ranges = schedule.tables
+      .flatMap((t) => t.cells)
+      .filter((c) => c.kind !== 'mark' && !windowRows.has(c.rowIndex))
+    expect(ranges.some((c) => c.spanCols.length > 1)).toBe(true)
+    let covered = 0
+    for (const cell of prn) {
+      const cx = (cell.bbox[0] + cell.bbox[2]) / 2
+      const cy = (cell.bbox[1] + cell.bbox[3]) / 2
+      if (
+        ranges.some(
+          (r) =>
+            r.page === cell.page &&
+            cx >= r.bbox[0] - 0.5 &&
+            cx <= r.bbox[2] + 0.5 &&
+            cy >= r.bbox[1] - 0.5 &&
+            cy <= r.bbox[3] + 0.5,
+        )
+      ) {
+        covered++
+      }
+    }
+    expect(covered).toBe(prn.length)
+  })
+})
+
+describe('T6 — tokens partidos recompuestos', () => {
+  it('F1: 100 % de encabezados = printedId del gold tras normalizar espacios', async () => {
+    const { gold, schedule } = await loadFixture('F1')
+    const norm = (s: string) => s.replace(/\s+/g, '')
+    expect(gold.difficulty.splitTokens).toBeGreaterThan(0)
+    let checked = 0
+    for (const table of schedule.tables) {
+      const mine = table.columns.map((c) => ({
+        page: c.page,
+        bbox: c.headerBBox as BBox,
+        headerText: c.headerText,
+      }))
+      const used = new Set<number>()
+      for (const visit of gold.visits.filter((v) => v.tableKey === table.key)) {
+        const [gx0, gy0, gx1, gy1] = visit.bbox
+        let best = -1
+        let bestDist = Infinity
+        mine.forEach((m, i) => {
+          if (used.has(i) || m.page !== visit.page) return
+          const cx = (m.bbox[0] + m.bbox[2]) / 2
+          const cy = (m.bbox[1] + m.bbox[3]) / 2
+          if (cx < gx0 - 1 || cx > gx1 + 1 || cy < gy0 - 1 || cy > gy1 + 1) return
+          const dist = Math.abs(cx - (gx0 + gx1) / 2) + Math.abs(cy - (gy0 + gy1) / 2)
+          if (dist < bestDist) {
+            bestDist = dist
+            best = i
+          }
+        })
+        expect(best).toBeGreaterThanOrEqual(0)
+        used.add(best)
+        expect(norm(mine[best]!.headerText)).toBe(norm(visit.printedId ?? ''))
+        checked++
+      }
+    }
+    expect(checked).toBe(gold.visits.length)
+  })
+})
+
+describe('T7 — página rotada (/Rotate 90)', () => {
+  it('F5: celdas de la tabla 2 en espacio sin rotar, P = R ≥ 98 %', async () => {
+    const { gold, schedule } = await loadFixture('F5')
+    const t2Keys = new Set(gold.visits.filter((v) => v.tableKey === 'T2').map((v) => v.key))
+    const goldT2 = gold.cells.filter((c) => t2Keys.has(c.visitKey))
+    expect(goldT2.length).toBeGreaterThan(50)
+    const mine = (schedule.tables.find((t) => t.key === 'T2')?.cells ?? []).filter(
+      (c) => c.kind === 'mark',
+    )
+    const { pairs, goldUnmatched, mineUnmatched } = matchBoxes(goldT2, mine)
+    expect(pairs / (pairs + mineUnmatched)).toBeGreaterThanOrEqual(0.98)
+    expect(pairs / (pairs + goldUnmatched)).toBeGreaterThanOrEqual(0.98)
+  })
 })
 
 describe('T11 — determinismo', () => {

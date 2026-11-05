@@ -35,6 +35,7 @@
  * tabla sale `partial` con `checks_pending`.
  */
 import type {
+  BBox,
   PageGeom,
   RawCell,
   RawColumn,
@@ -67,6 +68,42 @@ const MIN_EDGE_LENGTH = 6
 const MIN_MARK_FONT = 5
 /** Separación entre líneas base que corta un cluster de filas (pt). */
 const ROW_CLUSTER_GAP = 10
+
+/** Texto de celda de rango ("según necesidad" y variantes). */
+const PRN_RE = /(según necesidad|as needed|a demanda|si aplica|p\.?r\.?n\.?)/
+
+/** Separación entre ítems de texto que siguen siendo UN grupo (pt). */
+const TEXT_GROUP_GAP = 6
+
+interface TextGroup {
+  x0: number
+  x1: number
+  text: string
+}
+
+/** Agrupa ítems de texto por adyacencia x (los tokens partidos vuelven a ser
+ * un texto; los partidos en DOS LÍNEAS se recomponen de abajo hacia arriba). */
+function groupTexts(items: TextItem[]): TextGroup[] {
+  const sorted = [...items].sort(
+    (a, b) => a.bbox[0] - b.bbox[0] || b.bbox[1] - a.bbox[1],
+  )
+  const groups: TextGroup[] = []
+  for (const item of sorted) {
+    const last = groups[groups.length - 1]
+    if (last && item.bbox[0] - last.x1 <= TEXT_GROUP_GAP) {
+      last.x1 = Math.max(last.x1, item.bbox[2])
+      last.text += ` ${item.str.trim()}`
+    } else {
+      groups.push({ x0: item.bbox[0], x1: item.bbox[2], text: item.str.trim() })
+    }
+  }
+  return groups.filter((g) => g.text.length > 0)
+}
+
+/** Texto comparable de ficha: sin espacios (los tokens partidos ya se recomponen). */
+function normalizeText(text: string): string {
+  return text.replace(/\s+/g, '')
+}
 
 interface ItemBand {
   y: number
@@ -112,6 +149,30 @@ function center(item: TextItem): number {
   return (item.bbox[0] + item.bbox[2]) / 2
 }
 
+/**
+ * Intervalos de celda de una banda-y: los bordes V que CRUZAN la banda como
+ * cortes; el intervalo entre cortes consecutivos es una celda de ESA fila.
+ * En las filas de datos los bordes van por celda y los intervalos son las
+ * columnas; en la fila de ventana cada grupo se dibuja como UNA caja que
+ * ocupa solo esa banda, así que los intervalos son los GRUPOS.
+ */
+function rowIntervals(page: PageGeom, y0: number, y1: number): Array<[number, number]> {
+  const xs = clusterEdges(
+    page.rules
+      .filter(
+        (r) =>
+          Math.abs(r.x1 - r.x0) < 0.5 &&
+          r.y1 - r.y0 >= MIN_EDGE_LENGTH &&
+          r.y1 > y0 &&
+          r.y0 < y1,
+      )
+      .flatMap((r) => [r.x0, r.x1]),
+  )
+  const intervals: Array<[number, number]> = []
+  for (let i = 0; i + 1 < xs.length; i++) intervals.push([xs[i]!, xs[i + 1]!])
+  return intervals
+}
+
 /** Caja que envuelve a un grupo de ítems. */
 function boxOf(items: TextItem[]): [number, number, number, number] | null {
   if (items.length === 0) return null
@@ -148,6 +209,7 @@ function readTable(
   const seenTokens = new Set<string>()
   const rows: RawRow[] = []
   const cells: RawCell[] = []
+  let windowRow: { rowIndex: number; cells: RawCell[] } | null = null
   let lastRowIndex = -1
 
   for (const pageNumber of located.pages) {
@@ -168,37 +230,48 @@ function readTable(
     const bandsX: Array<[number, number]> = []
     for (let i = 0; i + 1 < vxs.length; i++) bandsX.push([vxs[i]!, vxs[i + 1]!])
 
-    // --- Encabezado: banda de texto con más fichas de visita.
+    // --- Encabezado: bandas de texto con más fichas de visita, MÁS las
+    // pegadas (±8 pt): una ficha partida por el extractor ("V" / "12" en dos
+    // líneas) cae en dos bandas por el techo de sus cajas. Los ítems se
+    // recomponen por adyacencia x (groupTexts), así la ficha vuelve a ser un
+    // solo texto.
     const bands = textBands(page.items)
-    let headerItems: TextItem[] = []
+    let headerY = 0
     let headerHits = 0
     for (const band of bands) {
       const hits = band.items.filter((i) => VISIT_TOKEN.test(i.str.trim())).length
       if (hits > headerHits) {
         headerHits = hits
-        headerItems = band.items
+        headerY = band.y
       }
     }
+    const headerGroups = groupTexts(
+      bands
+        .filter((b) => Math.abs(b.y - headerY) <= 8)
+        .flatMap((b) => b.items)
+        .filter((i) => i.str.trim().length > 0 && i.fontSize >= 4),
+    )
 
     // --- Bandas de columna efectivas: los bordes V no siempre llegan por
     // columna (F1 T2 y F5 T1 dejan zonas sin bordes intermedios), así que una
     // banda-x que contiene varias fichas del encabezado se SUBDIVIDE por
     // ficha: los cortes son los puntos medios entre fichas adyacentes.
     const effBands: Array<[number, number]> = []
-    const effTokens: TextItem[][] = []
+    const effTokens: TextGroup[][] = []
     for (const band of bandsX) {
-      const tokens = headerItems
-        .filter((item) => center(item) >= band[0] && center(item) <= band[1])
-        .sort((a, b) => a.bbox[0] - b.bbox[0])
+      const tokens = headerGroups.filter((g) => {
+        const cx = (g.x0 + g.x1) / 2
+        return cx >= band[0] && cx <= band[1]
+      })
       if (tokens.length <= 1) {
         effBands.push(band)
         effTokens.push(tokens)
         continue
       }
       for (let k = 0; k < tokens.length; k++) {
-        const cx = center(tokens[k]!)
-        const left = k === 0 ? band[0] : (center(tokens[k - 1]!) + cx) / 2
-        const right = k === tokens.length - 1 ? band[1] : (cx + center(tokens[k + 1]!)) / 2
+        const cx = (tokens[k]!.x0 + tokens[k]!.x1) / 2
+        const left = k === 0 ? band[0] : ((tokens[k - 1]!.x0 + tokens[k - 1]!.x1) / 2 + cx) / 2
+        const right = k === tokens.length - 1 ? band[1] : (cx + (tokens[k + 1]!.x0 + tokens[k + 1]!.x1) / 2) / 2
         effBands.push([left, right])
         effTokens.push([tokens[k]!])
       }
@@ -215,20 +288,28 @@ function readTable(
       const band = effBands[i]!
       const tokens = effTokens[i]!
       if (tokens.length === 0) continue
-      localColumns.push({ band, token: tokens[0]!.str.trim() })
-      if (tokens.some((t) => !tokensBeforePage.has(t.str.trim()))) {
-        const box = boxOf(tokens)!
-        for (const t of tokens) seenTokens.add(t.str.trim())
+      const norm = tokens.map((t) => normalizeText(t.text))
+      localColumns.push({ band, token: norm[0]! })
+      if (norm.some((t) => !tokensBeforePage.has(t))) {
+        // Caja de la fila del encabezado: el texto se apoya a 6 pt del fondo
+        // de una fila de 20 pt (convención del generador).
+        const box: BBox = [
+          Math.min(...tokens.map((t) => t.x0)),
+          headerY - 14,
+          Math.max(...tokens.map((t) => t.x1)),
+          headerY + 6,
+        ]
+        for (const t of norm) seenTokens.add(t)
         columns.push({
           index: columns.length,
           page: pageNumber,
           xCenter: (band[0] + band[1]) / 2,
           x0: band[0],
           x1: band[1],
-          headerText: tokens.map((t) => t.str.trim()).join(' '),
+          headerText: tokens.map((t) => t.text).join(' '),
           headerBBox: box,
         })
-        columnTokens.push(new Set(tokens.map((t) => t.str.trim())))
+        columnTokens.push(new Set(norm))
       }
     }
 
@@ -246,8 +327,8 @@ function readTable(
     for (const item of page.items) {
       if (WINDOW_ROW_RE.test(item.str.trim())) headerCeiling = Math.max(headerCeiling, item.bbox[3])
     }
-    if (headerCeiling === -Infinity && headerItems.length > 0) {
-      headerCeiling = Math.max(...headerItems.map((i) => i.bbox[3]))
+    if (headerCeiling === -Infinity && headerGroups.length > 0) {
+      headerCeiling = headerY
     }
 
     // --- Filas: intervalos entre bordes H con contenido, o clusters de líneas
@@ -357,6 +438,26 @@ function readTable(
       if (!continued) lastRowIndex = index
     }
 
+    // --- Índice de columna de la tabla para una banda local: ficha de la
+    // banda → columna registrada con esa ficha; con fichas repetidas (los
+    // "—" de F3), la posición ordinal entre las candidatas; sin ficha, la
+    // ordinal local.
+    const tableColOfBand = (band: [number, number]): number => {
+      const local = localColumns.findIndex((lc) => lc.band === band)
+      const token = localColumns[local]?.token ?? null
+      let tableCol = -1
+      if (token !== null) {
+        const candidates = columnTokens.flatMap((tokens, i) => (tokens.has(token) ? [i] : []))
+        if (candidates.length === 1) {
+          tableCol = candidates[0]!
+        } else if (candidates.length > 1) {
+          const sameTokenLocals = localColumns.flatMap((lc, i) => (lc.token === token ? [i] : []))
+          tableCol = candidates[Math.min(Math.max(sameTokenLocals.indexOf(local), 0), candidates.length - 1)]!
+        }
+      }
+      return tableCol >= 0 ? tableCol : local >= 0 ? local : 0
+    }
+
     // --- Celdas: cada marca cae en una columna (centro-x) y una fila (base de caja).
     for (const mark of marks) {
       const colIdx = effBands.findIndex(
@@ -373,23 +474,7 @@ function readTable(
       if (rowBands[rowIdx]!.isAttribute) continue
       if (!localColumns.some((lc) => lc.band === effBands[colIdx])) continue
 
-      // Índice de columna de la tabla: ficha de la banda local → columna
-      // registrada con esa ficha; con fichas repetidas (los "—" de F3), la
-      // posición ordinal entre las candidatas; sin ficha, la ordinal local.
-      const local = localColumns.findIndex((lc) => lc.band === effBands[colIdx])
-      const token = localColumns[local]?.token ?? null
-      let tableCol = -1
-      if (token !== null) {
-        const candidates = columnTokens.flatMap((tokens, i) => (tokens.has(token) ? [i] : []))
-        if (candidates.length === 1) {
-          tableCol = candidates[0]!
-        } else if (candidates.length > 1) {
-          const sameTokenLocals = localColumns.flatMap((lc, i) => (lc.token === token ? [i] : []))
-          tableCol = candidates[Math.min(Math.max(sameTokenLocals.indexOf(local), 0), candidates.length - 1)]!
-        }
-      }
-      if (tableCol < 0) tableCol = local >= 0 ? local : colIdx
-
+      const tableCol = tableColOfBand(effBands[colIdx]!)
       const [cx0, cx1] = effBands[colIdx]!
       const band = rowBands[rowIdx]!
       const width = Math.max(cx1 - cx0, 1e-6)
@@ -405,6 +490,159 @@ function readTable(
         distanceToCenter: Math.min(Math.abs(center(mark) - (cx0 + cx1) / 2) / width, 1),
       })
     }
+
+    // --- Fila de ventana: la banda del "Ventana…" con sus textos por grupo
+    // de ventana. El generador dibuja cada grupo como UNA caja que cruza
+    // solo esa banda, así que el span de un texto es el INTERVALO entre
+    // bordes que lo contiene — nunca el ancho del texto, que va centrado en
+    // el grupo y no alcanza a cubrirlo (F1 T1: 8 textos cubren las 26).
+    const windowBand = bands.find(
+      (b) => b.items.some((i) => WINDOW_ROW_RE.test(i.str.trim())) && Math.abs(b.y - headerCeiling) <= 2,
+    )
+    if (windowBand) {
+      const labels = labelItemsOf(windowBand.items)
+      const wBox = boxOf(windowBand.items)!
+      rows.push({
+        index: rows.length,
+        page: pageNumber,
+        label: labels.map((i) => i.str.trim()).join(' '),
+        labelBBox: boxOf(labels) ?? [0, wBox[1], 0, wBox[3]],
+        y0: wBox[1],
+        y1: wBox[3],
+        continuedFromPrevPage: false,
+        isAttributeCandidate: false,
+      })
+      const windowCells: RawCell[] = []
+      // Textos de la fila de ventana en las bandas ±2: el grupo partido en
+      // tokens ("Hast"+"a"+"42"+"d") se dibuja en fuente 5, así que su techo
+      // queda 1 pt por debajo del resto (fuente 6) y en otra banda.
+      const windowTexts = bands
+        .filter((b) => Math.abs(b.y - windowBand.y) <= 2)
+        .flatMap((b) => b.items)
+        .filter(
+          (i) =>
+            i.bbox[0] >= firstColumnX - 2 &&
+            i.str.trim().length > 0 &&
+            !MARK_STRINGS.has(i.str.trim()) &&
+            i.fontSize >= 4,
+        )
+      // Cajas de grupo: bordes V que cruzan la banda ventana (los de las
+      // bandas vecinas —timing, atributos— no llegan a entrar con margen).
+      const winIntervals = rowIntervals(page, wBox[1] + 1, wBox[3] - 1).filter(
+        ([, b]) => b > firstColumnX,
+      )
+      for (const group of groupTexts(windowTexts)) {
+        // El intervalo de mayor solape con el texto es el grupo del texto.
+        let box: [number, number] | null = null
+        let bestOverlap = 0
+        for (const interval of winIntervals) {
+          const overlap = Math.min(group.x1, interval[1]) - Math.max(group.x0, interval[0])
+          if (overlap > bestOverlap) {
+            bestOverlap = overlap
+            box = interval
+          }
+        }
+        // Columnas del grupo: las bandas locales con centro dentro de la
+        // caja (sin bordes de caja, por solape del texto).
+        const spanOf = (band: [number, number]): boolean => {
+          const cx = (band[0] + band[1]) / 2
+          return box !== null && cx >= box[0] - 0.5 && cx <= box[1] + 0.5
+        }
+        const spans = localColumns.filter((lc) =>
+          box
+            ? spanOf(lc.band)
+            : lc.band[0] < group.x1 && lc.band[1] > group.x0,
+        )
+        if (spans.length === 0) continue
+        const tableCols = spans.map((lc) => tableColOfBand(lc.band))
+        windowCells.push({
+          page: pageNumber,
+          rowIndex: rows.length - 1,
+          colIndex: tableCols[0]!,
+          text: group.text,
+          bbox: box
+            ? [box[0], wBox[1], box[1], wBox[3]]
+            : [spans[0]!.band[0], wBox[1], spans[spans.length - 1]!.band[1], wBox[3]],
+          kind: tableCols.length > 1 ? 'merged' : 'text',
+          spanCols: tableCols,
+          noteRefs: [],
+          distanceToCenter: 0,
+        })
+      }
+      cells.push(...windowCells)
+      windowRow ??= { rowIndex: rows.length - 1, cells: [] }
+      if (windowRow.rowIndex === rows.length - 1) windowRow.cells = windowCells
+    }
+
+    // --- Rangos "según necesidad" en filas normales: una CORRIDA de celdas
+    // vacías consecutivas con un único texto centrado encima (el generador
+    // NO dibuja la caja de la corrida: cada celda conserva su borde). El
+    // alcance exacto no es visible en la página — se reporta el bloque
+    // contiguo de columnas SIN marca ni otro texto alrededor de la corrida,
+    // que contiene a la corrida real (en F2, la fila entera de visitas).
+    for (const band of rowBands) {
+      if (band.isAttribute) continue
+      const texts = page.items.filter(
+        (i) =>
+          !MARK_STRINGS.has(i.str.trim()) &&
+          i.str.trim().length > 0 &&
+          i.fontSize >= 5 &&
+          i.bbox[0] >= firstColumnX - 2 &&
+          (i.bbox[1] + i.bbox[3]) / 2 >= band.y0 &&
+          (i.bbox[1] + i.bbox[3]) / 2 <= band.y1 &&
+          !windowBand?.items.includes(i),
+      )
+      const groups = groupTexts(texts)
+      if (groups.length === 0) continue
+      const rowIdx = rows.findIndex(
+        (r) => r.page === pageNumber && r.y0 === band.y0 && r.y1 === band.y1,
+      )
+      if (rowIdx < 0) continue
+      // Columna ocupada: una marca de la fila o el centro de un grupo de
+      // texto (la corrida se corta contra ambas).
+      const occupied = [
+        ...band.marks.map((m) => center(m)),
+        ...groups.map((g) => (g.x0 + g.x1) / 2),
+      ]
+      const isFree = (bandX: [number, number]): boolean =>
+        !occupied.some((o) => o >= bandX[0] - 0.5 && o <= bandX[1] + 0.5)
+      for (const group of groups) {
+        if (!PRN_RE.test(group.text.replace(/\s+/g, ' ').toLowerCase())) continue
+        const gCenter = (group.x0 + group.x1) / 2
+        let start = localColumns.findIndex(
+          (lc) => gCenter >= lc.band[0] && gCenter <= lc.band[1],
+        )
+        if (start < 0) {
+          // Centro entre dos columnas: la de mayor solape con el texto.
+          let bestOverlap = 0
+          localColumns.forEach((lc, i) => {
+            const overlap = Math.min(group.x1, lc.band[1]) - Math.max(group.x0, lc.band[0])
+            if (overlap > bestOverlap) {
+              bestOverlap = overlap
+              start = i
+            }
+          })
+        }
+        if (start < 0) continue
+        let lo = start
+        while (lo > 0 && isFree(localColumns[lo - 1]!.band)) lo--
+        let hi = start
+        while (hi + 1 < localColumns.length && isFree(localColumns[hi + 1]!.band)) hi++
+        const tableCols: number[] = []
+        for (let i = lo; i <= hi; i++) tableCols.push(tableColOfBand(localColumns[i]!.band))
+        cells.push({
+          page: pageNumber,
+          rowIndex: rowIdx,
+          colIndex: tableCols[0]!,
+          text: group.text,
+          bbox: [localColumns[lo]!.band[0], band.y0, localColumns[hi]!.band[1], band.y1],
+          kind: tableCols.length > 1 ? 'merged' : 'text',
+          spanCols: tableCols,
+          noteRefs: [],
+          distanceToCenter: 0,
+        })
+      }
+    }
   }
 
   return {
@@ -413,7 +651,7 @@ function readTable(
     columns,
     rows,
     cells,
-    windowRow: null,
+    windowRow,
     notes: [],
     checks: [],
     outcome: 'partial',
