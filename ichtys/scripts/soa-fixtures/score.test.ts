@@ -243,21 +243,27 @@ describe('calificador de cronogramas', () => {
     expect(report.cells).toEqual({ tp: 0, fp: 1, fn: 1 })
   })
 
-  it('empareja inconsistencias por tabla y evidencia, no solo por kind', () => {
+  it('empareja inconsistencias por kind y tabla alineada, uno a uno', () => {
     const source = gold()
-    source.inconsistencies = [
-      { kind: 'duplicated_row', tableKey: 'T1', evidence: 'R2/R4:label_repetido_misma_tira', pages: [13] },
+    source.tables = [
+      { key: 'T1', pages: [13, 20], outcome: 'complete', reasons: [] },
+      { key: 'T2', pages: [40, 62], outcome: 'complete', reasons: [] },
     ]
-    const other = clone(source)
-    other.inconsistencies = [
+    source.inconsistencies = [
+      { kind: 'duplicated_row', description: 'Panel de laboratorio A está repetido.', pages: [13] },
+      { kind: 'duplicated_row', description: 'Otra fila repetida.', pages: [13] },
+    ]
+    const otherTable = clone(source)
+    otherTable.inconsistencies = [
       { kind: 'duplicated_row', description: 'T2:R9/R10:label_repetido_misma_tira', pages: [40] },
     ]
-    expect(scoreSchedule(source, other).inconsistencies).toEqual({ tp: 0, fp: 1, fn: 1 })
-    const same = clone(source)
-    same.inconsistencies = [
-      { kind: 'duplicated_row', description: 'T1:R2/R4:label_repetido_misma_tira', pages: [13] },
+    expect(scoreSchedule(source, otherTable).inconsistencies).toEqual({ tp: 0, fp: 1, fn: 2 })
+    const one = clone(source)
+    one.tables = [{ key: 'ZZ', pages: [13, 20], outcome: 'complete', reasons: [] }]
+    one.inconsistencies = [
+      { kind: 'duplicated_row', description: 'ZZ:R44/R139:label_repetido_misma_tira', pages: [20] },
     ]
-    expect(scoreSchedule(source, same).inconsistencies).toEqual({ tp: 1, fp: 0, fn: 0 })
+    expect(scoreSchedule(source, one).inconsistencies).toEqual({ tp: 1, fp: 0, fn: 1 })
   })
 
   it('la ventana propia solo es acierto en la celda que cita la nota', () => {

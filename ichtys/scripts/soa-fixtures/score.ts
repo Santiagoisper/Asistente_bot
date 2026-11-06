@@ -8,7 +8,10 @@
  * identifica la celda: una etiqueta puede ser una clave compartida o una por
  * tabla, y las dos convenciones puntúan igual. Las condiciones propias del
  * procedimiento sí se emparejan uno a uno, por alias o similitud ≥ 0,85.
- * Inconsistencias: (kind, tabla, evidencia, páginas), no el kind solo.
+ * Inconsistencias: (kind, tabla alineada por sus páginas), uno a uno.
+ * El cruce entre las páginas del hallazgo solo ordena el par: en F3 el
+ * gold anota la 13 y P3 la 20 y la 62, y no se cruzan. Una nota fuera de
+ * toda grilla toma la tabla del prefijo `T1:`. La evidencia fina espera.
  * `procedureWindows`: misma celda y mismo valor, y la celda cita una nota.
  * `scoreGrid` califica la geometría cruda sin modelo. Salida: solo contadores.
  * `--private` no imprime etiquetas ni texto.
@@ -583,19 +586,40 @@ function cellSlot(tableKey: string, visitKey: string, label: string, mark: strin
   return `${tableKey}\n${visitKey}\n${label}\n${mark}`
 }
 
-/** `T1:R2/R4:motivo` → tabla T1 y evidencia `R2/R4:motivo`. La prosa no entra en este patrón. */
-const CODED_INSTANCE = /^(T\d+):(.+)$/
+/** Prefijo `T1:` de una descripción codificada. La prosa del gold no entra. */
+const CODED_TABLE = /^(T\d+):/
+
+function statedTable(item: InconsistencyRec): string {
+  if (item.tableKey?.trim()) return item.tableKey.trim()
+  return item.description?.trim().match(CODED_TABLE)?.[1] ?? ''
+}
 
 /**
- * Instancia de T11: kind + tabla + evidencia + páginas. El kind solo no
- * alcanza: otra tabla o otra evidencia del mismo kind es otro hallazgo.
+ * Tabla de la instancia. Primero la tabla cuyas páginas contienen una página
+ * del hallazgo; si el hallazgo cae fuera de la grilla (una nota), la clave
+ * declarada, ya alineada. La evidencia (filas, refs) no entra: gold y P3 no
+ * comparten ese espacio.
  */
-function inconsistencyInstance(item: InconsistencyRec): string {
-  const coded = item.description?.trim().match(CODED_INSTANCE)
-  const table = (item.tableKey ?? coded?.[1] ?? '').trim()
-  const evidence = (item.evidence ?? (coded ? coded[2] : normalizeLabel(item.description ?? ''))).trim()
-  const pages = [...(item.pages ?? [])].sort((a, b) => a - b).join(',')
-  return `${item.kind.trim()}\n${table}\n${evidence}\n${pages}`
+function alignedInconsistencyTable(
+  item: InconsistencyRec,
+  pageOwner: Map<number, string>,
+  tableMap: Map<string, string>,
+): string {
+  for (const page of item.pages ?? []) {
+    const owner = pageOwner.get(page)
+    if (owner) return owner
+  }
+  const stated = statedTable(item)
+  if (!stated) return ''
+  return tableMap.get(stated) ?? stated
+}
+
+function pageOwnerOf(tables: TableRec[]): Map<number, string> {
+  const owner = new Map<number, string>()
+  for (const table of tables) {
+    for (const page of table.pages ?? []) if (!owner.has(page)) owner.set(page, table.key)
+  }
+  return owner
 }
 
 function citesNote(cell: CellRec): boolean {
@@ -607,10 +631,11 @@ function windowIdentity(slot: string, window: ProcedureWindowRec): string {
 }
 
 export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreReport {
-  const aligned = withAlignedTables(candidate, alignTables(gold.tables ?? [], candidate.tables ?? [], {
+  const tableMap = alignTables(gold.tables ?? [], candidate.tables ?? [], {
     gold: visitRanges(gold.visits),
     candidate: visitRanges(candidate.visits),
-  }))
+  })
+  const aligned = withAlignedTables(candidate, tableMap)
   const goldVisits = gold.visits ?? []
   const candVisits = aligned.visits ?? []
   const visitMatch = matchVisits(goldVisits, candVisits)
@@ -817,16 +842,44 @@ export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreR
   rulesC.forEach((rule, index) => { if (!usedC.has(index)) foldConditions(conditions, [], rule.conditions) })
 
   const inconsistencies = emptyCounts()
-  const goldInstances = new Map<string, number>()
-  for (const item of gold.inconsistencies ?? []) {
-    const key = inconsistencyInstance(item)
-    goldInstances.set(key, (goldInstances.get(key) ?? 0) + 1)
+  const goldOwner = pageOwnerOf(gold.tables ?? [])
+  const candOwner = pageOwnerOf(aligned.tables ?? [])
+  const identityMap = new Map<string, string>()
+  const goldInst = (gold.inconsistencies ?? []).map((item) => ({
+    kind: item.kind.trim(),
+    table: alignedInconsistencyTable(item, goldOwner, identityMap),
+    pages: new Set(item.pages ?? []),
+  }))
+  const candInst = (aligned.inconsistencies ?? []).map((item) => ({
+    kind: item.kind.trim(),
+    table: alignedInconsistencyTable(item, candOwner, tableMap),
+    pages: new Set(item.pages ?? []),
+  }))
+  const sameFinding = (left: { kind: string; table: string }, right: { kind: string; table: string }): boolean => {
+    if (left.kind !== right.kind) return false
+    if (left.table === '' && right.table === '') return true
+    return left.table !== '' && left.table === right.table
   }
-  for (const item of aligned.inconsistencies ?? []) {
-    if (take(goldInstances, inconsistencyInstance(item))) inconsistencies.tp += 1
-    else inconsistencies.fp += 1
+  const rankedFindings: Array<{ gi: number; ci: number; inter: number }> = []
+  goldInst.forEach((left, gi) => {
+    candInst.forEach((right, ci) => {
+      if (!sameFinding(left, right)) return
+      let inter = 0
+      for (const page of left.pages) if (right.pages.has(page)) inter += 1
+      rankedFindings.push({ gi, ci, inter })
+    })
+  })
+  rankedFindings.sort((a, b) => b.inter - a.inter || a.gi - b.gi || a.ci - b.ci)
+  const usedFindingG = new Set<number>()
+  const usedFindingC = new Set<number>()
+  for (const pair of rankedFindings) {
+    if (usedFindingG.has(pair.gi) || usedFindingC.has(pair.ci)) continue
+    usedFindingG.add(pair.gi)
+    usedFindingC.add(pair.ci)
+    inconsistencies.tp += 1
   }
-  for (const left of goldInstances.values()) inconsistencies.fn += left
+  inconsistencies.fn += goldInst.length - usedFindingG.size
+  inconsistencies.fp += candInst.length - usedFindingC.size
 
   const procedureWindows = emptyCounts()
   const windowBag = new Map<string, number>()
