@@ -126,6 +126,19 @@ export interface RawCell {
   distanceToCenter: number
 }
 
+/**
+ * Marca de una fila de atributo (Ayuno, visita a la clínica…). No es una
+ * celda: T5 sigue en 0 celdas de atributo. El texto es del documento y no
+ * se loguea (S8).
+ */
+export interface AttributeMark {
+  rowIndex: number
+  colIndex: number
+  page: number
+  bbox: BBox
+  text: string
+}
+
 /** Tabla cruda con sus chequeos geométricos (§4). */
 export interface RawTable {
   key: string
@@ -133,6 +146,11 @@ export interface RawTable {
   columns: RawColumn[]
   rows: RawRow[]
   cells: RawCell[]
+  /**
+   * Marcas de filas de atributo, aparte de `cells` (G26). `marksAttr` las
+   * contaba y las tiraba; ahora viajan acá.
+   */
+  attributeMarks: AttributeMark[]
   windowRow: { rowIndex: number; cells: RawCell[] } | null
   notes: Array<{ ref: string; page: number; text: string; bbox: BBox }>
   checks: Array<{ id: string; pass: boolean; detail: string }>
@@ -140,8 +158,24 @@ export interface RawTable {
   reasons: string[]
 }
 
+/**
+ * Párrafo de reglas previo a la grilla (G26). Texto del protocolo: dato,
+ * nunca a logs (S8).
+ */
+export interface RuleParagraph {
+  index: number
+  page: number
+  text: string
+}
+
 /** Salida completa de la etapa (b). */
 export interface RawSchedule {
   tables: RawTable[]
   location: ScheduleLocation
+  /**
+   * Prosa de las páginas `synopsis_prose` anteriores a la primera tabla,
+   * más el texto de esa página que queda por encima del encabezado.
+   * Tope de páginas y de caracteres en `collectRuleParagraphs`.
+   */
+  ruleParagraphs: RuleParagraph[]
 }

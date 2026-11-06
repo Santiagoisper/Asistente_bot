@@ -11,6 +11,7 @@ export type { PdfLimitCode } from './pdf-text'
 export { locateSchedule } from './locate'
 export { columnCenterCollisions, readGrid } from './grid'
 export type {
+  AttributeMark,
   BBox,
   HeaderSource,
   PageGeom,
@@ -20,6 +21,7 @@ export type {
   RawSchedule,
   RawTable,
   RuleLine,
+  RuleParagraph,
   ScheduleLocation,
   TextItem,
 } from './types'

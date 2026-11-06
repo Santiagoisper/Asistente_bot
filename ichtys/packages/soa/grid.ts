@@ -28,8 +28,8 @@
  * cuando no (F2 T1/T3 son "bordered=false": la fila de ventana es lo único
  * con caja). Las bandas por encima de la fila de ventana (o del encabezado
  * de fichas) son el encabezado repetido, no filas. Las filas de ATRIBUTO
- * ("Ayuno", "visit type"…) se entregan marcadas (`isAttributeCandidate`) pero
- * sus marcas no son celdas del cronograma — la clasificación fina es P3.
+ * ("Ayuno", "visit type"…) se entregan marcadas (`isAttributeCandidate`) y
+ * sus marcas van en `attributeMarks`, no en `cells` — la clasificación fina es P3.
  * Una fila que arranca sin etiqueta propia tras el corte de página lleva
  * `continuedFromPrevPage` (F3 p14 continúa la fila partida de p13).
  *
@@ -54,6 +54,7 @@ import {
 } from './header'
 import type { NumericHeader } from './header'
 import type {
+  AttributeMark,
   BBox,
   HeaderSource,
   PageGeom,
@@ -65,6 +66,7 @@ import type {
   ScheduleLocation,
   TextItem,
 } from './types'
+import { collectRuleParagraphs } from './rule-paragraphs'
 
 /** Fila de ventana (etiqueta de la banda). */
 const WINDOW_ROW_RE =
@@ -361,6 +363,7 @@ function readTable(
   const seenTokens = new Set<string>()
   const rows: RawRow[] = []
   const cells: RawCell[] = []
+  const attributeMarks: AttributeMark[] = []
   const notes: RawTable['notes'] = []
   let windowRow: { rowIndex: number; cells: RawCell[] } | null = null
   let lastRowIndex = -1
@@ -956,6 +959,16 @@ function readTable(
       }
       if (rowBands[rowIdx]!.isAttribute) {
         marksAttr++
+        const tableCol = tableColOfBand(effBands[colIdx]!)
+        const [cx0, cx1] = effBands[colIdx]!
+        const band = rowBands[rowIdx]!
+        attributeMarks.push({
+          rowIndex: rows.findIndex((row) => row.page === pageNumber && row.y0 === band.y0 && row.y1 === band.y1),
+          colIndex: columns[tableCol]?.index ?? tableCol,
+          page: pageNumber,
+          bbox: [cx0, band.y0, cx1, band.y1],
+          text: mark.str.trim(),
+        })
         continue
       }
 
@@ -1538,6 +1551,7 @@ function readTable(
     columns,
     rows,
     cells,
+    attributeMarks,
     windowRow,
     notes,
     checks,
@@ -1593,8 +1607,10 @@ export function columnCenterCollisions(columns: RawColumn[]): string | null {
 export function readGrid(pages: PageGeom[], location: ScheduleLocation): RawSchedule {
   const byPage = new Map(pages.map((p) => [p.page, p]))
   const lastDocPage = pages.length > 0 ? pages[pages.length - 1]!.page : 0
+  const tables = location.tables.map((table) => readTable(table, byPage, lastDocPage))
   return {
-    tables: location.tables.map((table) => readTable(table, byPage, lastDocPage)),
+    tables,
     location,
+    ruleParagraphs: collectRuleParagraphs(pages, location, tables),
   }
 }
