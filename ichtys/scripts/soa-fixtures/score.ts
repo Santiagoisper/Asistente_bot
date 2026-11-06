@@ -8,10 +8,11 @@
  * identifica la celda: una etiqueta puede ser una clave compartida o una por
  * tabla, y las dos convenciones puntúan igual. Las condiciones propias del
  * procedimiento sí se emparejan uno a uno, por alias o similitud ≥ 0,85.
- * Inconsistencias: (kind, tabla alineada por sus páginas), uno a uno.
- * El cruce entre las páginas del hallazgo solo ordena el par: en F3 el
- * gold anota la 13 y P3 la 20 y la 62, y no se cruzan. Una nota fuera de
- * toda grilla toma la tabla del prefijo `T1:`. La evidencia fina espera.
+ * Inconsistencias: (kind, tabla alineada), uno a uno. La tabla sale del
+ * tableKey o del prefijo `T#:`, alineado como las celdas. Sin código, es
+ * la tabla cuyas páginas contienen una página del hallazgo. Sin tabla
+ * deducible no hay acierto. Las páginas de los hallazgos no tienen que
+ * cruzarse: solo desempatan por cercanía. La evidencia fina espera.
  * `procedureWindows`: misma celda y mismo valor, y la celda cita una nota.
  * `scoreGrid` califica la geometría cruda sin modelo. Salida: solo contadores.
  * `--private` no imprime etiquetas ni texto.
@@ -595,23 +596,69 @@ function statedTable(item: InconsistencyRec): string {
 }
 
 /**
- * Tabla de la instancia. Primero la tabla cuyas páginas contienen una página
- * del hallazgo; si el hallazgo cae fuera de la grilla (una nota), la clave
- * declarada, ya alineada. La evidencia (filas, refs) no entra: gold y P3 no
- * comparten ese espacio.
+ * Tabla de la instancia. Primero el código (`tableKey` o prefijo `T#:`),
+ * ya alineado. Sin código, la tabla cuyas páginas contienen una página del
+ * hallazgo. Sin ninguna de las dos, queda vacía y no acierta. La evidencia
+ * (filas, refs) no entra: gold y P3 no comparten ese espacio.
  */
 function alignedInconsistencyTable(
   item: InconsistencyRec,
   pageOwner: Map<number, string>,
   tableMap: Map<string, string>,
 ): string {
+  const stated = statedTable(item)
+  if (stated) return tableMap.get(stated) ?? stated
   for (const page of item.pages ?? []) {
     const owner = pageOwner.get(page)
     if (owner) return owner
   }
-  const stated = statedTable(item)
-  if (!stated) return ''
-  return tableMap.get(stated) ?? stated
+  return ''
+}
+
+interface FindingInst {
+  kind: string
+  table: string
+  pages: Set<number>
+}
+
+function pageDistance(left: Set<number>, right: Set<number>): number {
+  if (left.size === 0 || right.size === 0) return Number.POSITIVE_INFINITY
+  let best = Number.POSITIVE_INFINITY
+  for (const page of left) {
+    for (const other of right) {
+      const gap = page > other ? page - other : other - page
+      if (gap < best) best = gap
+    }
+  }
+  return best
+}
+
+/** Pares 1 a 1 del mismo kind y la misma tabla, el más cercano primero. */
+export function pairInconsistencies(
+  gold: FindingInst[],
+  candidate: FindingInst[],
+): Array<{ gi: number; ci: number }> {
+  const ranked: Array<{ gi: number; ci: number; distance: number }> = []
+  gold.forEach((left, gi) => {
+    candidate.forEach((right, ci) => {
+      if (left.kind !== right.kind || left.table === '' || left.table !== right.table) return
+      ranked.push({ gi, ci, distance: pageDistance(left.pages, right.pages) })
+    })
+  })
+  ranked.sort((a, b) => {
+    if (a.distance !== b.distance) return a.distance < b.distance ? -1 : 1
+    return a.gi - b.gi || a.ci - b.ci
+  })
+  const usedG = new Set<number>()
+  const usedC = new Set<number>()
+  const pairs: Array<{ gi: number; ci: number }> = []
+  for (const pair of ranked) {
+    if (usedG.has(pair.gi) || usedC.has(pair.ci)) continue
+    usedG.add(pair.gi)
+    usedC.add(pair.ci)
+    pairs.push({ gi: pair.gi, ci: pair.ci })
+  }
+  return pairs
 }
 
 function pageOwnerOf(tables: TableRec[]): Map<number, string> {
@@ -855,31 +902,10 @@ export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreR
     table: alignedInconsistencyTable(item, candOwner, tableMap),
     pages: new Set(item.pages ?? []),
   }))
-  const sameFinding = (left: { kind: string; table: string }, right: { kind: string; table: string }): boolean => {
-    if (left.kind !== right.kind) return false
-    if (left.table === '' && right.table === '') return true
-    return left.table !== '' && left.table === right.table
-  }
-  const rankedFindings: Array<{ gi: number; ci: number; inter: number }> = []
-  goldInst.forEach((left, gi) => {
-    candInst.forEach((right, ci) => {
-      if (!sameFinding(left, right)) return
-      let inter = 0
-      for (const page of left.pages) if (right.pages.has(page)) inter += 1
-      rankedFindings.push({ gi, ci, inter })
-    })
-  })
-  rankedFindings.sort((a, b) => b.inter - a.inter || a.gi - b.gi || a.ci - b.ci)
-  const usedFindingG = new Set<number>()
-  const usedFindingC = new Set<number>()
-  for (const pair of rankedFindings) {
-    if (usedFindingG.has(pair.gi) || usedFindingC.has(pair.ci)) continue
-    usedFindingG.add(pair.gi)
-    usedFindingC.add(pair.ci)
-    inconsistencies.tp += 1
-  }
-  inconsistencies.fn += goldInst.length - usedFindingG.size
-  inconsistencies.fp += candInst.length - usedFindingC.size
+  const pairs = pairInconsistencies(goldInst, candInst)
+  inconsistencies.tp = pairs.length
+  inconsistencies.fn = goldInst.length - pairs.length
+  inconsistencies.fp = candInst.length - pairs.length
 
   const procedureWindows = emptyCounts()
   const windowBag = new Map<string, number>()
