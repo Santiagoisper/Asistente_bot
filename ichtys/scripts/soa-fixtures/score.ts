@@ -3,9 +3,13 @@
  *
  * Visitas: (tabla alineada, día canónico). Semana = valor × 7, tolerancia ±1.
  * Sin tiempo: printedId normalizado dentro de la tabla. El tipo no entra en
- * la identidad; se mide en `types`. Procedimientos: etiqueta normalizada,
- * alias del gold, o similitud ≥ 0,85. `scoreGrid` califica la geometría cruda
- * sin modelo. Salida: solo contadores. `--private` no imprime etiquetas ni texto.
+ * la identidad; se mide en `types`. Celdas: (tabla alineada, visita emparejada,
+ * etiqueta normalizada o alias del gold). La clave del procedimiento no
+ * identifica la celda: una etiqueta puede ser una clave compartida o una por
+ * tabla, y las dos convenciones puntúan igual. Las condiciones propias del
+ * procedimiento sí se emparejan uno a uno, por alias o similitud ≥ 0,85.
+ * `scoreGrid` califica la geometría cruda sin modelo. Salida: solo contadores.
+ * `--private` no imprime etiquetas ni texto.
  */
 import { readFileSync } from 'node:fs'
 // El runner de fixtures no resuelve paquetes del workspace. El CLI corre
@@ -523,6 +527,42 @@ function take(bag: Map<string, number>, key: string): boolean {
   return true
 }
 
+/** Etiqueta normalizada del gold, también alcanzable por alias. Una etiqueta real no la pisa un alias. */
+function canonicalLabelMap(
+  procedures: ProcedureRec[],
+  aliasList: Array<{ alias: string; procedureKey: string }>,
+): Map<string, string> {
+  const canon = new Map<string, string>()
+  const claim = (form: string, canonical: string) => {
+    const key = normalizeLabel(form)
+    if (!key || canon.has(key)) return
+    canon.set(key, canonical)
+  }
+  for (const procedure of procedures) {
+    const canonical = normalizeLabel(procedure.label)
+    if (canonical) claim(procedure.label, canonical)
+  }
+  for (const procedure of procedures) {
+    const canonical = normalizeLabel(procedure.label)
+    if (!canonical) continue
+    for (const alias of procedure.aliases ?? []) claim(alias, canonical)
+  }
+  const byKey = new Map(procedures.map((procedure) => [procedure.key, normalizeLabel(procedure.label)]))
+  for (const alias of aliasList) {
+    const canonical = byKey.get(alias.procedureKey)
+    if (canonical) claim(alias.alias, canonical)
+  }
+  return canon
+}
+
+function labelsByKey(procedures: ProcedureRec[]): Map<string, string> {
+  return new Map(procedures.map((procedure) => [procedure.key, normalizeLabel(procedure.label)]))
+}
+
+function cellSlot(tableKey: string, visitKey: string, label: string, mark: string): string {
+  return `${tableKey}\n${visitKey}\n${label}\n${mark}`
+}
+
 export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreReport {
   const aligned = withAlignedTables(candidate, alignTables(gold.tables ?? [], candidate.tables ?? [], {
     gold: visitRanges(gold.visits),
@@ -580,9 +620,20 @@ export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreR
   const procMatch = matchProcedures(gold.procedures ?? [], aligned.procedures ?? [], gold.procedureAliases ?? [])
   const goldVisitByKey = new Map(goldVisits.map((visit) => [visit.key, visit]))
   const visitGoldOfCand = new Map(visitMatch.pairs.map((pair) => [pair.candidate.key, pair.gold.key]))
-  const procGoldOfCand = new Map(procMatch.pairs.map((pair) => [pair.candidate.key, pair.gold.key]))
   const matchedGoldVisits = new Set(visitMatch.pairs.map((pair) => pair.gold.key))
-  const matchedGoldProcs = new Set(procMatch.pairs.map((pair) => pair.gold.key))
+  const canon = canonicalLabelMap(gold.procedures ?? [], gold.procedureAliases ?? [])
+  const goldProcLabel = labelsByKey(gold.procedures ?? [])
+  const candProcLabel = labelsByKey(aligned.procedures ?? [])
+  const resolvedLabel = (procedureKey: string, own: Map<string, string>): string => {
+    const raw = own.get(procedureKey) ?? ''
+    if (!raw) return ''
+    return canon.get(raw) ?? raw
+  }
+  const slotFor = (visit: VisitRec, procedureKey: string, mark: Mark, own: Map<string, string>): string => {
+    const label = resolvedLabel(procedureKey, own)
+    if (!label) return ''
+    return cellSlot(visit.tableKey ?? '', visit.key, label, mark)
+  }
 
   const cells = emptyCounts()
   const prnCells = emptyCounts()
@@ -599,56 +650,60 @@ export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreR
     if (visitType && cellsByVisitType[visitType]) cellsByVisitType[visitType]![field] += 1
   }
 
-  const goldBags = new Map<string, number>()
+  const goldBags = new Map<string, { mark: Mark; tableKey: string; visitType: string; left: number }>()
   for (const cell of gold.cells ?? []) {
     const visit = goldVisitByKey.get(cell.visitKey)
-    if (!visit || !matchedGoldVisits.has(visit.key) || !matchedGoldProcs.has(cell.procedureKey)) continue
-    const key = `${visit.key}|${cell.procedureKey}|${cell.mark}`
-    goldBags.set(key, (goldBags.get(key) ?? 0) + 1)
+    if (!visit || !matchedGoldVisits.has(visit.key)) continue
+    const key = slotFor(visit, cell.procedureKey, cell.mark, goldProcLabel)
+    if (!key) continue
+    const slot = goldBags.get(key) ?? { mark: cell.mark, tableKey: visit.tableKey ?? '', visitType: visit.type, left: 0 }
+    slot.left += 1
+    goldBags.set(key, slot)
   }
   for (const cell of aligned.cells ?? []) {
     const goldVisitKey = visitGoldOfCand.get(cell.visitKey)
-    const goldProcKey = procGoldOfCand.get(cell.procedureKey)
     const visit = goldVisitKey ? goldVisitByKey.get(goldVisitKey) : undefined
-    const key = goldVisitKey && goldProcKey ? `${goldVisitKey}|${goldProcKey}|${cell.mark}` : ''
-    if (visit && key && take(goldBags, key)) record(cell.mark, visit.tableKey ?? '', visit.type, 'tp')
-    else record(cell.mark, visit?.tableKey ?? '', visit?.type ?? '', 'fp')
+    const key = visit ? slotFor(visit, cell.procedureKey, cell.mark, candProcLabel) : ''
+    const slot = key ? goldBags.get(key) : undefined
+    if (slot && slot.left > 0) {
+      slot.left -= 1
+      if (slot.left === 0) goldBags.delete(key)
+      record(cell.mark, visit?.tableKey ?? '', visit?.type ?? '', 'tp')
+    } else record(cell.mark, visit?.tableKey ?? '', visit?.type ?? '', 'fp')
   }
-  for (const [key, left] of goldBags) {
-    const [visitKey, , mark] = key.split('|') as [string, string, Mark]
-    const visit = goldVisitByKey.get(visitKey)
-    for (let i = 0; i < left; i += 1) record(mark, visit?.tableKey ?? '', visit?.type ?? '', 'fn')
+  for (const slot of goldBags.values()) {
+    for (let i = 0; i < slot.left; i += 1) record(slot.mark, slot.tableKey, slot.visitType, 'fn')
   }
   for (const cell of gold.cells ?? []) {
     const visit = goldVisitByKey.get(cell.visitKey)
-    if (visit && matchedGoldVisits.has(visit.key) && matchedGoldProcs.has(cell.procedureKey)) continue
+    if (visit && matchedGoldVisits.has(visit.key) && resolvedLabel(cell.procedureKey, goldProcLabel)) continue
     record(cell.mark, visit?.tableKey ?? '', visit?.type ?? '', 'fn')
   }
 
   const notes = emptyCounts()
   const noteBag = new Map<string, number>()
-  const remember = (bag: Map<string, number>, cellVisit: string, cellProc: string, refs: string[] | undefined) => {
-    for (const ref of refs ?? []) {
-      const key = `${cellVisit}|${cellProc}|${ref.trim()}`
-      bag.set(key, (bag.get(key) ?? 0) + 1)
-    }
-  }
   for (const cell of gold.cells ?? []) {
-    if (!matchedGoldVisits.has(cell.visitKey) || !matchedGoldProcs.has(cell.procedureKey)) {
+    const visit = goldVisitByKey.get(cell.visitKey)
+    const slot = visit && matchedGoldVisits.has(visit.key) ? slotFor(visit, cell.procedureKey, cell.mark, goldProcLabel) : ''
+    if (!slot) {
       notes.fn += (cell.noteRefs ?? []).length
       continue
     }
-    remember(noteBag, cell.visitKey, cell.procedureKey, cell.noteRefs)
+    for (const ref of cell.noteRefs ?? []) {
+      const key = `${slot}\n${ref.trim()}`
+      noteBag.set(key, (noteBag.get(key) ?? 0) + 1)
+    }
   }
   for (const cell of aligned.cells ?? []) {
     const goldVisitKey = visitGoldOfCand.get(cell.visitKey)
-    const goldProcKey = procGoldOfCand.get(cell.procedureKey)
-    if (!goldVisitKey || !goldProcKey) {
+    const visit = goldVisitKey ? goldVisitByKey.get(goldVisitKey) : undefined
+    const slot = visit ? slotFor(visit, cell.procedureKey, cell.mark, candProcLabel) : ''
+    if (!slot) {
       notes.fp += (cell.noteRefs ?? []).length
       continue
     }
     for (const ref of cell.noteRefs ?? []) {
-      const key = `${goldVisitKey}|${goldProcKey}|${ref.trim()}`
+      const key = `${slot}\n${ref.trim()}`
       if (take(noteBag, key)) notes.tp += 1
       else notes.fp += 1
     }
@@ -660,20 +715,20 @@ export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreR
   const candByCell = new Map<string, CellRec[]>()
   for (const cell of aligned.cells ?? []) {
     const goldVisitKey = visitGoldOfCand.get(cell.visitKey)
-    const goldProcKey = procGoldOfCand.get(cell.procedureKey)
-    if (!goldVisitKey || !goldProcKey) {
+    const visit = goldVisitKey ? goldVisitByKey.get(goldVisitKey) : undefined
+    const key = visit ? slotFor(visit, cell.procedureKey, cell.mark, candProcLabel) : ''
+    if (!key) {
       foldConditions(conditions, [], cell.conditions)
       continue
     }
-    const key = `${goldVisitKey}|${goldProcKey}|${cell.mark}`
     const list = candByCell.get(key) ?? []
     list.push(cell)
     candByCell.set(key, list)
   }
   for (const cell of gold.cells ?? []) {
-    const aligned = matchedGoldVisits.has(cell.visitKey) && matchedGoldProcs.has(cell.procedureKey)
-    const key = `${cell.visitKey}|${cell.procedureKey}|${cell.mark}`
-    const pool = aligned ? candByCell.get(key) : undefined
+    const visit = goldVisitByKey.get(cell.visitKey)
+    const key = visit && matchedGoldVisits.has(visit.key) ? slotFor(visit, cell.procedureKey, cell.mark, goldProcLabel) : ''
+    const pool = key ? candByCell.get(key) : undefined
     const other = pool && pool.length > 0 ? pool.shift() : undefined
     foldConditions(conditions, cell.conditions, other?.conditions ?? [])
   }
