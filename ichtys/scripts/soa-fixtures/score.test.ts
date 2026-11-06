@@ -5,6 +5,7 @@ import {
   adaptLegacyVisits,
   alignTables,
   normalizeLabel,
+  pairInconsistencies,
   scoreSchedule,
   similarity,
   toPrivate,
@@ -50,8 +51,8 @@ function gold(): ScheduleDoc {
       { text: 'En ayunas de al menos 8 h', page: 1, conditions: [{ kind: 'fasting', expr: '>= 8 h' }] },
     ],
     inconsistencies: [
-      { kind: 'duplicated_row' },
-      { kind: 'reversed_operator' },
+      { kind: 'duplicated_row', pages: [2] },
+      { kind: 'reversed_operator', pages: [2] },
     ],
   }
 }
@@ -142,7 +143,8 @@ describe('calificador de cronogramas', () => {
     expect(report.notes.fn).toBeGreaterThan(0)
     expect(report.conditions.arm.fn).toBe(1)
     expect(report.conditions.fasting.fn).toBe(1)
-    expect(report.inconsistencies).toEqual({ tp: 1, fp: 1, fn: 1 })
+    expect(report.inconsistencies).toEqual({ tp: 0, fp: 2, fn: 2 })
+    expect(report.procedureWindows).toEqual({ tp: 0, fp: 0, fn: 0 })
     expect(report.failedTables.tp).toBe(1)
     expect(report.failedTables.fp).toBe(1)
     expect(report.costUsd).toBe(0.2)
@@ -242,6 +244,108 @@ describe('calificador de cronogramas', () => {
     expect(report.cells).toEqual({ tp: 0, fp: 1, fn: 1 })
   })
 
+  it('empareja inconsistencias por kind y tabla alineada, uno a uno', () => {
+    const source = gold()
+    source.tables = [
+      { key: 'T1', pages: [13, 20], outcome: 'complete', reasons: [] },
+      { key: 'T2', pages: [40, 62], outcome: 'complete', reasons: [] },
+    ]
+    source.inconsistencies = [
+      { kind: 'duplicated_row', description: 'Panel de laboratorio A está repetido.', pages: [13] },
+      { kind: 'duplicated_row', description: 'Otra fila repetida.', pages: [13] },
+    ]
+    const otherTable = clone(source)
+    otherTable.inconsistencies = [
+      { kind: 'duplicated_row', description: 'T2:R9/R10:label_repetido_misma_tira', pages: [40] },
+    ]
+    expect(scoreSchedule(source, otherTable).inconsistencies).toEqual({ tp: 0, fp: 1, fn: 2 })
+    const one = clone(source)
+    one.tables = [{ key: 'ZZ', pages: [13, 20], outcome: 'complete', reasons: [] }]
+    one.inconsistencies = [
+      { kind: 'duplicated_row', description: 'ZZ:R44/R139:label_repetido_misma_tira', pages: [20] },
+    ]
+    expect(scoreSchedule(source, one).inconsistencies).toEqual({ tp: 1, fp: 0, fn: 1 })
+  })
+
+  it('el mismo kind en otra tabla es fp y fn', () => {
+    const source = gold()
+    source.tables = [
+      { key: 'T1', pages: [13, 20], outcome: 'complete', reasons: [] },
+      { key: 'T2', pages: [40], outcome: 'complete', reasons: [] },
+    ]
+    source.inconsistencies = [
+      { kind: 'duplicated_row', description: 'Panel de laboratorio A está repetido.', pages: [13] },
+    ]
+    const byPage = clone(source)
+    byPage.inconsistencies = [
+      { kind: 'duplicated_row', description: 'Fila repetida en la otra grilla.', pages: [40] },
+    ]
+    expect(scoreSchedule(source, byPage).inconsistencies).toEqual({ tp: 0, fp: 1, fn: 1 })
+    const byCode = clone(source)
+    byCode.inconsistencies = [
+      { kind: 'duplicated_row', description: 'T2:R9/R10:label_repetido_misma_tira', pages: [13] },
+    ]
+    expect(scoreSchedule(source, byCode).inconsistencies).toEqual({ tp: 0, fp: 1, fn: 1 })
+  })
+
+  it('dos hallazgos del mismo kind en la misma tabla se emparejan por cercanía', () => {
+    const source = gold()
+    source.tables = [
+      { key: 'T1', pages: [10, 12, 28, 30], outcome: 'complete', reasons: [] },
+    ]
+    source.inconsistencies = [
+      { kind: 'duplicated_row', description: 'La de la página 10.', pages: [10] },
+      { kind: 'duplicated_row', description: 'La de la página 30.', pages: [30] },
+    ]
+    const candidate = clone(source)
+    candidate.inconsistencies = [
+      { kind: 'duplicated_row', description: 'T1:R1/R2:lejos', pages: [28] },
+      { kind: 'duplicated_row', description: 'T1:R3/R4:cerca', pages: [12] },
+    ]
+    expect(scoreSchedule(source, candidate).inconsistencies).toEqual({ tp: 2, fp: 0, fn: 0 })
+    expect(pairInconsistencies(
+      [
+        { kind: 'duplicated_row', table: 'T1', pages: new Set([10]) },
+        { kind: 'duplicated_row', table: 'T1', pages: new Set([30]) },
+      ],
+      [
+        { kind: 'duplicated_row', table: 'T1', pages: new Set([28]) },
+        { kind: 'duplicated_row', table: 'T1', pages: new Set([12]) },
+      ],
+    )).toEqual([{ gi: 0, ci: 1 }, { gi: 1, ci: 0 }])
+  })
+
+  it('la ventana propia solo es acierto en la celda que cita la nota', () => {
+    const source: ScheduleDoc = {
+      tables: [{ key: 'T1', pages: [2], outcome: 'complete', reasons: [] }],
+      visits: [
+        { key: 'A', tableKey: 'T1', printedId: 'V1', label: 'Visita 1', timing: timing(1, 'day'), window: null, type: 'standard', attributes: null },
+        { key: 'C', tableKey: 'T1', printedId: 'V8', label: 'Visita 8', timing: timing(8, 'day'), window: null, type: 'standard', attributes: null },
+      ],
+      procedures: [
+        { key: 'CONS', label: 'Consentimiento informado', conditions: [] },
+        { key: 'DOSIS', label: 'Entre 1 y 2 horas después de la dosis', conditions: [] },
+      ],
+      cells: [
+        { visitKey: 'A', procedureKey: 'CONS', mark: 'x', noteRefs: ['1'], conditions: [], procedureWindow: { before: 4, after: 2, unit: 'week' } },
+        { visitKey: 'C', procedureKey: 'DOSIS', mark: 'x', noteRefs: [], conditions: [], procedureWindow: null },
+      ],
+      notes: [{ ref: '1', tableKey: 'T1', text: 'Ventana propia' }],
+      inconsistencies: [],
+    }
+    const planted = clone(source)
+    planted.cells = [
+      { visitKey: 'A', procedureKey: 'CONS', mark: 'x', noteRefs: ['1'], conditions: [], procedureWindow: null },
+      { visitKey: 'C', procedureKey: 'DOSIS', mark: 'x', noteRefs: [], conditions: [], procedureWindow: { before: 4, after: 2, unit: 'week' } },
+    ]
+    expect(scoreSchedule(source, planted).procedureWindows).toEqual({ tp: 0, fp: 1, fn: 1 })
+    const sameCell = clone(source)
+    expect(scoreSchedule(source, sameCell).procedureWindows).toEqual({ tp: 1, fp: 0, fn: 0 })
+    const wrongValue = clone(source)
+    wrongValue.cells![0]!.procedureWindow = { before: 2, after: 2, unit: 'day' }
+    expect(scoreSchedule(source, wrongValue).procedureWindows).toEqual({ tp: 0, fp: 1, fn: 1 })
+  })
+
   it('en modo private no quedan etiquetas ni textos', () => {
     const report = toPrivate(scoreSchedule(gold(), gold()))
     const dumped = JSON.stringify(report)
@@ -255,7 +359,7 @@ describe('calificador de cronogramas', () => {
     const allowed = new Set([
       'visits', 'tp', 'fp', 'fn', 'printedIdsExact', 'printedIdsInexact', 'printedIdsInvented',
       'windows', 'types', 'attributes', 'cells', 'cellsByTable', 'cellsByVisitType', 'prnCells',
-      'notes', 'conditions', 'inconsistencies', 'failedTables', 'costUsd', 'latencyS',
+      'notes', 'conditions', 'inconsistencies', 'procedureWindows', 'failedTables', 'costUsd', 'latencyS',
     ])
     const walk = (value: unknown): void => {
       if (value === null || typeof value === 'number') return

@@ -8,6 +8,12 @@
  * identifica la celda: una etiqueta puede ser una clave compartida o una por
  * tabla, y las dos convenciones puntúan igual. Las condiciones propias del
  * procedimiento sí se emparejan uno a uno, por alias o similitud ≥ 0,85.
+ * Inconsistencias: (kind, tabla alineada), uno a uno. La tabla sale del
+ * tableKey o del prefijo `T#:`, alineado como las celdas. Sin código, es
+ * la tabla cuyas páginas contienen una página del hallazgo. Sin tabla
+ * deducible no hay acierto. Las páginas de los hallazgos no tienen que
+ * cruzarse: solo desempatan por cercanía. La evidencia fina espera.
+ * `procedureWindows`: misma celda y mismo valor, y la celda cita una nota.
  * `scoreGrid` califica la geometría cruda sin modelo. Salida: solo contadores.
  * `--private` no imprime etiquetas ni texto.
  */
@@ -82,12 +88,20 @@ export interface ProcedureRec {
   conditions?: Condition[]
 }
 
+export interface ProcedureWindowRec {
+  before: number
+  after: number
+  unit: string
+}
+
 export interface CellRec {
   visitKey: string
   procedureKey: string
   mark: Mark
   noteRefs?: string[]
   conditions?: Condition[]
+  /** Ventana propia de la celda. Null o ausente: no hay ventana. */
+  procedureWindow?: ProcedureWindowRec | null
   page?: number | null
   bbox?: BBox | null
 }
@@ -108,6 +122,13 @@ export interface RuleRec {
 
 export interface InconsistencyRec {
   kind: string
+  /** Tabla de la instancia. Si falta, se lee el prefijo `T12:` de `description`. */
+  tableKey?: string | null
+  /** Evidencia estable (códigos). Si falta, el resto del código o la descripción normalizada. */
+  evidence?: string | null
+  description?: string
+  pages?: number[]
+  status?: string
 }
 
 export interface ScheduleDoc {
@@ -189,6 +210,8 @@ export interface ScoreReport {
   notes: Counts
   conditions: Record<string, Counts>
   inconsistencies: Counts
+  /** Ventana propia de la celda que cita la nota. Una ventana sin cita no es acierto. */
+  procedureWindows: Counts
   failedTables: Counts
   costUsd: number | null
   latencyS: number | null
@@ -209,6 +232,7 @@ export interface PrivateScoreReport {
   notes: Counts
   conditions: Counts[]
   inconsistencies: Counts
+  procedureWindows: Counts
   failedTables: Counts
   costUsd: number | null
   latencyS: number | null
@@ -563,11 +587,102 @@ function cellSlot(tableKey: string, visitKey: string, label: string, mark: strin
   return `${tableKey}\n${visitKey}\n${label}\n${mark}`
 }
 
+/** Prefijo `T1:` de una descripción codificada. La prosa del gold no entra. */
+const CODED_TABLE = /^(T\d+):/
+
+function statedTable(item: InconsistencyRec): string {
+  if (item.tableKey?.trim()) return item.tableKey.trim()
+  return item.description?.trim().match(CODED_TABLE)?.[1] ?? ''
+}
+
+/**
+ * Tabla de la instancia. Primero el código (`tableKey` o prefijo `T#:`),
+ * ya alineado. Sin código, la tabla cuyas páginas contienen una página del
+ * hallazgo. Sin ninguna de las dos, queda vacía y no acierta. La evidencia
+ * (filas, refs) no entra: gold y P3 no comparten ese espacio.
+ */
+function alignedInconsistencyTable(
+  item: InconsistencyRec,
+  pageOwner: Map<number, string>,
+  tableMap: Map<string, string>,
+): string {
+  const stated = statedTable(item)
+  if (stated) return tableMap.get(stated) ?? stated
+  for (const page of item.pages ?? []) {
+    const owner = pageOwner.get(page)
+    if (owner) return owner
+  }
+  return ''
+}
+
+interface FindingInst {
+  kind: string
+  table: string
+  pages: Set<number>
+}
+
+function pageDistance(left: Set<number>, right: Set<number>): number {
+  if (left.size === 0 || right.size === 0) return Number.POSITIVE_INFINITY
+  let best = Number.POSITIVE_INFINITY
+  for (const page of left) {
+    for (const other of right) {
+      const gap = page > other ? page - other : other - page
+      if (gap < best) best = gap
+    }
+  }
+  return best
+}
+
+/** Pares 1 a 1 del mismo kind y la misma tabla, el más cercano primero. */
+export function pairInconsistencies(
+  gold: FindingInst[],
+  candidate: FindingInst[],
+): Array<{ gi: number; ci: number }> {
+  const ranked: Array<{ gi: number; ci: number; distance: number }> = []
+  gold.forEach((left, gi) => {
+    candidate.forEach((right, ci) => {
+      if (left.kind !== right.kind || left.table === '' || left.table !== right.table) return
+      ranked.push({ gi, ci, distance: pageDistance(left.pages, right.pages) })
+    })
+  })
+  ranked.sort((a, b) => {
+    if (a.distance !== b.distance) return a.distance < b.distance ? -1 : 1
+    return a.gi - b.gi || a.ci - b.ci
+  })
+  const usedG = new Set<number>()
+  const usedC = new Set<number>()
+  const pairs: Array<{ gi: number; ci: number }> = []
+  for (const pair of ranked) {
+    if (usedG.has(pair.gi) || usedC.has(pair.ci)) continue
+    usedG.add(pair.gi)
+    usedC.add(pair.ci)
+    pairs.push({ gi: pair.gi, ci: pair.ci })
+  }
+  return pairs
+}
+
+function pageOwnerOf(tables: TableRec[]): Map<number, string> {
+  const owner = new Map<number, string>()
+  for (const table of tables) {
+    for (const page of table.pages ?? []) if (!owner.has(page)) owner.set(page, table.key)
+  }
+  return owner
+}
+
+function citesNote(cell: CellRec): boolean {
+  return (cell.noteRefs ?? []).some((ref) => ref.trim().length > 0)
+}
+
+function windowIdentity(slot: string, window: ProcedureWindowRec): string {
+  return `${slot}\n${window.before}\n${window.after}\n${window.unit}`
+}
+
 export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreReport {
-  const aligned = withAlignedTables(candidate, alignTables(gold.tables ?? [], candidate.tables ?? [], {
+  const tableMap = alignTables(gold.tables ?? [], candidate.tables ?? [], {
     gold: visitRanges(gold.visits),
     candidate: visitRanges(candidate.visits),
-  }))
+  })
+  const aligned = withAlignedTables(candidate, tableMap)
   const goldVisits = gold.visits ?? []
   const candVisits = aligned.visits ?? []
   const visitMatch = matchVisits(goldVisits, candVisits)
@@ -774,13 +889,51 @@ export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreR
   rulesC.forEach((rule, index) => { if (!usedC.has(index)) foldConditions(conditions, [], rule.conditions) })
 
   const inconsistencies = emptyCounts()
-  const goldKinds = new Map<string, number>()
-  for (const item of gold.inconsistencies ?? []) goldKinds.set(item.kind, (goldKinds.get(item.kind) ?? 0) + 1)
-  for (const item of aligned.inconsistencies ?? []) {
-    if (take(goldKinds, item.kind)) inconsistencies.tp += 1
-    else inconsistencies.fp += 1
+  const goldOwner = pageOwnerOf(gold.tables ?? [])
+  const candOwner = pageOwnerOf(aligned.tables ?? [])
+  const identityMap = new Map<string, string>()
+  const goldInst = (gold.inconsistencies ?? []).map((item) => ({
+    kind: item.kind.trim(),
+    table: alignedInconsistencyTable(item, goldOwner, identityMap),
+    pages: new Set(item.pages ?? []),
+  }))
+  const candInst = (aligned.inconsistencies ?? []).map((item) => ({
+    kind: item.kind.trim(),
+    table: alignedInconsistencyTable(item, candOwner, tableMap),
+    pages: new Set(item.pages ?? []),
+  }))
+  const pairs = pairInconsistencies(goldInst, candInst)
+  inconsistencies.tp = pairs.length
+  inconsistencies.fn = goldInst.length - pairs.length
+  inconsistencies.fp = candInst.length - pairs.length
+
+  const procedureWindows = emptyCounts()
+  const windowBag = new Map<string, number>()
+  for (const cell of gold.cells ?? []) {
+    if (!cell.procedureWindow) continue
+    const visit = goldVisitByKey.get(cell.visitKey)
+    const slot = visit && matchedGoldVisits.has(visit.key) ? slotFor(visit, cell.procedureKey, cell.mark, goldProcLabel) : ''
+    if (!slot || !citesNote(cell)) continue
+    const key = windowIdentity(slot, cell.procedureWindow)
+    windowBag.set(key, (windowBag.get(key) ?? 0) + 1)
   }
-  for (const left of goldKinds.values()) inconsistencies.fn += left
+  for (const cell of aligned.cells ?? []) {
+    if (!cell.procedureWindow) continue
+    const goldVisitKey = visitGoldOfCand.get(cell.visitKey)
+    const visit = goldVisitKey ? goldVisitByKey.get(goldVisitKey) : undefined
+    const slot = visit && citesNote(cell) ? slotFor(visit, cell.procedureKey, cell.mark, candProcLabel) : ''
+    const key = slot ? windowIdentity(slot, cell.procedureWindow) : ''
+    if (key && take(windowBag, key)) procedureWindows.tp += 1
+    else procedureWindows.fp += 1
+  }
+  for (const left of windowBag.values()) procedureWindows.fn += left
+  for (const cell of gold.cells ?? []) {
+    if (!cell.procedureWindow) continue
+    const visit = goldVisitByKey.get(cell.visitKey)
+    const slot = visit && matchedGoldVisits.has(visit.key) ? slotFor(visit, cell.procedureKey, cell.mark, goldProcLabel) : ''
+    if (slot && citesNote(cell)) continue
+    procedureWindows.fn += 1
+  }
 
   const failedTables = emptyCounts()
   const matchedByTable = new Map<string, number>()
@@ -803,7 +956,7 @@ export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreR
 
   return {
     visits, printedIds, windows, types, attributes, cells, cellsByTable, cellsByVisitType,
-    prnCells, notes, conditions, inconsistencies, failedTables,
+    prnCells, notes, conditions, inconsistencies, procedureWindows, failedTables,
     costUsd: aligned.meta?.costUsd ?? null,
     latencyS: aligned.meta?.latencyS ?? null,
   }
@@ -825,6 +978,7 @@ export function toPrivate(report: ScoreReport): PrivateScoreReport {
     notes: report.notes,
     conditions: CONDITION_KINDS.map((kind) => report.conditions[kind] ?? emptyCounts()),
     inconsistencies: report.inconsistencies,
+    procedureWindows: report.procedureWindows,
     failedTables: report.failedTables,
     costUsd: report.costUsd,
     latencyS: report.latencyS,

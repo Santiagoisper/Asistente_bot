@@ -52,6 +52,24 @@ describe('gold contra sí mismo', () => {
     })
   }
 
+  it('F3 empareja las dos inconsistencias que P3 emite y deja el seguimiento como fn', () => {
+    const gold = JSON.parse(readFileSync(resolve(FIXTURES, 'F3.gold.json'), 'utf8')) as ScheduleDoc
+    const candidate = clone(gold)
+    // Páginas medidas en la salida de P3 (f7342c2): la duplicada cae en la
+    // página 20 de T1 y el límite distinto en la página 62 de la nota. El
+    // gold anota las dos en la página 13. No se cruzan; sí comparten tabla.
+    candidate.inconsistencies = [
+      { kind: 'duplicated_row', description: 'T1:R44/R139:label_repetido_misma_tira', pages: [20] },
+      { kind: 'prose_vs_table_limit', description: 'T1:N2:limites_distintos', pages: [62] },
+    ]
+    expect(scoreSchedule(gold, candidate).inconsistencies).toEqual({ tp: 2, fp: 0, fn: 1 })
+  })
+
+  it('F3 no cuenta como acierto la ventana plantada en la celda que no cita la nota', () => {
+    const gold = JSON.parse(readFileSync(resolve(FIXTURES, 'F3.gold.json'), 'utf8')) as ScheduleDoc
+    expect(scoreSchedule(clone(gold), clone(gold)).procedureWindows).toEqual({ tp: 0, fp: 1, fn: 1 })
+  })
+
   it('F8 con las claves del candidato invertidas da el mismo puntaje', () => {
     const gold = JSON.parse(readFileSync(resolve(FIXTURES, 'F8.gold.json'), 'utf8')) as ScheduleDoc
     const straight = scoreSchedule(clone(gold), clone(gold))
