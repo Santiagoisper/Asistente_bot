@@ -52,6 +52,11 @@ describe('gold contra sí mismo', () => {
     })
   }
 
+  it('F3 no cuenta como acierto la ventana plantada en la celda que no cita la nota', () => {
+    const gold = JSON.parse(readFileSync(resolve(FIXTURES, 'F3.gold.json'), 'utf8')) as ScheduleDoc
+    expect(scoreSchedule(clone(gold), clone(gold)).procedureWindows).toEqual({ tp: 0, fp: 1, fn: 1 })
+  })
+
   it('F8 con las claves del candidato invertidas da el mismo puntaje', () => {
     const gold = JSON.parse(readFileSync(resolve(FIXTURES, 'F8.gold.json'), 'utf8')) as ScheduleDoc
     const straight = scoreSchedule(clone(gold), clone(gold))

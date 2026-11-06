@@ -143,6 +143,7 @@ describe('calificador de cronogramas', () => {
     expect(report.conditions.arm.fn).toBe(1)
     expect(report.conditions.fasting.fn).toBe(1)
     expect(report.inconsistencies).toEqual({ tp: 1, fp: 1, fn: 1 })
+    expect(report.procedureWindows).toEqual({ tp: 0, fp: 0, fn: 0 })
     expect(report.failedTables.tp).toBe(1)
     expect(report.failedTables.fp).toBe(1)
     expect(report.costUsd).toBe(0.2)
@@ -242,6 +243,54 @@ describe('calificador de cronogramas', () => {
     expect(report.cells).toEqual({ tp: 0, fp: 1, fn: 1 })
   })
 
+  it('empareja inconsistencias por tabla y evidencia, no solo por kind', () => {
+    const source = gold()
+    source.inconsistencies = [
+      { kind: 'duplicated_row', tableKey: 'T1', evidence: 'R2/R4:label_repetido_misma_tira', pages: [13] },
+    ]
+    const other = clone(source)
+    other.inconsistencies = [
+      { kind: 'duplicated_row', description: 'T2:R9/R10:label_repetido_misma_tira', pages: [40] },
+    ]
+    expect(scoreSchedule(source, other).inconsistencies).toEqual({ tp: 0, fp: 1, fn: 1 })
+    const same = clone(source)
+    same.inconsistencies = [
+      { kind: 'duplicated_row', description: 'T1:R2/R4:label_repetido_misma_tira', pages: [13] },
+    ]
+    expect(scoreSchedule(source, same).inconsistencies).toEqual({ tp: 1, fp: 0, fn: 0 })
+  })
+
+  it('la ventana propia solo es acierto en la celda que cita la nota', () => {
+    const source: ScheduleDoc = {
+      tables: [{ key: 'T1', pages: [2], outcome: 'complete', reasons: [] }],
+      visits: [
+        { key: 'A', tableKey: 'T1', printedId: 'V1', label: 'Visita 1', timing: timing(1, 'day'), window: null, type: 'standard', attributes: null },
+        { key: 'C', tableKey: 'T1', printedId: 'V8', label: 'Visita 8', timing: timing(8, 'day'), window: null, type: 'standard', attributes: null },
+      ],
+      procedures: [
+        { key: 'CONS', label: 'Consentimiento informado', conditions: [] },
+        { key: 'DOSIS', label: 'Entre 1 y 2 horas después de la dosis', conditions: [] },
+      ],
+      cells: [
+        { visitKey: 'A', procedureKey: 'CONS', mark: 'x', noteRefs: ['1'], conditions: [], procedureWindow: { before: 4, after: 2, unit: 'week' } },
+        { visitKey: 'C', procedureKey: 'DOSIS', mark: 'x', noteRefs: [], conditions: [], procedureWindow: null },
+      ],
+      notes: [{ ref: '1', tableKey: 'T1', text: 'Ventana propia' }],
+      inconsistencies: [],
+    }
+    const planted = clone(source)
+    planted.cells = [
+      { visitKey: 'A', procedureKey: 'CONS', mark: 'x', noteRefs: ['1'], conditions: [], procedureWindow: null },
+      { visitKey: 'C', procedureKey: 'DOSIS', mark: 'x', noteRefs: [], conditions: [], procedureWindow: { before: 4, after: 2, unit: 'week' } },
+    ]
+    expect(scoreSchedule(source, planted).procedureWindows).toEqual({ tp: 0, fp: 1, fn: 1 })
+    const sameCell = clone(source)
+    expect(scoreSchedule(source, sameCell).procedureWindows).toEqual({ tp: 1, fp: 0, fn: 0 })
+    const wrongValue = clone(source)
+    wrongValue.cells![0]!.procedureWindow = { before: 2, after: 2, unit: 'day' }
+    expect(scoreSchedule(source, wrongValue).procedureWindows).toEqual({ tp: 0, fp: 1, fn: 1 })
+  })
+
   it('en modo private no quedan etiquetas ni textos', () => {
     const report = toPrivate(scoreSchedule(gold(), gold()))
     const dumped = JSON.stringify(report)
@@ -255,7 +304,7 @@ describe('calificador de cronogramas', () => {
     const allowed = new Set([
       'visits', 'tp', 'fp', 'fn', 'printedIdsExact', 'printedIdsInexact', 'printedIdsInvented',
       'windows', 'types', 'attributes', 'cells', 'cellsByTable', 'cellsByVisitType', 'prnCells',
-      'notes', 'conditions', 'inconsistencies', 'failedTables', 'costUsd', 'latencyS',
+      'notes', 'conditions', 'inconsistencies', 'procedureWindows', 'failedTables', 'costUsd', 'latencyS',
     ])
     const walk = (value: unknown): void => {
       if (value === null || typeof value === 'number') return

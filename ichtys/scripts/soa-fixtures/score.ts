@@ -8,6 +8,8 @@
  * identifica la celda: una etiqueta puede ser una clave compartida o una por
  * tabla, y las dos convenciones puntúan igual. Las condiciones propias del
  * procedimiento sí se emparejan uno a uno, por alias o similitud ≥ 0,85.
+ * Inconsistencias: (kind, tabla, evidencia, páginas), no el kind solo.
+ * `procedureWindows`: misma celda y mismo valor, y la celda cita una nota.
  * `scoreGrid` califica la geometría cruda sin modelo. Salida: solo contadores.
  * `--private` no imprime etiquetas ni texto.
  */
@@ -82,12 +84,20 @@ export interface ProcedureRec {
   conditions?: Condition[]
 }
 
+export interface ProcedureWindowRec {
+  before: number
+  after: number
+  unit: string
+}
+
 export interface CellRec {
   visitKey: string
   procedureKey: string
   mark: Mark
   noteRefs?: string[]
   conditions?: Condition[]
+  /** Ventana propia de la celda. Null o ausente: no hay ventana. */
+  procedureWindow?: ProcedureWindowRec | null
   page?: number | null
   bbox?: BBox | null
 }
@@ -108,6 +118,13 @@ export interface RuleRec {
 
 export interface InconsistencyRec {
   kind: string
+  /** Tabla de la instancia. Si falta, se lee el prefijo `T12:` de `description`. */
+  tableKey?: string | null
+  /** Evidencia estable (códigos). Si falta, el resto del código o la descripción normalizada. */
+  evidence?: string | null
+  description?: string
+  pages?: number[]
+  status?: string
 }
 
 export interface ScheduleDoc {
@@ -189,6 +206,8 @@ export interface ScoreReport {
   notes: Counts
   conditions: Record<string, Counts>
   inconsistencies: Counts
+  /** Ventana propia de la celda que cita la nota. Una ventana sin cita no es acierto. */
+  procedureWindows: Counts
   failedTables: Counts
   costUsd: number | null
   latencyS: number | null
@@ -209,6 +228,7 @@ export interface PrivateScoreReport {
   notes: Counts
   conditions: Counts[]
   inconsistencies: Counts
+  procedureWindows: Counts
   failedTables: Counts
   costUsd: number | null
   latencyS: number | null
@@ -563,6 +583,29 @@ function cellSlot(tableKey: string, visitKey: string, label: string, mark: strin
   return `${tableKey}\n${visitKey}\n${label}\n${mark}`
 }
 
+/** `T1:R2/R4:motivo` → tabla T1 y evidencia `R2/R4:motivo`. La prosa no entra en este patrón. */
+const CODED_INSTANCE = /^(T\d+):(.+)$/
+
+/**
+ * Instancia de T11: kind + tabla + evidencia + páginas. El kind solo no
+ * alcanza: otra tabla o otra evidencia del mismo kind es otro hallazgo.
+ */
+function inconsistencyInstance(item: InconsistencyRec): string {
+  const coded = item.description?.trim().match(CODED_INSTANCE)
+  const table = (item.tableKey ?? coded?.[1] ?? '').trim()
+  const evidence = (item.evidence ?? (coded ? coded[2] : normalizeLabel(item.description ?? ''))).trim()
+  const pages = [...(item.pages ?? [])].sort((a, b) => a - b).join(',')
+  return `${item.kind.trim()}\n${table}\n${evidence}\n${pages}`
+}
+
+function citesNote(cell: CellRec): boolean {
+  return (cell.noteRefs ?? []).some((ref) => ref.trim().length > 0)
+}
+
+function windowIdentity(slot: string, window: ProcedureWindowRec): string {
+  return `${slot}\n${window.before}\n${window.after}\n${window.unit}`
+}
+
 export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreReport {
   const aligned = withAlignedTables(candidate, alignTables(gold.tables ?? [], candidate.tables ?? [], {
     gold: visitRanges(gold.visits),
@@ -774,13 +817,44 @@ export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreR
   rulesC.forEach((rule, index) => { if (!usedC.has(index)) foldConditions(conditions, [], rule.conditions) })
 
   const inconsistencies = emptyCounts()
-  const goldKinds = new Map<string, number>()
-  for (const item of gold.inconsistencies ?? []) goldKinds.set(item.kind, (goldKinds.get(item.kind) ?? 0) + 1)
+  const goldInstances = new Map<string, number>()
+  for (const item of gold.inconsistencies ?? []) {
+    const key = inconsistencyInstance(item)
+    goldInstances.set(key, (goldInstances.get(key) ?? 0) + 1)
+  }
   for (const item of aligned.inconsistencies ?? []) {
-    if (take(goldKinds, item.kind)) inconsistencies.tp += 1
+    if (take(goldInstances, inconsistencyInstance(item))) inconsistencies.tp += 1
     else inconsistencies.fp += 1
   }
-  for (const left of goldKinds.values()) inconsistencies.fn += left
+  for (const left of goldInstances.values()) inconsistencies.fn += left
+
+  const procedureWindows = emptyCounts()
+  const windowBag = new Map<string, number>()
+  for (const cell of gold.cells ?? []) {
+    if (!cell.procedureWindow) continue
+    const visit = goldVisitByKey.get(cell.visitKey)
+    const slot = visit && matchedGoldVisits.has(visit.key) ? slotFor(visit, cell.procedureKey, cell.mark, goldProcLabel) : ''
+    if (!slot || !citesNote(cell)) continue
+    const key = windowIdentity(slot, cell.procedureWindow)
+    windowBag.set(key, (windowBag.get(key) ?? 0) + 1)
+  }
+  for (const cell of aligned.cells ?? []) {
+    if (!cell.procedureWindow) continue
+    const goldVisitKey = visitGoldOfCand.get(cell.visitKey)
+    const visit = goldVisitKey ? goldVisitByKey.get(goldVisitKey) : undefined
+    const slot = visit && citesNote(cell) ? slotFor(visit, cell.procedureKey, cell.mark, candProcLabel) : ''
+    const key = slot ? windowIdentity(slot, cell.procedureWindow) : ''
+    if (key && take(windowBag, key)) procedureWindows.tp += 1
+    else procedureWindows.fp += 1
+  }
+  for (const left of windowBag.values()) procedureWindows.fn += left
+  for (const cell of gold.cells ?? []) {
+    if (!cell.procedureWindow) continue
+    const visit = goldVisitByKey.get(cell.visitKey)
+    const slot = visit && matchedGoldVisits.has(visit.key) ? slotFor(visit, cell.procedureKey, cell.mark, goldProcLabel) : ''
+    if (slot && citesNote(cell)) continue
+    procedureWindows.fn += 1
+  }
 
   const failedTables = emptyCounts()
   const matchedByTable = new Map<string, number>()
@@ -803,7 +877,7 @@ export function scoreSchedule(gold: ScheduleDoc, candidate: ScheduleDoc): ScoreR
 
   return {
     visits, printedIds, windows, types, attributes, cells, cellsByTable, cellsByVisitType,
-    prnCells, notes, conditions, inconsistencies, failedTables,
+    prnCells, notes, conditions, inconsistencies, procedureWindows, failedTables,
     costUsd: aligned.meta?.costUsd ?? null,
     latencyS: aligned.meta?.latencyS ?? null,
   }
@@ -825,6 +899,7 @@ export function toPrivate(report: ScoreReport): PrivateScoreReport {
     notes: report.notes,
     conditions: CONDITION_KINDS.map((kind) => report.conditions[kind] ?? emptyCounts()),
     inconsistencies: report.inconsistencies,
+    procedureWindows: report.procedureWindows,
     failedTables: report.failedTables,
     costUsd: report.costUsd,
     latencyS: report.latencyS,
