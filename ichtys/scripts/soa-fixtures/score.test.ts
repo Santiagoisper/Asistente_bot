@@ -166,6 +166,82 @@ describe('calificador de cronogramas', () => {
     expect(similarity('Panel de laboratorio A', 'Panel de laboratorio B')).toBeGreaterThanOrEqual(0.85)
   })
 
+  it('empareja la celda por tabla, visita y etiqueta aunque la clave del procedimiento cambie', () => {
+    const shared: ScheduleDoc = {
+      tables: [
+        { key: 'T1', pages: [2], outcome: 'complete', reasons: [] },
+        { key: 'T2', pages: [3], outcome: 'complete', reasons: [] },
+      ],
+      visits: [
+        { key: 'A', tableKey: 'T1', printedId: 'V1', timing: timing(1, 'day'), window: null, type: 'standard' },
+        { key: 'C', tableKey: 'T2', printedId: 'V2', timing: timing(8, 'day'), window: null, type: 'standard' },
+      ],
+      procedures: [
+        { key: 'P', label: 'Signos vitales', aliases: ['vitales'], conditions: [] },
+      ],
+      cells: [
+        { visitKey: 'A', procedureKey: 'P', mark: 'x', noteRefs: ['1'], conditions: [{ kind: 'arm', expr: 'brazo A' }] },
+        { visitKey: 'C', procedureKey: 'P', mark: 'x', noteRefs: [], conditions: [] },
+      ],
+      notes: [{ ref: '1', tableKey: 'T1', text: 'nota', conditions: [] }],
+    }
+    const split = clone(shared)
+    split.procedures = [
+      { key: 'P-T1', label: 'Signos vitales', conditions: [] },
+      { key: 'P-T2', label: 'vitales', conditions: [] },
+    ]
+    split.cells = [
+      { visitKey: 'A', procedureKey: 'P-T1', mark: 'x', noteRefs: ['1'], conditions: [{ kind: 'arm', expr: 'brazo A' }] },
+      { visitKey: 'C', procedureKey: 'P-T2', mark: 'x', noteRefs: [], conditions: [] },
+    ]
+    const splitAgainstShared = scoreSchedule(shared, split)
+    expect(splitAgainstShared.cells).toEqual({ tp: 2, fp: 0, fn: 0 })
+    expect(splitAgainstShared.notes).toEqual({ tp: 1, fp: 0, fn: 0 })
+    expect(splitAgainstShared.conditions.arm).toEqual({ tp: 1, fp: 0, fn: 0 })
+
+    const perTable = clone(shared)
+    perTable.procedures = [
+      { key: 'P-T1', label: 'Signos vitales', conditions: [] },
+      { key: 'P-T2', label: 'Signos vitales', conditions: [] },
+    ]
+    perTable.cells = [
+      { visitKey: 'A', procedureKey: 'P-T1', mark: 'x', noteRefs: ['1'], conditions: [{ kind: 'arm', expr: 'brazo A' }] },
+      { visitKey: 'C', procedureKey: 'P-T2', mark: 'x', noteRefs: [], conditions: [] },
+    ]
+    const sharedAgainstSplit = scoreSchedule(perTable, shared)
+    expect(sharedAgainstSplit.cells).toEqual({ tp: 2, fp: 0, fn: 0 })
+    expect(sharedAgainstSplit.notes).toEqual({ tp: 1, fp: 0, fn: 0 })
+
+    const wrong = clone(split)
+    wrong.procedures = [
+      { key: 'P-T1', label: 'Signos vitales', conditions: [] },
+      { key: 'P-T2', label: 'Talla', conditions: [] },
+    ]
+    const missed = scoreSchedule(shared, wrong)
+    expect(missed.cells).toEqual({ tp: 1, fp: 1, fn: 1 })
+  })
+
+  it('no cruza paneles hermanos solo por similitud', () => {
+    const source = gold()
+    source.procedures = [
+      { key: 'PA', label: 'Panel de laboratorio A', kind: 'procedure', conditions: [] },
+      { key: 'PB', label: 'Panel de laboratorio B', kind: 'procedure', conditions: [] },
+    ]
+    source.cells = [
+      { visitKey: 'A', procedureKey: 'PA', mark: 'x', noteRefs: [], conditions: [] },
+    ]
+    const candidate = clone(source)
+    candidate.procedures = [
+      { key: 'PX', label: 'Panel de laboratorio B', kind: 'procedure', conditions: [] },
+    ]
+    candidate.cells = [
+      { visitKey: 'A', procedureKey: 'PX', mark: 'x', noteRefs: [], conditions: [] },
+    ]
+    expect(similarity('Panel de laboratorio A', 'Panel de laboratorio B')).toBeGreaterThanOrEqual(0.85)
+    const report = scoreSchedule(source, candidate)
+    expect(report.cells).toEqual({ tp: 0, fp: 1, fn: 1 })
+  })
+
   it('en modo private no quedan etiquetas ni textos', () => {
     const report = toPrivate(scoreSchedule(gold(), gold()))
     const dumped = JSON.stringify(report)
