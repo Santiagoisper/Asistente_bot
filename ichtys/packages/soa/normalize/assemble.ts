@@ -391,11 +391,23 @@ async function assembleTable(
     const notesOut = await llm.parseNotes({ notes: notesInput })
     const noteByRef = new Map(table.notes.map((n) => [n.ref, n]))
     const responded = new Set<string>()
+    // §0.3/T10: un ref impreso DUPLICADO hace ambigua toda respuesta por ref
+    // — el modelo no dice a cuál nota aplicó y el Map dejaría la respuesta
+    // pegada al texto de la otra (medido: la inyección heredaba la
+    // interpretación de la nota legítima). Fail-closed: ref duplicado →
+    // ninguna de las notas se interpreta, ambas viajan advertidas.
+    const dupRefs = new Set(
+      table.notes.map((n) => n.ref).filter((r, i, all) => all.indexOf(r) !== i),
+    )
     notesOut.notes.forEach((out, i) => {
       const src = noteByRef.get(out.ref)
       if (!src) {
         // §0.3: nota con ref inexistente → descartada con advertencia.
         warnings.push(`${table.key}:N${i}:ref_inexistente`)
+        return
+      }
+      if (dupRefs.has(out.ref)) {
+        warnings.push(`${table.key}:N${i}:ref_duplicado`)
         return
       }
       responded.add(out.ref)
@@ -435,8 +447,13 @@ async function assembleTable(
       // Nota del documento que el modelo no interpretó (p. ej. texto con
       // inyección, T10): viaja SIN conditions — el texto es del documento,
       // la interpretación no se inventa — y el descarte queda advertido.
-      warnings.push(`${table.key}:N${i}:nota_sin_respuesta`)
-      const src = noteByRef.get(n.ref)!
+      // Con ref duplicado el aviso es la ambigüedad misma (T10 medido).
+      warnings.push(
+        `${table.key}:N${i}:${dupRefs.has(n.ref) ? 'ref_duplicado' : 'nota_sin_respuesta'}`,
+      )
+      // Por ÍNDICE: notesInput se mapea 1:1 de table.notes, y con refs
+      // duplicados el Map devolvería el texto de la otra nota del ref.
+      const src = table.notes[i]!
       notes.push({ ref: n.ref, tableKey: table.key, text: src.text, page: src.page, conditions: [] })
     })
     calls += 1
