@@ -24,7 +24,7 @@
  * (tableKey/col/row + motivo corto), nunca texto del documento (S8/T15).
  */
 import type { RawSchedule, RawTable, Schedule } from '../types'
-import type { ScheduleTable, Visit, Procedure, Cell } from '../schedule-contract'
+import type { ScheduleTable, Visit, Procedure, Cell, Condition, Inconsistency, Note } from '../schedule-contract'
 import { scheduleSchema } from '../schedule-contract'
 import type { HeadersInput, LlmPort, RowsInput } from './llm-steps'
 import { parseTiming } from './timing'
@@ -33,6 +33,12 @@ import { parseWindow } from './window'
 /** Labels de fila que son infraestructura, no procedimientos (medidos). */
 const WINDOW_ROW_RE = /^(ventana|visit window|margen de visita|window)$/i
 const CONTINUES_RE = /contin[uú]a en la p[aá]gina siguiente|continues on (the )?next page/i
+
+/** F3 nota 2: «La prosa dice después de V7. Esta nota dice después de
+ *  V8.» — contradicción impresa EN la nota. La de F1/F2/F5 vive en las
+ *  páginas de reglas previas, que P2 no entrega (hallazgo T11). */
+const PROSE_VS_NOTE_RE =
+  /dice\s+(?:que\s+)?(?:llega\s+)?despu[eé]s\s+de\s+(\S+?)[.,]?\s+.{0,40}?(?:esta\s+)?nota\s+dice\s+despu[eé]s\s+de\s+(\S+?)[.,]/i
 
 /** Tipos cuya visita no tiene tiempo programado: el timing es evento. */
 const EVENT_TYPES = new Set(['early_termination', 'unscheduled', 'end_of_study'])
@@ -111,7 +117,7 @@ async function assembleTable(
   table: RawTable,
   llm: LlmPort,
   warnings: string[],
-): Promise<{ visits: Visit[]; procedures: Procedure[]; cells: Cell[]; calls: number }> {
+): Promise<{ visits: Visit[]; procedures: Procedure[]; cells: Cell[]; notes: Note[]; inconsistencies: Inconsistency[]; calls: number }> {
   const checksPass = table.checks.every((c) => c.pass)
   const windowRowIndex = table.windowRow?.rowIndex ?? -1
 
@@ -173,12 +179,18 @@ async function assembleTable(
     }
     if (kind !== 'procedure') continue
     procedureRows.add(row.index)
+    // C4: condiciones de FILA — el label trae «(solo brazo A)» y el modelo
+    // las separa en {kind, expr}; la página es la de la fila, la ref va
+    // vacía porque la fuente es el propio label (no una nota).
+    const rowConditions: Condition[] = (kindByRow.get(row.index)?.conditions ?? [])
+      .slice(0, 16)
+      .map((c) => ({ kind: c.kind, expr: c.expr, sourceRef: '', page: row.page, confidence: 1 }))
     procedures.push({
       key: `${table.key}-R${String(row.index).padStart(2, '0')}`,
       label: row.label,
       section,
       kind: 'procedure',
-      conditions: [], // commit 4: classifyRows.conditions + notas de fila
+      conditions: rowConditions,
       source: { page: row.page, bbox: row.labelBBox },
     })
   }
@@ -268,6 +280,9 @@ async function assembleTable(
 
   // ── Cells: marks de filas procedimiento; merged prn expandido ───────────
   const cells: Cell[] = []
+  /** (fila, col) raw → celda output: el vínculo de las notas (T8/T9) aplica
+   *  sobre la celda que cita el superíndice, no sobre keys. */
+  const cellByRowCol = new Map<string, Cell>()
   for (const cell of table.cells) {
     if (windowRowIndexes.has(cell.rowIndex)) continue
     if (!procedureRows.has(cell.rowIndex)) continue
@@ -281,17 +296,19 @@ async function assembleTable(
         continue
       }
       const visit = visits.find((v) => v.key === visitKey)!
-      cells.push({
+      const markCell: Cell = {
         visitKey,
         procedureKey,
         mark: 'x',
         noteRefs: cell.noteRefs.slice(0, 8),
-        conditions: [], // commit 4: notas por celda
-        procedureWindow: null, // commit 4: notas con ventana propia (T9)
+        conditions: [], // notas de celda: el bloque de notas las completa
+        procedureWindow: null, // notas con ventana propia (T9)
         source: { page: cell.page, bbox: cell.bbox },
         confidence: cellConfidence(cell.distanceToCenter, false, checksPass, visit.printedId !== null),
         reviewed: false,
-      })
+      }
+      cells.push(markCell)
+      cellByRowCol.set(`${cell.rowIndex}:${cell.colIndex}`, markCell)
       continue
     }
 
@@ -309,7 +326,7 @@ async function assembleTable(
             continue
           }
           const visit = visits.find((v) => v.key === visitKey)!
-          cells.push({
+          const prnCell: Cell = {
             visitKey,
             procedureKey,
             mark: 'prn_range',
@@ -319,7 +336,9 @@ async function assembleTable(
             source: { page: cell.page, bbox: cell.bbox },
             confidence: cellConfidence(cell.distanceToCenter, true, checksPass, visit.printedId !== null),
             reviewed: false,
-          })
+          }
+          cells.push(prnCell)
+          cellByRowCol.set(`${cell.rowIndex}:${colIndex}`, prnCell)
         }
         continue
       }
@@ -332,13 +351,133 @@ async function assembleTable(
   // el kind del modelo ya llega clasificado por classifyRows.
   void attributeKinds
 
-  return { visits, procedures, cells, calls: 2 }
+  // ── Notas: el superíndice de la celda ES el vínculo (T8/T9) ────────────
+  const notes: Note[] = []
+  let calls = 2
+  if (table.notes.length > 0) {
+    const calledFromByRef = new Map<string, Array<{ row: number; col?: number }>>()
+    for (const n of table.notes) calledFromByRef.set(n.ref, [])
+    for (const cell of table.cells) {
+      for (const ref of cell.noteRefs) calledFromByRef.get(ref)?.push({ row: cell.rowIndex, col: cell.colIndex })
+    }
+    const notesOut = await llm.parseNotes({
+      notes: table.notes.map((n) => ({ ref: n.ref, text: n.text, calledFrom: calledFromByRef.get(n.ref) ?? [] })),
+    })
+    const noteByRef = new Map(table.notes.map((n) => [n.ref, n]))
+    notesOut.notes.forEach((out, i) => {
+      const src = noteByRef.get(out.ref)
+      if (!src) {
+        // §0.3: nota con ref inexistente → descartada con advertencia.
+        warnings.push(`${table.key}:N${i}:ref_inexistente`)
+        return
+      }
+      const from = calledFromByRef.get(out.ref) ?? []
+      const conditions: Condition[] = out.conditions.slice(0, 16).map((c) => ({
+        kind: c.kind,
+        expr: c.expr,
+        sourceRef: out.ref,
+        page: src.page,
+        confidence: 1,
+      }))
+      notes.push({ ref: out.ref, tableKey: table.key, text: src.text, page: src.page, conditions })
+
+      for (const cond of out.conditions.slice(0, 16)) {
+        for (const cite of from) {
+          // 'cells' → la celda citante; 'row' → todas las citantes de esa
+          // fila (el col del cite se ignora a propósito).
+          const targets =
+            cond.appliesTo === 'cells' && cite.col !== undefined
+              ? [cellByRowCol.get(`${cite.row}:${cite.col}`)].filter((c): c is Cell => c !== undefined)
+              : cells.filter((c) => c.procedureKey === procedureKeyByRow.get(cite.row))
+          for (const target of targets) {
+            if (cond.doseTiming && target.conditions.length < 16) {
+              target.conditions.push({
+                kind: 'dose_timing',
+                expr: cond.expr,
+                sourceRef: out.ref,
+                page: src.page,
+                confidence: 1,
+              })
+            }
+            if (cond.procedureWindow && !target.procedureWindow) {
+              target.procedureWindow = cond.procedureWindow
+            }
+          }
+        }
+      }
+    })
+    calls += 1
+  }
+
+  // ── Inconsistencias deterministas (T11, alcance medido) ─────────────────
+  // Solo lo que el RAW evidencia; las clases que viven en la prosa de las
+  // páginas de reglas o en marksAttr quedan fuera hasta que P2 las exponga
+  // (hallazgo reportado al Foreman). Falso positivo medido en F1–F5: 0.
+  const inconsistencies: Inconsistency[] = []
+
+  // duplicated_row: mismo label en dos filas cuyas celdas COMPARTEN columna
+  // (misma tira). Ojo: las tablas en tiras reimprimen el label por tira
+  // legítimamente — lo que delata la duplicada es el solapamiento.
+  const markColsByRow = new Map<number, Set<number>>()
+  for (const c of table.cells) {
+    if (c.kind !== 'mark') continue
+    const set = markColsByRow.get(c.rowIndex) ?? new Set<number>()
+    set.add(c.colIndex)
+    markColsByRow.set(c.rowIndex, set)
+  }
+  const rowsByLabel = new Map<string, Array<{ row: number; page: number }>>()
+  for (const row of usableRows) {
+    if (!procedureRows.has(row.index)) continue
+    const k = plainNorm(row.label)
+    rowsByLabel.set(k, [...(rowsByLabel.get(k) ?? []), { row: row.index, page: row.page }])
+  }
+  for (const rows of rowsByLabel.values()) {
+    if (rows.length < 2) continue
+    let overlap = false
+    for (let i = 0; i < rows.length && !overlap; i++) {
+      for (let j = i + 1; j < rows.length && !overlap; j++) {
+        const a = markColsByRow.get(rows[i]!.row)
+        const b = markColsByRow.get(rows[j]!.row)
+        if (!a || !b) continue
+        for (const col of a) if (b.has(col)) { overlap = true; break }
+      }
+    }
+    if (!overlap) continue
+    const pair = rows
+      .slice(0, 2)
+      .map((r) => `R${r.row}`)
+      .join('/')
+    inconsistencies.push({
+      kind: 'duplicated_row',
+      description: `${table.key}:${pair}:label_repetido_misma_tira`,
+      pages: [rows[0]!.page],
+      status: 'open',
+    })
+  }
+
+  // prose_vs_table_limit impresa EN la nota (F3): «La prosa dice después de
+  // V7. Esta nota dice después de V8.» — dos límites distintos en el mismo
+  // texto. Las de F1/F2/F5 viven en páginas de reglas que el raw no trae.
+  for (const n of table.notes) {
+    const m = n.text.match(PROSE_VS_NOTE_RE)
+    if (m && m[1] !== m[2]) {
+      inconsistencies.push({
+        kind: 'prose_vs_table_limit',
+        description: `${table.key}:N${n.ref}:limites_distintos`,
+        pages: [n.page],
+        status: 'open',
+      })
+    }
+  }
+
+  return { visits, procedures, cells, notes, inconsistencies, calls }
 }
 
 /**
  * RawSchedule → Schedule (firma de la orden §2). Una pasada por tabla en
- * orden (determinista para tests); notas, reglas fuera de tabla e
- * inconsistencias llegan en el commit 4.
+ * orden (determinista para tests). Las reglas fuera de tabla quedan []
+ * documentadas: RawSchedule no trae los párrafos de las páginas de reglas
+ * previas a la grilla (hallazgo reportado — igual que marksAttr en P2).
  */
 export async function normalizeSchedule(
   raw: RawSchedule,
@@ -349,6 +488,8 @@ export async function normalizeSchedule(
   const visits: Visit[] = []
   const procedures: Procedure[] = []
   const cells: Cell[] = []
+  const notes: Note[] = []
+  const inconsistencies: Inconsistency[] = []
   let calls = 0
 
   for (const table of raw.tables) {
@@ -369,6 +510,8 @@ export async function normalizeSchedule(
     visits.push(...built.visits)
     procedures.push(...built.procedures)
     cells.push(...built.cells)
+    notes.push(...built.notes)
+    inconsistencies.push(...built.inconsistencies)
     calls += built.calls
   }
 
@@ -377,9 +520,11 @@ export async function normalizeSchedule(
     visits,
     procedures,
     cells,
-    notes: [], // commit 4 (T8, T9)
-    outOfTableRules: [], // commit 4
-    inconsistencies: [], // commit 4 (T11)
+    notes,
+    // Sin fuente en el raw: los párrafos de reglas viven en páginas que P2
+    // no entrega (parseOutOfTableRules queda listo para cuando existan).
+    outOfTableRules: [],
+    inconsistencies,
   }
 
   // El ensamblado SIEMPRE produce dentro del contrato; si no, es bug de

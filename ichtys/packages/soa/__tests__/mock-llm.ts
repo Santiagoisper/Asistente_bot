@@ -8,7 +8,15 @@
  * El escenario "ruidoso" (errores inyectados) llega en el commit 5 como
  * mutaciones sobre estas respuestas, en fixtures/mock-llm/*.json.
  */
-import type { LlmPort, HeadersInput, HeadersOutput, RowsInput, RowsOutput } from '../normalize/llm-steps'
+import type {
+  LlmPort,
+  HeadersInput,
+  HeadersOutput,
+  NotesInput,
+  NotesOutput,
+  RowsInput,
+  RowsOutput,
+} from '../normalize/llm-steps'
 import { parseTiming } from '../normalize/timing'
 import { parseWindow } from '../normalize/window'
 import type { GoldSchedule } from '../normalize/score'
@@ -100,6 +108,16 @@ export function buildPerfectLlm(deps: PerfectLlmDeps): LlmPort {
         const p = gold.procedures.find((gp) => gp.key === c.procedureKey)
         if (p) goldLabelsHere.add(plain(p.label))
       }
+      // C4: condiciones de fila del gold, por label («(solo brazo A)»).
+      type RowCond = RowsOutput['rows'][number]['conditions'][number]
+      const rowConditionsByLabel = new Map<string, RowsOutput['rows'][number]['conditions']>()
+      for (const p of gold.procedures) {
+        if (!p.conditions?.length) continue
+        rowConditionsByLabel.set(
+          plain(p.label),
+          p.conditions.map((c): RowCond => ({ kind: c.kind as RowCond['kind'], expr: c.expr })),
+        )
+      }
 
       return {
         rows: input.rows.map((r) => {
@@ -119,16 +137,49 @@ export function buildPerfectLlm(deps: PerfectLlmDeps): LlmPort {
             // fixtures no traen secciones; la mecánica vive en el ensamblado).
             kind = 'procedure'
           }
-          return { row: r.row, kind, conditions: [] }
+          return { row: r.row, kind, conditions: rowConditionsByLabel.get(label) ?? [] }
         }),
       }
     },
 
-    async parseNotes(): Promise<never> {
-      throw new Error('parseNotes llega en el commit 4')
+    async parseNotes(input: NotesInput): Promise<NotesOutput> {
+      type NoteCond = NotesOutput['notes'][number]['conditions'][number]
+      return {
+        notes: input.notes.flatMap((n) => {
+          // La nota del gold con mismo ref (los refs del generador coinciden
+          // raw↔gold); sin gold no hay respuesta «perfecta» posible.
+          const gn = (gold.notes ?? []).find((g) => g.ref === n.ref && plain(g.text) === plain(n.text))
+          if (!gn) return []
+          const conds = (gn.conditions ?? []).map<NoteCond>((c) => {
+            const out: NoteCond = {
+              kind: c.kind as NoteCond['kind'],
+              expr: c.expr,
+              appliesTo: n.calledFrom.length > 0 ? ('cells' as const) : ('row' as const),
+            }
+            // El momento respecto de la dosis es determinista del TEXTO.
+            if (c.kind === 'dose_timing') {
+              const t = plain(n.text)
+              if (/antes de la dosis/.test(t)) return { ...out, doseTiming: 'pre' as const }
+              if (/entre \d+ y \d+ horas despues/.test(t)) return { ...out, doseTiming: 'between' as const }
+              if (/despues de la dosis/.test(t)) return { ...out, doseTiming: 'post' as const }
+            }
+            return out
+          })
+          // Ventana propia: el texto de la nota ES una ventana (parser §0.2).
+          const pwMatch = n.text.match(/ventana propia:\s*(.+?)\s*[.!]*\s*$/i)
+          const pwText = pwMatch?.[1]
+          const pw = pwText !== undefined ? parseWindow(pwText) : null
+          if (pw && conds.length > 0) {
+            conds[0] = { ...conds[0]!, procedureWindow: { before: pw.before ?? 0, after: pw.after ?? 0, unit: pw.unit === 'week' ? 'week' : 'day' } }
+          }
+          return [{ ref: n.ref, conditions: conds }]
+        }),
+      }
     },
     async parseOutOfTableRules(): Promise<never> {
-      throw new Error('parseOutOfTableRules llega en el commit 4')
+      // Sin fuente: RawSchedule no trae los párrafos de reglas previas a la
+      // grilla (hallazgo reportado). Si alguien llama acá, es un bug.
+      throw new Error('parseOutOfTableRules: sin fuente — P2 no expone los párrafos de reglas')
     },
   }
 }

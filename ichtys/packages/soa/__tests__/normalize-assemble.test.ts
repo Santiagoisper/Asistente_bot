@@ -54,7 +54,7 @@ async function load(fixture: string): Promise<Loaded> {
 }
 
 function scoreOf(entry: Loaded): ScoreScheduleResult {
-  return scoreSchedule(entry.gold, entry.schedule)
+  return scoreSchedule(entry.gold, entry.schedule, entry.raw)
 }
 
 describe('commit 3 — T3: visitas (scoreSchedule con C1–C3)', () => {
@@ -176,17 +176,109 @@ describe('commit 3 — T12: outcome de P2 propagado', () => {
   })
 })
 
+describe('commit 4 — T8: notas vinculadas y condiciones', () => {
+  it('notas emparejadas ≥ 95 % sobre las que el documento imprime (F1–F5)', async () => {
+    for (const fx of FIXTURES) {
+      const s = scoreOf(await load(fx))
+      expect(s.notes.matched / Math.max(s.notes.reachable, 1), `${fx} notas`).toBeGreaterThanOrEqual(0.95)
+      expect(s.notes.outTotal, `${fx} outTotal`).toBe(s.notes.reachable)
+    }
+    // Hallazgo del generador (reportado): F2 declara 16 notas en el gold
+    // que nunca imprime en el PDF — el techo del fixture es 10/26.
+    const f2 = scoreOf(await load('F2'))
+    expect(f2.notes.reachable).toBe(10)
+    expect(f2.notes.goldTotal).toBe(26)
+  })
+
+  it('condiciones por tipo ≥ 90 % exactas (notas + fila C4)', async () => {
+    for (const fx of FIXTURES) {
+      const s = scoreOf(await load(fx))
+      const kinds = Object.entries(s.conditionsByKind)
+      expect(kinds.length, `${fx} con condiciones`).toBeGreaterThan(0)
+      for (const [kind, m] of kinds) {
+        expect(m.exact, `${fx} ${kind} exact=${m.exact} gold=${m.gold}`).toBeGreaterThanOrEqual(Math.ceil(m.gold * 0.9))
+      }
+    }
+  })
+
+  it('C4: las conditions de fila del gold llegan a sus procedures', async () => {
+    // F3 trae 4 (solo subgrupo X / solo brazo A / solo brazo B).
+    const f3 = await load('F3')
+    const conProcedimiento = f3.schedule.procedures.filter(
+      (p: { conditions: unknown[]; label: string }) => p.conditions.length > 0 && /solo (subgrupo|brazo)/i.test(p.label),
+    )
+    expect(conProcedimiento.length).toBeGreaterThanOrEqual(4)
+    for (const p of conProcedimiento) {
+      for (const c of p.conditions) {
+        expect(c.kind === 'population' || c.kind === 'arm', JSON.stringify(c)).toBe(true)
+      }
+    }
+  })
+})
+
+describe('commit 4 — T9: ventana propia y momento de la dosis', () => {
+  it('F3: la ventana propia −4/+2 semanas llega a la celda citante del superíndice', async () => {
+    // El gold la planta en E55/C08, pero el PDF cita la nota «Ventana
+    // propia» desde OTRA celda (medido: R2/C0, Consentimiento tira 1) — se
+    // mide PRESENCIA con el valor exacto, no la celda.
+    const f3 = await load('F3')
+    const s = scoreOf(f3)
+    expect(s.procedureWindows.expected).toBe(1)
+    expect(s.procedureWindows.present).toBe(1)
+    const conPw = f3.schedule.cells.filter((c: { procedureWindow: unknown }) => c.procedureWindow !== null)
+    expect(conPw.length).toBeGreaterThanOrEqual(1)
+    expect(conPw[0]!.procedureWindow).toEqual({ before: 4, after: 2, unit: 'week' })
+  })
+
+  it('el momento respecto de la dosis queda como condition dose_timing (Antes/Entre 1 y 2 h)', async () => {
+    const f3 = await load('F3')
+    const s = scoreOf(f3)
+    // El gold trae 7 conditions dose_timing en notas (Antes/Entre 1 y 2 h).
+    expect(s.conditionsByKind['dose_timing']?.gold).toBe(7)
+    expect(s.conditionsByKind['dose_timing']?.exact).toBeGreaterThanOrEqual(Math.ceil(7 * 0.9))
+    // Y la celda citante de «Entre 1 y 2 horas…» lleva su condition.
+    const condt = f3.schedule.cells.filter((c: { conditions: Array<{ kind: string }> }) =>
+      c.conditions.some((cd) => cd.kind === 'dose_timing'),
+    )
+    expect(condt.length).toBeGreaterThan(0)
+  })
+})
+
+describe('commit 4 — T11: inconsistencias deterministas (alcance medido)', () => {
+  it('F3 detecta duplicated_row y prose_vs_table_limit impresa en la nota', async () => {
+    const f3 = await load('F3')
+    const kinds = new Set(f3.schedule.inconsistencies.map((i: { kind: string }) => i.kind))
+    expect(kinds.has('duplicated_row')).toBe(true)
+    expect(kinds.has('prose_vs_table_limit')).toBe(true)
+    // La descripción viaja con códigos, sin texto del documento.
+    for (const i of f3.schedule.inconsistencies) {
+      expect(i.description).toMatch(/^T\d+:(R\d+\/R\d+|N\d+):[a-z_]+$/)
+    }
+  })
+
+  it('cero inconsistencias inventadas: F1/F2/F4/F5 sin detectores disparados', async () => {
+    // El techo medido (reportado al Foreman): followup/hybrid/onsite no son
+    // detectables desde el raw actual (prosa y marksAttr no expuestos). Lo
+    // que NO puede pasar es acusar inconsistencias que no están.
+    for (const fx of ['F1', 'F2', 'F4', 'F5'] as const) {
+      const { schedule } = await load(fx)
+      expect(schedule.inconsistencies, `${fx} inconsistencias`).toHaveLength(0)
+    }
+  })
+})
+
 describe('commit 3 — contorno del ensamblado', () => {
-  it('usage.calls = 2 por tabla (headers + rows); notas/reglas en commit 4', async () => {
+  it('usage.calls = 2 por tabla + 1 por tabla con notas; reglas sin fuente', async () => {
     const f1 = await load('F1')
-    expect(f1.calls).toBe(f1.raw.tables.length * 2)
+    const tablasConNotas = f1.raw.tables.filter((t) => t.notes.length > 0).length
+    expect(f1.calls).toBe(f1.raw.tables.length * 2 + tablasConNotas)
   })
 
   it('warnings solo con códigos: sin texto de etiquetas ni encabezados (T15)', async () => {
     for (const fx of FIXTURES) {
       const { warnings } = await load(fx)
       for (const w of warnings) {
-        expect(w).toMatch(/^T\d+(:[CR]\d+)*:[a-z_]+$/)
+        expect(w).toMatch(/^T\d+(:[CRN]\d+)*:[a-z_]+$/)
       }
     }
   })
