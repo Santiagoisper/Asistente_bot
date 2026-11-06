@@ -13,10 +13,13 @@
  *   página siguiente» es paginación, no procedimiento.
  * - Filas `continuedFromPrevPage` comparten rowIndex con la original: una
  *   sola fila de procedimiento, celdas de ambas páginas.
- * - `merged` con «según necesidad»/«as needed» = corrida prn: se expande a
- *   prn_range por columna del span (la cadena vive centrada en la corrida;
- *   sus extremos no sobreviven al raw — la cobertura del gold queda entera,
- *   T7, y la confianza penaliza la combinada ×0,9, §3).
+ * - `merged` con «según necesidad»/«as needed» = corrida prn (K7/G29): el
+ *   PDF no dibuja la caja fusionada — solo las columnas bajo el TEXTO
+ *   (textBBox) toman prn_range, con la extensión como duda
+ *   (:prn_extension_incierta, confianza ×0,9). El ancho de la corrida NO es
+ *   recuperable del documento: T7 exige precisión 100 % con TECHO de recall
+ *   documentado (F2: 8/80), nunca expansión al span. Sin textBBox no hay
+ *   evidencia: 0 celdas + :prn_sin_evidencia (sin caída silenciosa).
  * - P2 DESCARTA las marcas de filas de atributo (grid.ts marksAttr): hasta
  *   que P2 las exponga, attributes queda null — ausencia, no invención.
  *
@@ -314,6 +317,7 @@ async function assembleTable(
         noteRefs: cell.noteRefs.slice(0, 8),
         conditions: [], // notas de celda: el bloque de notas las completa
         procedureWindow: null, // notas con ventana propia (T9)
+        doseTiming: null, // G27: lo toma la celda citante de la nota dose_timing
         source: { page: cell.page, bbox: cell.bbox },
         confidence: cellConfidence(cell.distanceToCenter, false, checksPass, visit.printedId !== null),
         reviewed: false,
@@ -333,7 +337,15 @@ async function assembleTable(
       // El recorte queda como duda: warning + confianza ×0,9.
       const norm = plainNorm(cell.text)
       if (norm === 'segun necesidad' || norm === 'as needed') {
-        const [tx0, , tx1] = cell.textBBox ?? cell.bbox
+        // G29 (condición del Architect): sin textBBox no hay evidencia del
+        // ancho real — ni el texto ni la caja de la fila lo marcan.
+        // Fail-closed: 0 prn_range + advertencia; NUNCA caída silenciosa a
+        // cell.bbox (inventaría columnas que el documento no marcó).
+        if (!cell.textBBox) {
+          warnings.push(`${table.key}:R${cell.rowIndex}:prn_sin_evidencia`)
+          continue
+        }
+        const [tx0, , tx1] = cell.textBBox
         let span = table.columns
           .filter((c) => c.xCenter >= tx0 && c.xCenter <= tx1)
           .map((c) => c.index)
@@ -345,7 +357,7 @@ async function assembleTable(
           )[0]
           span = nearest ? [nearest.index] : [cell.colIndex]
         }
-        warnings.push(`${table.key}:R${cell.rowIndex}:prn_expandida`)
+        warnings.push(`${table.key}:R${cell.rowIndex}:prn_extension_incierta`)
         for (const colIndex of span) {
           const visitKey = visitKeyByCol.get(colIndex)
           if (!visitKey) {
@@ -360,6 +372,7 @@ async function assembleTable(
             noteRefs: [],
             conditions: [],
             procedureWindow: null,
+            doseTiming: null,
             source: { page: cell.page, bbox: cell.bbox },
             confidence: cellConfidence(cell.distanceToCenter, true, checksPass, visit.printedId !== null),
             reviewed: false,
@@ -438,6 +451,12 @@ async function assembleTable(
           }
           if (cond.procedureWindow && !target.procedureWindow) {
             target.procedureWindow = cond.procedureWindow
+          }
+          // G27: el momento respecto de la dosis vive en la CELDA citante
+          // (dayOrder lo lee por celda) — la nota lo entrega, la celda lo
+          // retiene; toda celda sin cita de dose_timing queda en null.
+          if (cond.kind === 'dose_timing' && cond.doseTiming && target.doseTiming === null) {
+            target.doseTiming = cond.doseTiming
           }
         }
       }

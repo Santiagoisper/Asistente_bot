@@ -147,6 +147,10 @@ export const cellSchema = z.object({
   noteRefs: z.array(z.string().max(16)).max(8),
   conditions: z.array(conditionSchema).max(16),
   procedureWindow: procedureWindowSchema.nullable(),
+  // G27: el momento respecto de la dosis es dato de CELDA (dayOrder lo lee
+  // por celda). Solo la celda que cita la nota dose_timing lo toma de la
+  // condición; toda otra celda viaja con null.
+  doseTiming: z.enum(['pre', 'post', 'between', 'other']).nullable(),
   source: z.object({ page: Page, bbox: Bbox }),
   confidence: Confidence,
   reviewed: z.boolean(),
