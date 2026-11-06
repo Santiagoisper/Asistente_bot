@@ -29,4 +29,3 @@ export {
   NORMALIZER_SYSTEM_PROMPT,
 } from './prompts'
 export { normalizeSchedule, type NormalizeResult } from './assemble'
-export { scoreSchedule, type GoldSchedule, type ScoreScheduleResult, type Metric } from './score'

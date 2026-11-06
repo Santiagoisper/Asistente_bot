@@ -844,6 +844,10 @@ function readTable(
           spanCols: tableCols,
           noteRefs: [],
           distanceToCenter: 0,
+          // K7: el run dibujado es angosto y está CENTRADO en la corrida que
+          // infiere `bbox` (el PDF no dibuja la caja fusionada) — el texto es
+          // lo único que el documento marca de verdad.
+          textBBox: [group.x0, band.y0, group.x1, band.y1],
         })
       }
     }

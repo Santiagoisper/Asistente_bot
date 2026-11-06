@@ -19,7 +19,10 @@ import type {
 } from '../normalize/llm-steps'
 import { parseTiming } from '../normalize/timing'
 import { parseWindow } from '../normalize/window'
-import type { GoldSchedule } from '../normalize/score'
+// K8: el shape del gold es el del CALIFICADOR OFICIAL (scripts/soa-fixtures)
+// — las cifras de aceptación de esta suite salen solo de ahí. Los tipos
+// viven en ./official-score-shapes (replicados; ver ahí el porqué).
+import type { ScheduleDoc, TableRec } from './official-score-shapes'
 import type { RawSchedule, RawTable } from '../types'
 
 function plain(text: string): string {
@@ -32,11 +35,11 @@ function plain(text: string): string {
 }
 
 /** La tabla del gold con máximo solapamiento de páginas (C2). */
-function goldTableFor(rawTable: RawTable, gold: GoldSchedule): GoldSchedule['tables'][number] | null {
-  let best: GoldSchedule['tables'][number] | null = null
+function goldTableFor(rawTable: RawTable, gold: ScheduleDoc): TableRec | null {
+  let best: TableRec | null = null
   let bestOverlap = 0
-  for (const gt of gold.tables) {
-    const overlap = rawTable.pages.filter((p) => gt.pages.includes(p)).length
+  for (const gt of gold.tables ?? []) {
+    const overlap = rawTable.pages.filter((p) => (gt.pages ?? []).includes(p)).length
     if (overlap > bestOverlap) {
       bestOverlap = overlap
       best = gt
@@ -47,7 +50,7 @@ function goldTableFor(rawTable: RawTable, gold: GoldSchedule): GoldSchedule['tab
 
 export interface PerfectLlmDeps {
   raw: RawSchedule
-  gold: GoldSchedule
+  gold: ScheduleDoc
 }
 
 /** LlmPort perfecto: por tabla alineada, responde desde el gold. */
@@ -55,7 +58,7 @@ export function buildPerfectLlm(deps: PerfectLlmDeps): LlmPort {
   const { raw, gold } = deps
 
   const rawTableByKey = new Map(raw.tables.map((t) => [t.key, t]))
-  const goldTableByRawKey = new Map<string, GoldSchedule['tables'][number]>()
+  const goldTableByRawKey = new Map<string, TableRec>()
   for (const t of raw.tables) {
     const gt = goldTableFor(t, gold)
     if (gt) goldTableByRawKey.set(t.key, gt)
@@ -65,7 +68,7 @@ export function buildPerfectLlm(deps: PerfectLlmDeps): LlmPort {
     async classifyHeaders(input: HeadersInput): Promise<HeadersOutput> {
       const table = rawTableByKey.get(input.tableKey)
       const gt = goldTableByRawKey.get(input.tableKey)
-      const goldVisits = gt ? gold.visits.filter((v) => v.tableKey === gt.key) : []
+      const goldVisits = gt ? (gold.visits ?? []).filter((v) => v.tableKey === gt.key) : []
 
       return {
         headers: input.headers.map((h, i) => {
@@ -100,19 +103,24 @@ export function buildPerfectLlm(deps: PerfectLlmDeps): LlmPort {
     async classifyRows(input: RowsInput): Promise<RowsOutput> {
       const table = rawTableByKey.get(input.tableKey)
       const gt = goldTableByRawKey.get(input.tableKey)
-      // Labels de procedimientos del gold PRESENTES en esta tabla (vía celdas).
+      // Labels y KEYS de procedimientos del gold PRESENTES en esta tabla (vía
+      // celdas): la C4 del gold está atada al procedureKey, y el mismo label
+      // puede existir en dos tablas con condiciones distintas.
       const goldLabelsHere = new Set<string>()
-      for (const c of gold.cells) {
-        const v = gold.visits.find((gv) => gv.key === c.visitKey)
+      const goldProcKeysHere = new Set<string>()
+      for (const c of gold.cells ?? []) {
+        const v = (gold.visits ?? []).find((gv) => gv.key === c.visitKey)
         if (!v || v.tableKey !== gt?.key) continue
-        const p = gold.procedures.find((gp) => gp.key === c.procedureKey)
+        goldProcKeysHere.add(c.procedureKey)
+        const p = (gold.procedures ?? []).find((gp) => gp.key === c.procedureKey)
         if (p) goldLabelsHere.add(plain(p.label))
       }
-      // C4: condiciones de fila del gold, por label («(solo brazo A)»).
+      // C4: condiciones de fila del gold — SOLO de los procedures de ESTA
+      // tabla (mismo label en otra tabla no las arrastra).
       type RowCond = RowsOutput['rows'][number]['conditions'][number]
       const rowConditionsByLabel = new Map<string, RowsOutput['rows'][number]['conditions']>()
-      for (const p of gold.procedures) {
-        if (!p.conditions?.length) continue
+      for (const p of gold.procedures ?? []) {
+        if (!p.conditions?.length || !goldProcKeysHere.has(p.key)) continue
         rowConditionsByLabel.set(
           plain(p.label),
           p.conditions.map((c): RowCond => ({ kind: c.kind as RowCond['kind'], expr: c.expr })),
@@ -148,7 +156,7 @@ export function buildPerfectLlm(deps: PerfectLlmDeps): LlmPort {
         notes: input.notes.flatMap((n) => {
           // La nota del gold con mismo ref (los refs del generador coinciden
           // raw↔gold); sin gold no hay respuesta «perfecta» posible.
-          const gn = (gold.notes ?? []).find((g) => g.ref === n.ref && plain(g.text) === plain(n.text))
+          const gn = (gold.notes ?? []).find((g) => g.ref === n.ref && plain(g.text ?? '') === plain(n.text))
           if (!gn) return []
           const conds = (gn.conditions ?? []).map<NoteCond>((c) => {
             const out: NoteCond = {

@@ -111,6 +111,13 @@ export interface RawCell {
   spanCols: number[]
   noteRefs: string[]
   distanceToCenter: number
+  /**
+   * Bbox del TEXTO dibujado cuando difiere del de la celda (K7): en las
+   * corridas prn «según necesidad» el PDF centra un run angosto y no dibuja
+   * la caja fusionada — `bbox` es la corrida inferida por libertad de fila y
+   * este es lo único que el documento realmente marca. Solo en merged prn.
+   */
+  textBBox?: BBox
 }
 
 /** Tabla cruda con sus chequeos geométricos (§4). */

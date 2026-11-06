@@ -141,7 +141,13 @@ async function assembleTable(
     })),
   }
   const headersOut = await llm.classifyHeaders(headersInput)
-  const headerByCol = new Map(headersOut.headers.map((h) => [h.col, h]))
+  const colSet = new Set(table.columns.map((c) => c.index))
+  for (const h of headersOut.headers) {
+    // §0.3: respuesta con columna que no existe en la tabla → descartada
+    // con advertencia (nunca en silencio).
+    if (!colSet.has(h.col)) warnings.push(`${table.key}:C${h.col}:col_inexistente`)
+  }
+  const headerByCol = new Map(headersOut.headers.filter((h) => colSet.has(h.col)).map((h) => [h.col, h]))
 
   // ── classifyRows: filas útiles (sin ventana/paginación/continuadas) ─────
   const usableRows = table.rows.filter(
@@ -161,7 +167,12 @@ async function assembleTable(
     })),
   }
   const rowsOut = await llm.classifyRows(rowsInput)
-  const kindByRow = new Map(rowsOut.rows.map((r) => [r.row, r]))
+  const usableRowSet = new Set(usableRows.map((r) => r.index))
+  for (const r of rowsOut.rows) {
+    // §0.3: índice de fila inexistente → descartado con advertencia (T6).
+    if (!usableRowSet.has(r.row)) warnings.push(`${table.key}:R${r.row}:fila_inexistente`)
+  }
+  const kindByRow = new Map(rowsOut.rows.filter((r) => usableRowSet.has(r.row)).map((r) => [r.row, r]))
 
   // Filas de atributo: informan attributes, no son procedimientos (T5). P2
   // aún no expone sus marcas (marksAttr en grid.ts): el gancho queda listo.
@@ -313,12 +324,28 @@ async function assembleTable(
     }
 
     if (cell.kind === 'merged') {
-      // Corrida prn: «según necesidad»/«as needed» centrada en el run. Los
-      // extremos del run no sobreviven al raw (sin textos vecinos que lo
-      // corten): se expande a TODO el span, cubriendo la corrida entera.
+      // Corrida prn: «según necesidad»/«as needed» centrada en el run. El
+      // texto dibujado es angosto y está CENTRADO en la corrida; el PDF no
+      // dibuja la caja fusionada, así que el ancho del rango del gold NO es
+      // recuperable del documento. K7: valen solo las columnas bajo el TEXTO
+      // (textBBox) — expandir a la corrida completa inferida por libertad de
+      // fila inventa columnas que el documento no marcó (52 celdas en F2).
+      // El recorte queda como duda: warning + confianza ×0,9.
       const norm = plainNorm(cell.text)
       if (norm === 'segun necesidad' || norm === 'as needed') {
-        const span = cell.spanCols.length > 0 ? cell.spanCols : [cell.colIndex]
+        const [tx0, , tx1] = cell.textBBox ?? cell.bbox
+        let span = table.columns
+          .filter((c) => c.xCenter >= tx0 && c.xCenter <= tx1)
+          .map((c) => c.index)
+        if (span.length === 0) {
+          // Texto más angosto que una columna: la más cercana al centro.
+          const mid = (tx0 + tx1) / 2
+          const nearest = [...table.columns].sort(
+            (a, b) => Math.abs(a.xCenter - mid) - Math.abs(b.xCenter - mid),
+          )[0]
+          span = nearest ? [nearest.index] : [cell.colIndex]
+        }
+        warnings.push(`${table.key}:R${cell.rowIndex}:prn_expandida`)
         for (const colIndex of span) {
           const visitKey = visitKeyByCol.get(colIndex)
           if (!visitKey) {
@@ -360,10 +387,10 @@ async function assembleTable(
     for (const cell of table.cells) {
       for (const ref of cell.noteRefs) calledFromByRef.get(ref)?.push({ row: cell.rowIndex, col: cell.colIndex })
     }
-    const notesOut = await llm.parseNotes({
-      notes: table.notes.map((n) => ({ ref: n.ref, text: n.text, calledFrom: calledFromByRef.get(n.ref) ?? [] })),
-    })
+    const notesInput = table.notes.map((n) => ({ ref: n.ref, text: n.text, calledFrom: calledFromByRef.get(n.ref) ?? [] }))
+    const notesOut = await llm.parseNotes({ notes: notesInput })
     const noteByRef = new Map(table.notes.map((n) => [n.ref, n]))
+    const responded = new Set<string>()
     notesOut.notes.forEach((out, i) => {
       const src = noteByRef.get(out.ref)
       if (!src) {
@@ -371,6 +398,7 @@ async function assembleTable(
         warnings.push(`${table.key}:N${i}:ref_inexistente`)
         return
       }
+      responded.add(out.ref)
       const from = calledFromByRef.get(out.ref) ?? []
       const conditions: Condition[] = out.conditions.slice(0, 16).map((c) => ({
         kind: c.kind,
@@ -383,28 +411,33 @@ async function assembleTable(
 
       for (const cond of out.conditions.slice(0, 16)) {
         for (const cite of from) {
-          // 'cells' → la celda citante; 'row' → todas las citantes de esa
-          // fila (el col del cite se ignora a propósito).
-          const targets =
-            cond.appliesTo === 'cells' && cite.col !== undefined
-              ? [cellByRowCol.get(`${cite.row}:${cite.col}`)].filter((c): c is Cell => c !== undefined)
-              : cells.filter((c) => c.procedureKey === procedureKeyByRow.get(cite.row))
-          for (const target of targets) {
-            if (cond.doseTiming && target.conditions.length < 16) {
-              target.conditions.push({
-                kind: 'dose_timing',
-                expr: cond.expr,
-                sourceRef: out.ref,
-                page: src.page,
-                confidence: 1,
-              })
-            }
-            if (cond.procedureWindow && !target.procedureWindow) {
-              target.procedureWindow = cond.procedureWindow
-            }
+          // La ventana propia SÍ es campo de la CELDA citante (T9: el gold
+          // la planta en una celda). El resto de la interpretación de la
+          // nota —conditions, momento de la dosis— vive en la NOTA: la
+          // celda ya queda vinculada por noteRefs, y duplicar la
+          // interpretación en la celda es afirmar estructura que el
+          // documento no ubica ahí (mismo principio que K7).
+          if (cond.appliesTo !== 'cells' || cite.col === undefined) continue
+          const target = cellByRowCol.get(`${cite.row}:${cite.col}`)
+          if (!target) {
+            // §0.3: la cita apunta a una celda que no está en el output.
+            warnings.push(`${table.key}:R${cite.row}:C${cite.col}:celda_inexistente`)
+            continue
+          }
+          if (cond.procedureWindow && !target.procedureWindow) {
+            target.procedureWindow = cond.procedureWindow
           }
         }
       }
+    })
+    notesInput.forEach((n, i) => {
+      if (responded.has(n.ref)) return
+      // Nota del documento que el modelo no interpretó (p. ej. texto con
+      // inyección, T10): viaja SIN conditions — el texto es del documento,
+      // la interpretación no se inventa — y el descarte queda advertido.
+      warnings.push(`${table.key}:N${i}:nota_sin_respuesta`)
+      const src = noteByRef.get(n.ref)!
+      notes.push({ ref: n.ref, tableKey: table.key, text: src.text, page: src.page, conditions: [] })
     })
     calls += 1
   }
