@@ -349,6 +349,7 @@ describe('answerEngine — evidence integrity', () => {
     expect(result.evidences).toHaveLength(1)
     const evidence = result.evidences[0]!
     expect(evidence.chunkId).toBe('chunk-abc')
+    expect(evidence.citationIndex).toBe(1)
     expect(evidence.documentId).toBe('doc-xyz')
     expect(evidence.documentVersionId).toBe('ver-123')
     expect(evidence.pageStart).toBe(7)
@@ -371,7 +372,7 @@ describe('answerEngine — evidence integrity', () => {
     expect(evidence.pageEnd).toBe(chunk.pageEnd)
   })
 
-  it('deduplicates evidences when citationIndices contains repeated chunk references', async () => {
+  it('deduplicates repeated citation indices', async () => {
     const chunk = makeChunk({ similarityScore: 0.90 })
     mocks.generateObject.mockResolvedValueOnce(
       makeLLMResponse({ confidence: 'high', citationIndices: [1, 1, 1] })
@@ -380,6 +381,38 @@ describe('answerEngine — evidence integrity', () => {
     const result = await answerEngine(makeInput([chunk]))
 
     expect(result.evidences).toHaveLength(1)
+  })
+
+  it('preserves original indices for out-of-order and non-contiguous citations', async () => {
+    const chunks = Array.from({ length: 7 }, () => makeChunk({ similarityScore: 0.9 }))
+    mocks.generateObject.mockResolvedValueOnce(
+      makeLLMResponse({
+        answer: 'Primera fuente [7], segunda [3], inválida [99].',
+        citationIndices: [7, 3, 99],
+      }),
+    )
+
+    const result = await answerEngine(makeInput(chunks))
+
+    expect(result.answer).toBe('Primera fuente [7], segunda [3], inválida [99].')
+    expect(result.evidences.map((e) => [e.citationIndex, e.chunkId])).toEqual([
+      [7, chunks[6]!.chunkId],
+      [3, chunks[2]!.chunkId],
+    ])
+  })
+
+  it('keeps separate indices even when two context positions contain the same chunk', async () => {
+    const chunk = makeChunk({ similarityScore: 0.9 })
+    mocks.generateObject.mockResolvedValueOnce(
+      makeLLMResponse({
+        answer: 'Una fuente repetida [2] [1].',
+        citationIndices: [2, 1],
+      }),
+    )
+
+    const result = await answerEngine(makeInput([chunk, chunk]))
+
+    expect(result.evidences.map((e) => e.citationIndex)).toEqual([2, 1])
   })
 
   it('skips out-of-bounds citationIndices silently and uses valid ones', async () => {
@@ -854,6 +887,31 @@ describe('extractCitationIndicesFromAnswer', () => {
 // ---------------------------------------------------------------------------
 
 describe('answerEngineStream', () => {
+  it('conserva índices originales desordenados y descarta referencias inválidas', async () => {
+    async function* fakeStream() {
+      yield 'Primero [7], después [3] y [99].'
+    }
+    mocks.streamText.mockReturnValue({
+      textStream: fakeStream(),
+      text: Promise.resolve('Primero [7], después [3] y [99].'),
+    })
+    mocks.generateObject.mockResolvedValueOnce({
+      object: { confidence: 'high' },
+    })
+
+    const chunks = Array.from({ length: 7 }, (_, i) => makeChunk({ content: `Fuente ${i + 1}` }))
+    const events = []
+    for await (const event of answerEngineStream(makeInput(chunks))) events.push(event)
+
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      evidences: [
+        { citationIndex: 7, chunkId: chunks[6]!.chunkId },
+        { citationIndex: 3, chunkId: chunks[2]!.chunkId },
+      ],
+    })
+  })
+
   it('emite tokens del streamText antes del evento done', async () => {
     async function* fakeStream() {
       yield 'Plazo de '

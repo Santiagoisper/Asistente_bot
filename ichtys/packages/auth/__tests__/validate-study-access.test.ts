@@ -417,6 +417,7 @@ function createTenantFixture(): TenantFixture {
     citation: {
       id: citationId,
       messageId,
+      citationIndex: null,
       chunkId,
       organizationId: orgId,
       studyId,

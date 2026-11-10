@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { pageLabel, privatePdfDownloadHref } from './chat-api'
 import type { Evidence } from './types'
+import { citationEvidencePosition, hasVerifiableCitationIndices } from './citation-index'
 
 /** Renders [1][2] footnote superscripts inline in the answer text */
 export function renderAnswerWithFootnotes(
@@ -23,7 +24,8 @@ export function renderAnswerWithFootnotes(
   while ((match = pattern.exec(text)) !== null) {
     const raw = match[1] ?? ''
     const num = parseInt(raw, 10)
-    if (num >= 1 && num <= evidences.length) {
+    const evidencePosition = citationEvidencePosition(evidences, num)
+    if (evidencePosition !== null) {
       if (match.index > lastIndex) {
         parts.push(<span key={key++}>{text.slice(lastIndex, match.index)}</span>)
       }
@@ -32,10 +34,10 @@ export function renderAnswerWithFootnotes(
           key={key++}
           type="button"
           className="alphi-footnote"
-          onClick={() => onFootnoteClick(num - 1)}
+          onClick={() => onFootnoteClick(evidencePosition)}
           title={`Ver fuente ${num}`}
         >
-          {num}
+          {match[0]}
         </button>,
       )
       lastIndex = match.index + match[0].length
@@ -71,19 +73,17 @@ export function EvidenceCard({
       id={`evidence-${index - 1}`}
       className={[
         'rounded-xl border px-4 py-3 text-sm transition-all duration-200',
-        highlighted
-          ? 'border-alphi-teal/60 bg-alphi-teal/5 shadow-alphi-card'
-          : 'border-alphi-border bg-white',
+        highlighted ? 'border-alphi-teal/60 bg-alphi-teal/5 shadow-alphi-card' : 'border-alphi-border bg-white',
       ].join(' ')}
     >
       <div className="mb-1.5 flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-alphi-navy text-[10px] font-bold text-white">
-            {index}
-          </span>
-          <span className="truncate text-xs font-semibold text-alphi-navy">
-            {evidence.documentName ?? 'Documento'}
-          </span>
+          {evidence.citationIndex !== null && evidence.citationIndex !== undefined && (
+            <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-alphi-navy text-[10px] font-bold text-white">
+              {evidence.citationIndex}
+            </span>
+          )}
+          <span className="truncate text-xs font-semibold text-alphi-navy">{evidence.documentName ?? 'Documento'}</span>
         </div>
         {label && (
           <span className="shrink-0 rounded bg-alphi-slate px-1.5 py-0.5 font-mono text-[10px] text-alphi-muted">
@@ -92,9 +92,7 @@ export function EvidenceCard({
         )}
       </div>
 
-      {evidence.sectionTitle && (
-        <p className="mb-1 text-[11px] font-medium text-alphi-teal">{evidence.sectionTitle}</p>
-      )}
+      {evidence.sectionTitle && <p className="mb-1 text-[11px] font-medium text-alphi-teal">{evidence.sectionTitle}</p>}
 
       <div className="relative">
         <p
@@ -138,12 +136,7 @@ export function EvidenceCard({
             Ver en documento
           </button>
         )}
-        <a
-          href={downloadHref}
-          target="_blank"
-          rel="noreferrer"
-          className="alphi-btn-ghost text-[10px] px-2 py-0.5"
-        >
+        <a href={downloadHref} target="_blank" rel="noreferrer" className="alphi-btn-ghost text-[10px] px-2 py-0.5">
           Descargar &rarr;
         </a>
       </div>
@@ -182,11 +175,7 @@ function HighlightedPageText({ pageText, excerpt }: { pageText: string; excerpt:
   }, [pageText, excerpt])
 
   if (!pageText) {
-    return (
-      <p className="text-xs text-alphi-muted">
-        No hay texto extraído disponible para esta página.
-      </p>
-    )
+    return <p className="text-xs text-alphi-muted">No hay texto extraído disponible para esta página.</p>
   }
 
   const regex = buildExcerptRegex(excerpt)
@@ -213,13 +202,7 @@ function HighlightedPageText({ pageText, excerpt }: { pageText: string; excerpt:
   )
 }
 
-export function EvidenceList({
-  evidences,
-  highlightIndex,
-}: {
-  evidences: Evidence[]
-  highlightIndex?: number | null
-}) {
+export function EvidenceList({ evidences, highlightIndex }: { evidences: Evidence[]; highlightIndex?: number | null }) {
   const [viewerUrl, setViewerUrl] = useState<string | null>(null)
   const [viewerTitle, setViewerTitle] = useState<string>('')
   const [viewerExcerpt, setViewerExcerpt] = useState<string>('')
@@ -228,6 +211,7 @@ export function EvidenceList({
   const [viewerLoading, setViewerLoading] = useState(false)
 
   if (evidences.length === 0) return null
+  const verifiable = hasVerifiableCitationIndices(evidences)
 
   async function openInlineViewer(evidence: Evidence): Promise<void> {
     const start = evidence.pageStart
@@ -252,13 +236,18 @@ export function EvidenceList({
 
     try {
       for (let p = start; p <= lastPage && !matched; p++) {
-        const res = await fetch(
-          `/api/documents/${encodeURIComponent(evidence.documentId)}/page/${p}`,
-        )
+        const res = await fetch(`/api/documents/${encodeURIComponent(evidence.documentId)}/page/${p}`)
         if (!res.ok) continue
-        const payload = (await res.json()) as { openUrl?: string; pageText?: string }
+        const payload = (await res.json()) as {
+          openUrl?: string
+          pageText?: string
+        }
         if (!payload.openUrl) continue
-        const hit: PageHit = { openUrl: payload.openUrl, pageText: payload.pageText ?? '', page: p }
+        const hit: PageHit = {
+          openUrl: payload.openUrl,
+          pageText: payload.pageText ?? '',
+          page: p,
+        }
         if (!firstOk) firstOk = hit
         if (regex && hit.pageText && regex.test(hit.pageText)) matched = hit
       }
@@ -284,13 +273,11 @@ export function EvidenceList({
   return (
     <>
       <div className="mt-4 space-y-2" aria-label="Fuentes citadas">
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-alphi-muted">
-          Fuentes citadas
-        </p>
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-alphi-muted">Fuentes citadas</p>
         {evidences.map((evidence, idx) => (
           <EvidenceCard
-            key={`${evidence.chunkId}-${evidence.documentVersionId}`}
-            evidence={evidence}
+            key={`${evidence.chunkId}-${evidence.documentVersionId}-${evidence.citationIndex ?? idx}`}
+            evidence={verifiable ? evidence : { ...evidence, citationIndex: null }}
             index={idx + 1}
             highlighted={highlightIndex === idx}
             onOpenViewer={openInlineViewer}
@@ -315,11 +302,7 @@ export function EvidenceList({
                   Pasaje citado resaltado sobre el texto de la página
                 </p>
               </div>
-              <button
-                type="button"
-                className="alphi-btn-secondary ml-4 shrink-0"
-                onClick={closeViewer}
-              >
+              <button type="button" className="alphi-btn-secondary ml-4 shrink-0" onClick={closeViewer}>
                 Cerrar
               </button>
             </div>

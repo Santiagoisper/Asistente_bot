@@ -43,6 +43,8 @@ import {
 export type Confidence = (typeof answerConfidence)[number]
 
 export type Evidence = {
+  /** Número 1-based del fragmento en el contexto que recibió el modelo. */
+  citationIndex: number
   chunkId: string
   documentId: string
   documentVersionId: string
@@ -421,16 +423,17 @@ function extractEvidences(
   indices: number[],
   query: string,
 ): Evidence[] {
-  const seen = new Set<string>()
+  const seen = new Set<number>()
   const evidences: Evidence[] = []
 
   for (const idx of indices) {
     const chunk = chunks[idx - 1] // 1-based → 0-based
     if (!chunk) continue
-    if (seen.has(chunk.chunkId)) continue
-    seen.add(chunk.chunkId)
+    if (seen.has(idx)) continue
+    seen.add(idx)
 
     evidences.push({
+      citationIndex: idx,
       chunkId: chunk.chunkId,
       documentId: chunk.documentId,
       documentVersionId: chunk.documentVersionId,

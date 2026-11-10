@@ -1,13 +1,10 @@
 export type AnswerConfidence = 'high' | 'medium' | 'low' | 'insufficient_evidence'
 
-export type DocumentType =
-  | 'protocol'
-  | 'investigator_brochure'
-  | 'lab_manual'
-  | 'pharmacy_manual'
-  | 'other'
+export type DocumentType = 'protocol' | 'investigator_brochure' | 'lab_manual' | 'pharmacy_manual' | 'other'
 
 export type Evidence = {
+  /** Índice 1-based del contexto original; ausente/null en historial anterior al fix. */
+  citationIndex?: number | null
   chunkId: string
   documentId: string
   documentVersionId: string

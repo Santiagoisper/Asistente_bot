@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, real, timestamp, index, jsonb } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, integer, real, timestamp, index, uniqueIndex, jsonb } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { organizations } from './organizations'
 import { studies } from './studies'
@@ -86,6 +86,8 @@ export const citations = pgTable(
     documentVersionId: uuid('document_version_id')
       .notNull()
       .references(() => documentVersions.id),
+    /** NULL identifica citas anteriores al mapeo verificable de índices. */
+    citationIndex: integer('citation_index'),
     documentName: text('document_name').notNull(),
     documentType: text('document_type', { enum: documentType }).notNull(),
     pageStart: integer('page_start').notNull(),
@@ -97,6 +99,7 @@ export const citations = pgTable(
   },
   (t) => ({
     messageIdx: index('citations_message_idx').on(t.messageId),
+    messageCitationIndexIdx: uniqueIndex('citations_message_citation_index_idx').on(t.messageId, t.citationIndex),
   }),
 )
 
