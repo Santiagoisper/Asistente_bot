@@ -330,6 +330,37 @@ describe('answerEngine — responses with evidence', () => {
 // ---------------------------------------------------------------------------
 
 describe('answerEngine — evidence integrity', () => {
+  it('preserves original context indices for sparse, out-of-order citations and ignores invalid indices', async () => {
+    const chunks = Array.from({ length: 7 }, (_, index) => makeChunk({
+      chunkId: `chunk-${index + 1}`,
+      documentId: `document-${index + 1}`,
+      documentVersionId: `version-${index + 1}`,
+      pageStart: index + 10,
+      pageEnd: index + 10,
+      content: `Source fragment ${index + 1}`,
+      similarityScore: 0.90 - index * 0.01,
+    }))
+    mocks.generateObject.mockResolvedValueOnce(
+      makeLLMResponse({
+        answer: 'First source [7], then source [3], with invalid reference [99].',
+        confidence: 'high',
+        citationIndices: [7, 3, 99],
+      })
+    )
+
+    const result = await answerEngine(makeInput(chunks))
+
+    expect(result.answer).toContain('[7]')
+    expect(result.answer).toContain('[3]')
+    expect(result.answer).toContain('[99]')
+    expect(result.evidences).toHaveLength(2)
+    expect(result.evidences).toMatchObject([
+      { citationIndex: 7, chunkId: 'chunk-7', documentId: 'document-7', pageStart: 16 },
+      { citationIndex: 3, chunkId: 'chunk-3', documentId: 'document-3', pageStart: 12 },
+    ])
+    expect(result.evidences.some((evidence) => evidence.chunkId === 'chunk-1')).toBe(false)
+  })
+
   it('derives evidences from the actual chunks received, not invented metadata', async () => {
     const chunk = makeChunk({
       chunkId: 'chunk-abc',

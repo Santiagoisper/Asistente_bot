@@ -18,6 +18,16 @@ function makeEvidence(): Evidence {
   }
 }
 
+function makeIndexedEvidence(citationIndex: number, chunkId: string): Evidence & { citationIndex: number } {
+  return {
+    ...makeEvidence(),
+    citationIndex,
+    chunkId,
+    documentId: `document-${chunkId}`,
+    excerpt: `Source for context fragment ${citationIndex}`,
+  }
+}
+
 describe('prepareAnswerMarkdown', () => {
   it('convierte citas [n] válidas en links internos', () => {
     expect(prepareAnswerMarkdown('Plazo de 24 horas [1] y seguimiento [2].', 2)).toBe(
@@ -33,6 +43,21 @@ describe('prepareAnswerMarkdown', () => {
 })
 
 describe('AnswerContent', () => {
+  it('links sparse citations by their original context index and leaves invalid citations unlinked', () => {
+    const html = renderToStaticMarkup(
+      <AnswerContent
+        text="Source seven [7], then source three [3], and invalid [99]."
+        evidences={[makeIndexedEvidence(7, 'chunk-7'), makeIndexedEvidence(3, 'chunk-3')]}
+        onFootnoteClick={vi.fn()}
+      />,
+    )
+
+    expect(html).toContain('title="Ver fuente 7"')
+    expect(html).toContain('title="Ver fuente 3"')
+    expect(html).not.toContain('title="Ver fuente 99"')
+    expect(html).toContain('[99]')
+  })
+
   it('renderiza negritas y botón de cita', () => {
     const html = renderToStaticMarkup(
       <AnswerContent
