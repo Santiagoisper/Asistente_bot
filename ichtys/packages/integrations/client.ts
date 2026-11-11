@@ -1,4 +1,4 @@
-import { resolveModuleBaseUrl, SIGNING_KEY_ENV, summaryUrl } from './config'
+import { parseModuleBaseUrl, resolveModuleBaseUrl, SIGNING_KEY_ENV, summaryUrl } from './config'
 import { moduleSummarySchema, type ModuleSummary, type OsModule } from './summary-schema'
 import { signOsToken } from './token'
 
@@ -63,7 +63,11 @@ async function readCapped(response: Response): Promise<string | null> {
  */
 export async function fetchModuleSummary(
   module: OsModule,
-  ctx: { userId: string; orgId: string },
+  /**
+   * `baseUrl` es la URL del módulo para esa organización: una cadena, o null si
+   * la organización no lo tiene. Si no se pasa, se usa la de la instalación.
+   */
+  ctx: { userId: string; orgId: string; baseUrl?: string | null },
   deps: FetchSummaryDeps = {},
 ): Promise<ModuleSummaryResult> {
   const env = deps.env ?? process.env
@@ -76,7 +80,7 @@ export async function fetchModuleSummary(
     fetchedAt: now().toISOString(),
   })
 
-  const base = resolveModuleBaseUrl(module, env)
+  const base = ctx.baseUrl === undefined ? resolveModuleBaseUrl(module, env) : parseModuleBaseUrl(ctx.baseUrl)
   const privateKeyPem = env[SIGNING_KEY_ENV]
   if (!base || !privateKeyPem) return done('not_configured')
 

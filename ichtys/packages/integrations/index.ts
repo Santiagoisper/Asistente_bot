@@ -20,7 +20,8 @@ export {
   type OsTokenClaims,
   type OsTokenErrorCode,
 } from './token'
-export { MODULE_URL_ENV, SIGNING_KEY_ENV, resolveModuleBaseUrl } from './config'
+export { MODULE_URL_ENV, SIGNING_KEY_ENV, parseModuleBaseUrl, resolveModuleBaseUrl } from './config'
+export { orgConnectors, orgModuleUrl, type OrgConnector, type OrgIntegrationRow } from './org-modules'
 export {
   SUMMARY_CACHE_TTL_MS,
   SUMMARY_MAX_BYTES,

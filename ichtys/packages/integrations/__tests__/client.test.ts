@@ -84,6 +84,28 @@ describe('fetchModuleSummary', () => {
     expect(hits).toBe(0)
   })
 
+  it('la URL de la organización manda sobre la variable de entorno', async () => {
+    const calls: string[] = []
+    const doFetch = (async (url: string | URL | Request) => {
+      calls.push(String(url))
+      return new Response(JSON.stringify(validSummary), { status: 200 })
+    }) as typeof fetch
+    const result = await fetchModuleSummary('queries', { ...ctx, baseUrl: 'https://queries.centro-b.example.test' }, { env: env(), fetch: doFetch })
+    expect(result.status).toBe('ok')
+    expect(calls).toEqual(['https://queries.centro-b.example.test/api/os/summary'])
+  })
+
+  it('una organización sin ese módulo no usa la URL de la instalación: not_configured y no sale ningún pedido', async () => {
+    let called = false
+    const doFetch = (async () => {
+      called = true
+      return new Response('{}')
+    }) as typeof fetch
+    expect((await fetchModuleSummary('queries', { ...ctx, baseUrl: null }, { env: env(), fetch: doFetch })).status).toBe('not_configured')
+    expect((await fetchModuleSummary('queries', { ...ctx, baseUrl: 'http://queries.example.test' }, { env: env(), fetch: doFetch })).status).toBe('not_configured')
+    expect(called).toBe(false)
+  })
+
   it('URL http que no es local, o con credenciales embebidas: not_configured', async () => {
     expect((await fetchModuleSummary('queries', ctx, { env: env({ OS_QUERIES_URL: 'http://queries.example.test' }) })).status).toBe('not_configured')
     expect((await fetchModuleSummary('queries', ctx, { env: env({ OS_QUERIES_URL: 'https://u:p@queries.example.test' }) })).status).toBe('not_configured')
