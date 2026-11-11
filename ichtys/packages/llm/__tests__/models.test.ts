@@ -50,6 +50,14 @@ describe('getModelId — mapa de modelos Anthropic por propósito', () => {
   it('regresión mínima: otros proveedores no cambian', () => {
     expect(getModelId('openai', 'answer')).toBe('gpt-4o')
     expect(getModelId('openai', 'title')).toBe('gpt-4o-mini')
-    expect(getModelId('groq', 'answer')).toBe('llama-3.3-70b-versatile')
+  })
+
+  it('Groq: el modelo por defecto no es el retirado, y la variable manda', () => {
+    expect(getModelId('groq', 'answer')).toBe('openai/gpt-oss-120b')
+    expect(getModelId('groq', 'spec')).toBe('openai/gpt-oss-120b')
+    vi.stubEnv('GROQ_ANSWER_MODEL', 'modelo-puesto-por-variable')
+    expect(getModelId('groq', 'answer')).toBe('modelo-puesto-por-variable')
+    vi.stubEnv('SPEC_EXTRACTION_MODEL_GROQ', 'modelo-de-especificacion')
+    expect(getModelId('groq', 'spec')).toBe('modelo-de-especificacion')
   })
 })
