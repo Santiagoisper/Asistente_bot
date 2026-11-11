@@ -10,18 +10,15 @@ export const SIGNING_KEY_ENV = 'OS_SIGNING_PRIVATE_KEY'
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
 
 /**
- * URL base del satélite, o null si no está configurada o no es aceptable.
- * Se exige https salvo en la máquina local, para que el token nunca viaje en claro.
+ * Valida una URL base. Se exige https salvo en la máquina local, para que el
+ * token nunca viaje en claro, y no se aceptan credenciales embebidas.
  */
-export function resolveModuleBaseUrl(
-  module: OsModule,
-  env: Record<string, string | undefined>,
-): URL | null {
-  const raw = env[MODULE_URL_ENV[module]]?.trim()
-  if (!raw) return null
+export function parseModuleBaseUrl(raw: string | null | undefined): URL | null {
+  const text = raw?.trim()
+  if (!text) return null
   let url: URL
   try {
-    url = new URL(raw)
+    url = new URL(text)
   } catch {
     return null
   }
@@ -29,6 +26,18 @@ export function resolveModuleBaseUrl(
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && local)) return null
   if (url.username || url.password) return null
   return url
+}
+
+/**
+ * URL base del satélite tomada de la instalación (variable de entorno), o null.
+ * Solo para desarrollo y pruebas: en una instalación con varios centros la URL
+ * sale de la organización.
+ */
+export function resolveModuleBaseUrl(
+  module: OsModule,
+  env: Record<string, string | undefined>,
+): URL | null {
+  return parseModuleBaseUrl(env[MODULE_URL_ENV[module]])
 }
 
 export function summaryUrl(base: URL): string {

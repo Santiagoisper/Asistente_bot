@@ -38,7 +38,7 @@ describe('leakage — consultas del OS filtradas por organización', () => {
     })
   }
 
-  it.each(['lib/labs/lab-report-service.ts', 'lib/labs/lab-image-report.ts', 'lib/agenda/agenda-service.ts'])('%s: toda consulta y toda escritura llevan la organización', (file) => {
+  it.each(['lib/labs/lab-report-service.ts', 'lib/labs/lab-image-report.ts', 'lib/agenda/agenda-service.ts', 'lib/os/org-integrations.ts'])('%s: toda consulta y toda escritura llevan la organización', (file) => {
     const source = readFileSync(join(WEB_ROOT, file), 'utf8')
     const wheres = countMatches(source, /\.where\(/g)
     const filters = countMatches(source, /\.organizationId, (params\.)?orgId\)/g)

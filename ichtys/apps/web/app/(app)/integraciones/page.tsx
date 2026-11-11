@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { MODULE_URL_ENV, OS_MODULES } from '@ichtys/integrations'
+import { OS_MODULES } from '@ichtys/integrations'
 import { ButtonLink, Card, EmptyState, PageHeader, Pill } from '../../../components/os/ui'
 import { isOsEnabled } from '../../../lib/flags'
 import { getOsContext } from '../../../lib/os/context'
@@ -50,7 +50,7 @@ export default async function IntegracionesPage() {
                   <p className="text-sm text-os-subtle">{copy.hint}</p>
                   <p className="mt-1 text-xs text-os-subtle">
                     {result.status === 'not_configured'
-                      ? `Variable a configurar: ${MODULE_URL_ENV[result.module]}`
+                      ? 'Esta organización no tiene este módulo conectado.'
                       : `Última comprobación: ${timeFormat.format(new Date(result.fetchedAt))}`}
                   </p>
                 </div>

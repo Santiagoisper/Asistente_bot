@@ -1,4 +1,4 @@
-import { resolveModuleBaseUrl, SIGNING_KEY_ENV, summaryUrl } from './config'
+import { parseModuleBaseUrl, resolveModuleBaseUrl, SIGNING_KEY_ENV, summaryUrl } from './config'
 import { moduleSummarySchema, type ModuleSummary, type OsModule } from './summary-schema'
 import { signOsToken } from './token'
 
@@ -63,7 +63,11 @@ async function readCapped(response: Response): Promise<string | null> {
  */
 export async function fetchModuleSummary(
   module: OsModule,
-  ctx: { userId: string; orgId: string },
+  /**
+   * `baseUrl` es la URL del módulo para esa organización: una cadena, o null si
+   * la organización no lo tiene. Si no se pasa, se usa la de la instalación.
+   */
+  ctx: { userId: string; orgId: string; baseUrl?: string | null },
   deps: FetchSummaryDeps = {},
 ): Promise<ModuleSummaryResult> {
   const env = deps.env ?? process.env
@@ -76,13 +80,14 @@ export async function fetchModuleSummary(
     fetchedAt: now().toISOString(),
   })
 
-  const base = resolveModuleBaseUrl(module, env)
+  const base = ctx.baseUrl === undefined ? resolveModuleBaseUrl(module, env) : parseModuleBaseUrl(ctx.baseUrl)
   const privateKeyPem = env[SIGNING_KEY_ENV]
   if (!base || !privateKeyPem) return done('not_configured')
 
   // El satélite puede responder distinto según el rol del usuario: la caché
   // es por usuario, no por organización.
-  const cacheKey = `${module}:${ctx.orgId}:${ctx.userId}`
+  // La URL forma parte de la clave: si el centro cambia de sistema, no se sirve lo del anterior.
+  const cacheKey = `${module}:${ctx.orgId}:${ctx.userId}:${base.origin}${base.pathname}`
   const cached = cache.get(cacheKey)
   if (cached && now().getTime() - cached.at < SUMMARY_CACHE_TTL_MS) return cached.result
 
