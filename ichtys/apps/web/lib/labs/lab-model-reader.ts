@@ -15,6 +15,8 @@ import { z } from 'zod'
 /** Proveedores que leen bien cifras, en texto y en imagen. */
 const READER_CHAIN: readonly LlmProviderId[] = ['anthropic', 'openai', 'google']
 const READER_TIMEOUT_MS = 50_000
+/** Tope de toda la cadena de proveedores: la ruta tiene que responder antes de que la plataforma la corte. */
+const READER_BUDGET_MS = 85_000
 const MAX_TEXT_LINES = 1_500
 const MAX_LINE_CHARS = 300
 
@@ -71,11 +73,15 @@ type Call<T> = (model: Parameters<Parameters<typeof runWithLlmFallback>[1]>[0], 
 /** Prueba los proveedores en orden hasta que uno responda. null si ninguno pudo. */
 async function runReader<T>(scope: ReaderScope, order: readonly LlmProviderId[], call: Call<T>): Promise<ReaderResult<T> | null> {
   const orgApiKeys = await getOrgLlmApiKeys(scope.orgId).catch(() => null)
+  const deadline = Date.now() + READER_BUDGET_MS
   for (const provider of order) {
     if (!isProviderConfigured(provider, orgApiKeys)) continue
+    const remaining = deadline - Date.now()
+    // Sin margen para otra llamada completa: mejor una sola lectura que ninguna respuesta.
+    if (remaining < 5_000) break
     try {
       const run = await runWithLlmFallback({ purpose: 'lab-read', providerPreference: provider, orgApiKeys }, async (model, _provider, reportUsage, signal) => {
-        const response = await call(model, AbortSignal.any([signal, AbortSignal.timeout(READER_TIMEOUT_MS)]))
+        const response = await call(model, AbortSignal.any([signal, AbortSignal.timeout(Math.min(READER_TIMEOUT_MS, remaining))]))
         reportUsage({ inputTokens: response.usage?.inputTokens ?? 0, outputTokens: response.usage?.outputTokens ?? 0 })
         return response.object
       })
