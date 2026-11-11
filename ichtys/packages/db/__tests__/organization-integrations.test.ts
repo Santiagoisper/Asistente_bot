@@ -52,9 +52,9 @@ describe('organization_integrations — integraciones por organización', () => 
     expect(sql).toContain('EXCEPTION WHEN duplicate_object THEN null')
     expect(sql).not.toMatch(/\bDROP\b|DELETE FROM|\bTRUNCATE\b|ALTER COLUMN|RENAME/i)
     const journal = JSON.parse(readFileSync(join(__dirname, '..', 'migrations', 'meta', '_journal.json'), 'utf8')) as { entries: { idx: number; tag: string; when: number }[] }
-    const last = journal.entries.at(-1)
-    const previous = journal.entries.at(-2)
-    expect(last).toMatchObject({ idx: 15, tag: '0015_organization_integrations' })
-    expect(last!.when).toBeGreaterThan(previous!.when)
+    const migration = journal.entries.find((entry) => entry.idx === 15)
+    const previous = journal.entries.find((entry) => entry.idx === 14)
+    expect(migration).toMatchObject({ idx: 15, tag: '0015_organization_integrations' })
+    expect(migration!.when).toBeGreaterThan(previous!.when)
   })
 })
