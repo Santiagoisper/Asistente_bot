@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { Plus, Upload } from 'lucide-react'
+import { FileText, Images, Plus, Upload } from 'lucide-react'
 import { useEffect, useId, useState, type FormEvent } from 'react'
 import { MAX_LAB_PDF_BYTES } from '../../lib/labs/lab-report-content'
 import {
@@ -13,6 +13,7 @@ import {
   uploadError,
   type SubjectsState,
 } from '../../lib/labs/upload-form-state'
+import { PhotoUpload } from './photo-upload'
 
 interface StudyChoice {
   id: string
@@ -64,6 +65,7 @@ export function LabUploadForm({ studies }: { studies: StudyChoice[] }) {
   const [newCode, setNewCode] = useState('')
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+  const [mode, setMode] = useState<'pdf' | 'photo'>('pdf')
 
   useEffect(() => {
     if (!studyId) return
@@ -166,6 +168,8 @@ export function LabUploadForm({ studies }: { studies: StudyChoice[] }) {
   const noSubjects = subjectsState === 'ready' && subjects.length === 0
   const showCreate = noSubjects || adding
   const missing = missingSteps({ studyId, subjectsState, subjectCount: subjects.length, subjectId, hasFile: file !== null })
+  // Lo que falta del estudio y el sujeto, sin contar el archivo: lo usa la carga por foto.
+  const missingTarget = missingSteps({ studyId, subjectsState, subjectCount: subjects.length, subjectId, hasFile: true })
   const ready = missing.length === 0 && !busy
 
   return (
@@ -275,50 +279,81 @@ export function LabUploadForm({ studies }: { studies: StudyChoice[] }) {
         </div>
       ) : null}
 
-      <label
-        htmlFor={`${formId}-file`}
-        className="flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-[#9CC9C1] bg-[#F2FAF8] px-4 py-8 text-center focus-within:outline focus-within:outline-2 focus-within:outline-os-accent"
-      >
-        <Upload aria-hidden="true" className="h-8 w-8 text-os-accent" strokeWidth={1.75} />
-        <span className="text-sm font-semibold text-os-ink">{file ? file.name : 'Elegí el PDF del laboratorio'}</span>
-        <span className="text-sm text-os-subtle">
-          PDF digital, hasta {MAX_LAB_PDF_MB} MB y 20 páginas. El archivo se lee y no se guarda.
-        </span>
-        <input
-          id={`${formId}-file`}
-          type="file"
-          accept="application/pdf,.pdf"
-          className="sr-only"
-          onChange={(event) => pickFile(event.target.files?.[0] ?? null)}
-        />
-      </label>
-
-      {error ? (
-        <p role="alert" className="rounded-xl bg-[#FBE3E7] px-4 py-3 text-sm text-[#8C1D3A]">
-          {error}
-        </p>
-      ) : null}
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="max-w-md text-sm text-os-subtle">
-          El encabezado con nombre y documento se omite antes de guardar. Vas a revisar cada valor antes de confirmar.
-        </p>
-        <div className="flex flex-col items-end gap-1.5">
+      <div role="group" aria-label="Cómo viene el informe" className="grid grid-cols-2 gap-2 rounded-xl bg-os-ground p-1">
+        {(
+          [
+            { id: 'pdf', label: 'PDF del laboratorio', Icon: FileText },
+            { id: 'photo', label: 'Foto o escaneo', Icon: Images },
+          ] as const
+        ).map(({ id, label, Icon }) => (
           <button
-            type="submit"
-            disabled={!ready}
-            aria-describedby={missing.length > 0 ? `${formId}-missing` : undefined}
-            className="inline-flex min-h-11 items-center justify-center rounded-lg bg-os-accent px-5 text-sm font-semibold text-white hover:bg-os-accentdim disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-os-accent"
+            key={id}
+            type="button"
+            aria-pressed={mode === id}
+            className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-os-accent ${
+              mode === id ? 'bg-white text-os-accentdim shadow-alphi-card' : 'text-os-subtle hover:text-os-ink'
+            }`}
+            onClick={() => {
+              setMode(id)
+              setError(null)
+            }}
           >
-            {busy ? 'Leyendo el estudio…' : 'Leer el estudio'}
+            <Icon aria-hidden="true" className="h-4 w-4" />
+            {label}
           </button>
-          {missing.length > 0 && !busy ? (
-            <p id={`${formId}-missing`} className="text-sm text-os-subtle">
-              Falta {missing.join(' y ')}.
+        ))}
+      </div>
+
+      {mode === 'photo' ? (
+        <PhotoUpload target={studyId && subjectId ? { studyId, subjectId } : null} missingTarget={missingTarget} />
+      ) : (
+        <>
+      <label
+            htmlFor={`${formId}-file`}
+            className="flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-[#9CC9C1] bg-[#F2FAF8] px-4 py-8 text-center focus-within:outline focus-within:outline-2 focus-within:outline-os-accent"
+          >
+            <Upload aria-hidden="true" className="h-8 w-8 text-os-accent" strokeWidth={1.75} />
+            <span className="text-sm font-semibold text-os-ink">{file ? file.name : 'Elegí el PDF del laboratorio'}</span>
+            <span className="text-sm text-os-subtle">
+              PDF con texto, hasta {MAX_LAB_PDF_MB} MB y 20 páginas. El archivo se lee y no se guarda. Si es un escaneo, usá «Foto o escaneo».
+            </span>
+            <input
+              id={`${formId}-file`}
+              type="file"
+              accept="application/pdf,.pdf"
+              className="sr-only"
+              onChange={(event) => pickFile(event.target.files?.[0] ?? null)}
+            />
+          </label>
+
+          {error ? (
+            <p role="alert" className="rounded-xl bg-[#FBE3E7] px-4 py-3 text-sm text-[#8C1D3A]">
+              {error}
             </p>
           ) : null}
-        </div>
-      </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="max-w-md text-sm text-os-subtle">
+              El encabezado con nombre y documento se omite antes de guardar. Vas a revisar cada valor antes de confirmar.
+            </p>
+            <div className="flex flex-col items-end gap-1.5">
+              <button
+                type="submit"
+                disabled={!ready}
+                aria-describedby={missing.length > 0 ? `${formId}-missing` : undefined}
+                className="inline-flex min-h-11 items-center justify-center rounded-lg bg-os-accent px-5 text-sm font-semibold text-white hover:bg-os-accentdim disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-os-accent"
+              >
+                {busy ? 'Leyendo el estudio…' : 'Leer el estudio'}
+              </button>
+              {missing.length > 0 && !busy ? (
+                <p id={`${formId}-missing`} className="text-sm text-os-subtle">
+                  Falta {missing.join(' y ')}.
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </>
+      )}
     </form>
   )
 }
