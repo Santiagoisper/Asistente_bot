@@ -41,7 +41,8 @@ function StatusPill({ row }: { row: ReviewRow }) {
 
 /**
  * Revisión de un informe de laboratorio: el texto del informe a la izquierda,
- * los campos a la derecha. Nada pasa al registro hasta que la persona confirma.
+ * los campos a la derecha. Nada se guarda hasta que la persona confirma, y confirmar
+ * guarda en Alphi: no envía nada a la historia clínica ni a otro sistema.
  */
 export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, studyLabel, status, content }: Props) {
   const lines = useMemo(() => content.transcription.split('\n'), [content.transcription])
@@ -128,7 +129,7 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
 
       {phase === 'confirmed' ? (
         <div role="status" className="rounded-2xl bg-os-tint px-5 py-4 text-sm text-os-accentdim">
-          <p className="font-semibold">Estudio confirmado. Los valores ya forman parte del registro del sujeto.</p>
+          <p className="font-semibold">Estudio revisado y guardado en Alphi. No se envió a la historia clínica ni a ningún otro sistema.</p>
           {profileWarning ? (
             <p className="mt-1 text-[#6B4200]">El estudio quedó confirmado, pero no se pudo actualizar el perfil de screening del sujeto. Avisá a soporte.</p>
           ) : null}
@@ -141,7 +142,7 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
       ) : null}
       {phase === 'rejected' ? (
         <p role="status" className="rounded-2xl bg-[#EEF2F6] px-5 py-4 text-sm font-semibold text-[#334155]">
-          Estudio rechazado. No se guardó ningún valor en el registro del sujeto.{' '}
+          Estudio rechazado. No se guardó ningún valor en Alphi.{' '}
           <Link href="/laboratorios" className="underline">Volver a Laboratorios</Link>
         </p>
       ) : null}
@@ -308,7 +309,7 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
                       ? 'Hay campos sin completar.'
                       : rows.length === 0
                         ? 'No hay campos para confirmar.'
-                        : 'Al confirmar, los valores pasan al registro con tu usuario, fecha y hora.'}
+                        : 'Al confirmar, los valores quedan guardados en Alphi con tu usuario, fecha y hora. No se envían a la historia clínica.'}
                 </p>
               </div>
             </div>

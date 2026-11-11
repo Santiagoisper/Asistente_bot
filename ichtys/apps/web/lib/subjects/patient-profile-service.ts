@@ -12,6 +12,7 @@ import { generateObject } from 'ai'
 import { z } from 'zod'
 import { labReviewMarker } from './lab-review-marker'
 import { decryptProfileJson, encryptProfileJson } from './phi-fields'
+import { nextVersion, whereProfileUnchanged, type ProfileScope } from './profile-version'
 
 // Exportado para poder testear su tamaño (A7): cada campo extra infla el
 // prompt del extractor clínico que corre sobre texto clínico real.
@@ -134,24 +135,58 @@ export async function loadPatientProfile(params: {
   return parsePatientProfile(decryptProfileJson(row.profileEncrypted))
 }
 
-export async function persistPatientProfile(params: {
-  orgId: string
-  studyId: string
-  subjectId: string
-  profile: PatientProfile
-}): Promise<void> {
-  const profileEncrypted = encryptProfileJson(params.profile as Record<string, unknown>)
+/** Otra persona estuvo escribiendo el mismo perfil y no se pudo aplicar el cambio. */
+export class ProfileConflictError extends Error {
+  constructor() {
+    super('patient profile: concurrent update')
+    this.name = 'ProfileConflictError'
+  }
+}
 
-  await db
-    .update(patientProfiles)
-    .set({ profileEncrypted, ...labReviewMarker(params.profile), updatedAt: new Date() })
-    .where(
-      and(
+/** El sujeto no tiene fila de perfil: no hay dónde guardar. */
+export class ProfileMissingError extends Error {
+  constructor() {
+    super('patient profile: missing row')
+    this.name = 'ProfileMissingError'
+  }
+}
+
+const MAX_PROFILE_WRITE_ATTEMPTS = 5
+
+/**
+ * Única forma de escribir el perfil del sujeto. Lee, aplica `mutate` y escribe
+ * solo si nadie cambió la fila en el medio; si la cambiaron, vuelve a leer y
+ * aplica `mutate` sobre lo nuevo. Así dos confirmaciones simultáneas no se
+ * pisan. `mutate` puede correr más de una vez: tiene que depender solo del
+ * perfil que recibe.
+ */
+export async function updatePatientProfile(
+  params: ProfileScope,
+  mutate: (current: PatientProfile) => PatientProfile | Promise<PatientProfile>,
+): Promise<PatientProfile> {
+  for (let attempt = 0; attempt < MAX_PROFILE_WRITE_ATTEMPTS; attempt += 1) {
+    const row = await db.query.patientProfiles.findFirst({
+      where: and(
         eq(patientProfiles.organizationId, params.orgId),
         eq(patientProfiles.studyId, params.studyId),
         eq(patientProfiles.subjectId, params.subjectId),
       ),
-    )
+    })
+    if (!row) throw new ProfileMissingError()
+
+    const next = await mutate(parsePatientProfile(decryptProfileJson(row.profileEncrypted)))
+    const written = await db
+      .update(patientProfiles)
+      .set({
+        profileEncrypted: encryptProfileJson(next as Record<string, unknown>),
+        ...labReviewMarker(next),
+        updatedAt: nextVersion(row.updatedAt),
+      })
+      .where(whereProfileUnchanged(params, row.updatedAt))
+      .returning({ subjectId: patientProfiles.subjectId })
+    if (written.length > 0) return next
+  }
+  throw new ProfileConflictError()
 }
 
 export async function refreshPatientProfileFromEvolution(params: {
@@ -161,25 +196,10 @@ export async function refreshPatientProfileFromEvolution(params: {
   evolutionId: string
   evolutionContent: string
 }): Promise<PatientProfile> {
-  const current = await loadPatientProfile(params)
-
+  // La extracción (que puede llamar a un modelo) se hace una sola vez, fuera del reintento.
   const heuristic = extractFactsFromEvolution(params.evolutionContent, params.evolutionId)
   const { text: redacted } = redactPhiForLlm(params.evolutionContent)
   const llmFacts = await extractFactsWithLlm(params.orgId, params.studyId, redacted)
   const merged = mergeExtractions(heuristic, llmFacts)
-  const profile = mergeProfileWithExtraction(current, merged, params.evolutionId)
-  const profileEncrypted = encryptProfileJson(profile)
-
-  await db
-    .update(patientProfiles)
-    .set({ profileEncrypted, ...labReviewMarker(profile), updatedAt: new Date() })
-    .where(
-      and(
-        eq(patientProfiles.organizationId, params.orgId),
-        eq(patientProfiles.studyId, params.studyId),
-        eq(patientProfiles.subjectId, params.subjectId),
-      ),
-    )
-
-  return profile
+  return updatePatientProfile(params, (current) => mergeProfileWithExtraction(current, merged, params.evolutionId))
 }

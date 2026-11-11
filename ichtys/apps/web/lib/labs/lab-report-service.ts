@@ -8,7 +8,7 @@ import {
 } from '@ichtys/clinical'
 import { and, db, eq, inArray, labAnalytes, labReports, type LabReportStatus } from '@ichtys/db'
 import { parsePdf, PdfParseError } from '@ichtys/ingestion/parser'
-import { loadPatientProfile, persistPatientProfile } from '../subjects/patient-profile-service'
+import { updatePatientProfile } from '../subjects/patient-profile-service'
 import { decryptClinicalContent, encryptClinicalContent } from '../subjects/phi-fields'
 import {
   labReportContentSchema,
@@ -253,11 +253,11 @@ export async function confirmLabReport(
       .filter((row): row is LabReportRow & { value: number } => row.value !== null)
       .map((row) => ({ name: row.analyte, value: row.value, ...(row.unit ? { unit: row.unit } : {}) }))
     if (numeric.length > 0) {
-      const profile = await loadPatientProfile(params)
-      await persistPatientProfile({
-        ...params,
-        profile: { ...profile, labs: mergeConfirmedLabs(profile.labs, numeric), lastUpdatedAt: new Date().toISOString() },
-      })
+      await updatePatientProfile(params, (profile) => ({
+        ...profile,
+        labs: mergeConfirmedLabs(profile.labs, numeric),
+        lastUpdatedAt: new Date().toISOString(),
+      }))
     }
   } catch {
     console.error('[labs] profile merge failed after confirm')
