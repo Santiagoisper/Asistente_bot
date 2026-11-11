@@ -89,8 +89,24 @@ export function getExtractionModelId(): string {
   return process.env.SPEC_EXTRACTION_MODEL ?? 'claude-opus-5-5'
 }
 
-/** Spec extraction siempre usa Claude — independiente del proveedor de chat de la org. */
-export const SPEC_EXTRACTION_LLM_PROVIDER = 'anthropic' as const
+const SPEC_EXTRACTION_PROVIDERS: readonly LlmProviderPreference[] = ['anthropic', 'openai', 'google', 'groq', 'glm', 'auto']
+
+/**
+ * Proveedor de la extracción de especificaciones. Por defecto Claude, sea cual
+ * sea el proveedor de chat de la organización: es la extracción que mejor
+ * resuelve criterios anidados y no se cambia sin medir.
+ *
+ * `SPEC_EXTRACTION_PROVIDER` permite elegir otro por instalación. Está pensado
+ * para entornos de prueba, donde importa que el recorrido funcione y no la
+ * calidad de la extracción. Un valor desconocido o vacío vuelve a Claude: un
+ * error de tipeo no cambia el proveedor de producción.
+ */
+export function getSpecExtractionProvider(
+  env: Record<string, string | undefined> = process.env,
+): LlmProviderPreference {
+  const raw = env.SPEC_EXTRACTION_PROVIDER?.trim().toLowerCase()
+  return SPEC_EXTRACTION_PROVIDERS.find((provider) => provider === raw) ?? 'anthropic'
+}
 
 export interface ExtractStudySpecOptions {
   llmProviderPreference?: LlmProviderPreference

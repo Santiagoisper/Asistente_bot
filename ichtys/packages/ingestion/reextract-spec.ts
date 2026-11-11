@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray } from 'drizzle-orm'
 import { db, documents, documentVersions, pages } from '@ichtys/db'
 import { getOrgLlmApiKeys } from '@ichtys/db'
 import type { ParsedPage } from './parser'
-import { extractStudySpec, SPEC_EXTRACTION_LLM_PROVIDER } from './spec-extractor'
+import { extractStudySpec, getSpecExtractionProvider } from './spec-extractor'
 import { getApprovedSpecExamples, getLatestMeaningfulStudySpec, saveStudySpec } from './spec-store'
 import { mergeSoaVisits, studySpecSchema, type StudySpec } from './study-spec'
 
@@ -73,7 +73,7 @@ export async function reextractStudySpec(params: {
     parsedPages,
     fewShotExamples,
     {
-      llmProviderPreference: SPEC_EXTRACTION_LLM_PROVIDER,
+      llmProviderPreference: getSpecExtractionProvider(),
       llmApiKeys: orgLlmKeys,
       orgId: params.orgId,
       studyId: params.studyId,

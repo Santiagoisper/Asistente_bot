@@ -131,7 +131,7 @@ const specMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../spec-extractor', () => ({
-  SPEC_EXTRACTION_LLM_PROVIDER: 'glm',
+  getSpecExtractionProvider: () => 'glm',
   extractStudySpec: specMocks.extractStudySpec,
   getExtractionModelId: () => 'claude-opus-5-5',
 }))
