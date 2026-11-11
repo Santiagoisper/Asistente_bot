@@ -117,3 +117,10 @@ export type LabReportStatus = (typeof labReportStatus)[number]
 /** Cómo se leyó el informe: texto de un PDF digital o imagen recortada. */
 export const labReportSourceKind = ['pdf_text', 'image'] as const
 export type LabReportSourceKind = (typeof labReportSourceKind)[number]
+
+/** Turnos de la Agenda del sitio. */
+export const agendaItemKind = ['visit', 'lab', 'call', 'monitoring', 'other'] as const
+export type AgendaItemKind = (typeof agendaItemKind)[number]
+
+export const agendaItemStatus = ['scheduled', 'done', 'cancelled', 'no_show'] as const
+export type AgendaItemStatus = (typeof agendaItemStatus)[number]
