@@ -24,6 +24,10 @@ export const memberFunctions = pgTable(
       .references(() => organizations.id, { onDelete: 'cascade' }),
     /** Identificador del usuario en el proveedor de identidad. */
     userId: text('user_id').notNull(),
+    /**
+     * Lista cerrada. La base la exige con un CHECK (migración 0017): un nombre
+     * mal escrito no entra. Agregar una función es una migración.
+     */
     functionKey: text('function_key', { enum: memberFunction }).notNull(),
     grantedBy: text('granted_by').notNull(),
     grantedAt: timestamp('granted_at', { withTimezone: true }).notNull().defaultNow(),
