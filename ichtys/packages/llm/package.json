@@ -14,11 +14,11 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "4.0.96",
-    "@ai-sdk/google": "4.0.111",
-    "@ai-sdk/groq": "4.0.76",
-    "@ai-sdk/openai": "4.0.108",
-    "ai": "7.0.162",
+    "@ai-sdk/anthropic": "4.0.99",
+    "@ai-sdk/google": "4.0.114",
+    "@ai-sdk/groq": "4.0.78",
+    "@ai-sdk/openai": "4.0.111",
+    "ai": "7.0.165",
     "zod": "4.6.7"
   },
   "devDependencies": {
