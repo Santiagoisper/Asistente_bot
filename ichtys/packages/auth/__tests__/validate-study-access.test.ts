@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   Citation,
   Conversation,
@@ -245,6 +245,33 @@ vi.mock('@ichtys/db', () => ({
   },
 }))
 
+vi.mock('../../../apps/web/app/api/documents/upload/blob-storage', () => ({
+  putPrivateDocumentPdf: async ({ blobKey, file }: PutPrivateDocumentPdfInput) => {
+    const blob = await mocks.put(blobKey, file, {
+      access: 'private',
+      addRandomSuffix: false,
+      allowOverwrite: false,
+      contentType: 'application/pdf',
+    })
+
+    return {
+      url: blob.url,
+      pathname: blob.pathname,
+    }
+  },
+}))
+
+vi.mock('@ichtys/ingestion', () => ({
+  runIngestion: mocks.runIngestion,
+}))
+
+vi.mock(
+  '../../../apps/web/app/api/document-versions/[documentVersionId]/download/blob-download',
+  () => ({
+    getPrivateDocumentPdf: mocks.getPrivateDocumentPdf,
+  }),
+)
+
 import {
   validateDocumentAccess,
   validateDocumentVersionAccess,
@@ -256,56 +283,11 @@ import { POST as chatPost } from '../../../apps/web/app/api/chat/route'
 import { GET as citationsGet } from '../../../apps/web/app/api/citations/[messageId]/route'
 import { GET as documentPageGet } from '../../../apps/web/app/api/documents/[id]/page/[pageNumber]/route'
 import { GET as documentStatusGet } from '../../../apps/web/app/api/documents/[id]/status/route'
+import { POST as documentUploadPost } from '../../../apps/web/app/api/documents/upload/route'
+import { POST as ingestionRunPost } from '../../../apps/web/app/api/ingestion/run/route'
+import { GET as documentVersionDownloadGet } from '../../../apps/web/app/api/document-versions/[documentVersionId]/download/route'
 
-type DocumentUploadPost = (req: Request) => Promise<Response>
-type DocumentVersionDownloadGet = (
-  req: Request,
-  context: { params: Promise<{ documentVersionId: string }> },
-) => Promise<Response>
-
-let documentUploadPost: DocumentUploadPost
-let ingestionRunPost: DocumentUploadPost
-let documentVersionDownloadGet: DocumentVersionDownloadGet
 const maxPdfBytes = 50 * 1024 * 1024 // MAX_SERVER_UPLOAD_BYTES from upload route
-
-beforeAll(async () => {
-  vi.doMock('../../../apps/web/app/api/documents/upload/blob-storage', () => ({
-    putPrivateDocumentPdf: async ({ blobKey, file }: PutPrivateDocumentPdfInput) => {
-      const blob = await mocks.put(blobKey, file, {
-        access: 'private',
-        addRandomSuffix: false,
-        allowOverwrite: false,
-        contentType: 'application/pdf',
-      })
-
-      return {
-        url: blob.url,
-        pathname: blob.pathname,
-      }
-    },
-  }))
-
-  vi.doMock('@ichtys/ingestion', () => ({
-    runIngestion: mocks.runIngestion,
-  }))
-
-  vi.doMock(
-    '../../../apps/web/app/api/document-versions/[documentVersionId]/download/blob-download',
-    () => ({
-      getPrivateDocumentPdf: mocks.getPrivateDocumentPdf,
-    }),
-  )
-
-  const uploadRoute = await import('../../../apps/web/app/api/documents/upload/route')
-  const ingestionRoute = await import('../../../apps/web/app/api/ingestion/run/route')
-  const documentVersionDownloadRoute = await import(
-    '../../../apps/web/app/api/document-versions/[documentVersionId]/download/route'
-  )
-  documentUploadPost = uploadRoute.POST
-  ingestionRunPost = ingestionRoute.POST
-  documentVersionDownloadGet = documentVersionDownloadRoute.GET
-  void uploadRoute // accessed for POST handler only
-})
 
 interface TenantFixture {
   userId: string
