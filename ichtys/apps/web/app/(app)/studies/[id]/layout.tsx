@@ -1,24 +1,10 @@
 import Link from 'next/link'
-import { auth } from '@clerk/nextjs/server'
-import {
-  validateStudyAccess,
-  AccessError,
-  studyExistsInAnotherOrganization,
-  resolveOrProvisionOrganization,
-} from '@ichtys/auth'
+import { validateStudyAccess, AccessError } from '@ichtys/auth'
 import { StudyNav } from '../../../../components/ui/study-nav'
 
 interface StudyLayoutProps {
   children: React.ReactNode
   params: Promise<{ id: string }>
-}
-
-async function studyWrongOrgHint(studyId: string): Promise<boolean> {
-  const { orgId: clerkOrgId } = await auth()
-  if (!clerkOrgId) return false
-  const org = await resolveOrProvisionOrganization(clerkOrgId)
-  if (!org) return false
-  return studyExistsInAnotherOrganization(studyId, org.id)
 }
 
 export default async function StudyLayout({ children, params }: StudyLayoutProps) {
@@ -50,23 +36,18 @@ export default async function StudyLayout({ children, params }: StudyLayoutProps
     )
   } catch (err) {
     if (err instanceof AccessError && err.status === 404) {
-      const hintWrongOrg = await studyWrongOrgHint(id)
-
+      // Respuesta uniforme: no se distingue «no existe» de «existe en otra
+      // organización». Confirmar la existencia de un estudio a quien no puede
+      // verlo es una fuga entre organizaciones.
       return (
         <div className="mx-auto max-w-lg py-16 text-center">
           <div className="alphi-card space-y-4 p-6">
             <p className="text-sm font-semibold text-alphi-navy">Estudio no disponible</p>
-            {hintWrongOrg ? (
-              <p className="text-sm text-alphi-muted">
-                Este estudio existe pero pertenece a <strong>otra organización</strong>. Cambiá la org
-                activa con el selector arriba a la izquierda (ej. <strong>INNOVA TRIALS</strong>) y volvé a
-                intentar.
-              </p>
-            ) : (
-              <p className="text-sm text-alphi-muted">
-                No encontramos este estudio en la organización activa, o no tenés permiso para verlo.
-              </p>
-            )}
+            <p className="text-sm text-alphi-muted">
+              No encontramos este estudio en la organización activa, o no tenés permiso para verlo. Si
+              trabajás en más de un centro, revisá cuál está activo en el selector de arriba a la
+              izquierda.
+            </p>
             <Link href="/studies" className="alphi-btn-primary inline-block text-sm">
               Ir a mis estudios
             </Link>

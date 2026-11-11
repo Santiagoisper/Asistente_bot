@@ -36,15 +36,3 @@ export async function resolveOrProvisionOrganization(
 
   return provisioned ?? null
 }
-
-/** True si el estudio existe pero en otra org (para mensajes UX, sin filtrar tenant). */
-export async function studyExistsInAnotherOrganization(
-  studyId: string,
-  currentOrgId: string,
-): Promise<boolean> {
-  const row = await db.query.studies.findFirst({
-    where: (s, { eq: eqFn }) => eqFn(s.id, studyId),
-    columns: { id: true, organizationId: true },
-  })
-  return Boolean(row && row.organizationId !== currentOrgId)
-}
