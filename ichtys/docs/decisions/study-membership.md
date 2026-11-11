@@ -1,6 +1,6 @@
 # Acceso por estudio: funciones y membresía
 
-Estado: **decisiones M1–M11 tomadas el 11/11/2026; M8 y M12 pendientes; sin implementar**. Revisado por Reviewer y por la revisión automática del PR. La sección de funciones se reescribió con la descripción de Santiago de cómo se organiza un centro; conviene que Reviewer la vuelva a mirar.
+Estado: **decisiones M1–M12 tomadas el 11/11/2026; sin implementar**. Revisado por Reviewer y por la revisión automática del PR. La sección de funciones se reescribió con la descripción de Santiago de cómo se organiza un centro; conviene que Reviewer la vuelva a mirar.
 Fecha: 2026-11-11.
 
 ## El problema
@@ -40,7 +40,7 @@ Tomadas de cómo se organiza un centro grande. Un centro chico usa menos: un inv
 | Dirección de Operaciones | Todos | Lo del Study Coordinator, en todos los estudios. Administra equipos y accesos |
 | Dirección de Investigación | Todos | Ve todo. Evoluciona solo si además tiene la función Investigador (M10) |
 | Monitor | El asignado, con vencimiento | Lectura, sin datos clínicos |
-| Administración de la plataforma | Ver M12 | Ajustes de la organización, claves, alta de personas |
+| Administración de la plataforma | Ninguno por esta función sola (M12) | Ajustes de la organización, claves, alta de personas. No ve datos clínicos |
 
 Todo el equipo del estudio ve los datos clínicos de los sujetos de sus estudios; el monitor no, igual que hoy.
 
@@ -50,7 +50,7 @@ Tres reglas sobre las funciones:
 2. **La autoría clínica no se hereda.** Evolucionar y responder queries salen solo de la función Investigador. Ninguna dirección ni la administración las traen consigo.
 3. **Son una matriz, no una escala.** Cada función tiene su lista de capacidades. No existe «al menos tal rol».
 
-Lecturas mías de lo conversado, a confirmar: «autorización total» del investigador es clínica y dentro de sus estudios, no administración del centro (importa para los investigadores externos); la gestión documental queda en el equipo y el investigador la lee.
+Criterios adoptados: «autorización total» del investigador es clínica y dentro de sus estudios, no administración del centro (importa para los investigadores externos); la gestión documental queda en el equipo y el investigador la lee.
 
 ### Dónde viven las funciones
 
@@ -215,11 +215,11 @@ Tomadas por Santiago el 11/11/2026.
 | M7 | Quien dirige o administra y además es médico | Funciones acumulables: tiene además la función Investigador |
 | M9 | ¿La función cambia según el estudio? ¿Ichtys refleja la delegación? | No y no. La función es la función; la delegación es asunto del CRF |
 | M10 | Direcciones de Operaciones y de Investigación | Ven todos los estudios. Quien dirige investigación evoluciona si es médico |
-| M11 | Quién da acceso a un estudio | Operaciones en todos; el Study Coordinator, que es parte de Operaciones, a su equipo en sus estudios. Lectura mía de la respuesta; a confirmar |
+| M11 | Quién da acceso a un estudio | Operaciones en todos; el Study Coordinator, que es parte de Operaciones, a su equipo en sus estudios |
 
-Pendientes:
+Delegadas por Santiago el 11/11/2026 y resueltas con la recomendación:
 
-| # | Decisión | Recomendación |
+| # | Decisión | Resuelto |
 |---|---|---|
 | M8 | Plazo de `open` y qué pasa al vencer | 60 días desde que la pantalla está disponible, con aviso al administrador a 14, 7 y 1 día. Al vencer, pasa solo a `enforced` |
 | M12 | ¿Quien administra la plataforma (ajustes, claves) ve datos clínicos y todos los estudios? | No por esa función sola. Los ve si además tiene otra. En un centro chico la misma persona tendrá las dos |
