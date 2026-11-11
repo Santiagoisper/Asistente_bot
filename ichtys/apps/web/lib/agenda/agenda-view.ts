@@ -66,3 +66,28 @@ export function agendaError(status: number, code: unknown): string {
   if (status === 503) return 'El cifrado de datos clínicos no está configurado. Avisá a quien administra el sistema.'
   return 'No se pudo guardar el turno. Probá de nuevo.'
 }
+
+export type SubjectLoad = 'idle' | 'loading' | 'ready' | 'failed'
+
+/**
+ * Opciones de sujeto a partir de la respuesta del servidor, o null si la lista
+ * no se pudo cargar. Una lista vacía es un estudio sin sujetos, no un error:
+ * quien arma el turno tiene que poder distinguir las dos cosas.
+ */
+export function subjectOptions(ok: boolean, payload: unknown): Array<{ id: string; label: string }> | null {
+  if (!ok || !Array.isArray(payload)) return null
+  const options: Array<{ id: string; label: string }> = []
+  for (const item of payload) {
+    if (typeof item !== 'object' || item === null) return null
+    const { id, subjectCode } = item as { id?: unknown; subjectCode?: unknown }
+    if (typeof id !== 'string' || typeof subjectCode !== 'string') return null
+    options.push({ id, label: subjectCode })
+  }
+  return options.sort((a, b) => a.label.localeCompare(b.label))
+}
+
+export function subjectPlaceholder(state: SubjectLoad): string {
+  if (state === 'loading') return 'Cargando sujetos…'
+  if (state === 'failed') return 'Sin sujeto — la lista no se pudo cargar'
+  return 'Sin sujeto (monitoreo, tarea del sitio)'
+}
