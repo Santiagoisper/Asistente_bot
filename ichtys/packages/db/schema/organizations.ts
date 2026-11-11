@@ -1,5 +1,6 @@
 import { pgTable, uuid, text, timestamp, jsonb, bigint } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
+import { accessMode } from './enums'
 import { sites } from './sites'
 import { studies } from './studies'
 
@@ -55,6 +56,16 @@ export const organizations = pgTable('organizations', {
   monthlyBudgetMicros: bigint('monthly_budget_micros', { mode: 'number' }),
   /** Ajustes del OS por organización (zona horaria). Null = valores de la instalación. */
   osSettings: jsonb('os_settings').$type<OrgOsSettings>(),
+  /**
+   * Modo de acceso por estudio (docs/decisions/study-membership.md).
+   * `open`: todo miembro ve todos los estudios (comportamiento histórico).
+   * `enforced`: valen funciones y membresías. Vive en una columna propia, no en
+   * `os_settings`, para que guardar otros ajustes no pueda pisarlo. La base
+   * además rechaza cualquier otro valor (CHECK en la migración 0017).
+   */
+  accessMode: text('access_mode', { enum: accessMode }).notNull().default('open'),
+  /** Fecha límite del modo `open`. Null = todavía sin fecha asignada. */
+  accessOpenUntil: timestamp('access_open_until', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })

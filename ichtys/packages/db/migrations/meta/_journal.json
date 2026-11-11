@@ -120,6 +120,13 @@
       "when": 1794424612540,
       "tag": "0016_chunks_embedding_hnsw",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794439800000,
+      "tag": "0017_access_functions_memberships",
+      "breakpoints": true
     }
   ]
 }
