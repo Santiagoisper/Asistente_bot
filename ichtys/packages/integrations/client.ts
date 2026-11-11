@@ -86,7 +86,8 @@ export async function fetchModuleSummary(
 
   // El satélite puede responder distinto según el rol del usuario: la caché
   // es por usuario, no por organización.
-  const cacheKey = `${module}:${ctx.orgId}:${ctx.userId}`
+  // La URL forma parte de la clave: si el centro cambia de sistema, no se sirve lo del anterior.
+  const cacheKey = `${module}:${ctx.orgId}:${ctx.userId}:${base.origin}${base.pathname}`
   const cached = cache.get(cacheKey)
   if (cached && now().getTime() - cached.at < SUMMARY_CACHE_TTL_MS) return cached.result
 

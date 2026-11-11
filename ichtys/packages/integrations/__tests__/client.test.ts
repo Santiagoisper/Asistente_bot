@@ -95,6 +95,18 @@ describe('fetchModuleSummary', () => {
     expect(calls).toEqual(['https://queries.centro-b.example.test/api/os/summary'])
   })
 
+  it('si la organización cambia la URL del módulo, no se sirve el resumen guardado del sistema anterior', async () => {
+    const calls: string[] = []
+    const doFetch = (async (url: string | URL | Request) => {
+      calls.push(String(url))
+      return new Response(JSON.stringify(validSummary), { status: 200 })
+    }) as typeof fetch
+    await fetchModuleSummary('queries', { ...ctx, baseUrl: 'https://viejo.example.test' }, { env: env(), fetch: doFetch })
+    await fetchModuleSummary('queries', { ...ctx, baseUrl: 'https://nuevo.example.test' }, { env: env(), fetch: doFetch })
+    await fetchModuleSummary('queries', { ...ctx, baseUrl: 'https://nuevo.example.test' }, { env: env(), fetch: doFetch })
+    expect(calls).toEqual(['https://viejo.example.test/api/os/summary', 'https://nuevo.example.test/api/os/summary'])
+  })
+
   it('una organización sin ese módulo no usa la URL de la instalación: not_configured y no sale ningún pedido', async () => {
     let called = false
     const doFetch = (async () => {

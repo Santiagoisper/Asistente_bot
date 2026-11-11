@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ loadOrgIntegrations: vi.fn(), fetchModuleSummary: vi.fn() }))
 
@@ -17,6 +17,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.fetchModuleSummary.mockResolvedValue({ module: 'queries', status: 'ok', summary: null, fetchedAt: 'x' })
 })
+
+afterEach(() => vi.unstubAllEnvs())
 
 describe('loadModuleSummary — la URL sale de la organización', () => {
   it('pide el resumen a la URL del centro', async () => {
@@ -38,5 +40,25 @@ describe('loadModuleSummary — la URL sale de la organización', () => {
     await expect(loadModuleSummary('queries', 'user_1', 'org-a')).resolves.toBeDefined()
     expect(mocks.fetchModuleSummary).toHaveBeenCalledWith('queries', { userId: 'user_1', orgId: 'org-a', baseUrl: null })
     error.mockRestore()
+  })
+
+  it('solo en la máquina de desarrollo, un centro sin fila usa las variables de la instalación', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    mocks.loadOrgIntegrations.mockResolvedValue([])
+    await loadModuleSummary('queries', 'user_1', 'org-dev')
+    expect(mocks.fetchModuleSummary).toHaveBeenCalledWith('queries', { userId: 'user_1', orgId: 'org-dev' })
+    // La fila de la organización sigue mandando también en desarrollo.
+    mocks.loadOrgIntegrations.mockResolvedValue([row])
+    await loadModuleSummary('queries', 'user_1', 'org-dev')
+    expect(mocks.fetchModuleSummary).toHaveBeenLastCalledWith('queries', { userId: 'user_1', orgId: 'org-dev', baseUrl: 'https://queries.centro-a.example.test' })
+  })
+
+  it('en producción y en preview nunca se cae en las variables de la instalación', async () => {
+    for (const env of ['production', 'test']) {
+      vi.stubEnv('NODE_ENV', env)
+      mocks.loadOrgIntegrations.mockResolvedValue([])
+      await loadModuleSummary('queries', 'user_1', 'org-b')
+      expect(mocks.fetchModuleSummary).toHaveBeenLastCalledWith('queries', { userId: 'user_1', orgId: 'org-b', baseUrl: null })
+    }
   })
 })

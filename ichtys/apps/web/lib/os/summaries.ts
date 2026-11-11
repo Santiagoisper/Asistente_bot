@@ -16,5 +16,8 @@ export const loadModuleSummary = cache(async (module: OsModule, userId: string, 
     console.error('[os] no se pudo leer la configuración de integraciones')
     baseUrl = null
   }
+  // Solo en la máquina de desarrollo, un centro sin fila usa las OS_*_URL de la
+  // instalación. En producción y en preview eso mezclaría centros.
+  if (baseUrl === null && process.env.NODE_ENV === 'development') return fetchModuleSummary(module, { userId, orgId })
   return fetchModuleSummary(module, { userId, orgId, baseUrl })
 })
