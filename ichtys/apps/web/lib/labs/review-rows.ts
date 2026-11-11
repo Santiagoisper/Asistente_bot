@@ -126,12 +126,13 @@ export function formatReading(value: number): string {
 export type ReviewPhase = 'editing' | 'saving' | 'confirmed' | 'rejected' | 'conflict'
 
 /**
- * Qué decir de un campo que el programa no conocía. Antes de confirmar es una
- * promesa («se crea al confirmar»); después tiene que decir lo que pasó, y si
- * el estudio se rechazó no se creó nada y no hay nada que decir.
+ * Qué decir de un campo que el programa no conocía. Solo vale mientras se
+ * revisa: es una promesa («se crea al confirmar»). Después de confirmar o
+ * rechazar no se dice nada: quien decide si el campo era nuevo es el servidor,
+ * con el nombre final del analito, y la persona pudo haberlo corregido a uno
+ * que ya existía. Afirmar «quedó creado» desde la pantalla podía ser falso.
  */
 export function newFieldNote(phase: ReviewPhase): string | null {
-  if (phase === 'confirmed') return 'No existía en el programa; quedó creado al confirmar.'
-  if (phase === 'rejected') return null
-  return 'No existía en el programa; se crea al confirmar.'
+  if (phase === 'editing' || phase === 'saving') return 'No existía en el programa; se crea al confirmar.'
+  return null
 }

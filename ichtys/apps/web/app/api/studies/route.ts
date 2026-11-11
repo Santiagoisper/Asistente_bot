@@ -1,9 +1,8 @@
 import { auth } from '@clerk/nextjs/server'
-import { db, studies } from '@ichtys/db'
+import { auditLogs, db, studies } from '@ichtys/db'
 import { canAdministerStudy, handleApiError, normalizeRole, resolveOrProvisionOrganization } from '@ichtys/auth'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../lib/api/body-limit'
 import { createStudyInput } from '../../../lib/api/input-schemas'
-import { safeWriteAuditLog } from '../../../lib/chat/persistence'
 
 export const runtime = 'nodejs'
 
@@ -38,29 +37,32 @@ export async function POST(req: Request): Promise<Response> {
     const org = await resolveOrProvisionOrganization(clerkOrgId)
     if (!org) throw new Error('Failed to provision organization')
 
-    const [study] = await db
-      .insert(studies)
-      .values({
+    // El alta y su registro de auditoría van en la misma transacción
+    // (docs/decisions/audit-policy.md): o quedan los dos, o ninguno. Si el
+    // registro falla, el estudio no existe y reintentar no lo duplica.
+    // El nombre del estudio no va al registro.
+    const study = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(studies)
+        .values({
+          organizationId: org.id,
+          name: parsed.data.name,
+          protocolNumber: parsed.data.protocolNumber ?? null,
+          status: 'active',
+        })
+        .returning()
+      if (!created) throw new Error('Insert did not return a row')
+
+      await tx.insert(auditLogs).values({
+        action: 'study.create',
         organizationId: org.id,
-        name: parsed.data.name,
-        protocolNumber: parsed.data.protocolNumber ?? null,
-        status: 'active',
+        studyId: created.id,
+        userId,
+        resourceType: 'study',
+        resourceId: created.id,
+        metadata: { hasProtocolNumber: created.protocolNumber !== null },
       })
-      .returning()
-
-    if (!study) throw new Error('Insert did not return a row')
-
-    // Abrir un estudio queda registrado: quién, cuándo y en qué organización.
-    // El nombre del estudio no va al registro. Si el registro falla no se
-    // devuelve error: el estudio ya existe y un reintento lo duplicaría.
-    await safeWriteAuditLog({
-      action: 'study.create',
-      orgId: org.id,
-      studyId: study.id,
-      userId,
-      resourceType: 'study',
-      resourceId: study.id,
-      metadata: { hasProtocolNumber: study.protocolNumber !== null },
+      return created
     })
 
     return Response.json(
