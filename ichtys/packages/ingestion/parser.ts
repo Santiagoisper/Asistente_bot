@@ -93,10 +93,87 @@ function normalizePageText(items: readonly unknown[]): string {
     .trim()
 }
 
+interface PositionedItem {
+  str: string
+  x: number
+  y: number
+  width: number | null
+  height: number
+}
+
+function positionOf(item: unknown): PositionedItem | null {
+  if (!isPdfTextItem(item)) return null
+  const transform = (item as { transform?: unknown }).transform
+  if (!Array.isArray(transform) || transform.length < 6) return null
+  const [, , , scaleY, x, y] = transform as unknown[]
+  if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) return null
+  const width = (item as { width?: unknown }).width
+  const height = (item as { height?: unknown }).height
+  return {
+    str: item.str,
+    x,
+    y,
+    width: typeof width === 'number' && Number.isFinite(width) ? width : null,
+    height:
+      typeof height === 'number' && height > 0 ? height : typeof scaleY === 'number' && scaleY !== 0 ? Math.abs(scaleY) : 10,
+  }
+}
+
+/**
+ * Texto de una página conservando los renglones: agrupa los ítems por su
+ * altura en la página y los ordena de izquierda a derecha. Lo usa la carga de
+ * laboratorios, donde cada renglón es un resultado. `normalizePageText` (RAG)
+ * no cambia: une todo con espacios porque ahí el renglón no importa.
+ */
+export function normalizePageLines(items: readonly unknown[]): string {
+  const positioned: PositionedItem[] = []
+  for (const item of items) {
+    const entry = positionOf(item)
+    if (entry && entry.str.length > 0) positioned.push(entry)
+  }
+  // De arriba hacia abajo (en PDF la y crece hacia arriba) y de izquierda a derecha.
+  positioned.sort((a, b) => b.y - a.y || a.x - b.x)
+
+  const lines: PositionedItem[][] = []
+  for (const entry of positioned) {
+    const current = lines[lines.length - 1]
+    const anchor = current?.[0]
+    if (current && anchor && Math.abs(anchor.y - entry.y) <= Math.max(2, Math.min(anchor.height, entry.height) * 0.5)) {
+      current.push(entry)
+    } else {
+      lines.push([entry])
+    }
+  }
+
+  let raw = ''
+  for (const line of lines) {
+    line.sort((a, b) => a.x - b.x)
+    let text = ''
+    let previous: PositionedItem | null = null
+    for (const entry of line) {
+      // Fragmentos de una misma palabra vienen pegados; columnas distintas, separadas.
+      const glued = previous !== null && previous.width !== null && entry.x - (previous.x + previous.width) < 1
+      text += previous === null || glued ? entry.str : ` ${entry.str}`
+      previous = entry
+    }
+    const piece = `${text.replace(/[ \t]{2,}/g, ' ').trim()}\n`
+    if (raw.length + piece.length > MAX_PAGE_TEXT_CHARS) {
+      throw new PdfParseError('pdf_complexity_limit', 'PDF exceeds the extracted-text limit')
+    }
+    raw += piece
+  }
+  return raw.trim()
+}
+
+export interface ParsePdfOptions {
+  /** Conserva los renglones de cada página (uno por línea). Por defecto, texto corrido. */
+  preserveLines?: boolean
+}
+
 /**
  * Extracts text by page from a PDF buffer.
  */
-export async function parsePdf(data: Buffer | Uint8Array): Promise<ParsedDocument> {
+export async function parsePdf(data: Buffer | Uint8Array, options: ParsePdfOptions = {}): Promise<ParsedDocument> {
   try {
     const source = Buffer.isBuffer(data) ? data : Buffer.from(data)
     // pdf.js 1.10 misreads a small Buffer (pooled or cloned). A fresh Uint8Array
@@ -129,7 +206,7 @@ export async function parsePdf(data: Buffer | Uint8Array): Promise<ParsedDocumen
           (textContent) => {
             let rawText: string
             try {
-              rawText = normalizePageText(textContent.items)
+              rawText = options.preserveLines ? normalizePageLines(textContent.items) : normalizePageText(textContent.items)
             } catch (err) {
               if (err instanceof PdfParseError && err.code === 'pdf_complexity_limit') return noteLimit()
               throw err

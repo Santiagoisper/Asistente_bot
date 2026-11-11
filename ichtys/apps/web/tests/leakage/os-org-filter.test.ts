@@ -38,6 +38,25 @@ describe('leakage — consultas del OS filtradas por organización', () => {
     })
   }
 
+  it('servicio de informes de laboratorio: toda consulta y toda escritura llevan la organización', () => {
+    const source = readFileSync(join(WEB_ROOT, 'lib/labs/lab-report-service.ts'), 'utf8')
+    const wheres = countMatches(source, /\.where\(/g)
+    const filters = countMatches(source, /\.organizationId, (params\.)?orgId\)/g)
+    expect(wheres).toBeGreaterThan(0)
+    expect(filters).toBeGreaterThanOrEqual(wheres)
+    const inserts = countMatches(source, /\.insert\(/g)
+    expect(countMatches(source, /organizationId: params\.orgId/g)).toBeGreaterThanOrEqual(inserts)
+  })
+
+  it('las rutas de informes validan el sujeto contra el estudio de la URL', () => {
+    const base = 'app/api/studies/[id]/subjects/[subjectId]/lab-reports'
+    for (const file of ['route.ts', '[reportId]/route.ts', '[reportId]/confirm/route.ts', '[reportId]/reject/route.ts']) {
+      const route = readFileSync(join(WEB_ROOT, base, file), 'utf8')
+      expect(route).toContain('validateSubjectAccess(subjectId, studyId)')
+      expect(route).not.toMatch(/orgId: (body|parsed\.data)/)
+    }
+  })
+
   it('la ruta del buscador toma la organización del token de Clerk', () => {
     const route = readFileSync(join(WEB_ROOT, 'app/api/search/route.ts'), 'utf8')
     expect(route).toContain('await auth()')

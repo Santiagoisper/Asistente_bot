@@ -57,3 +57,14 @@ export {
   type NormalizedVisitWindow,
   type SpecVisitWindowInput,
 } from './visit-window'
+export {
+  MAX_LAB_REPORT_LINES,
+  MAX_LAB_REPORT_ROWS,
+  normalizeAnalyteKey,
+  numericReadings,
+  parseLabReportText,
+  parsePrintedNumber,
+  rowIsGrounded,
+  type ParsedLabReport,
+  type ParsedLabRow,
+} from './lab-report-parser'
