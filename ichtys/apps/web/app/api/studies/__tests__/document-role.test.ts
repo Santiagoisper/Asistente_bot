@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   resolveOrProvisionOrganization: vi.fn(),
   insert: vi.fn(),
-  safeWriteAuditLog: vi.fn(),
+  auditValues: vi.fn(),
 }))
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: mocks.auth }))
@@ -20,12 +20,21 @@ vi.mock('@ichtys/auth', async () => {
   }
 })
 
-vi.mock('@ichtys/db', () => ({
-  db: { insert: (...args: unknown[]) => mocks.insert(...args) },
-  studies: { id: 'studies.id' },
-}))
-
-vi.mock('../../../../lib/chat/persistence', () => ({ safeWriteAuditLog: mocks.safeWriteAuditLog }))
+vi.mock('@ichtys/db', () => {
+  const studies = { id: 'studies.id' }
+  const auditLogs = { id: 'audit_logs.id' }
+  // La transacción de prueba no revierte nada: si el registro de auditoría
+  // lanza, la ruta tiene que propagar el error y no devolver 201.
+  const tx = {
+    insert: (table: unknown) =>
+      table === auditLogs ? { values: (row: unknown) => mocks.auditValues(row) } : mocks.insert(table),
+  }
+  return {
+    db: { transaction: async (run: (t: typeof tx) => Promise<unknown>) => run(tx) },
+    studies,
+    auditLogs,
+  }
+})
 
 import { POST } from '../route'
 
@@ -50,6 +59,7 @@ beforeEach(() => {
   mocks.insert.mockReturnValue({
     values: () => ({ returning: async () => [STUDY] }),
   })
+  mocks.auditValues.mockResolvedValue(undefined)
 })
 
 describe('POST /api/studies — gestión documental (S1)', () => {
@@ -99,11 +109,11 @@ describe('POST /api/studies — gestión documental (S1)', () => {
     const res = await POST(createRequest())
 
     expect(res.status).toBe(201)
-    expect(mocks.safeWriteAuditLog).toHaveBeenCalledTimes(1)
-    const entry = mocks.safeWriteAuditLog.mock.calls[0]?.[0]
+    expect(mocks.auditValues).toHaveBeenCalledTimes(1)
+    const entry = mocks.auditValues.mock.calls[0]?.[0]
     expect(entry).toMatchObject({
       action: 'study.create',
-      orgId: 'org-interna',
+      organizationId: 'org-interna',
       studyId: STUDY.id,
       userId: 'user_1',
       resourceType: 'study',
@@ -112,11 +122,20 @@ describe('POST /api/studies — gestión documental (S1)', () => {
     expect(JSON.stringify(entry)).not.toContain(STUDY.name)
   })
 
+  it('si el registro de auditoría falla, el alta no se informa como hecha', async () => {
+    mocks.auth.mockResolvedValue({ userId: 'user_1', orgId: 'org_clerk', orgRole: 'org:study_admin' })
+    mocks.auditValues.mockRejectedValue(new Error('falla ficticia'))
+
+    const res = await POST(createRequest())
+
+    expect(res.status).toBe(500)
+  })
+
   it('un pedido rechazado no deja registro de estudio creado', async () => {
     mocks.auth.mockResolvedValue({ userId: 'user_1', orgId: 'org_clerk', orgRole: 'org:read_only_monitor' })
 
     await POST(createRequest())
 
-    expect(mocks.safeWriteAuditLog).not.toHaveBeenCalled()
+    expect(mocks.auditValues).not.toHaveBeenCalled()
   })
 })
