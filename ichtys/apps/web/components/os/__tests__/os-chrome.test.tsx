@@ -52,7 +52,7 @@ describe('cáscara del OS', () => {
     const links = Array.from(container.querySelectorAll('nav[aria-label="Módulos"] a'))
     expect(links).toHaveLength(10)
     const soon = links.filter((link) => link.textContent?.includes('Próximamente')).map((link) => link.getAttribute('href'))
-    expect(soon).toEqual(['/agenda', '/visitas', '/metricas'])
+    expect(soon).toEqual(['/visitas', '/metricas'])
   })
 
   it('la campana dice cuántos ítems hay y no muestra globo en cero', () => {

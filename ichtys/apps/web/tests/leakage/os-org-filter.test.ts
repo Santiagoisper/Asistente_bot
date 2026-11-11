@@ -38,7 +38,7 @@ describe('leakage — consultas del OS filtradas por organización', () => {
     })
   }
 
-  it.each(['lib/labs/lab-report-service.ts', 'lib/labs/lab-image-report.ts'])('%s: toda consulta y toda escritura llevan la organización', (file) => {
+  it.each(['lib/labs/lab-report-service.ts', 'lib/labs/lab-image-report.ts', 'lib/agenda/agenda-service.ts'])('%s: toda consulta y toda escritura llevan la organización', (file) => {
     const source = readFileSync(join(WEB_ROOT, file), 'utf8')
     const wheres = countMatches(source, /\.where\(/g)
     const filters = countMatches(source, /\.organizationId, (params\.)?orgId\)/g)
@@ -53,6 +53,15 @@ describe('leakage — consultas del OS filtradas por organización', () => {
     for (const file of ['route.ts', 'images/route.ts', '[reportId]/route.ts', '[reportId]/image/[page]/route.ts', '[reportId]/confirm/route.ts', '[reportId]/reject/route.ts']) {
       const route = readFileSync(join(WEB_ROOT, base, file), 'utf8')
       expect(route).toContain('validateSubjectAccess(subjectId, studyId)')
+      expect(route).not.toMatch(/orgId: (body|parsed\.data)/)
+    }
+  })
+
+  it('las rutas de agenda validan el estudio de la URL y no aceptan la organización del cuerpo', () => {
+    for (const file of ['app/api/studies/[id]/agenda/route.ts', 'app/api/studies/[id]/agenda/[itemId]/route.ts']) {
+      const route = readFileSync(join(WEB_ROOT, file), 'utf8')
+      expect(route).toContain('validatePhiStudyAccess(studyId)')
+      expect(route).toContain('orgId: access.orgId')
       expect(route).not.toMatch(/orgId: (body|parsed\.data)/)
     }
   })

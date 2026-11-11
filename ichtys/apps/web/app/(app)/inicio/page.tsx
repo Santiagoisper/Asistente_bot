@@ -5,6 +5,10 @@ import { BookOpen, CalendarDays, FlaskConical, MessageSquare, Mic } from 'lucide
 import { ModuleCard } from '../../../components/os/module-card'
 import { ProtocolIntelligence } from '../../../components/os/protocol-intelligence'
 import { ButtonLink, Card, EmptyState, LoadError, Pill, StatCard, cardClass } from '../../../components/os/ui'
+import { KIND_LABELS, STATUS_LABELS } from '../../../lib/agenda/agenda-schema'
+import { listAgendaDay } from '../../../lib/agenda/agenda-service'
+import { dayKeyInZone, siteTimeZone } from '../../../lib/agenda/agenda-time'
+import { daySummary, toAgendaCard } from '../../../lib/agenda/agenda-view'
 import { isOsEnabled } from '../../../lib/flags'
 import { getFirstName, getOsContext, type OsContext } from '../../../lib/os/context'
 import { greetingFor, longDate, sinceLabel } from '../../../lib/os/greeting'
@@ -57,6 +61,23 @@ async function Greeting() {
   )
 }
 
+async function TodayTurnsStat({ ctx }: { ctx: OsContext }) {
+  return guarded('los turnos de hoy', async () => {
+    const timeZone = siteTimeZone()
+    const live = (await listAgendaDay({ orgId: ctx.orgId, dayKey: dayKeyInZone(new Date(), timeZone), timeZone, includeSubjects: false })).filter((entry) => entry.status !== 'cancelled')
+    const pending = live.filter((entry) => entry.status === 'scheduled').length
+    return (
+      <StatCard
+        label="Turnos de hoy"
+        value={number.format(live.length)}
+        note={live.length === 0 ? 'sin turnos' : pending === 0 ? 'todos resueltos' : `${pending} ${pending === 1 ? 'pendiente' : 'pendientes'}`}
+        icon={<CalendarDays aria-hidden="true" className="h-6 w-6" strokeWidth={1.75} />}
+        href="/agenda"
+      />
+    )
+  })
+}
+
 async function ActiveStudiesStat({ ctx }: { ctx: OsContext }) {
   return guarded('los protocolos activos', async () => {
     const total = await countActiveStudies(ctx.orgId)
@@ -103,6 +124,42 @@ async function OpenQueriesStat({ ctx }: { ctx: OsContext }) {
         icon={<MessageSquare aria-hidden="true" className="h-6 w-6" strokeWidth={1.75} />}
         href="/queries"
       />
+    )
+  })
+}
+
+/** Turnos de hoy en la hora del sitio. Los cancelados no se listan. */
+async function TodayAgenda({ ctx }: { ctx: OsContext }) {
+  return guarded('la jornada de hoy', async () => {
+    const timeZone = siteTimeZone()
+    const today = dayKeyInZone(new Date(), timeZone)
+    const cards = (await listAgendaDay({ orgId: ctx.orgId, dayKey: today, timeZone, includeSubjects: ctx.canSeeSubjects }))
+      .map((entry) => toAgendaCard(entry, timeZone))
+      .filter((card) => card.status !== 'cancelled')
+    if (cards.length === 0) {
+      return <EmptyState title="No hay turnos para hoy" detail="Cuando agendes una visita para hoy, aparece acá con su hora, sujeto, estudio y estado." action={<ButtonLink href="/agenda" variant="solid">Agendar un turno</ButtonLink>} />
+    }
+    return (
+      <>
+        <p className="mb-2 text-sm text-os-subtle">{daySummary(cards)}</p>
+        <ol className="flex flex-col">
+          {cards.slice(0, 8).map((card) => (
+            <li key={card.id}>
+              <Link href="/agenda" className="flex min-h-11 items-center justify-between gap-3 rounded-xl px-3 py-2 hover:bg-os-ground focus-visible:outline focus-visible:outline-2 focus-visible:outline-os-accent">
+                <span className="flex min-w-0 items-center gap-3">
+                  <span className="w-12 shrink-0 text-sm font-bold tabular-nums text-os-ink">{card.time}</span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold text-os-ink">{card.title}</span>
+                    <span className="block truncate text-sm text-os-subtle">{[card.subjectCode, card.studyLabel, KIND_LABELS[card.kind]].filter(Boolean).join(' · ')}</span>
+                  </span>
+                </span>
+                <Pill tone={card.status === 'done' ? 'ok' : card.status === 'no_show' ? 'error' : 'info'}>{STATUS_LABELS[card.status]}</Pill>
+              </Link>
+            </li>
+          ))}
+        </ol>
+        {cards.length > 8 ? <p className="mt-2 text-sm text-os-subtle">Y {cards.length - 8} más en la agenda.</p> : null}
+      </>
     )
   })
 }
@@ -277,13 +334,9 @@ export default async function InicioPage() {
       </Suspense>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Visitas de hoy"
-          value={null}
-          note="Sin agenda todavía"
-          icon={<CalendarDays aria-hidden="true" className="h-6 w-6" strokeWidth={1.75} />}
-          href="/agenda"
-        />
+        <Suspense fallback={<Skeleton />}>
+          <TodayTurnsStat ctx={ctx} />
+        </Suspense>
         <Suspense fallback={<Skeleton />}>
           <PendingLabsStat ctx={ctx} />
         </Suspense>
@@ -299,13 +352,12 @@ export default async function InicioPage() {
         <Card
           labelledBy="jornada-de-hoy"
           title="Jornada de hoy"
-          subtitle="Visitas programadas en el sitio."
+          subtitle="Turnos programados en el sitio."
           action={<ButtonLink href="/agenda">Ver agenda</ButtonLink>}
         >
-          <EmptyState
-            title="La agenda todavía no está disponible"
-            detail="Cuando se active, vas a ver acá cada visita del día con su hora, sujeto, estudio, tipo y estado."
-          />
+          <Suspense fallback={<Skeleton className="h-40" />}>
+            <TodayAgenda ctx={ctx} />
+          </Suspense>
         </Card>
         <Suspense fallback={<Skeleton className="h-64" />}>
           <PriorityList ctx={ctx} />

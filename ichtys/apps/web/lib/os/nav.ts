@@ -27,7 +27,7 @@ export interface NavItem {
 
 export const OS_NAV: NavItem[] = [
   { href: '/inicio', label: 'Inicio', icon: 'home', group: 'main' },
-  { href: '/agenda', label: 'Agenda', icon: 'calendar', group: 'main', soon: true },
+  { href: '/agenda', label: 'Agenda', icon: 'calendar', group: 'main' },
   { href: '/visitas', label: 'Visitas', icon: 'users', group: 'main', soon: true },
   { href: '/studies', label: 'Protocolos', icon: 'book', group: 'main' },
   { href: '/laboratorios', label: 'Laboratorios', icon: 'flask', group: 'main' },
