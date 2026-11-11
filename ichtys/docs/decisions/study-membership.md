@@ -1,67 +1,92 @@
-# Membresía por estudio
+# Acceso por estudio: funciones y membresía
 
-Estado: **decisiones M1–M6 aprobadas el 11/11/2026; M7 y M8 pendientes; sin implementar**. Revisado por Reviewer y por la revisión automática del PR; sus correcciones están incorporadas abajo.
+Estado: **decisiones M1–M11 tomadas el 11/11/2026; M8 y M12 pendientes; sin implementar**. Revisado por Reviewer y por la revisión automática del PR. La sección de funciones se reescribió con la descripción de Santiago de cómo se organiza un centro; conviene que Reviewer la vuelva a mirar.
 Fecha: 2026-11-11.
 
 ## El problema
 
-Hoy la frontera de acceso es la organización. `validateStudyAccess` (`packages/auth/validate-study-access.ts`) comprueba que el estudio pertenezca a la organización del token y que el rol alcance; no comprueba que **esa persona** tenga algo que ver con **ese estudio**. Los listados hacen lo mismo: filtran por `organization_id` y nada más.
+Son dos, y se resuelven juntos.
 
-Consecuencia: todo miembro de una organización ve todos los estudios de la organización, con el alcance que le dé su rol.
+**Alcance.** Hoy la frontera de acceso es la organización. `validateStudyAccess` (`packages/auth/validate-study-access.ts`) comprueba que el estudio pertenezca a la organización del token y que el rol alcance; no comprueba que **esa persona** tenga algo que ver con **ese estudio**. Los listados filtran por `organization_id` y nada más. Todo miembro de una organización ve todos sus estudios.
 
-Para un centro con un solo equipo eso alcanza. Deja de alcanzar en cuanto pasa lo normal en investigación clínica:
+- Un monitor externo entra a revisar el estudio de un patrocinador y ve los de otros patrocinadores.
+- Un investigador ve sujetos de estudios en los que no participa.
+- Un centro no puede demostrar quién tenía acceso a qué estudio en una fecha dada, porque la respuesta es «todos, a todo».
 
-- Un monitor externo entra a revisar el estudio de un patrocinador y ve la lista, los protocolos y los documentos de los estudios de otros patrocinadores.
-- Un investigador principal ve sujetos de estudios en los que no participa. El rol le da acceso a datos clínicos; nada lo limita a sus estudios.
-- Un centro no puede demostrar ante una auditoría quién tenía acceso a qué estudio en una fecha dada, porque la respuesta es «todos, a todo».
+**Capacidad.** Los cinco roles del código (`packages/auth/roles.ts`) están ordenados en una escala: quien está más arriba puede todo lo de abajo. Un centro no funciona así. El investigador tiene toda la autoridad clínica y no administra el centro; quien dirige operaciones ve todo y no escribe una historia clínica. Con la escala, hoy la ruta de evoluciones acepta a cualquiera con acceso a datos clínicos: investigador, coordinador, `study_admin` y `org_admin`.
 
 La frontera entre organizaciones no cambia y no se discute acá: sigue siendo la primera comprobación, siempre.
 
 ## Qué se propone: dos ejes
 
-- **Alcance**: a qué estudios entra una persona. Lo decide la **membresía**.
-- **Capacidad**: qué puede hacer adentro. Lo decide el **rol de la organización**.
+- **Alcance**: a qué estudios entra una persona. Lo decide la **membresía**, salvo en las funciones de dirección, que entran a todos.
+- **Capacidad**: qué puede hacer adentro. Lo decide la **función** de la persona en el centro.
 
-Los dos se comprueban siempre, y ninguno reemplaza al otro:
+Los dos se comprueban siempre, y ninguno reemplaza al otro. Quien compruebe solo la función deja a todos viendo todo otra vez. La membresía no lleva permisos.
 
-- Quien compruebe solo el rol deja a todos viendo todo otra vez.
-- Quien le agregue permisos a la fila de membresía duplica la matriz de permisos. La membresía no lleva permisos.
+La función de una persona es la misma en todos sus estudios (M9). Por eso no va en la membresía. La delegación de tareas por estudio es asunto del CRF del patrocinador y no se modela en Ichtys (M9).
 
-`study_admin` es un rol de la organización cuyo alcance efectivo es por estudio: entra solo a los estudios que crea o a los que lo suman (M3). En la práctica es «responsable de *este* estudio», expresado como rol × membresía. No hace falta un rol distinto por estudio; si algún día una misma persona necesita oficios distintos en estudios distintos, se agrega una columna a la tabla.
+### Funciones
 
-### Qué puede cada rol
+Tomadas de cómo se organiza un centro grande. Un centro chico usa menos: un investigador, un subinvestigador, un Study Coordinator y, a lo sumo, un asistente.
 
-Columna «hoy»: lo que hace el código en `main` (`packages/auth/roles.ts` y las rutas). Columna «regla»: lo definido por Santiago el 11/11/2026.
-
-| Capacidad | Hoy | Regla |
+| Función | Estudios | Qué hace en Ichtys |
 |---|---|---|
-| Ver datos clínicos de sujetos | investigador, coordinador, `study_admin`, `org_admin` | igual |
-| Ver laboratorios y qué datos van al CRF | los mismos | igual; es trabajo central de `study_admin` |
-| Controlar que lo evolucionado por el médico sea correcto | sin capacidad propia | `study_admin` |
-| **Escribir una evolución clínica** | los cuatro roles con acceso a datos clínicos: la ruta de evoluciones exige solo ese acceso | **solo el médico**. `study_admin` no |
-| **Responder en nombre del médico** | sin capacidad propia | **nadie más que el médico** |
-| Subir y gestionar documentos | coordinador, `study_admin`, `org_admin` | igual |
-| Crear estudios, importar, ajustes de la organización | `study_admin`, `org_admin` | igual |
-| Ver y nada más | monitor (sin datos clínicos) | igual |
+| Investigador (PI o Sub-PI) | Los suyos | Ve los datos clínicos. **Es el único que evoluciona una historia clínica y el único que responde un query.** PI o Sub-PI es una etiqueta por estudio, sin diferencia de permisos |
+| Study Coordinator | Los suyos | Todo lo operativo del estudio: documentos, agenda, laboratorios, CRF y queries. Crea estudios. Da acceso a su equipo en sus estudios (M11) |
+| Asistente de laboratorio | Los de su equipo | Carga y confirma valores de laboratorio |
+| Asistente de regulatorio | Los de su equipo | Documentos, SOA y hojas de visita |
+| Asistente de CRF | Los de su equipo | Ve qué datos van al CRF. Levanta los queries y sigue el plazo de respuesta del médico |
+| Dirección de Operaciones | Todos | Lo del Study Coordinator, en todos los estudios. Administra equipos y accesos |
+| Dirección de Investigación | Todos | Ve todo. Evoluciona solo si además tiene la función Investigador (M10) |
+| Monitor | El asignado, con vencimiento | Lectura, sin datos clínicos |
+| Administración de la plataforma | Ver M12 | Ajustes de la organización, claves, alta de personas |
 
-Dos consecuencias que este documento registra pero no resuelve:
+Todo el equipo del estudio ve los datos clínicos de los sujetos de sus estudios; el monitor no, igual que hoy.
 
-1. **La escritura de evoluciones hoy es más amplia que la regla.** Cerrarla es un cambio propio, chico y separado de la membresía: una capacidad explícita de autoría clínica, exigida en la ruta, con su prueba. No se deriva de la jerarquía: la jerarquía es lineal (`study_admin` está por encima del investigador) y la autoría clínica no lo es.
-2. **Un rol por persona no alcanza para «administra y además es médico».** Si el director del centro es `org_admin` y también investigador, con la regla aplicada sobre el rol no podría evolucionar. Ver M7.
+Tres reglas sobre las funciones:
+
+1. **Son acumulables.** En un centro chico un asistente hace laboratorio, regulatorio y CRF. En uno grande, quien dirige investigación puede ser además médico. Una persona tiene las funciones que le correspondan y sus capacidades son la suma.
+2. **La autoría clínica no se hereda.** Evolucionar y responder queries salen solo de la función Investigador. Ninguna dirección ni la administración las traen consigo.
+3. **Son una matriz, no una escala.** Cada función tiene su lista de capacidades. No existe «al menos tal rol».
+
+Lecturas mías de lo conversado, a confirmar: «autorización total» del investigador es clínica y dentro de sus estudios, no administración del centro (importa para los investigadores externos); la gestión documental queda en el equipo y el investigador la lee.
+
+### Dónde viven las funciones
+
+El proveedor de identidad da un solo rol por persona. No alcanza para funciones acumulables. Las funciones pasan a nuestra base:
+
+```
+member_functions
+  id               uuid, clave primaria
+  organization_id  uuid, no nulo
+  user_id          text, no nulo
+  function         text, no nulo        -- lista cerrada
+  granted_by       text, no nulo
+  granted_at       timestamptz, no nulo
+  revoked_by       text, nulo
+  revoked_at       timestamptz, nulo    -- la baja no borra la fila
+
+  único (organization_id, user_id, function) donde revoked_at es nulo
+```
+
+El proveedor de identidad sigue diciendo quién es la persona y si pertenece a la organización. Qué puede hacer lo dice esta tabla.
+
+Efecto lateral buscado: quién tenía alcance total en una fecha pasada queda en la base, con fechas. Antes dependía de la historia de roles del proveedor de identidad, que no guardamos.
 
 ## Reglas
 
-1. `org_admin` entra a todos los estudios de su organización sin fila de membresía. Es quien las administra.
-2. Cualquier otro rol entra a un estudio solo si tiene una membresía vigente en ese estudio.
+1. Las direcciones entran a todos los estudios de su organización sin fila de membresía.
+2. Cualquier otra función entra a un estudio solo si la persona tiene una membresía vigente en ese estudio.
 3. Quien crea un estudio queda como miembro en la misma transacción.
-4. Una membresía puede tener fecha de vencimiento. Vencida, no da acceso. Pensado para monitores, que rotan.
+4. Una membresía puede tener fecha de vencimiento. Vencida, no da acceso. Para el monitor es obligatoria (M4).
 5. Sin membresía la respuesta es **404**, igual que para un estudio que no existe o que es de otra organización. No se confirma la existencia de un estudio a quien no puede verlo.
 6. Un estudio al que la persona no entra tampoco aparece en listados, búsquedas, contadores del Inicio, agenda ni pendientes de laboratorio. Un contador que suma estudios ajenos es una fuga aunque no muestre nombres.
-7. Alta, baja y cambio de vencimiento de una membresía, y el cambio de modo de la organización, quedan en `audit_logs`.
+7. Alta y baja de funciones, alta, baja y cambio de vencimiento de membresías, y el cambio de modo de la organización, quedan en `audit_logs`.
 
 La regla 5 hoy no se cumple entre organizaciones: `apps/web/app/(app)/studies/[id]/layout.tsx` llama a `studyExistsInAnotherOrganization` (`packages/auth/resolve-org.ts`), que consulta el estudio sin límite de organización para distinguir el caso. Se quita en un PR propio, antes que todo lo demás (paso 0).
 
-## Tabla
+## Tabla de membresías
 
 ```
 study_memberships
@@ -69,6 +94,7 @@ study_memberships
   organization_id  uuid, no nulo
   study_id         uuid, no nulo
   user_id          text, no nulo        -- identificador del usuario en el proveedor de identidad
+  study_label      text, nulo           -- «PI», «Sub-PI»; informativo, no autoriza nada
   expires_at       timestamptz, nulo    -- nulo = sin vencimiento
   created_by       text, no nulo
   created_at       timestamptz, no nulo
@@ -82,46 +108,66 @@ study_memberships
 
 La clave foránea compuesta exige un índice único en `studies (id, organization_id)`. Es redundante con la clave primaria, pero es lo que impide por construcción una membresía que apunte a un estudio de otra organización. Va en la misma migración.
 
-Las bajas se marcan, no se borran: «quién tenía acceso a este estudio el día tal» tiene que poder responderse. Por eso la clave foránea no borra en cascada: con cascada, eliminar el estudio se llevaba la historia que la tabla existe para conservar. Consecuencia a atender en la implementación: un estudio con historia de membresías no se puede eliminar, y los scripts que eliminan organizaciones enteras (`orgs:consolidate`) van a fallar hasta que decidan qué hacer con esas filas.
+Las bajas se marcan, no se borran: «quién tenía acceso a este estudio el día tal» tiene que poder responderse. Por eso la clave foránea no borra en cascada. Consecuencia a atender en la implementación: un estudio con historia de membresías no se puede eliminar, y los scripts que eliminan organizaciones enteras (`orgs:consolidate`) van a fallar hasta que decidan qué hacer con esas filas.
 
-### Lo que la tabla no responde
-
-`org_admin` entra sin fila, y los roles y la pertenencia a la organización viven en el proveedor de identidad. Para una fecha pasada, la tabla no dice quién era `org_admin`. La historia completa de acceso necesita además registrar en `audit_logs` las altas, bajas y cambios de rol de la organización. Eso hoy no existe. Es un paso propio (paso 5) y, hasta que esté, la respuesta de auditoría es parcial: completa para miembros, incompleta para administradores.
+`study_label` es el único dato por estudio de la persona. Si alguna vez empieza a decidir permisos, este documento dejó de valer y hay que reabrirlo.
 
 ## Dónde se aplica
 
-Tres lugares. Salen del mismo módulo (`packages/auth`) para que no se separen.
+Todo sale de `packages/auth`, para que no se separe.
 
 ### 1. Acceso a un estudio
 
-La versión anterior de este documento decía que todos los validadores pasaban por `validateStudyAccess`. Es falso: `validatePhiStudyAccess`, `validateSubjectAccess` y los de `object-access.ts` autentican y consultan el estudio por su cuenta. Agregar la comprobación en uno solo dejaba abiertos los demás.
+Los validadores no pasan todos por `validateStudyAccess`: `validatePhiStudyAccess`, `validateSubjectAccess` y los de `object-access.ts` autentican y consultan el estudio por su cuenta. Se propone una función única, `assertStudyMembership(ctx)`, llamada por **cada** validador después de la comprobación de organización. Una prueba enumera los validadores exportados por `packages/auth` y falla si alguno no la llama.
 
-Se propone una función única, `assertStudyMembership(ctx)`, llamada por **cada** validador después de la comprobación de organización. Una prueba enumera los validadores exportados por `packages/auth` y falla si alguno no la llama.
+### 2. Capacidades
 
-### 2. Consultas sobre `studies`
+Las funciones `canX(role)` de `roles.ts` y `roleSatisfies` se reemplazan por comprobaciones de capacidad sobre el conjunto de funciones de la persona. La primera que se necesita es la de autoría clínica en la ruta de evoluciones.
 
-`visibleStudiesFilter(ctx)` devuelve la condición SQL: organización y, si no es `org_admin` y la organización está en modo estricto, existencia de membresía vigente. Ninguna consulta de estudios arma su propio filtro.
+### 3. Consultas sobre `studies`
 
-### 3. Consultas sobre tablas hijas
+`visibleStudiesFilter(ctx)` devuelve la condición SQL: organización y, si la persona no tiene alcance total y la organización está en modo estricto, existencia de membresía vigente. Ninguna consulta de estudios arma su propio filtro.
+
+### 4. Consultas sobre tablas hijas
 
 Es el hueco que encontró Reviewer y la parte más grande del trabajo. `organization_id` está copiado en las tablas hijas (`subjects`, `lab_reports`, `documents`, `agenda_items`, `audit_logs`, `patient_profiles`, imágenes de laboratorio). Eso permite contar y listar por organización sin tocar nunca `studies`, y un filtro sobre `studies` no alcanza a esas consultas. Casos ya identificados en `main`:
 
-- `apps/web/lib/os/inicio-data.ts`: `countPendingLabReviews` y `countPendingLabReports` cuentan por organización sobre la tabla hija. El listado gemelo sí une con `studies`; el contador no.
+- `apps/web/lib/os/inicio-data.ts`: `countPendingLabReviews` y `countPendingLabReports` cuentan por organización sobre la tabla hija.
 - `listActiveStudies`, segunda consulta: agrupa sujetos por estudio filtrando solo por organización.
 - `apps/web/lib/os/search.ts`: la rama de sujetos necesita la membresía igual que la de estudios.
 
 Se propone `visibleStudyIds(ctx)`: una subconsulta con los estudios visibles, que cada consulta sobre una tabla hija aplica como `study_id IN (...)`. Donde la tabla no tenga `study_id`, por unión con `subjects`. No es agregar un filtro: es reescribir cada una de esas consultas.
 
-## Cómo se pasa de «todos ven todo» a membresía
+## Cómo se pasa de lo de hoy a esto
 
-No se puede hacer con una migración de datos: los miembros de una organización viven en el proveedor de identidad, no en la base. Una migración SQL no sabe a quién darle qué.
+No se puede hacer solo con una migración de datos: los miembros de una organización viven en el proveedor de identidad, y qué función real tiene cada uno no está escrito en ningún lado.
 
-Se usa un modo por organización, guardado en `organizations.os_settings`:
+### Funciones
 
-- `open` — el comportamiento de hoy. Las membresías se pueden cargar, pero no restringen.
+La migración crea una fila por persona a partir de su rol actual:
+
+| Rol de hoy | Función inicial |
+|---|---|
+| `principal_investigator` | Investigador |
+| `site_coordinator` | Study Coordinator |
+| `study_admin` | Study Coordinator |
+| `org_admin` | Dirección de Operaciones y Administración de la plataforma |
+| `read_only_monitor` | Monitor |
+
+Es un punto de partida para que nada se rompa el primer día, no la verdad del centro. El administrador la corrige en pantalla.
+
+**Riesgo principal: dejar a un médico sin poder evolucionar.** Hoy escriben evoluciones personas cuyo rol no es `principal_investigator` (por ejemplo, un director que además es médico). Si la regla de autoría se activa con el mapa inicial, esas personas quedan bloqueadas en medio de una visita. Por eso la autoría clínica se exige recién en modo estricto, y antes la pantalla muestra quién escribió evoluciones sin tener la función Investigador, para que el administrador decida caso por caso. Ese listado sale de la auditoría; hay que verificar que el dato alcance.
+
+El costo de esa prudencia: en las organizaciones existentes, la regla «solo el médico evoluciona» no rige hasta que pasen a modo estricto. La fecha límite (M5) lo acota.
+
+### Membresías
+
+Modo por organización, guardado en `organizations.os_settings`:
+
+- `open` — el comportamiento de hoy. Funciones y membresías se pueden cargar, pero no restringen.
 - `enforced` — valen las reglas de arriba.
 
-**`open` es transitorio y tiene fecha (M5).** Sin fecha queda como estado permanente para los centros que menos incentivo tienen para hacer la carga, y el objetivo no se alcanza nunca.
+**`open` es transitorio y tiene fecha (M5).** Sin fecha queda como estado permanente para los centros que menos incentivo tienen para hacer la carga.
 
 Las dos direcciones no son iguales:
 
@@ -130,59 +176,62 @@ Las dos direcciones no son iguales:
 
 Pasos:
 
-1. La migración crea la tabla. Las organizaciones existentes quedan en `open` con una fecha límite. Nada cambia para nadie.
-2. El administrador ve una pantalla «Acceso por estudio»: sus estudios, los miembros de la organización (leídos del proveedor de identidad), quién está en cuál y cuántos días quedan. Carga las membresías con el modo todavía en `open`.
-3. Antes de pasar a `enforced`, la pantalla muestra qué cambia: «estas personas dejan de ver estos estudios» y «estas personas quedan sin ningún estudio». El cambio pide confirmación y queda auditado.
-4. La corrección de un estudio mal cargado es acotada y no necesita volver a `open`: `org_admin` siempre entra y agrega la membresía que falta en el momento. Volver a `open` queda disponible solo antes de la fecha límite, auditado; después, no.
-
-El modo vive en la organización y no en una variable de la instalación para que cada centro haga el paso cuando esté listo dentro del plazo, y para que un centro nuevo no dependa de un despliegue.
+1. La migración crea las tablas y las funciones iniciales. Las organizaciones existentes quedan en `open` con una fecha límite. Nada cambia para nadie.
+2. El administrador ve una pantalla «Equipo y accesos»: las personas con sus funciones, los estudios, quién está en cuál y cuántos días quedan. Corrige funciones y carga membresías con el modo todavía en `open`.
+3. Antes de pasar a `enforced`, la pantalla muestra qué cambia: quién deja de ver qué estudios, quién queda sin ningún estudio y quién deja de poder evolucionar. El cambio pide confirmación y queda auditado.
+4. La corrección de un error de carga es acotada y no necesita volver a `open`: quien tiene alcance total entra siempre y agrega la membresía o la función que falta en el momento. Volver a `open` queda disponible solo antes de la fecha límite, auditado; después, no.
 
 ## Pruebas
 
-- `test:leakage` suma un caso por cada punto de aplicación: dos personas de la misma organización, una con membresía y otra sin ella, y la segunda no obtiene el estudio por ninguna vía. La lista es explícita y nombra cada función: acceso directo por cada validador, listado de estudios, búsqueda (rama de estudios y rama de sujetos), cada contador del Inicio, agenda y laboratorios pendientes. Para los contadores la prueba compara números, no nombres.
-- Prueba estática, redefinida. La versión anterior buscaba filtros sobre `studies` y habría pasado en verde con los contadores fugando. La nueva falla si un archivo fuera de `packages/auth` consulta `studies` **o cualquier tabla con `study_id`** filtrando por `organization_id` sin pasar por `visibleStudiesFilter` o `visibleStudyIds`. Las excepciones (trabajos internos sin usuario) van en una lista con el motivo al lado.
+- `test:leakage` suma un caso por cada punto de aplicación: dos personas de la misma organización, una con membresía y otra sin ella, y la segunda no obtiene el estudio por ninguna vía. La lista es explícita y nombra cada función del código: acceso directo por cada validador, listado de estudios, búsqueda (rama de estudios y rama de sujetos), cada contador del Inicio, agenda y laboratorios pendientes. Para los contadores la prueba compara números, no nombres.
+- Autoría clínica: con cada función que no sea Investigador, sola y combinada con las demás, la ruta de evoluciones rechaza. Con Investigador más cualquier otra, acepta. La prueba comprueba el motivo del rechazo, no solo el código.
+- Prueba estática: falla si un archivo fuera de `packages/auth` consulta `studies` o cualquier tabla con `study_id` filtrando por `organization_id` sin pasar por `visibleStudiesFilter` o `visibleStudyIds`. Las excepciones (trabajos internos sin usuario) van en una lista con el motivo al lado.
 - Límite de la prueba estática: reconoce patrones de código, no significado. Impide que una consulta nueva nazca sin filtro; no demuestra que no haya fuga. Lo que demuestra es la prueba de fuga con datos. Hacen falta las dos.
-- Todos los validadores llaman a `assertStudyMembership` (ver arriba).
-- Vencimiento y baja: una membresía vencida o dada de baja no da acceso, y la historia se conserva.
-- Modo `open`: el comportamiento es idéntico al actual, con y sin membresías cargadas.
+- Todos los validadores llaman a `assertStudyMembership`.
+- Vencimiento y baja: una membresía o una función vencida o dada de baja no da acceso, y la historia se conserva.
+- Modo `open`: el comportamiento es idéntico al actual, con y sin funciones y membresías cargadas.
 
 ## Lo que queda afuera
 
-- **Rol distinto por estudio para una misma persona.** Ver «dos ejes».
-- **Membresía por sede.** Existe la tabla `sites`, pero hoy no restringe nada. Un centro con varias sedes y equipos separados la va a necesitar; es otra decisión.
-- **Limpieza automática cuando alguien sale de la organización.** No hace falta para la seguridad: quien sale de la organización falla la primera comprobación. Las filas quedan como historia.
+- **Función distinta por estudio para una misma persona, y delegación de tareas.** M9.
+- **Membresía por sede.** Existe la tabla `sites`, pero hoy no restringe nada. Es otra decisión.
+- **Dispensación de medicación.** Es tarea del asistente de laboratorio en el centro; Ichtys no la modela.
+- **Seguimiento del plazo de los queries.** El asistente de CRF levanta el query, solo el médico lo responde y hay un plazo que alguien tiene que perseguir. Es requisito del módulo de queries, con el plazo configurable por estudio. Acá solo se fija quién puede responder.
+- **Limpieza automática cuando alguien sale de la organización.** Quien sale falla la primera comprobación. Las filas quedan como historia.
 - **Acceso de patrocinadores a varios centros.** Cruza organizaciones; es otro problema.
 
 ## Decisiones
 
-Aprobadas por Santiago el 11/11/2026.
+Tomadas por Santiago el 11/11/2026.
 
 | # | Decisión | Resuelto |
 |---|---|---|
-| M1 | Modo de una organización nueva | `enforced` desde el alta. Un centro nuevo no tiene costumbres que romper, y quien crea cada estudio ya queda como miembro |
-| M2 | ¿El investigador principal ve todos los estudios del centro? | No. Solo los suyos. Es el caso que más pesa en datos clínicos |
-| M3 | ¿`study_admin` entra a todo, como `org_admin`? | No. Entra a los estudios que crea o a los que lo suman. Si un centro quiere a alguien que vea todo, es `org_admin` |
-| M4 | Vencimiento obligatorio para monitores | Sí, con un máximo configurable. Sin fecha, el acceso de un monitor que ya no trabaja en el estudio queda abierto hasta que alguien se acuerde |
+| M1 | Modo de una organización nueva | `enforced` desde el alta |
+| M2 | ¿El investigador ve todos los estudios del centro? | No. Solo los suyos |
+| M3 | ¿El Study Coordinator entra a todo? | No. Entra a los estudios que crea o a los que lo suman. Alcance total tienen solo las direcciones |
+| M4 | Vencimiento obligatorio para monitores | Sí, con un máximo configurable |
 | M5 | ¿`open` es transitorio o permanente? | Transitorio, con fecha límite |
-| M6 | Qué hace `study_admin` dentro de un estudio | Carga en el CRF, controla que lo evolucionado por el médico sea correcto, ve laboratorios y ve qué datos van a subir al CRF. No evoluciona una historia clínica ni responde por el médico |
+| M6 | Quién evoluciona y quién responde queries | Solo el médico. El equipo carga en el CRF, controla que lo evolucionado sea correcto, ve laboratorios y ve qué datos van al CRF, pero no evoluciona ni responde por el médico. (Registrada primero bajo el nombre `study_admin`; describe al equipo del Study Coordinator) |
+| M7 | Quien dirige o administra y además es médico | Funciones acumulables: tiene además la función Investigador |
+| M9 | ¿La función cambia según el estudio? ¿Ichtys refleja la delegación? | No y no. La función es la función; la delegación es asunto del CRF |
+| M10 | Direcciones de Operaciones y de Investigación | Ven todos los estudios. Quien dirige investigación evoluciona si es médico |
+| M11 | Quién da acceso a un estudio | Operaciones en todos; el Study Coordinator, que es parte de Operaciones, a su equipo en sus estudios. Lectura mía de la respuesta; a confirmar |
 
 Pendientes:
 
 | # | Decisión | Recomendación |
 |---|---|---|
-| M7 | Quién puede evolucionar cuando la misma persona administra y es médico, y si `site_coordinator` se distingue de `study_admin` en algo más que crear estudios | Autoría clínica como atributo propio de la persona, independiente del rol. El rol sigue siendo uno |
-| M8 | Plazo de `open` y qué pasa al vencer | 60 días desde que la pantalla está disponible, con aviso al administrador a 14, 7 y 1 día. Al vencer, pasa solo a `enforced`: el riesgo es que alguien quede sin entrar a un estudio, y lo corrige el administrador en el momento |
+| M8 | Plazo de `open` y qué pasa al vencer | 60 días desde que la pantalla está disponible, con aviso al administrador a 14, 7 y 1 día. Al vencer, pasa solo a `enforced` |
+| M12 | ¿Quien administra la plataforma (ajustes, claves) ve datos clínicos y todos los estudios? | No por esa función sola. Los ve si además tiene otra. En un centro chico la misma persona tendrá las dos |
 
 ## Orden de trabajo
 
 0. Quitar la consulta sin límite de organización del layout de estudio. PR propio, no depende de nada.
-1. Migración: tabla e índice único en `studies`. Sin efecto visible.
-2. `assertStudyMembership` en todos los validadores, detrás del modo, con su prueba.
-3. `visibleStudiesFilter`, `visibleStudyIds` y la reescritura de las consultas sobre tablas hijas. Pruebas de fuga por función y prueba estática. Es el paso grande.
-4. Pantalla «Acceso por estudio», fecha límite y cambio de modo.
-5. Registro de altas, bajas y cambios de rol de la organización en `audit_logs`.
+1. Migración: `member_functions` con las funciones iniciales, `study_memberships` e índice único en `studies`. Sin efecto visible.
+2. Capacidades sobre funciones en `packages/auth`, con el comportamiento de hoy mientras el modo sea `open`. Autoría clínica en la ruta de evoluciones, activa en `enforced`.
+3. `assertStudyMembership` en todos los validadores, detrás del modo, con su prueba.
+4. `visibleStudiesFilter`, `visibleStudyIds` y la reescritura de las consultas sobre tablas hijas. Pruebas de fuga por función y prueba estática. Es el paso grande.
+5. Pantalla «Equipo y accesos», fecha límite y cambio de modo.
 6. Recorrido en el entorno de prueba con dos personas y dos estudios antes de ofrecerlo a un centro real.
 
-Aparte, y después de M7: capacidad de autoría clínica en la ruta de evoluciones.
-
-Cada paso es un PR que se puede integrar solo. Con todas las organizaciones en `open`, los pasos 1 a 3 no cambian nada para nadie.
+Cada paso es un PR que se puede integrar solo. Con todas las organizaciones en `open`, los pasos 1 a 4 no cambian nada para nadie.
