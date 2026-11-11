@@ -1,6 +1,6 @@
 # Membresía por estudio
 
-Estado: **propuesta, sin implementar**. Documento de diseño para decidir antes de escribir código.
+Estado: **decisiones M1–M4 aprobadas el 11/11/2026; sin implementar**. Falta la revisión adversarial del diseño antes de escribir código.
 Fecha: 2026-11-11.
 
 ## El problema
@@ -97,9 +97,11 @@ El modo vive en la organización y no en una variable de la instalación para qu
 - **Limpieza automática cuando alguien sale de la organización.** No hace falta para la seguridad: quien sale de la organización falla la primera comprobación. Las filas quedan como historia.
 - **Acceso de patrocinadores a varios centros.** Cruza organizaciones; es otro problema.
 
-## Decisiones que hacen falta
+## Decisiones tomadas
 
-| # | Decisión | Recomendación |
+Aprobadas por Santiago el 11/11/2026, tal como estaban recomendadas.
+
+| # | Decisión | Resuelto |
 |---|---|---|
 | M1 | Modo de una organización nueva | `enforced` desde el alta. Un centro nuevo no tiene costumbres que romper, y quien crea cada estudio ya queda como miembro |
 | M2 | ¿El investigador principal ve todos los estudios del centro? | No. Solo los suyos. Es el caso que más pesa en datos clínicos |
