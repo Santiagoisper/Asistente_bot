@@ -51,11 +51,10 @@ export const chunks = pgTable(
   (t) => ({
     // Filtro de tenant/study — se usa SIEMPRE antes del similarity search.
     orgStudyIdx: index('chunks_org_study_idx').on(t.organizationId, t.studyId),
-    // Índice vectorial (IVFFlat, cosine, lists=100). La migration crea la
-    // extensión vector.
+    // Índice vectorial HNSW para distancia coseno.
     embeddingIdx: index('chunks_embedding_idx')
-      .using('ivfflat', t.embedding.op('vector_cosine_ops'))
-      .with({ lists: 100 }),
+      .using('hnsw', t.embedding.op('vector_cosine_ops'))
+      .with({ m: 16, ef_construction: 64 }),
   }),
 )
 
