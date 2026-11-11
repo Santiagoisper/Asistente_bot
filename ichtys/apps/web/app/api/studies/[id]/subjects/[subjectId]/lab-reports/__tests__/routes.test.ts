@@ -37,6 +37,7 @@ vi.mock('../../../../../../../../lib/labs/lab-report-service', () => ({
   rejectLabReport: mocks.rejectLabReport,
 }))
 vi.mock('../../../../../../../../lib/subjects/phi-fields', () => ({ PhiConfigError: class extends Error {} }))
+vi.mock('../../../../../../../../lib/os/org-settings', () => ({ loadOrgTimeZone: async (orgId: string) => (orgId === 'org-bogota' ? 'America/Bogota' : 'America/Argentina/Buenos_Aires') }))
 
 import { POST as upload } from '../route'
 import { GET as read } from '../[reportId]/route'
@@ -316,6 +317,14 @@ describe('GET lab-reports/[reportId]/export — sin sistema de destino', () => {
     mocks.loadLabReport.mockResolvedValue(confirmed)
     const res = await exportCsv(get(), reportCtx)
     expect(await res.text()).toContain('Estudio de demostración;SUJ-1047;')
+  })
+
+  it('la hora de revisión del CSV sale en la zona del centro, no en la de la instalación', async () => {
+    mocks.validateSubjectAccess.mockResolvedValue({ userId: 'user_2', orgId: 'org-bogota', subject: { subjectCode: 'SUJ-1047' }, study: { name: 'Estudio de demostración', protocolNumber: 'ABC-301' } })
+    mocks.loadLabReport.mockResolvedValue(confirmed)
+    const res = await exportCsv(get(), reportCtx)
+    // 15:30 UTC son las 10:30 en Bogotá (y las 12:30 en Buenos Aires).
+    expect(await res.text()).toContain(';2026-11-11 10:30;33333333')
   })
 
   it('si no se puede dejar registro, no se entrega el archivo', async () => {

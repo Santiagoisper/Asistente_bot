@@ -1,10 +1,10 @@
 import { validatePhiStudyAccess, handleApiError } from '@ichtys/auth'
 import { createAgendaItemSchema } from '../../../../../lib/agenda/agenda-schema'
 import { AgendaError, createAgendaItem } from '../../../../../lib/agenda/agenda-service'
-import { siteTimeZone } from '../../../../../lib/agenda/agenda-time'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../lib/api/body-limit'
 import { writeAuditLog } from '../../../../../lib/chat/persistence'
 import { isOsEnabled } from '../../../../../lib/flags'
+import { loadOrgTimeZone } from '../../../../../lib/os/org-settings'
 import { PhiConfigError } from '../../../../../lib/subjects/phi-fields'
 
 export const runtime = 'nodejs'
@@ -35,7 +35,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!parsed.success) return Response.json({ error: 'invalid_item' }, { status: 400 })
 
   try {
-    const created = await createAgendaItem({ orgId: access.orgId, studyId: access.study.id, userId: access.userId, timeZone: siteTimeZone(), input: parsed.data })
+    const created = await createAgendaItem({ orgId: access.orgId, studyId: access.study.id, userId: access.userId, timeZone: await loadOrgTimeZone(access.orgId), input: parsed.data })
     await writeAuditLog({
       action: 'agenda.create',
       orgId: access.orgId,
