@@ -70,10 +70,7 @@ export async function sendChatQuestion(
   return parsed
 }
 
-export async function fetchConversations(
-  studyId: string,
-  fetcher: FetchLike = fetch,
-): Promise<ConversationListItem[]> {
+export async function fetchConversations(studyId: string, fetcher: FetchLike = fetch): Promise<ConversationListItem[]> {
   const response = await fetcher(`/api/conversations?studyId=${encodeURIComponent(studyId)}`)
   if (!response.ok) throw new ChatUiError('request_failed')
 
@@ -89,9 +86,7 @@ export async function fetchConversationMessages(
   conversationId: string,
   fetcher: FetchLike = fetch,
 ): Promise<MessageItem[]> {
-  const response = await fetcher(
-    `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
-  )
+  const response = await fetcher(`/api/conversations/${encodeURIComponent(conversationId)}/messages`)
   if (!response.ok) throw new ChatUiError('request_failed')
 
   const payload: unknown = await response.json()
@@ -102,10 +97,7 @@ export async function fetchConversationMessages(
   return payload.messages.filter(isMessageItem)
 }
 
-export async function fetchMessageCitations(
-  messageId: string,
-  fetcher: FetchLike = fetch,
-): Promise<CitationItem[]> {
+export async function fetchMessageCitations(messageId: string, fetcher: FetchLike = fetch): Promise<CitationItem[]> {
   const response = await fetcher(`/api/citations/${encodeURIComponent(messageId)}`)
   if (!response.ok) throw new ChatUiError('request_failed')
 
@@ -196,6 +188,11 @@ function isEvidence(value: unknown): value is Evidence {
     typeof value.chunkId === 'string' &&
     typeof value.documentId === 'string' &&
     typeof value.documentVersionId === 'string' &&
+    (value.citationIndex === undefined ||
+      value.citationIndex === null ||
+      (typeof value.citationIndex === 'number' &&
+        Number.isSafeInteger(value.citationIndex) &&
+        value.citationIndex > 0)) &&
     (typeof value.documentName === 'string' || value.documentName === undefined) &&
     (typeof value.documentType === 'string' || value.documentType === undefined) &&
     isNullableNumber(value.pageStart) &&

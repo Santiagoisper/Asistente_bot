@@ -33,6 +33,7 @@ export type MessageItem = {
 
 export type CitationItem = {
   citationId: string
+  citationIndex: number | null
   chunkId: string
   documentId: string
   documentVersionId: string
@@ -58,8 +59,7 @@ export async function listConversationsForStudy(
   userId: string,
 ): Promise<ConversationListItem[]> {
   const rows = await db.query.conversations.findMany({
-    where: (c, { and, eq }) =>
-      and(eq(c.organizationId, orgId), eq(c.studyId, studyId), eq(c.userId, userId)),
+    where: (c, { and, eq }) => and(eq(c.organizationId, orgId), eq(c.studyId, studyId), eq(c.userId, userId)),
     orderBy: (c, { desc }) => desc(c.updatedAt),
   })
 
@@ -83,11 +83,7 @@ export async function getConversationMessages(
 ): Promise<MessageItem[]> {
   const rows = await db.query.messages.findMany({
     where: (m, { and, eq }) =>
-      and(
-        eq(m.conversationId, conversationId),
-        eq(m.organizationId, orgId),
-        eq(m.studyId, studyId),
-      ),
+      and(eq(m.conversationId, conversationId), eq(m.organizationId, orgId), eq(m.studyId, studyId)),
     orderBy: (m, { asc }) => asc(m.createdAt),
   })
 
@@ -105,22 +101,15 @@ export async function getConversationMessages(
  * La autorización ya fue validada por el caller (incluida la cadena
  * messageId → conversationId → userId).
  */
-export async function getMessageCitations(
-  messageId: string,
-  orgId: string,
-  studyId: string,
-): Promise<CitationItem[]> {
+export async function getMessageCitations(messageId: string, orgId: string, studyId: string): Promise<CitationItem[]> {
   const rows = await db.query.citations.findMany({
-    where: (c, { and, eq }) =>
-      and(
-        eq(c.messageId, messageId),
-        eq(c.organizationId, orgId),
-        eq(c.studyId, studyId),
-      ),
+    where: (c, { and, eq }) => and(eq(c.messageId, messageId), eq(c.organizationId, orgId), eq(c.studyId, studyId)),
+    orderBy: (c, { asc }) => [asc(c.citationIndex), asc(c.createdAt), asc(c.id)],
   })
 
   return rows.map((row) => ({
     citationId: row.id,
+    citationIndex: row.citationIndex,
     chunkId: row.chunkId,
     documentId: row.documentId,
     documentVersionId: row.documentVersionId,

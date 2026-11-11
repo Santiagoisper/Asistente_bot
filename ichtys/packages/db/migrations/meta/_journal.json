@@ -71,6 +71,13 @@
       "when": 1751788800000,
       "tag": "0009_usage_metering",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794350000000,
+      "tag": "0010_citation_original_index",
+      "breakpoints": true
     }
   ]
 }

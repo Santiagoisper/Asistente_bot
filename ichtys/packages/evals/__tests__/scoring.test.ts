@@ -17,6 +17,7 @@ import type { FormalEvalCase } from '../types'
 
 function makeEvidence(overrides: Partial<AnswerResult['evidences'][number]> = {}): AnswerResult['evidences'][number] {
   return {
+    citationIndex: 1,
     chunkId: 'chunk-1',
     documentId: 'doc-1',
     documentVersionId: 'ver-1',

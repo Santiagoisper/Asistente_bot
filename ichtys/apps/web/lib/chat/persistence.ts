@@ -170,9 +170,7 @@ export async function persistAssistantMessageAndCitations(params: {
         role: 'assistant',
         content: params.answer,
         confidence: params.confidence,
-        annotations: params.annotations && params.annotations.length > 0
-          ? params.annotations
-          : null,
+        annotations: params.annotations && params.annotations.length > 0 ? params.annotations : null,
       })
       .returning({ id: messages.id })
 
@@ -190,12 +188,7 @@ export async function persistAssistantMessageAndCitations(params: {
           documentType: documents.documentType,
         })
         .from(documents)
-        .where(
-          and(
-            inArray(documents.id, documentIds),
-            eq(documents.organizationId, params.orgId),
-          ),
-        )
+        .where(and(inArray(documents.id, documentIds), eq(documents.organizationId, params.orgId)))
 
       const docMap = new Map(docs.map((d) => [d.id, { name: d.name, documentType: d.documentType }]))
 
@@ -203,9 +196,7 @@ export async function persistAssistantMessageAndCitations(params: {
         const docMeta = docMap.get(evidence.documentId)
         if (!docMeta) {
           // Hard failure — no persistir citation sin metadata real del documento.
-          throw new Error(
-            `Document metadata not found for citation — document may have been deleted`,
-          )
+          throw new Error(`Document metadata not found for citation — document may have been deleted`)
         }
 
         // pageStart/pageEnd son notNull en DB. En retrieval siempre son numbers.
@@ -216,6 +207,7 @@ export async function persistAssistantMessageAndCitations(params: {
 
         await tx.insert(citations).values({
           messageId: assistantMsg.id,
+          citationIndex: evidence.citationIndex,
           chunkId: evidence.chunkId,
           organizationId: params.orgId,
           studyId: params.studyId,
@@ -260,7 +252,13 @@ export async function generateAndPersistConversationTitle(params: {
     ? `Study: ${params.studyName}\nQuestion: ${params.question}`
     : `Question: ${params.question}`
 
-  const { result: text, provider, modelId, usage, keySource } = await runWithLlmFallback(
+  const {
+    result: text,
+    provider,
+    modelId,
+    usage,
+    keySource,
+  } = await runWithLlmFallback(
     { purpose: 'title', platformKeyBlocked: params.platformKeyBlocked },
     async (model, _provider, reportUsage, signal) => {
       const { text: titleText, usage: titleUsage } = await generateText({
@@ -272,7 +270,10 @@ export async function generateAndPersistConversationTitle(params: {
         maxOutputTokens: 20,
         temperature: 0.3,
       })
-      reportUsage({ inputTokens: titleUsage?.inputTokens ?? 0, outputTokens: titleUsage?.outputTokens ?? 0 })
+      reportUsage({
+        inputTokens: titleUsage?.inputTokens ?? 0,
+        outputTokens: titleUsage?.outputTokens ?? 0,
+      })
       return titleText
     },
   )
@@ -289,7 +290,10 @@ export async function generateAndPersistConversationTitle(params: {
     keySource: keySource === 'none' ? 'platform' : keySource,
   })
 
-  const title = text.trim().replace(/^["']|["']$/g, '').slice(0, 100)
+  const title = text
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .slice(0, 100)
   if (!title) return null
 
   await db
