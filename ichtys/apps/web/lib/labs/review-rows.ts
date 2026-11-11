@@ -15,6 +15,10 @@ export interface ReviewRow {
   reading: number | null | 'unset'
   isNewField: boolean
   reviewReason: string | null
+  /** Las dos lecturas no coinciden: hay que elegir o corregir antes de confirmar. */
+  needsDecision: boolean
+  /** Lo que leyó la otra lectura. */
+  alternative: string | null
 }
 
 let manualSeq = 0
@@ -31,6 +35,8 @@ export function toReviewRow(row: LabReportRow): ReviewRow {
     reading: row.status === 'review' && parsePrintedNumber(row.printedValue).ambiguous ? 'unset' : row.value,
     isNewField: row.isNewField,
     reviewReason: row.reviewReason,
+    needsDecision: row.mustDecide === true,
+    alternative: row.alternative ?? null,
   }
 }
 
@@ -46,6 +52,8 @@ export function emptyManualRow(): ReviewRow {
     reading: null,
     isNewField: false,
     reviewReason: null,
+    needsDecision: false,
+    alternative: null,
   }
 }
 
@@ -65,7 +73,19 @@ export function withPrintedValue(row: ReviewRow, printedValue: string, lines: st
     sourceLine: stillInLine ? row.sourceLine : null,
     reading: ambiguous ? 'unset' : value,
     reviewReason: ambiguous ? 'Puede ser miles o decimal: confirmá cómo se lee.' : null,
+    // Corregir el valor a mano es decidir.
+    needsDecision: false,
+    alternative: null,
   }
+}
+
+/**
+ * Resuelve una diferencia entre lecturas eligiendo uno de los dos valores.
+ * Elegir el que ya está es dejarlo como está y darlo por comparado.
+ */
+export function decideValue(row: ReviewRow, printedValue: string, lines: string[]): ReviewRow {
+  if (printedValue.trim() === row.printedValue.trim()) return { ...row, needsDecision: false, alternative: null, reviewReason: row.reading === 'unset' ? row.reviewReason : null }
+  return withPrintedValue(row, printedValue, lines)
 }
 
 /** Lecturas entre las que hay que elegir; vacío si el valor no es ambiguo. */
@@ -74,11 +94,12 @@ export function readingChoices(printedValue: string): number[] {
   return numericReadings(printedValue).filter((reading): reading is number => reading !== null)
 }
 
-export type RowProblem = 'missing_analyte' | 'missing_value' | 'reading_unset'
+export type RowProblem = 'missing_analyte' | 'missing_value' | 'needs_decision' | 'reading_unset'
 
 export function rowProblem(row: ReviewRow): RowProblem | null {
   if (row.analyte.trim().length === 0) return 'missing_analyte'
   if (row.printedValue.trim().length === 0) return 'missing_value'
+  if (row.needsDecision) return 'needs_decision'
   if (row.reading === 'unset') return 'reading_unset'
   return null
 }

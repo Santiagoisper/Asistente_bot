@@ -8,7 +8,8 @@ import { createLabReportFromPdf, LabReportError } from '../../../../../../../lib
 import { PhiConfigError } from '../../../../../../../lib/subjects/phi-fields'
 
 export const runtime = 'nodejs'
-export const maxDuration = 60
+// La segunda lectura consulta a un modelo: puede tardar más que la lectura por reglas.
+export const maxDuration = 120
 
 /** Margen para los límites del multipart alrededor del archivo. */
 const MAX_BODY_BYTES = MAX_LAB_PDF_BYTES + 64 * 1024

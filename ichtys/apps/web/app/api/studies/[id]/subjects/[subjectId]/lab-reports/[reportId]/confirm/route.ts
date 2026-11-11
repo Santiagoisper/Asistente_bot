@@ -46,6 +46,7 @@ export async function POST(
       reportId,
       userId: access.userId,
       rows: parsed.data.rows,
+      comparedWithImage: parsed.data.comparedWithImage,
     })
 
     await writeAuditLog({
@@ -55,7 +56,7 @@ export async function POST(
       userId: access.userId,
       resourceType: 'lab_report',
       resourceId: reportId,
-      metadata: { subjectId, rowCount: result.rowCount, newAnalytes: result.newAnalytes, profileUpdated: result.profileUpdated },
+      metadata: { subjectId, comparedWithImage: parsed.data.comparedWithImage === true, rowCount: result.rowCount, newAnalytes: result.newAnalytes, profileUpdated: result.profileUpdated },
     })
 
     return Response.json(result)

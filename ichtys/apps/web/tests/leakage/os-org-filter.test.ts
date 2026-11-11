@@ -38,8 +38,8 @@ describe('leakage — consultas del OS filtradas por organización', () => {
     })
   }
 
-  it('servicio de informes de laboratorio: toda consulta y toda escritura llevan la organización', () => {
-    const source = readFileSync(join(WEB_ROOT, 'lib/labs/lab-report-service.ts'), 'utf8')
+  it.each(['lib/labs/lab-report-service.ts', 'lib/labs/lab-image-report.ts'])('%s: toda consulta y toda escritura llevan la organización', (file) => {
+    const source = readFileSync(join(WEB_ROOT, file), 'utf8')
     const wheres = countMatches(source, /\.where\(/g)
     const filters = countMatches(source, /\.organizationId, (params\.)?orgId\)/g)
     expect(wheres).toBeGreaterThan(0)
@@ -50,7 +50,7 @@ describe('leakage — consultas del OS filtradas por organización', () => {
 
   it('las rutas de informes validan el sujeto contra el estudio de la URL', () => {
     const base = 'app/api/studies/[id]/subjects/[subjectId]/lab-reports'
-    for (const file of ['route.ts', '[reportId]/route.ts', '[reportId]/confirm/route.ts', '[reportId]/reject/route.ts']) {
+    for (const file of ['route.ts', 'images/route.ts', '[reportId]/route.ts', '[reportId]/image/[page]/route.ts', '[reportId]/confirm/route.ts', '[reportId]/reject/route.ts']) {
       const route = readFileSync(join(WEB_ROOT, base, file), 'utf8')
       expect(route).toContain('validateSubjectAccess(subjectId, studyId)')
       expect(route).not.toMatch(/orgId: (body|parsed\.data)/)

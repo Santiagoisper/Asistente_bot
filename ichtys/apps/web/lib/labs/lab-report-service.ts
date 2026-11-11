@@ -1,13 +1,15 @@
 import {
   mergeConfirmedLabs,
+  mergeTextReadings,
   normalizeAnalyteKey,
   numericReadings,
   parseLabReportText,
   rowIsGrounded,
   type LabObservation,
 } from '@ichtys/clinical'
-import { and, db, eq, inArray, labAnalytes, labReports, type LabReportStatus } from '@ichtys/db'
+import { and, db, eq, inArray, labAnalytes, labReportImages, labReports, type LabReportStatus } from '@ichtys/db'
 import { parsePdf, PdfParseError } from '@ichtys/ingestion/parser'
+import { readTextWithModel, secondReaderEnabled } from './lab-model-reader'
 import { loadPatientProfile, persistPatientProfile } from '../subjects/patient-profile-service'
 import { decryptClinicalContent, encryptClinicalContent } from '../subjects/phi-fields'
 import {
@@ -26,6 +28,8 @@ export type LabReportErrorCode =
   | 'too_many_pages'
   | 'no_rows'
   | 'invalid_rows'
+  | 'bad_image'
+  | 'reader_unavailable'
 
 /** Error del módulo. El código es estable; nunca lleva texto del documento. */
 export class LabReportError extends Error {
@@ -35,7 +39,7 @@ export class LabReportError extends Error {
   }
 }
 
-interface SubjectScope {
+export interface SubjectScope {
   orgId: string
   studyId: string
   subjectId: string
@@ -46,7 +50,7 @@ function sanitizeFileName(name: string): string {
   return name.toLowerCase().endsWith('.pdf') ? 'informe.pdf' : 'informe'
 }
 
-async function knownAnalyteKeys(orgId: string, keys: string[]): Promise<Set<string>> {
+export async function knownAnalyteKeys(orgId: string, keys: string[]): Promise<Set<string>> {
   if (keys.length === 0) return new Set()
   const rows = await db
     .select({ key: labAnalytes.normalizedKey })
@@ -62,9 +66,21 @@ export interface CreatedLabReport {
   newFieldCount: number
 }
 
-/** Lee un PDF digital, tapa el encabezado, interpreta los renglones y deja el informe pendiente de revisión. */
+export interface LabReaders {
+  /** Segunda lectura del texto. Se reemplaza en las pruebas. */
+  readText: typeof readTextWithModel
+}
+
+/**
+ * Lee un PDF digital: tapa el encabezado, interpreta los renglones por reglas
+ * y pide una segunda lectura a un modelo. Lo que el modelo propone solo entra
+ * si su valor figura carácter por carácter en el texto. Si el modelo no
+ * responde, quedan las filas de las reglas. El informe queda pendiente de
+ * revisión.
+ */
 export async function createLabReportFromPdf(
   params: SubjectScope & { userId: string; fileName: string; data: Uint8Array },
+  readers: LabReaders = { readText: readTextWithModel },
 ): Promise<CreatedLabReport> {
   let text: string
   try {
@@ -81,12 +97,18 @@ export async function createLabReportFromPdf(
   }
 
   const parsed = parseLabReportText(text)
-  if (parsed.rows.length === 0) throw new LabReportError('no_rows')
+  // Al modelo le llega la transcripción, que ya no tiene el encabezado.
+  const second = secondReaderEnabled() && parsed.lines.some((line) => /\d/.test(line))
+    ? await readers.readText({ orgId: params.orgId, studyId: params.studyId }, parsed.lines).catch(() => null)
+    : null
+  const merged = mergeTextReadings(parsed.rows, second?.result ?? null, parsed.lines)
+  if (merged.rows.length === 0) throw new LabReportError('no_rows')
+  if (merged.dropped > 0) console.warn('[labs] second reading: rows without backing dropped', { dropped: merged.dropped })
 
-  const keys = [...new Set(parsed.rows.map((row) => normalizeAnalyteKey(row.analyte)))]
+  const keys = [...new Set(merged.rows.map((row) => normalizeAnalyteKey(row.analyte)))]
   const known = await knownAnalyteKeys(params.orgId, keys)
 
-  const rows: LabReportRow[] = parsed.rows.map((row, index) => ({
+  const rows: LabReportRow[] = merged.rows.map((row, index) => ({
     id: `r${index + 1}`,
     analyte: row.analyte,
     printedValue: row.printedValue,
@@ -97,6 +119,7 @@ export async function createLabReportFromPdf(
     status: row.needsReview ? 'review' : 'read',
     isNewField: !known.has(normalizeAnalyteKey(row.analyte)),
     reviewReason: row.reviewReason,
+    ...(row.mustDecide ? { mustDecide: true, alternative: row.alternative } : {}),
   }))
 
   const content: LabReportContent = labReportContentSchema.parse({
@@ -106,6 +129,13 @@ export async function createLabReportFromPdf(
     unparsedLines: parsed.unparsedLines,
     piiRedactedCount: parsed.piiRedactedCount,
     rows,
+    source: 'pdf_text',
+    readers: {
+      first: 'reglas',
+      second: second?.provider ?? null,
+      agreed: merged.agreed,
+      disagreements: second ? merged.rows.length - merged.agreed : 0,
+    },
   })
 
   const [created] = await db
@@ -158,6 +188,19 @@ export async function loadLabReport(params: SubjectScope & { reportId: string })
   return { id: row.id, status: row.status, createdAt: row.createdAt, reviewedAt: row.reviewedAt, content }
 }
 
+/**
+ * Borra las imágenes de un informe ya revisado. La imagen solo existe para
+ * que la persona compare; después de confirmar o rechazar no se conserva.
+ */
+export async function purgeLabReportImages(params: { orgId: string; reportId: string }): Promise<void> {
+  try {
+    await db.delete(labReportImages).where(and(eq(labReportImages.reportId, params.reportId), eq(labReportImages.organizationId, params.orgId)))
+  } catch {
+    // El informe ya cambió de estado; el borrado se reintenta en la próxima lectura de la imagen.
+    console.error('[labs] image purge failed')
+  }
+}
+
 /** Lecturas numéricas admitidas para un valor impreso (definidas junto al intérprete). */
 export const allowedReadings = numericReadings
 
@@ -196,16 +239,18 @@ export interface ConfirmedLabReport {
 }
 
 export async function confirmLabReport(
-  params: SubjectScope & { reportId: string; userId: string; rows: LabRowInput[] },
+  params: SubjectScope & { reportId: string; userId: string; rows: LabRowInput[]; comparedWithImage?: boolean },
 ): Promise<ConfirmedLabReport> {
   const report = await loadLabReport(params)
   if (report.status !== 'pending_review') throw new LabReportError('already_reviewed')
+  // Lo leído de una imagen no tiene texto que lo respalde: lo respalda quien confirma.
+  if (report.content.source === 'image' && params.comparedWithImage !== true) throw new LabReportError('invalid_rows')
 
   const keyOf = new Map(params.rows.map((row) => [normalizeAnalyteKey(row.analyte), row]))
   keyOf.delete('')
   const known = await knownAnalyteKeys(params.orgId, [...keyOf.keys()])
   const rows = finalizeRows(params.rows, report.content.transcription.split('\n'), known)
-  const content: LabReportContent = labReportContentSchema.parse({ ...report.content, rows })
+  const content: LabReportContent = labReportContentSchema.parse({ ...report.content, rows, imagePages: 0 })
 
   // La transición de estado es la que decide: si otra confirmación llegó
   // primero (doble clic), acá no se actualiza ninguna fila y se corta.
@@ -228,6 +273,7 @@ export async function confirmLabReport(
     )
     .returning({ id: labReports.id })
   if (claimed.length === 0) throw new LabReportError('already_reviewed')
+  await purgeLabReportImages(params)
 
   const fresh = [...keyOf.entries()].filter(([key]) => !known.has(key))
   if (fresh.length > 0) {
@@ -281,7 +327,10 @@ export async function rejectLabReport(params: SubjectScope & { reportId: string;
       ),
     )
     .returning({ id: labReports.id })
-  if (rejected.length > 0) return
+  if (rejected.length > 0) {
+    await purgeLabReportImages(params)
+    return
+  }
 
   // No se actualizó nada: o no existe para este sujeto, o ya fue revisado.
   await loadLabReport(params)

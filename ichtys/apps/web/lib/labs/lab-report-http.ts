@@ -8,6 +8,8 @@ const STATUS: Record<LabReportErrorCode, number> = {
   too_many_pages: 422,
   no_rows: 422,
   invalid_rows: 400,
+  bad_image: 415,
+  reader_unavailable: 503,
 }
 
 /** Respuesta para un error del módulo: código estable, sin texto del documento. */
