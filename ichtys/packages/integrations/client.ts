@@ -5,6 +5,12 @@ import { signOsToken } from './token'
 export type ModuleStatus =
   | 'ok'
   | 'not_configured'
+  /**
+   * Hay una dirección válida para pedir, pero esta instalación no puede firmar
+   * el pedido (falta la clave del OS o no sirve). No es lo mismo que
+   * `not_configured`: el centro ya hizo su parte y hay que decírselo.
+   */
+  | 'installation_not_ready'
   | 'unreachable'
   | 'unauthorized'
   | 'invalid_response'
@@ -85,7 +91,8 @@ export async function fetchModuleSummary(
   const rules = { allowLocal: env.NODE_ENV === 'development' }
   const base = ctx.baseUrl === undefined ? resolveModuleBaseUrl(module, env, rules) : parseModuleBaseUrl(ctx.baseUrl, rules)
   const privateKeyPem = env[SIGNING_KEY_ENV]
-  if (!base || !privateKeyPem) return done('not_configured')
+  if (!base) return done('not_configured')
+  if (!privateKeyPem) return done('installation_not_ready')
 
   // El satélite puede responder distinto según el rol del usuario: la caché
   // es por usuario, no por organización.
@@ -98,7 +105,7 @@ export async function fetchModuleSummary(
   try {
     token = signOsToken({ module, userId: ctx.userId, orgId: ctx.orgId, privateKeyPem, now: now() })
   } catch {
-    return done('not_configured')
+    return done('installation_not_ready')
   }
 
   const controller = new AbortController()

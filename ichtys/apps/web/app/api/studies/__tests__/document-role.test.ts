@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   resolveOrProvisionOrganization: vi.fn(),
   insert: vi.fn(),
+  safeWriteAuditLog: vi.fn(),
 }))
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: mocks.auth }))
@@ -23,6 +24,8 @@ vi.mock('@ichtys/db', () => ({
   db: { insert: (...args: unknown[]) => mocks.insert(...args) },
   studies: { id: 'studies.id' },
 }))
+
+vi.mock('../../../../lib/chat/persistence', () => ({ safeWriteAuditLog: mocks.safeWriteAuditLog }))
 
 import { POST } from '../route'
 
@@ -88,5 +91,32 @@ describe('POST /api/studies — gestión documental (S1)', () => {
 
     expect(res.status).toBe(201)
     expect(mocks.insert).toHaveBeenCalledTimes(1)
+  })
+
+  it('abrir un estudio deja registro de auditoría, sin el nombre del estudio', async () => {
+    mocks.auth.mockResolvedValue({ userId: 'user_1', orgId: 'org_clerk', orgRole: 'org:study_admin' })
+
+    const res = await POST(createRequest())
+
+    expect(res.status).toBe(201)
+    expect(mocks.safeWriteAuditLog).toHaveBeenCalledTimes(1)
+    const entry = mocks.safeWriteAuditLog.mock.calls[0]?.[0]
+    expect(entry).toMatchObject({
+      action: 'study.create',
+      orgId: 'org-interna',
+      studyId: STUDY.id,
+      userId: 'user_1',
+      resourceType: 'study',
+      resourceId: STUDY.id,
+    })
+    expect(JSON.stringify(entry)).not.toContain(STUDY.name)
+  })
+
+  it('un pedido rechazado no deja registro de estudio creado', async () => {
+    mocks.auth.mockResolvedValue({ userId: 'user_1', orgId: 'org_clerk', orgRole: 'org:read_only_monitor' })
+
+    await POST(createRequest())
+
+    expect(mocks.safeWriteAuditLog).not.toHaveBeenCalled()
   })
 })

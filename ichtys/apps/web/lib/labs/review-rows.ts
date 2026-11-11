@@ -121,3 +121,17 @@ const local = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 6 })
 export function formatReading(value: number): string {
   return local.format(value)
 }
+
+/** En qué punto está la pantalla de revisión; lo comparte el texto de cada fila. */
+export type ReviewPhase = 'editing' | 'saving' | 'confirmed' | 'rejected' | 'conflict'
+
+/**
+ * Qué decir de un campo que el programa no conocía. Antes de confirmar es una
+ * promesa («se crea al confirmar»); después tiene que decir lo que pasó, y si
+ * el estudio se rechazó no se creó nada y no hay nada que decir.
+ */
+export function newFieldNote(phase: ReviewPhase): string | null {
+  if (phase === 'confirmed') return 'No existía en el programa; quedó creado al confirmar.'
+  if (phase === 'rejected') return null
+  return 'No existía en el programa; se crea al confirmar.'
+}

@@ -39,9 +39,7 @@ export default function SubjectsClient({ studyId }: SubjectsClientProps) {
         return
       }
       if (res.status === 503) {
-        setError(
-          'Falta PHI_ENCRYPTION_KEY en .env.local — ejecutá: node scripts/generate-phi-key.mjs',
-        )
+        setError('Esta instalación no tiene configurado el cifrado de datos clínicos. Avisá a quien administra la plataforma.')
         return
       }
       if (!res.ok) throw new Error('fetch_failed')
@@ -74,7 +72,7 @@ export default function SubjectsClient({ studyId }: SubjectsClientProps) {
         return
       }
       if (res.status === 503) {
-        setError('Falta PHI_ENCRYPTION_KEY en .env.local')
+        setError('Esta instalación no tiene configurado el cifrado de datos clínicos. No se guardó nada. Avisá a quien administra la plataforma.')
         return
       }
       if (!res.ok) throw new Error('create_failed')
@@ -98,9 +96,8 @@ export default function SubjectsClient({ studyId }: SubjectsClientProps) {
 
       <div className="rounded-lg border border-alphi-amber/20 bg-alphi-amber/5 px-4 py-3">
         <p className="text-xs leading-relaxed text-alphi-navy/80">
-          <strong className="text-alphi-amber">PHI — Local dev:</strong>{' '}
-          No incluyas nombre, DNI ni teléfono en las evoluciones. Configurá{' '}
-          <code className="rounded bg-white/60 px-1">PHI_ENCRYPTION_KEY</code> antes de guardar.
+          <strong className="text-alphi-amber">Datos identificables:</strong>{' '}
+          no incluyas nombre, DNI ni teléfono en las evoluciones. Cada sujeto se identifica solo por su código.
         </p>
       </div>
 

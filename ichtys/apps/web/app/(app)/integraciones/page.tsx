@@ -61,7 +61,9 @@ export default async function IntegracionesPage() {
                   <p className="mt-1 text-xs text-os-subtle">
                     {result.status === 'not_configured'
                       ? 'Esta organización no tiene este módulo conectado.'
-                      : `Última comprobación: ${timeFormat.format(new Date(result.fetchedAt))}`}
+                      : result.status === 'installation_not_ready'
+                        ? 'No se hizo ningún pedido al sistema.'
+                        : `Última comprobación: ${timeFormat.format(new Date(result.fetchedAt))}`}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">

@@ -28,6 +28,11 @@ const COPY: Record<ModuleStatus, StatusCopy> = {
     tone: 'idle',
     hint: 'Este sistema todavía no está enlazado con el OS.',
   },
+  installation_not_ready: {
+    label: 'Falta la clave del OS',
+    tone: 'warn',
+    hint: 'La dirección del sistema está cargada, pero esta instalación todavía no tiene la clave con la que el OS firma los pedidos. Avisá a quien administra la plataforma.',
+  },
   unreachable: {
     label: 'Sin respuesta',
     tone: 'error',
