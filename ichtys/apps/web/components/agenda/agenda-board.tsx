@@ -7,7 +7,7 @@ import { useEffect, useId, useState, type FormEvent } from 'react'
 import { agendaItemKind, type AgendaItemKind, type AgendaItemStatus } from '@ichtys/db/enums'
 import { KIND_LABELS, STATUS_LABELS, TITLE_SUGGESTIONS } from '../../lib/agenda/agenda-schema'
 import { addDays, dayLabel, isDayKey, isTimeOfDay, shortDayLabel } from '../../lib/agenda/agenda-time'
-import { agendaError, daySummary, type AgendaCard } from '../../lib/agenda/agenda-view'
+import { agendaError, daySummary, subjectOptions, subjectPlaceholder, type AgendaCard, type SubjectLoad } from '../../lib/agenda/agenda-view'
 
 interface StudyChoice {
   id: string
@@ -35,10 +35,6 @@ const STATUS_CLASS: Record<AgendaItemStatus, string> = {
   no_show: 'bg-[#FBE3E7] text-[#8C1D3A]',
 }
 
-function isSubjectList(value: unknown): value is Array<{ id: string; subjectCode: string }> {
-  return Array.isArray(value) && value.every((item) => typeof item === 'object' && item !== null && typeof (item as { id?: unknown }).id === 'string' && typeof (item as { subjectCode?: unknown }).subjectCode === 'string')
-}
-
 /** Agenda del sitio: la semana arriba, los turnos del día y el alta de un turno. */
 export function AgendaBoard({ day, today, week, counts, cards, studies, canEdit }: Props) {
   const router = useRouter()
@@ -51,6 +47,8 @@ export function AgendaBoard({ day, today, week, counts, cards, studies, canEdit 
   const [studyId, setStudyId] = useState(studies[0]?.id ?? '')
   const [subjects, setSubjects] = useState<Array<{ id: string; label: string }>>([])
   const [subjectId, setSubjectId] = useState('')
+  const [subjectLoad, setSubjectLoad] = useState<SubjectLoad>('idle')
+  const [subjectAttempt, setSubjectAttempt] = useState(0)
   const [title, setTitle] = useState('')
   const [kind, setKind] = useState<AgendaItemKind>('visit')
   const [newDay, setNewDay] = useState(day)
@@ -67,14 +65,23 @@ export function AgendaBoard({ day, today, week, counts, cards, studies, canEdit 
     const controller = new AbortController()
     setSubjects([])
     setSubjectId('')
+    setSubjectLoad('loading')
     fetch(`/api/studies/${studyId}/subjects`, { signal: controller.signal })
       .then(async (response) => {
-        const payload: unknown = response.ok ? await response.json() : []
-        if (isSubjectList(payload)) setSubjects(payload.map((item) => ({ id: item.id, label: item.subjectCode })).sort((a, b) => a.label.localeCompare(b.label)))
+        const options = subjectOptions(response.ok, response.ok ? await response.json().catch(() => null) : null)
+        if (options === null) {
+          setSubjectLoad('failed')
+          return
+        }
+        setSubjects(options)
+        setSubjectLoad('ready')
       })
-      .catch(() => undefined)
+      .catch(() => {
+        // Cambiar de estudio cancela el pedido anterior: eso no es una falla.
+        if (!controller.signal.aborted) setSubjectLoad('failed')
+      })
     return () => controller.abort()
-  }, [open, studyId])
+  }, [open, studyId, subjectAttempt])
 
   async function patch(card: AgendaCard, body: Record<string, string>) {
     if (pending) return
@@ -191,13 +198,21 @@ export function AgendaBoard({ day, today, week, counts, cards, studies, canEdit 
               <label className="flex flex-col gap-1.5 text-sm font-semibold text-os-ink" htmlFor={`${formId}-subject`}>
                 Sujeto
                 <select id={`${formId}-subject`} className={fieldClass} value={subjectId} onChange={(event) => setSubjectId(event.target.value)}>
-                  <option value="">Sin sujeto (monitoreo, tarea del sitio)</option>
+                  <option value="">{subjectPlaceholder(subjectLoad)}</option>
                   {subjects.map((subject) => (
                     <option key={subject.id} value={subject.id}>
                       {subject.label}
                     </option>
                   ))}
                 </select>
+                {subjectLoad === 'failed' ? (
+                  <span role="alert" className="text-sm font-semibold text-[#8C1D3A]">
+                    No se pudo cargar la lista de sujetos de este estudio. Si el turno es de un sujeto, no lo guardes todavía.{' '}
+                    <button type="button" className={`underline ${focusRing}`} onClick={() => setSubjectAttempt((attempt) => attempt + 1)}>
+                      Reintentar
+                    </button>
+                  </span>
+                ) : null}
               </label>
               <label className="flex flex-col gap-1.5 text-sm font-semibold text-os-ink" htmlFor={`${formId}-title`}>
                 Turno
@@ -254,7 +269,7 @@ export function AgendaBoard({ day, today, week, counts, cards, studies, canEdit 
               <button type="button" className={`min-h-11 rounded-lg px-4 text-sm font-semibold text-os-subtle hover:text-os-ink ${focusRing}`} onClick={() => setOpen(false)}>
                 Cancelar
               </button>
-              <button type="submit" disabled={saving || formProblem !== null} className={`inline-flex min-h-11 items-center rounded-lg bg-os-accent px-5 text-sm font-semibold text-white hover:bg-os-accentdim disabled:opacity-50 ${focusRing}`}>
+              <button type="submit" disabled={saving || formProblem !== null || subjectLoad === 'loading'} className={`inline-flex min-h-11 items-center rounded-lg bg-os-accent px-5 text-sm font-semibold text-white hover:bg-os-accentdim disabled:opacity-50 ${focusRing}`}>
                 {saving ? 'Guardando…' : 'Guardar turno'}
               </button>
             </div>
