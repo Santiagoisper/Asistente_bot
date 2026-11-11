@@ -3,6 +3,7 @@ import { db, studies } from '@ichtys/db'
 import { canAdministerStudy, handleApiError, normalizeRole, resolveOrProvisionOrganization } from '@ichtys/auth'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../lib/api/body-limit'
 import { createStudyInput } from '../../../lib/api/input-schemas'
+import { safeWriteAuditLog } from '../../../lib/chat/persistence'
 
 export const runtime = 'nodejs'
 
@@ -48,6 +49,19 @@ export async function POST(req: Request): Promise<Response> {
       .returning()
 
     if (!study) throw new Error('Insert did not return a row')
+
+    // Abrir un estudio queda registrado: quién, cuándo y en qué organización.
+    // El nombre del estudio no va al registro. Si el registro falla no se
+    // devuelve error: el estudio ya existe y un reintento lo duplicaría.
+    await safeWriteAuditLog({
+      action: 'study.create',
+      orgId: org.id,
+      studyId: study.id,
+      userId,
+      resourceType: 'study',
+      resourceId: study.id,
+      metadata: { hasProtocolNumber: study.protocolNumber !== null },
+    })
 
     return Response.json(
       { id: study.id, name: study.name, protocolNumber: study.protocolNumber, status: study.status },

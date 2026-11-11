@@ -19,7 +19,7 @@ import {
   listPriorityItems,
   listStudiesWithReadyDocs,
 } from '../../../lib/os/inicio-data'
-import { formatCounter } from '../../../lib/os/module-status'
+import { formatCounter, statusCopy } from '../../../lib/os/module-status'
 import { isExternalHref } from '../../../lib/os/priority'
 import { loadOrgTimeZone } from '../../../lib/os/org-settings'
 import { loadModuleSummary } from '../../../lib/os/summaries'
@@ -121,7 +121,7 @@ async function OpenQueriesStat({ ctx }: { ctx: OsContext }) {
       <StatCard
         label="Queries abiertas"
         value={counter ? formatCounter(counter) : null}
-        note={counter ? 'en el sistema de queries' : result.status === 'ok' ? 'sin dato' : 'Sin conectar'}
+        note={counter ? 'en el sistema de queries' : result.status === 'ok' ? 'sin dato' : statusCopy(result.status).label}
         icon={<MessageSquare aria-hidden="true" className="h-6 w-6" strokeWidth={1.75} />}
         href="/queries"
       />
