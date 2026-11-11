@@ -5,7 +5,7 @@ export { db, schema, type Database } from './client'
 export * from './schema'
 // Re-export de operadores Drizzle usados por capas server-only (apps/web)
 // que no deben depender directamente de drizzle-orm.
-export { and, count, desc, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm'
+export { and, asc, count, desc, eq, gte, inArray, isNotNull, lt, ne, sql } from 'drizzle-orm'
 export {
   recordUsage,
   getUsagePeriod,
