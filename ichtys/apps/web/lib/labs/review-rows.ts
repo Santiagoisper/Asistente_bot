@@ -121,3 +121,18 @@ const local = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 6 })
 export function formatReading(value: number): string {
   return local.format(value)
 }
+
+/** En qué punto está la pantalla de revisión; lo comparte el texto de cada fila. */
+export type ReviewPhase = 'editing' | 'saving' | 'confirmed' | 'rejected' | 'conflict'
+
+/**
+ * Qué decir de un campo que el programa no conocía. Solo vale mientras se
+ * revisa: es una promesa («se crea al confirmar»). Después de confirmar o
+ * rechazar no se dice nada: quien decide si el campo era nuevo es el servidor,
+ * con el nombre final del analito, y la persona pudo haberlo corregido a uno
+ * que ya existía. Afirmar «quedó creado» desde la pantalla podía ser falso.
+ */
+export function newFieldNote(phase: ReviewPhase): string | null {
+  if (phase === 'editing' || phase === 'saving') return 'No existía en el programa; se crea al confirmar.'
+  return null
+}

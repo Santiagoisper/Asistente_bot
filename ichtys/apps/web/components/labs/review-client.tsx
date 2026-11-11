@@ -3,13 +3,14 @@
 import Link from 'next/link'
 import { NO_DESTINATION, describeDelivery } from '@ichtys/integrations/connector'
 import { Copy, Download, ExternalLink, Plus, Trash2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { copyText } from '../../lib/labs/copy-text'
 import { downloadName } from '../../lib/labs/lab-export'
 import type { LabReportContent } from '../../lib/labs/lab-report-content'
 import {
   decideValue,
   emptyManualRow,
+  newFieldNote,
   formatReading,
   readingChoices,
   rowProblem,
@@ -17,6 +18,7 @@ import {
   toReviewRow,
   withPrintedValue,
   type ReviewRow,
+  type ReviewPhase,
 } from '../../lib/labs/review-rows'
 
 const focusRing =
@@ -24,7 +26,7 @@ const focusRing =
 const inputClass = `min-h-11 w-full min-w-0 rounded-lg border border-alphi-border bg-white px-2.5 text-sm text-os-ink ${focusRing}`
 const pillBase = 'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold'
 
-type Phase = 'editing' | 'saving' | 'confirmed' | 'rejected' | 'conflict'
+type Phase = ReviewPhase
 
 interface Props {
   studyId: string
@@ -82,6 +84,16 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
   const [rows, setRows] = useState<ReviewRow[]>(() => content.rows.map(toReviewRow))
   const [focusedLine, setFocusedLine] = useState<number | null>(null)
   const [phase, setPhase] = useState<Phase>(status === 'pending_review' ? 'editing' : status)
+  // El resultado se muestra arriba y los botones están al pie de una lista larga:
+  // después de confirmar o rechazar hay que llevar a la persona hasta el resultado.
+  const topRef = useRef<HTMLDivElement>(null)
+  const justActed = useRef(false)
+  useEffect(() => {
+    if (!justActed.current || phase === 'editing' || phase === 'saving') return
+    justActed.current = false
+    topRef.current?.scrollIntoView?.({ block: 'start' })
+    topRef.current?.focus?.({ preventScroll: true })
+  }, [phase])
   const [error, setError] = useState<string | null>(null)
   const [confirmingReject, setConfirmingReject] = useState(false)
   const [profileWarning, setProfileWarning] = useState(false)
@@ -164,6 +176,7 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
         body: action === 'confirm' ? JSON.stringify(fromImage ? { rows: payload, comparedWithImage: true } : { rows: payload }) : undefined,
       })
       if (response.status === 409) {
+        justActed.current = true
         setPhase('conflict')
         return
       }
@@ -179,8 +192,10 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
       if (action === 'confirm') {
         const result: unknown = await response.json().catch(() => null)
         setProfileWarning(typeof result === 'object' && result !== null && (result as { profileUpdated?: unknown }).profileUpdated === false)
+        justActed.current = true
         setPhase('confirmed')
       } else {
+        justActed.current = true
         setPhase('rejected')
       }
     } catch {
@@ -190,7 +205,7 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
   }
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-5">
+    <div ref={topRef} tabIndex={-1} className="mx-auto flex max-w-7xl scroll-mt-24 flex-col gap-5 outline-none">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-sm text-os-subtle">
@@ -399,7 +414,7 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <StatusPill row={row} />
-                      {row.isNewField && row.sourceLine !== null ? <span className="text-xs text-os-subtle">No existía en el programa; se crea al confirmar.</span> : null}
+                      {row.isNewField && row.sourceLine !== null && newFieldNote(phase) ? <span className="text-xs text-os-subtle">{newFieldNote(phase)}</span> : null}
                       {problem === 'missing_analyte' || problem === 'missing_value' ? <span className="text-xs text-[#8C1D3A]">Completá el analito y el valor.</span> : null}
                     </div>
                     {editable ? (

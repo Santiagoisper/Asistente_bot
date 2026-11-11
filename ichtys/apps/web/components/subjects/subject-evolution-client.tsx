@@ -149,7 +149,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         return
       }
       if (res.status === 503) {
-        setError('Configurá PHI_ENCRYPTION_KEY en .env.local')
+        setError('Esta instalación no tiene configurado el cifrado de datos clínicos. No se guardó nada. Avisá a quien administra la plataforma.')
         return
       }
       if (!res.ok) throw new Error('fetch_failed')
@@ -185,7 +185,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       })
       const data = (await res.json()) as { piiWarnings?: string[]; error?: string }
       if (res.status === 503) {
-        setError('Configurá PHI_ENCRYPTION_KEY en .env.local')
+        setError('Esta instalación no tiene configurado el cifrado de datos clínicos. No se guardó nada. Avisá a quien administra la plataforma.')
         return
       }
       if (!res.ok) throw new Error(data.error ?? 'save_failed')

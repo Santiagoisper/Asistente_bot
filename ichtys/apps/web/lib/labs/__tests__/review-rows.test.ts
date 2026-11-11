@@ -66,3 +66,18 @@ describe('filas de la pantalla de revisión', () => {
     expect(toConfirmPayload([])).toBeNull()
   })
 })
+
+describe('nota de un campo nuevo según el momento de la revisión', () => {
+  it('mientras se revisa, promete que se crea al confirmar', async () => {
+    const { newFieldNote } = await import('../review-rows')
+    expect(newFieldNote('editing')).toBe('No existía en el programa; se crea al confirmar.')
+    expect(newFieldNote('saving')).toBe('No existía en el programa; se crea al confirmar.')
+  })
+
+  it('después de confirmar, rechazar o chocar no afirma nada: lo decide el servidor', async () => {
+    const { newFieldNote } = await import('../review-rows')
+    expect(newFieldNote('confirmed')).toBeNull()
+    expect(newFieldNote('rejected')).toBeNull()
+    expect(newFieldNote('conflict')).toBeNull()
+  })
+})

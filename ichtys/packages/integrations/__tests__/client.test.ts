@@ -78,10 +78,24 @@ describe('fetchModuleSummary', () => {
     expect(claims).toMatchObject({ sub: 'user_1', org: 'org_1', aud: 'queries' })
   })
 
-  it('sin URL, sin clave o con clave inválida: not_configured y no sale ningún pedido', async () => {
+  it('sin URL: not_configured y no sale ningún pedido', async () => {
     expect((await fetchModuleSummary('queries', ctx, { env: env({ OS_QUERIES_URL: undefined }) })).status).toBe('not_configured')
-    expect((await fetchModuleSummary('queries', ctx, { env: env({ OS_SIGNING_PRIVATE_KEY: undefined }) })).status).toBe('not_configured')
-    expect((await fetchModuleSummary('queries', ctx, { env: env({ OS_SIGNING_PRIVATE_KEY: 'basura' }) })).status).toBe('not_configured')
+    expect(hits).toBe(0)
+  })
+
+  it('con dirección pero sin clave del OS, o con una clave que no sirve: installation_not_ready y no sale ningún pedido', async () => {
+    expect((await fetchModuleSummary('queries', ctx, { env: env({ OS_SIGNING_PRIVATE_KEY: undefined }) })).status).toBe('installation_not_ready')
+    expect((await fetchModuleSummary('queries', ctx, { env: env({ OS_SIGNING_PRIVATE_KEY: 'basura' }) })).status).toBe('installation_not_ready')
+    expect(
+      (await fetchModuleSummary('queries', { ...ctx, baseUrl: 'https://queries.centro-b.example.test' }, { env: env({ OS_SIGNING_PRIVATE_KEY: undefined }) })).status,
+    ).toBe('installation_not_ready')
+    expect(hits).toBe(0)
+  })
+
+  it('sin dirección y sin clave: manda not_configured, porque al centro todavía le falta su parte', async () => {
+    expect(
+      (await fetchModuleSummary('queries', { ...ctx, baseUrl: null }, { env: env({ OS_SIGNING_PRIVATE_KEY: undefined }) })).status,
+    ).toBe('not_configured')
     expect(hits).toBe(0)
   })
 
