@@ -8,6 +8,7 @@ import {
   capabilitiesOf,
   hasFullStudyScope,
   parseAccessMode,
+  parseMemberFunctions,
   suggestedFunctionsForLegacyRole,
   type AccessSubject,
 } from '../functions'
@@ -46,6 +47,69 @@ describe('matriz de funciones', () => {
 
   it('sin funciones no hay ninguna capacidad', () => {
     expect(capabilitiesOf([]).size).toBe(0)
+  })
+})
+
+describe('composición: quien contiene a otra función no pierde nada de ella', () => {
+  function contains(outer: MemberFunction, inner: MemberFunction): string[] {
+    const outerCapabilities = capabilitiesOf([outer])
+    return [...capabilitiesOf([inner])].filter((capability) => !outerCapabilities.has(capability))
+  }
+
+  it('Dirección de Operaciones contiene todo lo del Study Coordinator', () => {
+    expect(contains('operations_director', 'study_coordinator')).toEqual([])
+  })
+
+  it('el Study Coordinator contiene todo lo de cada asistente', () => {
+    for (const assistant of ['lab_assistant', 'regulatory_assistant', 'crf_assistant'] as const) {
+      expect(contains('study_coordinator', assistant), assistant).toEqual([])
+    }
+  })
+
+  it('Dirección de Investigación solo lee', () => {
+    for (const capability of capabilitiesOf(['research_director'])) {
+      expect(capability.endsWith('.read'), capability).toBe(true)
+    }
+  })
+})
+
+describe('cada capacidad nombra el par dato.operación', () => {
+  it('todas tienen la forma dato.operación', () => {
+    for (const capability of CAPABILITIES) expect(capability).toMatch(/^[a-z]+\.[a-z_]+$/)
+  })
+
+  it('leer el estudio y leer datos clínicos son capacidades distintas', () => {
+    expect(capabilitiesOf(['monitor']).has('study.read')).toBe(true)
+    expect(capabilitiesOf(['monitor']).has('clinical.read')).toBe(false)
+  })
+
+  it('el asistente de CRF ve los datos que van al CRF', () => {
+    const capabilities = capabilitiesOf(['crf_assistant'])
+    expect(capabilities.has('clinical.read')).toBe(true)
+    expect(capabilities.has('crf.manage')).toBe(true)
+  })
+})
+
+describe('parseMemberFunctions: un nombre desconocido restringe y queda a la vista', () => {
+  it('separa las funciones conocidas de las que no', () => {
+    expect(parseMemberFunctions(['investigator', 'investigador', 'monitor'])).toEqual({
+      known: ['investigator', 'monitor'],
+      unknown: ['investigador'],
+    })
+  })
+
+  it('un nombre desconocido no da ninguna capacidad', () => {
+    const { known } = parseMemberFunctions(['Investigator', ' investigator', 'admin'])
+    expect(known).toEqual([])
+    expect(capabilitiesOf(known).size).toBe(0)
+  })
+
+  it('no confunde propiedades heredadas de un objeto con funciones', () => {
+    expect(parseMemberFunctions(['toString', 'constructor', '__proto__', 'hasOwnProperty']).known).toEqual([])
+  })
+
+  it('no duplica', () => {
+    expect(parseMemberFunctions(['monitor', 'monitor']).known).toEqual(['monitor'])
   })
 })
 

@@ -8,8 +8,16 @@ import { ROLES, type Role } from './roles'
  *   - ALCANCE: a qué estudios entra la persona → membresía por estudio.
  *   - CAPACIDAD: qué puede hacer adentro → sus funciones (este módulo).
  *
- * Es una MATRIZ, no una escala: no existe «al menos tal función». Una persona
- * puede tener varias funciones y sus capacidades son la suma.
+ * No hay una escala global: no existe «al menos tal función». Sí hay
+ * composición explícita: Dirección de Operaciones contiene todo lo del Study
+ * Coordinator, y este todo lo de los tres asistentes. Esa contención está
+ * escrita una sola vez (COORDINATION) y la comprueba una prueba, para que
+ * agregar una capacidad abajo no deje sin ella a quien está arriba.
+ *
+ * Cada capacidad nombra el par `dato.operación` (`clinical.read`,
+ * `labs.manage`): así «lee el estudio pero no los datos clínicos» (monitor)
+ * se expresa sin casos especiales. Una persona puede tener varias funciones y
+ * sus capacidades son la suma.
  *
  * Módulo puro: no toca la base ni la sesión. Quien lo llama trae el modo de la
  * organización, el rol histórico y las funciones vigentes de la persona.
@@ -85,6 +93,26 @@ export function capabilitiesOf(functions: readonly MemberFunction[]): ReadonlySe
 
 export function hasFullStudyScope(functions: readonly MemberFunction[]): boolean {
   return functions.some((fn) => FULL_SCOPE_FUNCTIONS.includes(fn))
+}
+
+function isMemberFunction(value: string): value is MemberFunction {
+  return Object.prototype.hasOwnProperty.call(FUNCTION_CAPABILITIES, value)
+}
+
+/**
+ * Funciones leídas de la base. Un nombre que este código no conoce NO se
+ * ignora en silencio: no da ninguna capacidad (se restringe) y vuelve aparte,
+ * para que la pantalla de administración lo muestre. La base ya lo impide con
+ * un CHECK; esto cubre el caso de código más viejo que la base.
+ */
+export function parseMemberFunctions(values: readonly string[]): { known: MemberFunction[]; unknown: string[] } {
+  const known: MemberFunction[] = []
+  const unknown: string[] = []
+  for (const value of values) {
+    if (!isMemberFunction(value)) unknown.push(value)
+    else if (!known.includes(value)) known.push(value)
+  }
+  return { known, unknown }
 }
 
 /**
