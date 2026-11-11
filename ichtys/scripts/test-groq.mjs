@@ -36,7 +36,7 @@ if (!key) {
 }
 
 console.log(`RESULT: GROQ_API_KEY presente (longitud ${key.length})`)
-console.log('Probando llama-3.3-70b-versatile...')
+console.log('Probando openai/gpt-oss-120b...')
 
 const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
   method: 'POST',
@@ -45,7 +45,7 @@ const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     'Content-Type': 'application/json',
   },
   body: JSON.stringify({
-    model: 'llama-3.3-70b-versatile',
+    model: 'openai/gpt-oss-120b',
     messages: [{ role: 'user', content: 'Responde únicamente la palabra OK' }],
     max_tokens: 16,
     temperature: 0,
