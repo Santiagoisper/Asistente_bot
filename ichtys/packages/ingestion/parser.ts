@@ -119,20 +119,61 @@ function positionOf(item: unknown): PositionedItem | null {
   }
 }
 
+export interface PageLinesOptions {
+  /** Ancho de la página en puntos. Si falta, se estima con los márgenes del texto. */
+  pageWidth?: number
+}
+
+/** Un renglón que empieza más allá de esta fracción del ancho está en la columna derecha. */
+const RIGHT_COLUMN_START = 0.45
+/** Hueco mínimo, en puntos, para considerar que dos ítems están en columnas distintas. */
+const MIN_COLUMN_GAP = 7
+
 /**
- * Texto de una página conservando los renglones: agrupa los ítems por su
- * altura en la página y los ordena de izquierda a derecha. Lo usa la carga de
- * laboratorios, donde cada renglón es un resultado. `normalizePageText` (RAG)
- * no cambia: une todo con espacios porque ahí el renglón no importa.
+ * Ligaduras que algunas fuentes (Calibri, sobre todo) declaran con un carácter
+ * equivocado: "ti" sale como "Ɵ" y "tt" como "Ʃ". No son letras del español.
  */
-export function normalizePageLines(items: readonly unknown[]): string {
+const BROKEN_LIGATURES: Record<string, string> = { 'Ɵ': 'ti', 'Ʃ': 'tt', 'ﬁ': 'fi', 'ﬂ': 'fl', 'ﬀ': 'ff', 'ﬃ': 'ffi', 'ﬄ': 'ffl' }
+
+function repairLigatures(text: string): string {
+  return text.replace(/[ƟƩﬁﬂﬀﬃﬄ]/g, (char) => BROKEN_LIGATURES[char] ?? char)
+}
+
+function widthOf(entry: PositionedItem): number {
+  // Sin ancho declarado se estima con medio cuerpo de letra por carácter.
+  return entry.width ?? entry.str.length * entry.height * 0.5
+}
+
+/**
+ * Texto de una página conservando renglones y columnas: agrupa los ítems por
+ * su altura en la página y los ordena de izquierda a derecha. Dentro del
+ * renglón, un hueco ancho se escribe como tabulación (columna distinta) y uno
+ * angosto como espacio. Un renglón que empieza en la mitad derecha de la hoja
+ * lleva una tabulación inicial. Lo usa la carga de laboratorios, donde cada
+ * renglón es un resultado y la columna dice qué es cada dato.
+ * `normalizePageText` (RAG) no cambia: une todo con espacios.
+ */
+export function normalizePageLines(items: readonly unknown[], options: PageLinesOptions = {}): string {
   const positioned: PositionedItem[] = []
   for (const item of items) {
     const entry = positionOf(item)
-    if (entry && entry.str.length > 0) positioned.push(entry)
+    if (entry && entry.str.trim().length > 0) positioned.push(entry)
   }
+  if (positioned.length === 0) return ''
   // De arriba hacia abajo (en PDF la y crece hacia arriba) y de izquierda a derecha.
   positioned.sort((a, b) => b.y - a.y || a.x - b.x)
+
+  let pageWidth = options.pageWidth
+  if (pageWidth === undefined || !Number.isFinite(pageWidth) || pageWidth <= 0) {
+    // Márgenes simétricos: el ancho es el borde derecho del texto más el margen izquierdo.
+    let left = Infinity
+    let right = 0
+    for (const entry of positioned) {
+      left = Math.min(left, entry.x)
+      right = Math.max(right, entry.x + widthOf(entry))
+    }
+    pageWidth = right + Math.max(0, left)
+  }
 
   const lines: PositionedItem[][] = []
   for (const entry of positioned) {
@@ -145,28 +186,42 @@ export function normalizePageLines(items: readonly unknown[]): string {
     }
   }
 
-  let raw = ''
+  const out: string[] = []
+  let total = 0
   for (const line of lines) {
     line.sort((a, b) => a.x - b.x)
-    let text = ''
+    let text = line[0]!.x > pageWidth * RIGHT_COLUMN_START ? '\t' : ''
     let previous: PositionedItem | null = null
     for (const entry of line) {
-      // Fragmentos de una misma palabra vienen pegados; columnas distintas, separadas.
-      const glued = previous !== null && previous.width !== null && entry.x - (previous.x + previous.width) < 1
-      text += previous === null || glued ? entry.str : ` ${entry.str}`
+      const str = repairLigatures(entry.str).replace(/\s+/g, ' ').trim()
+      if (previous === null) {
+        text += str
+      } else {
+        const gap = entry.x - (previous.x + widthOf(previous))
+        // Fragmentos de una misma palabra vienen pegados; columnas distintas, separadas.
+        const columnGap = Math.max(MIN_COLUMN_GAP, Math.min(previous.height, entry.height) * 0.7)
+        text += gap >= columnGap ? `\t${str}` : gap < 1 && previous.width !== null ? str : ` ${str}`
+      }
       previous = entry
     }
-    const piece = `${text.replace(/[ \t]{2,}/g, ' ').trim()}\n`
-    if (raw.length + piece.length > MAX_PAGE_TEXT_CHARS) {
+    total += text.length + 1
+    if (total > MAX_PAGE_TEXT_CHARS) {
       throw new PdfParseError('pdf_complexity_limit', 'PDF exceeds the extracted-text limit')
     }
-    raw += piece
+    out.push(text)
   }
-  return raw.trim()
+  return out.join('\n')
+}
+
+/** Ancho de la página a partir de su caja `[x0, y0, x1, y1]`. */
+function pageWidthOf(view: unknown): number | undefined {
+  if (!Array.isArray(view) || view.length < 4) return undefined
+  const [x0, , x1] = view as unknown[]
+  return typeof x0 === 'number' && typeof x1 === 'number' && x1 > x0 ? x1 - x0 : undefined
 }
 
 export interface ParsePdfOptions {
-  /** Conserva los renglones de cada página (uno por línea). Por defecto, texto corrido. */
+  /** Conserva renglones (uno por línea) y columnas (tabulación). Por defecto, texto corrido. */
   preserveLines?: boolean
 }
 
@@ -194,7 +249,7 @@ export async function parsePdf(data: Buffer | Uint8Array, options: ParsePdfOptio
     // inside pagerender never reaches us. The flag and the real numpages do.
     const result = await pdfParse(buffer as unknown as Buffer, {
       max: MAX_PDF_PAGES,
-      pagerender: (pageData: { getTextContent: (opts?: object) => Promise<{ items: unknown[] }> }) => {
+      pagerender: (pageData: { view?: unknown; getTextContent: (opts?: object) => Promise<{ items: unknown[] }> }) => {
         const elapsed = Date.now() - startedAt
         if (pageCounter >= MAX_PDF_PAGES || elapsed >= MAX_PDF_PARSE_MS) return noteLimit()
         const currentPage = ++pageCounter
@@ -206,7 +261,9 @@ export async function parsePdf(data: Buffer | Uint8Array, options: ParsePdfOptio
           (textContent) => {
             let rawText: string
             try {
-              rawText = options.preserveLines ? normalizePageLines(textContent.items) : normalizePageText(textContent.items)
+              rawText = options.preserveLines
+                ? normalizePageLines(textContent.items, { pageWidth: pageWidthOf(pageData.view) })
+                : normalizePageText(textContent.items)
             } catch (err) {
               if (err instanceof PdfParseError && err.code === 'pdf_complexity_limit') return noteLimit()
               throw err
