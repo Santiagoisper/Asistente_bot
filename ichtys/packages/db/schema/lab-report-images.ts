@@ -5,9 +5,9 @@ import { studies } from './studies'
 
 /**
  * lab_report_images — imagen recortada de un informe subido como foto o
- * escaneo. Existe solo mientras el informe está pendiente de revisión: la
- * persona necesita verla al lado de los campos para confirmar cada valor.
- * Al confirmar o rechazar el informe se borra. El contenido va cifrado con
+ * escaneo. La persona la ve al lado de los campos para confirmar cada valor.
+ * Cuánto se conserva lo decide la política de conservación de evidencia (por
+ * defecto se conserva; borrarla es una decisión explícita). Va cifrada con
  * @ichtys/crypto; el recorte se hace en el navegador y deja afuera el
  * encabezado con nombre y documento.
  */

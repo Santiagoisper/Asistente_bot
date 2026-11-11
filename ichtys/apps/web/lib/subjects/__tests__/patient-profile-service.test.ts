@@ -51,6 +51,8 @@ vi.mock('ai', () => ({
   generateObject: vi.fn(),
 }))
 
+vi.mock('../profile-version', () => ({ whereProfileUnchanged: () => ({}), nextVersion: () => new Date() }))
+
 vi.mock('../phi-fields', () => ({
   encryptProfileJson: mocks.encryptProfileJson,
   decryptProfileJson: mocks.decryptProfileJson,
@@ -71,8 +73,8 @@ describe('refreshPatientProfileFromEvolution — logging del error del proveedor
 
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.findFirst.mockResolvedValue(null)
-    mocks.updateWhere.mockResolvedValue(undefined)
+    mocks.findFirst.mockResolvedValue({ profileEncrypted: 'encrypted', updatedAt: new Date() })
+    mocks.updateWhere.mockReturnValue({ returning: async () => [{ subjectId: 'subject' }] })
     mocks.extractFactsFromEvolution.mockReturnValue({ labs: [] })
     mocks.mergeExtractions.mockReturnValue({ labs: [] })
     mocks.mergeProfileWithExtraction.mockReturnValue({ version: 1, labs: [], medications: [], conditions: [] })
@@ -130,8 +132,8 @@ describe('refreshPatientProfileFromEvolution — logging del error del proveedor
 describe('refreshPatientProfileFromEvolution — medición de consumo (A7)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.findFirst.mockResolvedValue(null)
-    mocks.updateWhere.mockResolvedValue(undefined)
+    mocks.findFirst.mockResolvedValue({ profileEncrypted: 'encrypted', updatedAt: new Date() })
+    mocks.updateWhere.mockReturnValue({ returning: async () => [{ subjectId: 'subject' }] })
     mocks.extractFactsFromEvolution.mockReturnValue({ labs: [] })
     mocks.mergeExtractions.mockReturnValue({ labs: [] })
     mocks.mergeProfileWithExtraction.mockReturnValue({ version: 1, labs: [], medications: [], conditions: [] })

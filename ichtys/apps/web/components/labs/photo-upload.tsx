@@ -23,6 +23,8 @@ interface Props {
   target: { studyId: string; subjectId: string } | null
   /** Lo que falta del estudio y el sujeto, para decirlo junto al botón. */
   missingTarget: string[]
+  /** La imagen recortada se conserva después de revisar (política de conservación). */
+  evidenceKept: boolean
 }
 
 const buttonClass =
@@ -33,7 +35,7 @@ const buttonClass =
  * navegador: del equipo sale solo la zona marcada. El programa la lee dos
  * veces y lo que no coincide queda para decidir en la revisión.
  */
-export function PhotoUpload({ target, missingTarget }: Props) {
+export function PhotoUpload({ target, missingTarget, evidenceKept }: Props) {
   const router = useRouter()
   const id = useId()
   const [sheets, setSheets] = useState<Sheet[]>([])
@@ -160,7 +162,10 @@ export function PhotoUpload({ target, missingTarget }: Props) {
           </label>
         </div>
         <p className="text-sm text-os-subtle">
-          JPG, PNG o PDF escaneado. Hasta {MAX_LAB_IMAGES} hojas. La imagen se guarda cifrada solo hasta que el estudio se confirma o se rechaza.
+          JPG, PNG o PDF escaneado. Hasta {MAX_LAB_IMAGES} hojas.{' '}
+          {evidenceKept
+            ? 'La zona recortada se guarda cifrada junto al estudio, para poder volver a verla.'
+            : 'La zona recortada se guarda cifrada solo hasta que el estudio se confirma o se rechaza.'}
         </p>
         {opening ? <p role="status" className="text-sm font-semibold text-os-accentdim">Abriendo las hojas…</p> : null}
       </div>

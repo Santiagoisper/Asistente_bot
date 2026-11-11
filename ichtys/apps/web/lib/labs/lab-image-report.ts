@@ -1,6 +1,7 @@
 import { mergeImageReadings, normalizeAnalyteKey, redactIdentifyingLines } from '@ichtys/clinical'
 import { and, db, eq, labReportImages, labReports } from '@ichtys/db'
 import { encryptClinicalContent, decryptClinicalContent } from '../subjects/phi-fields'
+import { evidenceRetention } from './evidence-policy'
 import { readImagesWithModel, type LabImage } from './lab-model-reader'
 import {
   LAB_IMAGE_MIMES,
@@ -15,8 +16,8 @@ import { knownAnalyteKeys, LabReportError, purgeLabReportImages, type CreatedLab
 
 /**
  * Informes subidos como foto o escaneo. La imagen llega recortada desde el
- * navegador (sin el encabezado), se lee dos veces y se guarda cifrada solo
- * mientras el informe está pendiente, para que quien revisa la tenga al lado.
+ * navegador (sin el encabezado), se lee dos veces y se guarda cifrada para que
+ * quien revisa la tenga al lado. Cuánto se conserva lo decide evidence-policy.
  */
 
 const MAX_TRANSCRIPTION_LINES = 600
@@ -140,7 +141,7 @@ export async function createLabReportFromImages(
   }
 }
 
-/** Imagen de un informe pendiente. Si el informe ya fue revisado, la imagen no existe más. */
+/** Imagen de un informe. Después de revisado, sigue disponible salvo que la política sea borrar. */
 export async function loadLabReportImage(params: SubjectScope & { reportId: string; page: number }): Promise<LabImage> {
   const [report] = await db
     .select({ status: labReports.status })
@@ -155,7 +156,8 @@ export async function loadLabReportImage(params: SubjectScope & { reportId: stri
     )
     .limit(1)
   if (!report) throw new LabReportError('not_found')
-  if (report.status !== 'pending_review') {
+  // Con política de borrado, un informe ya revisado no tiene imagen (y si quedó alguna, se borra ahora).
+  if (report.status !== 'pending_review' && evidenceRetention() === 'purge') {
     await purgeLabReportImages(params)
     throw new LabReportError('not_found')
   }
