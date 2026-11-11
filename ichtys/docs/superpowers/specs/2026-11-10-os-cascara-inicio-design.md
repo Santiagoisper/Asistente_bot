@@ -129,7 +129,8 @@ límite de error: si uno falla, muestra "No se pudo cargar" y los demás siguen.
 3. Specs en `draft` cuya extracción quedó parcial y esperan revisión.
 4. Alertas que devuelvan los satélites conectados.
 
-Cada ítem enlaza a la pantalla donde se resuelve. Tope de 8 ítems, con "ver todos".
+Cada ítem enlaza a la pantalla donde se resuelve. Se muestran 8 ítems; "ver todos" despliega el
+resto en el mismo bloque, sin página aparte.
 
 **Protocol Intelligence** reutiliza el endpoint `/api/chat/stream` y los componentes de
 `components/chat` (respuesta, insignia de confianza, lista de evidencia). El widget agrega un selector
