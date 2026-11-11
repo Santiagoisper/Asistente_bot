@@ -9,8 +9,9 @@ import {
 } from '@ichtys/clinical'
 import { and, db, eq, inArray, labAnalytes, labReportImages, labReports, type LabReportStatus } from '@ichtys/db'
 import { parsePdf, PdfParseError } from '@ichtys/ingestion/parser'
+import { evidenceRetention } from './evidence-policy'
 import { readTextWithModel, secondReaderEnabled } from './lab-model-reader'
-import { loadPatientProfile, persistPatientProfile } from '../subjects/patient-profile-service'
+import { updatePatientProfile } from '../subjects/patient-profile-service'
 import { decryptClinicalContent, encryptClinicalContent } from '../subjects/phi-fields'
 import {
   labReportContentSchema,
@@ -189,8 +190,9 @@ export async function loadLabReport(params: SubjectScope & { reportId: string })
 }
 
 /**
- * Borra las imágenes de un informe ya revisado. La imagen solo existe para
- * que la persona compare; después de confirmar o rechazar no se conserva.
+ * Borra las imágenes de un informe. Solo se llama cuando la política de
+ * conservación es "purge" (ver evidence-policy): por defecto la evidencia se
+ * conserva, cifrada, para poder volver a consultarla después de confirmar.
  */
 export async function purgeLabReportImages(params: { orgId: string; reportId: string }): Promise<void> {
   try {
@@ -250,7 +252,8 @@ export async function confirmLabReport(
   keyOf.delete('')
   const known = await knownAnalyteKeys(params.orgId, [...keyOf.keys()])
   const rows = finalizeRows(params.rows, report.content.transcription.split('\n'), known)
-  const content: LabReportContent = labReportContentSchema.parse({ ...report.content, rows, imagePages: 0 })
+  const keepEvidence = evidenceRetention() === 'keep'
+  const content: LabReportContent = labReportContentSchema.parse({ ...report.content, rows, ...(keepEvidence ? {} : { imagePages: 0 }) })
 
   // La transición de estado es la que decide: si otra confirmación llegó
   // primero (doble clic), acá no se actualiza ninguna fila y se corta.
@@ -273,7 +276,7 @@ export async function confirmLabReport(
     )
     .returning({ id: labReports.id })
   if (claimed.length === 0) throw new LabReportError('already_reviewed')
-  await purgeLabReportImages(params)
+  if (!keepEvidence) await purgeLabReportImages(params)
 
   const fresh = [...keyOf.entries()].filter(([key]) => !known.has(key))
   if (fresh.length > 0) {
@@ -299,11 +302,11 @@ export async function confirmLabReport(
       .filter((row): row is LabReportRow & { value: number } => row.value !== null)
       .map((row) => ({ name: row.analyte, value: row.value, ...(row.unit ? { unit: row.unit } : {}) }))
     if (numeric.length > 0) {
-      const profile = await loadPatientProfile(params)
-      await persistPatientProfile({
-        ...params,
-        profile: { ...profile, labs: mergeConfirmedLabs(profile.labs, numeric), lastUpdatedAt: new Date().toISOString() },
-      })
+      await updatePatientProfile(params, (profile) => ({
+        ...profile,
+        labs: mergeConfirmedLabs(profile.labs, numeric),
+        lastUpdatedAt: new Date().toISOString(),
+      }))
     }
   } catch {
     console.error('[labs] profile merge failed after confirm')
@@ -328,7 +331,7 @@ export async function rejectLabReport(params: SubjectScope & { reportId: string;
     )
     .returning({ id: labReports.id })
   if (rejected.length > 0) {
-    await purgeLabReportImages(params)
+    if (evidenceRetention() === 'purge') await purgeLabReportImages(params)
     return
   }
 

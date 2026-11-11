@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { validateSubjectAccess } from '@ichtys/auth'
 import { LabReviewClient } from '../../../../../../../../components/labs/review-client'
+import { evidenceRetention } from '../../../../../../../../lib/labs/evidence-policy'
 import { writeAuditLog } from '../../../../../../../../lib/chat/persistence'
 import { isOsEnabled } from '../../../../../../../../lib/flags'
 import { isUuid } from '../../../../../../../../lib/labs/lab-report-http'
@@ -51,6 +52,7 @@ export default async function LabReportReviewPage({
       studyLabel={access.study.protocolNumber?.trim() || access.study.name}
       status={report.status}
       content={report.content}
+      evidenceKept={evidenceRetention() === 'keep'}
     />
   )
 }

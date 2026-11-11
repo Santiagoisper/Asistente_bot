@@ -59,9 +59,10 @@ vi.mock('@ichtys/db', async (importOriginal) => {
 })
 
 vi.mock('../../subjects/patient-profile-service', () => ({
-  loadPatientProfile: vi.fn(async () => store.profile),
-  persistPatientProfile: vi.fn(async ({ profile }: { profile: (typeof store.persisted)[number] }) => {
-    store.persisted.push(profile)
+  updatePatientProfile: vi.fn(async (_scope: unknown, mutate: (current: typeof store.profile) => (typeof store.persisted)[number]) => {
+    const next = await mutate(store.profile)
+    store.persisted.push(next)
+    return next
   }),
 }))
 

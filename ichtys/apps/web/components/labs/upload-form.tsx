@@ -48,7 +48,7 @@ function errorCodeOf(payload: unknown): unknown {
   return typeof payload === 'object' && payload !== null ? (payload as { error?: unknown }).error : null
 }
 
-export function LabUploadForm({ studies }: { studies: StudyChoice[] }) {
+export function LabUploadForm({ studies, evidenceKept = true }: { studies: StudyChoice[]; evidenceKept?: boolean }) {
   const router = useRouter()
   const formId = useId()
   // Arranca en un estudio que ya tiene sujetos, si hay alguno.
@@ -305,7 +305,7 @@ export function LabUploadForm({ studies }: { studies: StudyChoice[] }) {
       </div>
 
       {mode === 'photo' ? (
-        <PhotoUpload target={studyId && subjectId ? { studyId, subjectId } : null} missingTarget={missingTarget} />
+        <PhotoUpload target={studyId && subjectId ? { studyId, subjectId } : null} missingTarget={missingTarget} evidenceKept={evidenceKept} />
       ) : (
         <>
       <label

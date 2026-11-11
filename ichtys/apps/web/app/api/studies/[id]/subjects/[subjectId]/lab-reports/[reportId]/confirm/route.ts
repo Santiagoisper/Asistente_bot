@@ -11,7 +11,8 @@ export const runtime = 'nodejs'
 
 /**
  * POST — una persona confirma las filas finales mirando el informe. Recién
- * acá los valores pasan al registro (URS-007). Un informe ya revisado da 409.
+ * acá los valores se guardan en Alphi (URS-007); no se envían a ningún otro
+ * sistema. Un informe ya revisado da 409.
  */
 export async function POST(
   req: Request,

@@ -9,7 +9,8 @@ export const runtime = 'nodejs'
 
 /**
  * GET — imagen recortada de un informe pendiente, para compararla con los
- * campos. No se guarda en caché: deja de existir cuando el informe se revisa.
+ * campos. No se guarda en caché. Si la política de conservación es borrar, deja
+ * de existir cuando el informe se revisa.
  */
 export async function GET(
   _req: Request,

@@ -71,9 +71,10 @@ vi.mock('@ichtys/db', async (importOriginal) => {
 })
 
 vi.mock('../../subjects/patient-profile-service', () => ({
-  loadPatientProfile: vi.fn(async () => ({ labs: [] })),
-  persistPatientProfile: vi.fn(async ({ profile }: { profile: (typeof store.persisted)[number] }) => {
-    store.persisted.push(profile)
+  updatePatientProfile: vi.fn(async (_scope: unknown, mutate: (current: { labs: [] }) => (typeof store.persisted)[number]) => {
+    const next = await mutate({ labs: [] })
+    store.persisted.push(next)
+    return next
   }),
 }))
 
@@ -242,10 +243,24 @@ describe('Foto o escaneo — dos lecturas independientes', () => {
       { name: 'Glucosa', value: 92, unit: 'mg/dL' },
       { name: 'Creatinina', value: 0.9, unit: 'mg/dL' },
     ])
-    // Confirmado: la imagen ya no existe.
-    expect(store.images).toHaveLength(0)
-    expect(lastContent().imagePages).toBe(0)
-    await expect(loadLabReportImage({ ...scope, reportId: created.reportId, page: 1 })).rejects.toMatchObject({ code: 'not_found' })
+    // Confirmado: por defecto la evidencia se conserva y se puede volver a ver.
+    expect(store.images).toHaveLength(2)
+    expect(lastContent().imagePages).toBe(2)
+    expect((await loadLabReportImage({ ...scope, reportId: created.reportId, page: 1 })).mime).toBe('image/jpeg')
+  })
+
+  it('con política de borrado, confirmar borra la imagen y ya no se puede pedir', async () => {
+    process.env.LAB_EVIDENCE_RETENTION = 'purge'
+    try {
+      const created = await upload({ lines: [], rows: [...main.rows] })
+      const report = await loadLabReport({ ...scope, reportId: created.reportId })
+      await confirmLabReport({ ...scope, reportId: created.reportId, userId: 'user_2', rows: toConfirmPayload(report.content.rows.map(toReviewRow))!, comparedWithImage: true })
+      expect(store.images).toHaveLength(0)
+      expect(lastContent().imagePages).toBe(0)
+      await expect(loadLabReportImage({ ...scope, reportId: created.reportId, page: 1 })).rejects.toMatchObject({ code: 'not_found' })
+    } finally {
+      delete process.env.LAB_EVIDENCE_RETENTION
+    }
   })
 
   it('"Lo comparé" sobre el mismo valor lo da por decidido sin cambiarlo', async () => {
@@ -275,11 +290,33 @@ describe('Foto o escaneo — dos lecturas independientes', () => {
     expect(store.images).toHaveLength(0)
   })
 
-  it('rechazar el informe también borra la imagen', async () => {
-    const created = await upload({ lines: [], rows: [...main.rows] })
-    await rejectLabReport({ ...scope, reportId: created.reportId, userId: 'user_2' })
+  it('rechazar conserva la imagen por defecto y la borra solo con política de borrado', async () => {
+    const kept = await upload({ lines: [], rows: [...main.rows] })
+    await rejectLabReport({ ...scope, reportId: kept.reportId, userId: 'user_2' })
     expect(store.reports[0]?.status).toBe('rejected')
-    expect(store.images).toHaveLength(0)
+    expect(store.images).toHaveLength(2)
+
+    process.env.LAB_EVIDENCE_RETENTION = 'purge'
+    try {
+      store.reports.length = 0
+      store.images.length = 0
+      const purged = await upload({ lines: [], rows: [...main.rows] })
+      await rejectLabReport({ ...scope, reportId: purged.reportId, userId: 'user_2' })
+      expect(store.images).toHaveLength(0)
+    } finally {
+      delete process.env.LAB_EVIDENCE_RETENTION
+    }
+  })
+
+  it('la política por defecto es conservar: borrar hay que pedirlo', async () => {
+    const { evidenceRetention } = await import('../evidence-policy')
+    delete process.env.LAB_EVIDENCE_RETENTION
+    expect(evidenceRetention()).toBe('keep')
+    process.env.LAB_EVIDENCE_RETENTION = 'cualquier cosa'
+    expect(evidenceRetention()).toBe('keep')
+    process.env.LAB_EVIDENCE_RETENTION = ' PURGE '
+    expect(evidenceRetention()).toBe('purge')
+    delete process.env.LAB_EVIDENCE_RETENTION
   })
 })
 
