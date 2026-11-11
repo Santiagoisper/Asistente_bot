@@ -21,6 +21,9 @@ CREATE TABLE IF NOT EXISTS "member_functions" (
 DO $$ BEGIN
  ALTER TABLE "member_functions" ADD CONSTRAINT "member_functions_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE cascade;
 EXCEPTION WHEN duplicate_object THEN null; END $$;--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "member_functions" ADD CONSTRAINT "member_functions_function_key_check" CHECK ("function_key" IN ('investigator', 'study_coordinator', 'lab_assistant', 'regulatory_assistant', 'crf_assistant', 'operations_director', 'research_director', 'monitor', 'platform_admin'));
+EXCEPTION WHEN duplicate_object THEN null; END $$;--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "member_functions_active_uniq" ON "member_functions" USING btree ("organization_id","user_id","function_key") WHERE "revoked_at" is null;--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "member_functions_org_user_idx" ON "member_functions" USING btree ("organization_id","user_id");--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "study_memberships" (

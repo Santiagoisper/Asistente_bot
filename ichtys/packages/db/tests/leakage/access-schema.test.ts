@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { getTableConfig } from 'drizzle-orm/pg-core'
-import { memberFunctions, organizations, studies, studyMemberships } from '../../schema'
+import { memberFunction, memberFunctions, organizations, studies, studyMemberships } from '../../schema'
 
 /**
  * Leakage suite — invariantes del acceso por estudio
@@ -75,6 +75,15 @@ describe('leakage — la baja conserva la historia', () => {
       expect(migrationSql).toContain(`"${indexName}"`)
       expect(migrationSql).toMatch(new RegExp(`"${indexName}"[^;]+WHERE "revoked_at" is null`))
     }
+  })
+})
+
+describe('leakage — la lista de funciones es cerrada en la base, no solo en el código', () => {
+  it('el CHECK de la migración nombra exactamente las funciones del código, ni una más ni una menos', () => {
+    const match = migrationSql.match(/"member_functions_function_key_check" CHECK \("function_key" IN \(([^)]+)\)\)/)
+    expect(match, 'falta el CHECK de function_key').not.toBeNull()
+    const inDatabase = (match?.[1] ?? '').split(',').map((value) => value.trim().replace(/^'|'$/g, ''))
+    expect([...inDatabase].sort()).toEqual([...memberFunction].sort())
   })
 })
 
