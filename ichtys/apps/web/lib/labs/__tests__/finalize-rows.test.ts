@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { vi } from 'vitest'
 vi.mock('@ichtys/db', () => ({ db: {}, and: vi.fn(), eq: vi.fn(), inArray: vi.fn(), labAnalytes: {}, labReports: {} }))
 vi.mock('@ichtys/ingestion/parser', () => ({ parsePdf: vi.fn(), PdfParseError: class extends Error {} }))
-vi.mock('../../subjects/patient-profile-service', () => ({ loadPatientProfile: vi.fn(), persistPatientProfile: vi.fn() }))
+vi.mock('../../subjects/patient-profile-service', () => ({ updatePatientProfile: vi.fn() }))
 
 import { allowedReadings, finalizeRows, LabReportError } from '../lab-report-service'
 import { labConfirmSchema, labRowInputSchema } from '../lab-report-content'
