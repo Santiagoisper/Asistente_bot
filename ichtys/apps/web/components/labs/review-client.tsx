@@ -5,7 +5,7 @@ import { NO_DESTINATION, describeDelivery } from '@ichtys/integrations/connector
 import { Copy, Download, ExternalLink, Plus, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { copyText } from '../../lib/labs/copy-text'
-import { downloadName, labRowsForClipboard } from '../../lib/labs/lab-export'
+import { downloadName } from '../../lib/labs/lab-export'
 import type { LabReportContent } from '../../lib/labs/lab-report-content'
 import {
   decideValue,
@@ -107,14 +107,22 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
 
   // Hoy no hay ningún sistema de destino conectado: lo revisado queda en Alphi y se puede sacar a mano.
   const delivery = describeDelivery({ review: 'reviewed', connector: NO_DESTINATION, delivery: null })
-  const reviewedRows = payload ?? content.rows
-
+  /** El texto se pide al servidor: es lo que quedó guardado, y pedirlo deja registro de la salida. */
   async function copyValues() {
-    const copied = await copyText(labRowsForClipboard(reviewedRows))
+    setExportNote(null)
+    let serverFailed = false
+    const text = fetch(`${base}/export?formato=texto`).then((response) => {
+      if (!response.ok) {
+        serverFailed = true
+        throw new Error('export_failed')
+      }
+      return response.text()
+    })
+    const copied = await copyText(text)
     setExportNote(
       copied
-        ? { text: `Copiado: ${reviewedRows.length} ${reviewedRows.length === 1 ? 'fila' : 'filas'} (analito, valor y unidad).`, failed: false }
-        : { text: 'No se pudo copiar. Descargá el CSV.', failed: true },
+        ? { text: `Copiado: ${rows.length} ${rows.length === 1 ? 'fila' : 'filas'} (analito, valor y unidad).`, failed: false }
+        : { text: serverFailed ? 'No se pudo copiar. Probá de nuevo.' : 'El navegador no dejó copiar. Descargá el CSV.', failed: true },
     )
   }
 

@@ -90,13 +90,17 @@ export function describeDelivery(input: {
   const name = displayName(connector)
   const delivery = input.delivery?.connectorId === connector.id ? input.delivery : null
 
-  if (!hasCapability(connector, 'deliver_proposal')) {
+  if (connector.id === NO_DESTINATION.id) {
     return {
       stage: 'reviewed',
       label: 'Revisado en Alphi',
       detail: 'No se envió a ningún otro sistema: no hay sistema de destino configurado.',
       canExport,
     }
+  }
+  // Hay un sistema conectado, pero no acepta envíos (solo consulta, o solo abre el registro).
+  if (!hasCapability(connector, 'deliver_proposal')) {
+    return { stage: 'reviewed', label: 'Revisado en Alphi', detail: `${name} no recibe envíos desde Alphi: hay que cargarlo ahí a mano.`, canExport }
   }
   if (!delivery) {
     return { stage: 'reviewed', label: 'Revisado en Alphi', detail: `Todavía no se envió a ${name}.`, canExport }

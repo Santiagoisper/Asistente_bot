@@ -64,6 +64,15 @@ describe('contrato de conector — qué se puede decir de una entrega', () => {
     expect(describeDelivery({ review: 'reviewed', connector: simulator, delivery: null }).detail).toContain('Alpha CR (simulador)')
   })
 
+  it('un sistema conectado que no recibe envíos no se confunde con "no hay sistema"', () => {
+    const readOnly: ConnectorDescriptor = { id: 'hce-consulta', label: 'Historia clínica', simulated: true, capabilities: ['open_record', 'export'] }
+    const view = describeDelivery({ review: 'reviewed', connector: readOnly, delivery: null })
+    expect(view).toMatchObject({ stage: 'reviewed', label: 'Revisado en Alphi', canExport: true })
+    expect(view.detail).toBe('Historia clínica (simulador) no recibe envíos desde Alphi: hay que cargarlo ahí a mano.')
+    // Aunque alguien anote una entrega, un conector que no envía nunca figura como enviado.
+    expect(describeDelivery({ review: 'reviewed', connector: readOnly, delivery: { connectorId: 'hce-consulta', stage: 'registered', verified: true } }).stage).toBe('reviewed')
+  })
+
   it('un envío fallido se dice como fallido', () => {
     const view = describeDelivery({ review: 'reviewed', connector: verifiable, delivery: { connectorId: 'hce', stage: 'failed', verified: false } })
     expect(view).toMatchObject({ stage: 'failed', label: 'No se pudo enviar a Historia clínica' })

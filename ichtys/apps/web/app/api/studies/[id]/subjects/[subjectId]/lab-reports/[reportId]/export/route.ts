@@ -3,20 +3,23 @@ import { NO_DESTINATION } from '@ichtys/integrations'
 import { siteTimeZone } from '../../../../../../../../../lib/agenda/agenda-time'
 import { writeAuditLog } from '../../../../../../../../../lib/chat/persistence'
 import { isOsEnabled } from '../../../../../../../../../lib/flags'
-import { exportFileName, labReportCsv } from '../../../../../../../../../lib/labs/lab-export'
+import { exportFileName, labReportCsv, labRowsForClipboard } from '../../../../../../../../../lib/labs/lab-export'
 import { isUuid, labReportErrorResponse } from '../../../../../../../../../lib/labs/lab-report-http'
 import { loadLabReport } from '../../../../../../../../../lib/labs/lab-report-service'
 import { PhiConfigError } from '../../../../../../../../../lib/subjects/phi-fields'
 
 export const runtime = 'nodejs'
 
+const FORMATS = { csv: 'csv', texto: 'clipboard' } as const
+
 /**
- * GET — descarga el estudio ya revisado como CSV. No envía nada a ningún
- * sistema: es la salida para un centro sin sistema de destino conectado.
- * Solo se exporta lo que una persona revisó, y cada descarga queda registrada.
+ * GET — saca un estudio ya revisado: como CSV para descargar, o como texto
+ * (`?formato=texto`) para copiar y pegar en otra pantalla. No envía nada a
+ * ningún sistema: es la salida para un centro sin sistema de destino conectado.
+ * Solo sale lo que una persona revisó, y cada salida queda registrada.
  */
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string; subjectId: string; reportId: string }> },
 ): Promise<Response> {
   const { id: studyId, subjectId, reportId } = await params
@@ -25,14 +28,23 @@ export async function GET(
   try {
     const access = await validateSubjectAccess(subjectId, studyId)
     if (!isUuid(reportId)) return Response.json({ error: 'not_found' }, { status: 404 })
+    const requested = new URL(req.url).searchParams.get('formato') ?? 'csv'
+    if (!Object.hasOwn(FORMATS, requested)) return Response.json({ error: 'invalid_format' }, { status: 400 })
+    const format = FORMATS[requested as keyof typeof FORMATS]
 
     const report = await loadLabReport({ orgId: access.orgId, studyId, subjectId, reportId })
     if (report.status !== 'confirmed') return Response.json({ error: 'not_reviewed' }, { status: 409 })
 
-    const timeZone = siteTimeZone()
-    const csv = labReportCsv({ subjectCode: access.subject.subjectCode, reviewedAt: report.reviewedAt, timeZone, rows: report.content.rows })
+    const context = {
+      studyLabel: access.study.protocolNumber?.trim() || access.study.name,
+      subjectCode: access.subject.subjectCode,
+      reportId,
+      reviewedAt: report.reviewedAt,
+      timeZone: siteTimeZone(),
+    }
+    const body = format === 'csv' ? labReportCsv({ ...context, rows: report.content.rows }) : labRowsForClipboard(report.content.rows)
 
-    // Primero el registro: un archivo con datos clínicos no sale sin dejar rastro.
+    // Primero el registro: datos clínicos no salen sin dejar rastro.
     await writeAuditLog({
       action: 'lab.export',
       orgId: access.orgId,
@@ -40,17 +52,17 @@ export async function GET(
       userId: access.userId,
       resourceType: 'lab_report',
       resourceId: reportId,
-      metadata: { subjectId, rowCount: report.content.rows.length, format: 'csv', destination: NO_DESTINATION.id },
+      metadata: { subjectId, rowCount: report.content.rows.length, format, destination: NO_DESTINATION.id },
     })
 
-    return new Response(csv, {
-      headers: {
-        'content-type': 'text/csv; charset=utf-8',
-        'content-disposition': `attachment; filename="${exportFileName(access.subject.subjectCode, report.reviewedAt, timeZone)}"`,
-        'cache-control': 'private, no-store',
-        'x-content-type-options': 'nosniff',
-      },
-    })
+    const headers: Record<string, string> = { 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' }
+    if (format === 'csv') {
+      headers['content-type'] = 'text/csv; charset=utf-8'
+      headers['content-disposition'] = `attachment; filename="${exportFileName(context)}"`
+    } else {
+      headers['content-type'] = 'text/plain; charset=utf-8'
+    }
+    return new Response(body, { headers })
   } catch (err) {
     const known = labReportErrorResponse(err)
     if (known) return known

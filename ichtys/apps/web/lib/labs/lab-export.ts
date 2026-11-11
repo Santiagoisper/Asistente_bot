@@ -12,8 +12,8 @@ export interface ExportRow {
   referenceRange: string | null
 }
 
-const HEADER = ['Sujeto', 'Analito', 'Valor impreso', 'Valor numérico', 'Unidad', 'Referencia', 'Revisado']
-const BOM = '﻿'
+const HEADER = ['Estudio', 'Sujeto', 'Analito', 'Valor impreso', 'Valor numérico', 'Unidad', 'Referencia', 'Revisado', 'Informe']
+const BOM = '\uFEFF'
 /** Con coma decimal, Excel en español separa columnas por punto y coma. */
 const SEPARATOR = ';'
 
@@ -21,13 +21,16 @@ function singleLine(text: string): string {
   return text.replace(/[\r\n\t]+/g, ' ').trim()
 }
 
+/** Un resultado con signo ("-2,5", "+5") o solo signos ("++", "-"): no puede llevar una fórmula adentro. */
+const PLAIN_SIGNED = /^[+-]+$|^[+-]\d[\d.,]*$/
+
 /**
  * Una planilla ejecuta como fórmula lo que empieza con = + - @. El texto de un
- * informe viene de afuera: esas celdas salen con un apóstrofo adelante. Un
- * número negativo no es una fórmula y queda igual.
+ * informe viene de afuera: esas celdas salen con un apóstrofo adelante. Los
+ * resultados con signo quedan tal cual están impresos.
  */
 function neutralizeFormula(text: string): string {
-  if (/^-\d[\d.,]*$/.test(text)) return text
+  if (PLAIN_SIGNED.test(text)) return text
   return /^[=+\-@]/.test(text) ? `'${text}` : text
 }
 
@@ -41,33 +44,49 @@ function numericCell(value: number | null): string {
   return value === null ? '' : String(value).replace('.', ',')
 }
 
-export function labReportCsv(input: { subjectCode: string; reviewedAt: Date | null; timeZone: string; rows: ExportRow[] }): string {
+/** Identificador corto del informe: alcanza para distinguir dos informes del mismo sujeto. */
+function shortReportId(reportId: string): string {
+  return reportId.replace(/[^A-Za-z0-9]/g, '').slice(0, 8)
+}
+
+export interface ExportContext {
+  /** Número de protocolo o nombre del estudio: el código de sujeto solo es único dentro de un estudio. */
+  studyLabel: string
+  subjectCode: string
+  reportId: string
+  reviewedAt: Date | null
+  timeZone: string
+}
+
+export function labReportCsv(input: ExportContext & { rows: ExportRow[] }): string {
   const reviewed = input.reviewedAt ? `${dayKeyInZone(input.reviewedAt, input.timeZone)} ${timeInZone(input.reviewedAt, input.timeZone)}` : ''
+  const study = csvCell(input.studyLabel)
+  const subject = csvCell(input.subjectCode)
+  const report = shortReportId(input.reportId)
   const lines = input.rows.map((row) =>
-    [
-      csvCell(input.subjectCode),
-      csvCell(row.analyte),
-      csvCell(row.printedValue),
-      numericCell(row.value),
-      csvCell(row.unit ?? ''),
-      csvCell(row.referenceRange ?? ''),
-      reviewed,
-    ].join(SEPARATOR),
+    [study, subject, csvCell(row.analyte), csvCell(row.printedValue), numericCell(row.value), csvCell(row.unit ?? ''), csvCell(row.referenceRange ?? ''), reviewed, report].join(SEPARATOR),
   )
   return `${BOM}${[HEADER.join(SEPARATOR), ...lines].join('\r\n')}\r\n`
 }
 
 /**
  * Para pegar en otra pantalla: analito, valor impreso y unidad separados por
- * tabulación. Va el valor tal cual está impreso, sin agregarle nada.
+ * tabulación. Lleva la misma protección que el CSV, por si se pega en una planilla.
  */
 export function labRowsForClipboard(rows: ExportRow[]): string {
-  return rows.map((row) => [row.analyte, row.printedValue, row.unit ?? ''].map(singleLine).join('\t')).join('\n')
+  return rows.map((row) => [row.analyte, row.printedValue, row.unit ?? ''].map((cell) => neutralizeFormula(singleLine(cell))).join('\t')).join('\n')
 }
 
-export function exportFileName(subjectCode: string, reviewedAt: Date | null, timeZone: string): string {
-  const code = subjectCode.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40)
-  const parts = ['laboratorio', code, reviewedAt ? dayKeyInZone(reviewedAt, timeZone) : ''].filter((part) => part.length > 0)
+const fileSafe = (text: string, max: number): string => text.replace(/[^A-Za-z0-9_-]/g, '').slice(0, max)
+
+export function exportFileName(input: ExportContext): string {
+  const parts = [
+    'laboratorio',
+    fileSafe(input.studyLabel, 30),
+    fileSafe(input.subjectCode, 40),
+    input.reviewedAt ? dayKeyInZone(input.reviewedAt, input.timeZone) : '',
+    shortReportId(input.reportId),
+  ].filter((part) => part.length > 0)
   return `${parts.join('-')}.csv`
 }
 
