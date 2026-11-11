@@ -39,6 +39,7 @@ const nextConfig: NextConfig = {
     '@ichtys/clinical',
     '@ichtys/crypto',
     '@ichtys/ingestion',
+    '@ichtys/integrations',
     '@ichtys/llm',
     '@ichtys/rag',
     '@ichtys/ui',

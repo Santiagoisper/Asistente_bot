@@ -33,6 +33,15 @@ const config: Config = {
           border:  '#E2E8F0',
           muted:   '#64748B',
         },
+        // Cáscara del Clinical Research OS (referencia: captura del 10/11/2026).
+        os: {
+          accent:    '#0B7A6E',
+          accentdim: '#084F48',
+          tint:      '#DDF3EE',
+          ground:    '#F5F8F8',
+          ink:       '#0D1F3C',
+          subtle:    '#475569',
+        },
       },
       boxShadow: {
         'alphi-card':  '0 1px 3px 0 rgba(13,31,60,0.08), 0 1px 2px -1px rgba(13,31,60,0.06)',
