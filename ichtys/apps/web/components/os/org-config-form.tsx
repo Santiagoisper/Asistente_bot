@@ -42,6 +42,14 @@ function ModuleRow({ module, title, baseUrl, enabled }: { module: OsModule; titl
   const [on, setOn] = useState(enabled)
   const [saving, setSaving] = useState(false)
   const [note, setNote] = useState<Note | null>(null)
+  // Si lo guardado cambió (lo normalizó el servidor, o lo cambió otra persona),
+  // el borrador se pone al día: si no, el próximo Guardar pisaría ese cambio.
+  const [saved, setSaved] = useState({ baseUrl, enabled })
+  if (saved.baseUrl !== baseUrl || saved.enabled !== enabled) {
+    setSaved({ baseUrl, enabled })
+    setUrl(baseUrl)
+    setOn(enabled)
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault()
@@ -79,6 +87,11 @@ function TimeZoneRow({ timeZone, effective }: { timeZone: string; effective: str
   const [zone, setZone] = useState(timeZone)
   const [saving, setSaving] = useState(false)
   const [note, setNote] = useState<Note | null>(null)
+  const [saved, setSaved] = useState(timeZone)
+  if (saved !== timeZone) {
+    setSaved(timeZone)
+    setZone(timeZone)
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault()

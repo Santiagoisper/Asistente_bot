@@ -50,9 +50,9 @@ describe('PUT /api/os/org-config — configuración del centro', () => {
   })
 
   it('guarda el módulo en la organización del token y lo audita sin la URL completa', async () => {
-    const res = await PUT(put({ ...moduleBody, baseUrl: 'https://queries.centro-a.example.test/x?token=secreto' }))
+    const res = await PUT(put({ ...moduleBody, baseUrl: 'https://queries.centro-a.example.test/ruta/privada/' }))
     expect(res.status).toBe(200)
-    expect(mocks.saveOrgModule).toHaveBeenCalledWith({ orgId: 'org-a', userId: 'user_1', module: 'queries', baseUrl: 'https://queries.centro-a.example.test/x?token=secreto', enabled: true })
+    expect(mocks.saveOrgModule).toHaveBeenCalledWith({ orgId: 'org-a', userId: 'user_1', module: 'queries', baseUrl: 'https://queries.centro-a.example.test/ruta/privada', enabled: true })
     expect(mocks.writeAuditLog).toHaveBeenCalledWith({
       action: 'org.integration.update',
       orgId: 'org-a',
@@ -61,7 +61,7 @@ describe('PUT /api/os/org-config — configuración del centro', () => {
       resourceId: 'queries',
       metadata: { category: 'module', enabled: true, host: 'queries.centro-a.example.test' },
     })
-    expect(JSON.stringify(mocks.writeAuditLog.mock.calls)).not.toContain('secreto')
+    expect(JSON.stringify(mocks.writeAuditLog.mock.calls)).not.toContain('privada')
   })
 
   it('la organización nunca sale del cuerpo del pedido', async () => {
@@ -73,6 +73,11 @@ describe('PUT /api/os/org-config — configuración del centro', () => {
     const bad = await PUT(put({ ...moduleBody, baseUrl: 'http://queries.example.test' }))
     expect(bad.status).toBe(400)
     expect(await bad.json()).toEqual({ error: 'url_invalid' })
+    for (const url of ['https://queries.centro-a.example.test/x?token=secreto', 'https://queries.centro-a.example.test/#secreto', 'http://localhost:3001', 'https://169.254.169.254']) {
+      const res = await PUT(put({ ...moduleBody, baseUrl: url }))
+      expect(res.status, url).toBe(400)
+      expect(await res.json()).toEqual({ error: 'url_invalid' })
+    }
     const missing = await PUT(put({ ...moduleBody, baseUrl: '' }))
     expect(await missing.json()).toEqual({ error: 'url_required' })
     expect(mocks.saveOrgModule).not.toHaveBeenCalled()

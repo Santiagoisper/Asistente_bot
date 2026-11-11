@@ -36,7 +36,7 @@ export async function PUT(req: Request): Promise<Response> {
     if (!parsed.success) return Response.json({ error: 'invalid_input' }, { status: 400 })
 
     if (parsed.data.kind === 'module') {
-      const checked = checkModuleInput(parsed.data)
+      const checked = checkModuleInput(parsed.data, { allowLocal: process.env.NODE_ENV === 'development' })
       if (!checked.ok) return Response.json({ error: checked.error }, { status: 400 })
       await saveOrgModule({ orgId: org.id, userId, module: parsed.data.module, baseUrl: checked.baseUrl, enabled: parsed.data.enabled })
       await writeAuditLog({

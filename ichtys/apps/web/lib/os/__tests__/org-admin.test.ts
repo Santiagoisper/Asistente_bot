@@ -4,11 +4,33 @@ import { orgConfigError } from '../org-config-messages'
 
 describe('configuración del centro — reglas de entrada', () => {
   it('un módulo encendido necesita una URL https válida', () => {
-    expect(checkModuleInput({ baseUrl: ' https://queries.centro-a.example.test/ ', enabled: true })).toEqual({ ok: true, baseUrl: 'https://queries.centro-a.example.test/' })
+    expect(checkModuleInput({ baseUrl: ' https://queries.centro-a.example.test/ ', enabled: true })).toEqual({ ok: true, baseUrl: 'https://queries.centro-a.example.test' })
+    expect(checkModuleInput({ baseUrl: 'https://centro-a.example.test/queries/', enabled: true })).toEqual({ ok: true, baseUrl: 'https://centro-a.example.test/queries' })
     expect(checkModuleInput({ baseUrl: '', enabled: true })).toEqual({ ok: false, error: 'url_required' })
     for (const bad of ['http://queries.example.test', 'https://u:p@queries.example.test', 'no es una url', 'ftp://x.example.test']) {
       expect(checkModuleInput({ baseUrl: bad, enabled: true })).toEqual({ ok: false, error: 'url_invalid' })
     }
+  })
+
+  it('nada que pueda llevar un secreto se guarda: ni parámetros ni fragmento', () => {
+    for (const bad of ['https://queries.example.test/?token=secreto', 'https://queries.example.test/x?a=1', 'https://queries.example.test/#clave', 'https://queries.example.test/x?']) {
+      const checked = checkModuleInput({ baseUrl: bad, enabled: true })
+      if (bad.endsWith('?')) expect(checked).toEqual({ ok: true, baseUrl: 'https://queries.example.test/x' })
+      else expect(checked).toEqual({ ok: false, error: 'url_invalid' })
+    }
+  })
+
+  it('un destino local o de red privada solo se acepta en la máquina de desarrollo', () => {
+    const local = ['http://localhost:3001', 'http://127.0.0.1:8080', 'https://localhost', 'https://127.0.0.1', 'https://10.0.0.5', 'https://172.16.4.1', 'https://192.168.1.10', 'https://169.254.169.254', 'https://[::1]', 'https://[fd00::1]', 'https://[fe80::1]', 'https://0.0.0.0', 'https://interno.localhost']
+    for (const url of local) {
+      expect(checkModuleInput({ baseUrl: url, enabled: true }), url).toEqual({ ok: false, error: 'url_invalid' })
+      expect(checkModuleInput({ baseUrl: url, enabled: false }), url).toEqual({ ok: false, error: 'url_invalid' })
+    }
+    expect(checkModuleInput({ baseUrl: 'http://localhost:3001', enabled: true }, { allowLocal: true })).toEqual({ ok: true, baseUrl: 'http://localhost:3001' })
+    // Ni en desarrollo vale http hacia un servidor que no es local.
+    expect(checkModuleInput({ baseUrl: 'http://queries.example.test', enabled: true }, { allowLocal: true })).toEqual({ ok: false, error: 'url_invalid' })
+    // Direcciones públicas que se parecen a las privadas siguen valiendo.
+    for (const url of ['https://172.32.0.1', 'https://11.0.0.1', 'https://192.169.0.1']) expect(checkModuleInput({ baseUrl: url, enabled: true }), url).toEqual({ ok: true, baseUrl: url })
   })
 
   it('apagado se puede guardar sin URL, pero una URL mala no se guarda ni apagada', () => {

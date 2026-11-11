@@ -1,7 +1,7 @@
 /** Textos de la pantalla de configuración del centro. Sin dependencias: se usa en el navegador. */
 const ERROR_TEXT: Record<string, string> = {
   url_required: 'Para encender el módulo hace falta la dirección del sistema.',
-  url_invalid: 'La dirección tiene que empezar con https:// y no puede llevar usuario ni clave.',
+  url_invalid: 'La dirección tiene que empezar con https://, ser de un servidor público y no llevar usuario, clave ni parámetros (nada después de un ? o un #).',
   time_zone_invalid: 'Esa zona horaria no existe. Usá el formato América/Ciudad, por ejemplo America/Bogota.',
 }
 

@@ -80,7 +80,10 @@ export async function fetchModuleSummary(
     fetchedAt: now().toISOString(),
   })
 
-  const base = ctx.baseUrl === undefined ? resolveModuleBaseUrl(module, env) : parseModuleBaseUrl(ctx.baseUrl)
+  // Un destino local solo se pide desde la máquina de desarrollo: en un servidor
+  // (producción o preview) sería una puerta a su red interna.
+  const rules = { allowLocal: env.NODE_ENV === 'development' }
+  const base = ctx.baseUrl === undefined ? resolveModuleBaseUrl(module, env, rules) : parseModuleBaseUrl(ctx.baseUrl, rules)
   const privateKeyPem = env[SIGNING_KEY_ENV]
   if (!base || !privateKeyPem) return done('not_configured')
 
