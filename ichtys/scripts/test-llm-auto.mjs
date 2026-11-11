@@ -84,7 +84,7 @@ async function tryGroq() {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      model: 'openai/gpt-oss-120b',
       messages: [{ role: 'user', content: 'Responde solo: OK' }],
       max_tokens: 8,
     }),

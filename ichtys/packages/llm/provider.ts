@@ -12,6 +12,14 @@ export type { OrgLlmApiKeys }
 
 let warnedLegacyGlmDefault = false
 
+/**
+ * Modelo de Groq cuando no hay uno puesto por variable. El anterior
+ * (`llama-3.3-70b-versatile`) fue retirado por Groq y respondía 404, con lo que
+ * cualquier respaldo por Groq fallaba. Este se probó con la extracción de
+ * especificaciones el 11/11/2026; por chat todavía no.
+ */
+const GROQ_DEFAULT_ANSWER_MODEL = 'openai/gpt-oss-120b'
+
 export function getDefaultProviderPreference(): LlmProviderPreference {
   const env = process.env.LLM_PROVIDER?.toLowerCase().trim()
   if (env === 'anthropic' || env === 'claude') return 'anthropic'
@@ -135,9 +143,9 @@ export function getModelId(provider: LlmProviderId, purpose: LlmPurpose): string
         return process.env.GROQ_TITLE_MODEL ?? 'llama-3.1-8b-instant'
       }
       if (purpose === 'spec') {
-        return process.env.SPEC_EXTRACTION_MODEL_GROQ ?? process.env.GROQ_ANSWER_MODEL ?? 'llama-3.3-70b-versatile'
+        return process.env.SPEC_EXTRACTION_MODEL_GROQ ?? process.env.GROQ_ANSWER_MODEL ?? GROQ_DEFAULT_ANSWER_MODEL
       }
-      return process.env.GROQ_ANSWER_MODEL ?? 'llama-3.3-70b-versatile'
+      return process.env.GROQ_ANSWER_MODEL ?? GROQ_DEFAULT_ANSWER_MODEL
     case 'glm':
       if (purpose === 'title' || purpose === 'clinical-extract') {
         return process.env.GLM_TITLE_MODEL ?? process.env.GLM_MODEL ?? 'z-ai/glm-5.2'
