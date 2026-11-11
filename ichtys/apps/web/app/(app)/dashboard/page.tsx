@@ -1,5 +1,7 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { auth } from '@clerk/nextjs/server'
+import { isOsEnabled } from '../../../lib/flags'
 import { db, eq, organizations, studies, documents } from '@ichtys/db'
 
 async function getDashboardData(clerkOrgId: string, userId: string) {
@@ -46,6 +48,9 @@ function formatRelative(date: Date): string {
 }
 
 export default async function DashboardPage() {
+  // Con la cáscara del OS encendida, la pantalla de inicio es /inicio.
+  if (isOsEnabled()) redirect('/inicio')
+
   const { orgId: clerkOrgId, userId } = await auth()
 
   const data = (clerkOrgId && userId)

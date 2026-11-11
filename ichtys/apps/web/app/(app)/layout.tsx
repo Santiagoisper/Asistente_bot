@@ -1,11 +1,37 @@
 import Link from 'next/link'
 import { OrganizationSwitcher, UserButton } from '@clerk/nextjs'
 import { DemoNavLink, GcpBadge } from '../../components/cabina/app-chrome'
-import { isCabinaEnabled } from '../../lib/flags'
+import { OsChrome } from '../../components/os/os-chrome'
+import { isCabinaEnabled, isOsEnabled } from '../../lib/flags'
+import { getOsContext } from '../../lib/os/context'
+import { countNativePriority } from '../../lib/os/inicio-data'
 import { AlphiLogo } from '../../components/ui/alphi-logo'
 import { IchtysLogo } from '../../components/ui/ichtys-logo'
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+/** Cantidad para la campana. Si no se puede calcular, la campana va sin número. */
+async function priorityCount(): Promise<number | null> {
+  try {
+    const ctx = await getOsContext()
+    return ctx ? await countNativePriority(ctx.orgId, ctx.canSeeSubjects) : null
+  } catch {
+    console.error('[os/layout] priority count failed')
+    return null
+  }
+}
+
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  if (isOsEnabled()) {
+    return (
+      <OsChrome
+        priorityCount={await priorityCount()}
+        orgSwitcher={<OrganizationSwitcher hidePersonal />}
+        userButton={<UserButton appearance={{ elements: { avatarBox: 'w-8 h-8' } }} />}
+      >
+        {children}
+      </OsChrome>
+    )
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-alphi-slate">
 
