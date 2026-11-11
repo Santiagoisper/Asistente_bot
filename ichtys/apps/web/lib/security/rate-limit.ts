@@ -144,8 +144,38 @@ function whenRedisUnavailable(params: RateLimitParams, failureCode: string): Rat
     }
     return { limited: false }
   }
+  if (isPreviewWithoutRedis(failureCode)) return enforcePreviewMemoryQuota(params)
   logRateLimitFailure(failureCode)
   return denyUnavailable()
+}
+
+/**
+ * Una vista previa de Vercel no tiene Redis: es un entorno de prueba, con su
+ * propia base y sin datos reales. Ahí, y solo ahí, una operación cara cuenta
+ * su cupo en la memoria del proceso en vez de rechazarse.
+ *
+ * Producción no entra nunca: `VERCEL_ENV` lo fija la plataforma, y vale
+ * `production` en producción. Tampoco entra una vista previa que sí tiene
+ * Redis configurado y falla: eso es una avería y se sigue bloqueando.
+ */
+function isPreviewWithoutRedis(failureCode: string): boolean {
+  return failureCode === 'redis_unconfigured' && process.env.VERCEL_ENV === 'preview'
+}
+
+let previewMemoryWarned = false
+
+function enforcePreviewMemoryQuota(params: RateLimitParams): RateLimitResult {
+  if (!previewMemoryWarned) {
+    previewMemoryWarned = true
+    console.warn('[rate-limit] vista previa sin Redis: el cupo se cuenta en memoria, por proceso')
+  }
+  // El cupo de la organización también se cuenta, para que el comportamiento
+  // se parezca al real: primero la organización, después quien hace el pedido.
+  if (params.orgKey && params.orgLimit) {
+    const org = enforceMemoryQuota({ key: params.orgKey, limit: params.orgLimit, windowSeconds: params.windowSeconds })
+    if (org.limited) return org
+  }
+  return enforceMemoryQuota(params)
 }
 
 /**
