@@ -1,6 +1,5 @@
 import { auth, currentUser } from '@clerk/nextjs/server'
-import { canAccessPhiData, canAdministerOrg, normalizeRole, type Role } from '@ichtys/auth'
-import { db, eq, organizations } from '@ichtys/db'
+import { canAccessPhiData, canAdministerOrg, normalizeRole, resolveOrProvisionOrganization, type Role } from '@ichtys/auth'
 
 export interface OsContext {
   userId: string
@@ -14,16 +13,18 @@ export interface OsContext {
 
 /**
  * Contexto del usuario para las pantallas del OS. Devuelve null si no hay
- * sesión, no hay organización activa o la organización todavía no existe en
- * la base: en esos casos las pantallas muestran un estado vacío, nunca datos.
+ * sesión o no hay organización activa: en esos casos las pantallas muestran un
+ * estado vacío, nunca datos.
+ *
+ * Una organización activa que todavía no existe en la base se da de alta acá,
+ * igual que en Protocolos: un centro nuevo tiene que poder usar Inicio, Agenda
+ * y Laboratorios desde la primera pantalla, sin pasar antes por otra.
  */
 export async function getOsContext(): Promise<OsContext | null> {
   const { userId, orgId: clerkOrgId, orgRole } = await auth()
   if (!userId || !clerkOrgId) return null
 
-  const org = await db.query.organizations.findFirst({
-    where: eq(organizations.clerkOrgId, clerkOrgId),
-  })
+  const org = await resolveOrProvisionOrganization(clerkOrgId)
   if (!org) return null
 
   const role = normalizeRole(orgRole)

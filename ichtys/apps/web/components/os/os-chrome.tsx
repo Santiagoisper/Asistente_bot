@@ -94,7 +94,7 @@ export function OsChrome({
       {drawerOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Menú">
           <button type="button" className="absolute inset-0 bg-[#0D1F3C]/40" aria-label="Cerrar el menú" onClick={() => setDrawerOpen(false)} />
-          <div className="relative h-full w-72 max-w-[85vw] bg-white shadow-alphi-modal">
+          <div className="relative flex h-full w-72 max-w-[85vw] flex-col bg-white shadow-alphi-modal">
             <button
               type="button"
               className={`absolute right-2 top-3 inline-flex h-11 w-11 items-center justify-center rounded-lg text-os-subtle ${focusRing}`}
@@ -103,7 +103,14 @@ export function OsChrome({
             >
               <X aria-hidden="true" className="h-5 w-5" />
             </button>
-            <Sidebar pathname={pathname} onNavigate={() => setDrawerOpen(false)} />
+            {/* En la barra el selector se oculta por debajo de 640 px; acá queda a mano. */}
+            <div data-testid="drawer-org-switcher" className="border-b border-alphi-border px-4 pb-3 pr-14 pt-4 sm:hidden">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-os-subtle">Organización</p>
+              {orgSwitcher}
+            </div>
+            <div className="min-h-0 flex-1">
+              <Sidebar pathname={pathname} onNavigate={() => setDrawerOpen(false)} />
+            </div>
           </div>
         </div>
       ) : null}

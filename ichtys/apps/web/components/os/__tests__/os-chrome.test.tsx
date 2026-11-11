@@ -82,4 +82,16 @@ describe('cáscara del OS', () => {
     act(() => (container.querySelector('[role="dialog"] button[aria-label="Cerrar el menú"]') as HTMLButtonElement).click())
     expect(container.querySelector('[role="dialog"]')).toBeNull()
   })
+
+  it('en pantalla angosta el selector de organización está dentro del menú', () => {
+    // En la barra queda oculto por debajo de 640 px: sin esto, desde un teléfono
+    // no hay forma de elegir ni de crear una organización.
+    render('/inicio', 0)
+    act(() => (container.querySelector('button[aria-label="Abrir el menú"]') as HTMLButtonElement).click())
+    const drawer = container.querySelector('[role="dialog"]') as HTMLElement
+    const slot = drawer.querySelector('[data-testid="drawer-org-switcher"]') as HTMLElement | null
+    expect(slot).not.toBeNull()
+    expect(slot!.textContent).toContain('org')
+    expect(slot!.className).toContain('sm:hidden')
+  })
 })
