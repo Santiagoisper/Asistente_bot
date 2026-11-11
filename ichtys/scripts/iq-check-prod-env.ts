@@ -101,6 +101,16 @@ async function main(): Promise<void> {
   if (ragRows.length > 0) pass('Migration rag_config', 'organizations.rag_config')
   else fail('Migration rag_config', 'column missing')
 
+  // 0011: el Inicio del OS cuenta laboratorios pendientes con esta columna.
+  // Si falta, encender ALPHI_OS rompe la pantalla de inicio.
+  const labCol = await db.execute<{ column_name: string }>(sql`
+    SELECT column_name FROM information_schema.columns
+    WHERE table_name = 'patient_profiles' AND column_name = 'lab_review_pending'
+  `)
+  const labRows = labCol.rows ?? labCol
+  if (labRows.length > 0) pass('Migration lab_review_pending', 'patient_profiles.lab_review_pending')
+  else fail('Migration lab_review_pending', 'column missing — aplicar 0011 antes de encender ALPHI_OS')
+
   const failed = checks.filter((c) => !c.ok)
   console.log(`\n=== IQ: ${checks.length - failed.length}/${checks.length} OK ===\n`)
   process.exit(failed.length > 0 ? 1 : 0)
