@@ -87,6 +87,7 @@ export const auditAction = [
   'agenda.update',
   'lab.confirm',
   'lab.reject',
+  'lab.export',
 ] as const
 export type AuditAction = (typeof auditAction)[number]
 

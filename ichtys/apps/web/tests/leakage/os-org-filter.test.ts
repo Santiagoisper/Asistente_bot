@@ -50,7 +50,7 @@ describe('leakage — consultas del OS filtradas por organización', () => {
 
   it('las rutas de informes validan el sujeto contra el estudio de la URL', () => {
     const base = 'app/api/studies/[id]/subjects/[subjectId]/lab-reports'
-    for (const file of ['route.ts', 'images/route.ts', '[reportId]/route.ts', '[reportId]/image/[page]/route.ts', '[reportId]/confirm/route.ts', '[reportId]/reject/route.ts']) {
+    for (const file of ['route.ts', 'images/route.ts', '[reportId]/route.ts', '[reportId]/image/[page]/route.ts', '[reportId]/confirm/route.ts', '[reportId]/reject/route.ts', '[reportId]/export/route.ts']) {
       const route = readFileSync(join(WEB_ROOT, base, file), 'utf8')
       expect(route).toContain('validateSubjectAccess(subjectId, studyId)')
       expect(route).not.toMatch(/orgId: (body|parsed\.data)/)

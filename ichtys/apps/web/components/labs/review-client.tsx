@@ -1,8 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { ExternalLink, Plus, Trash2 } from 'lucide-react'
+import { NO_DESTINATION, describeDelivery } from '@ichtys/integrations/connector'
+import { Copy, Download, ExternalLink, Plus, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { copyText } from '../../lib/labs/copy-text'
+import { downloadName, labRowsForClipboard } from '../../lib/labs/lab-export'
 import type { LabReportContent } from '../../lib/labs/lab-report-content'
 import {
   decideValue,
@@ -83,6 +86,8 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
   const [confirmingReject, setConfirmingReject] = useState(false)
   const [profileWarning, setProfileWarning] = useState(false)
   const [compared, setCompared] = useState(false)
+  const [exportNote, setExportNote] = useState<{ text: string; failed: boolean } | null>(null)
+  const [downloading, setDownloading] = useState(false)
   const fromImage = content.source === 'image'
   const imagePages = fromImage ? (content.imagePages ?? 0) : 0
   const summary = readingSummary(content)
@@ -99,6 +104,42 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
     return problem === 'missing_analyte' || problem === 'missing_value'
   }).length
   const base = `/api/studies/${studyId}/subjects/${subjectId}/lab-reports/${reportId}`
+
+  // Hoy no hay ningún sistema de destino conectado: lo revisado queda en Alphi y se puede sacar a mano.
+  const delivery = describeDelivery({ review: 'reviewed', connector: NO_DESTINATION, delivery: null })
+  const reviewedRows = payload ?? content.rows
+
+  async function copyValues() {
+    const copied = await copyText(labRowsForClipboard(reviewedRows))
+    setExportNote(
+      copied
+        ? { text: `Copiado: ${reviewedRows.length} ${reviewedRows.length === 1 ? 'fila' : 'filas'} (analito, valor y unidad).`, failed: false }
+        : { text: 'No se pudo copiar. Descargá el CSV.', failed: true },
+    )
+  }
+
+  async function downloadCsv() {
+    setDownloading(true)
+    setExportNote(null)
+    try {
+      const response = await fetch(`${base}/export`)
+      if (!response.ok) {
+        setExportNote({ text: response.status === 409 ? 'Este estudio todavía no está revisado: recargá la página.' : 'No se pudo descargar. Probá de nuevo.', failed: true })
+        return
+      }
+      const url = URL.createObjectURL(await response.blob())
+      const link = document.createElement('a')
+      link.href = url
+      link.download = downloadName(response.headers.get('content-disposition'))
+      link.click()
+      URL.revokeObjectURL(url)
+      setExportNote({ text: 'Descargado. El archivo tiene datos del sujeto: guardalo solo donde corresponda.', failed: false })
+    } catch {
+      setExportNote({ text: 'No se pudo descargar. Revisá la conexión y probá de nuevo.', failed: true })
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   function update(key: string, change: (row: ReviewRow) => ReviewRow) {
     setRows((current) => current.map((row) => (row.key === key ? change(row) : row)))
@@ -170,7 +211,8 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
 
       {phase === 'confirmed' ? (
         <div role="status" className="rounded-2xl bg-os-tint px-5 py-4 text-sm text-os-accentdim">
-          <p className="font-semibold">Estudio revisado y guardado en Alphi. No se envió a la historia clínica ni a ningún otro sistema.</p>
+          <p className="font-semibold">{delivery.label}</p>
+          <p className="mt-0.5">{delivery.detail}</p>
           {profileWarning ? (
             <p className="mt-1 text-[#6B4200]">El estudio quedó confirmado, pero no se pudo actualizar el perfil de screening del sujeto. Avisá a soporte.</p>
           ) : null}
@@ -179,6 +221,33 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
             <Link href={`/studies/${studyId}/subjects/${subjectId}`} className="underline">Ver la ficha del sujeto</Link>
             <Link href="/laboratorios/cargar" className="underline">Cargar otro estudio</Link>
           </p>
+          {delivery.canExport ? (
+            <div className="mt-4 border-t border-os-accent/20 pt-3">
+              <p>Para llevarlo a otro sistema a mano:</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={downloading}
+                  className={`inline-flex min-h-11 items-center gap-2 rounded-lg border-[1.5px] border-os-accent bg-white px-4 text-sm font-semibold text-os-accentdim hover:bg-os-tint disabled:opacity-50 ${focusRing}`}
+                  onClick={() => void downloadCsv()}
+                >
+                  <Download aria-hidden="true" className="h-4 w-4" />
+                  {downloading ? 'Descargando…' : 'Descargar CSV'}
+                </button>
+                <button
+                  type="button"
+                  className={`inline-flex min-h-11 items-center gap-2 rounded-lg border-[1.5px] border-os-accent bg-white px-4 text-sm font-semibold text-os-accentdim hover:bg-os-tint ${focusRing}`}
+                  onClick={() => void copyValues()}
+                >
+                  <Copy aria-hidden="true" className="h-4 w-4" />
+                  Copiar valores
+                </button>
+              </div>
+              <p aria-live="polite" className={`mt-2 min-h-5 ${exportNote?.failed ? 'font-semibold text-[#8C1D3A]' : ''}`}>
+                {exportNote?.text ?? ''}
+              </p>
+            </div>
+          ) : null}
         </div>
       ) : null}
       {phase === 'rejected' ? (
