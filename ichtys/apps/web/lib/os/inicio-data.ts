@@ -8,6 +8,7 @@ import {
   documentVersions,
   eq,
   inArray,
+  labReports,
   patientProfiles,
   sql,
   studies,
@@ -41,6 +42,74 @@ export async function countPendingLabReviews(orgId: string): Promise<number> {
     .from(patientProfiles)
     .where(and(eq(patientProfiles.organizationId, orgId), eq(patientProfiles.labReviewPending, true)))
   return row?.value ?? 0
+}
+
+/** Informes de laboratorio subidos que esperan revisión (Carga de laboratorios). */
+export async function countPendingLabReports(orgId: string): Promise<number> {
+  const [row] = await db
+    .select({ value: count() })
+    .from(labReports)
+    .where(and(eq(labReports.organizationId, orgId), eq(labReports.status, 'pending_review')))
+  return row?.value ?? 0
+}
+
+/** Todo lo de laboratorio que espera a una persona: revisiones del perfil e informes subidos. */
+export async function countPendingLabWork(orgId: string): Promise<number> {
+  const [reviews, reports] = await Promise.all([countPendingLabReviews(orgId), countPendingLabReports(orgId)])
+  return reviews + reports
+}
+
+export interface PendingLabReportRow {
+  reportId: string
+  subjectId: string
+  subjectCode: string
+  studyId: string
+  studyLabel: string
+  rowCount: number
+  since: Date
+}
+
+export async function listPendingLabReports(orgId: string, limit: number): Promise<PendingLabReportRow[]> {
+  const rows = await db
+    .select({
+      reportId: labReports.id,
+      subjectId: subjects.id,
+      subjectCode: subjects.subjectCode,
+      studyId: studies.id,
+      studyName: studies.name,
+      protocolNumber: studies.protocolNumber,
+      rowCount: labReports.rowCount,
+      since: labReports.createdAt,
+    })
+    .from(labReports)
+    .innerJoin(subjects, and(eq(subjects.id, labReports.subjectId), eq(subjects.organizationId, orgId)))
+    .innerJoin(studies, and(eq(studies.id, labReports.studyId), eq(studies.organizationId, orgId)))
+    .where(and(eq(labReports.organizationId, orgId), eq(labReports.status, 'pending_review')))
+    .orderBy(labReports.createdAt)
+    .limit(limit)
+  return rows.map((row) => ({
+    reportId: row.reportId,
+    subjectId: row.subjectId,
+    subjectCode: row.subjectCode,
+    studyId: row.studyId,
+    studyLabel: studyLabel(row),
+    rowCount: row.rowCount,
+    since: row.since,
+  }))
+}
+
+/** Estudios activos de la organización, para elegir dónde cargar un informe. */
+export async function listActiveStudies(orgId: string): Promise<StudyOption[]> {
+  const rows = await db
+    .select({ id: studies.id, name: studies.name, protocolNumber: studies.protocolNumber })
+    .from(studies)
+    .where(and(eq(studies.organizationId, orgId), eq(studies.status, 'active')))
+    .orderBy(studies.name)
+    .limit(200)
+  return rows.map((row) => ({
+    id: row.id,
+    label: row.protocolNumber?.trim() ? `${row.protocolNumber.trim()} · ${row.name}` : row.name,
+  }))
 }
 
 export interface PendingLabReviewRow {
@@ -217,8 +286,9 @@ export async function listPriorityItems(
   orgId: string,
   opts: { includeSubjects: boolean; satellites?: SatelliteAlerts[] },
 ): Promise<PriorityItem[]> {
-  const [labs, ingestions, specs] = await Promise.all([
+  const [labs, reports, ingestions, specs] = await Promise.all([
     opts.includeSubjects ? listPendingLabReviews(orgId, PRIORITY_FETCH_LIMIT) : Promise.resolve([]),
+    opts.includeSubjects ? listPendingLabReports(orgId, PRIORITY_FETCH_LIMIT) : Promise.resolve([]),
     listFailedIngestions(orgId, PRIORITY_FETCH_LIMIT),
     listDraftSpecs(orgId, PRIORITY_FETCH_LIMIT),
   ])
@@ -232,6 +302,15 @@ export async function listPriorityItems(
       detail: `${row.subjectCode} · ${row.studyLabel}`,
       href: `/studies/${row.studyId}/subjects/${row.subjectId}`,
       since: row.since?.toISOString() ?? null,
+    })),
+    ...reports.map((row): PriorityItem => ({
+      id: `lab-report:${row.reportId}`,
+      kind: 'lab',
+      severity: 'high',
+      title: 'Informe de laboratorio por revisar',
+      detail: `${row.subjectCode} · ${row.studyLabel}`,
+      href: `/studies/${row.studyId}/subjects/${row.subjectId}/labs/${row.reportId}`,
+      since: row.since.toISOString(),
     })),
     ...ingestions.map((row): PriorityItem => ({
       id: `ingestion:${row.versionId}`,
@@ -269,7 +348,7 @@ export async function listPriorityItems(
 /** Cantidad exacta para la campana: solo lo que Alphi sabe sin consultar satélites. */
 export async function countNativePriority(orgId: string, includeSubjects: boolean): Promise<number> {
   const [labs, [ingestions], [specs]] = await Promise.all([
-    includeSubjects ? countPendingLabReviews(orgId) : Promise.resolve(0),
+    includeSubjects ? countPendingLabWork(orgId) : Promise.resolve(0),
     db
       .select({ value: count() })
       .from(documentVersions)

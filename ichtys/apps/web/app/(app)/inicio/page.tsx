@@ -10,7 +10,7 @@ import { getFirstName, getOsContext, type OsContext } from '../../../lib/os/cont
 import { greetingFor, longDate, sinceLabel } from '../../../lib/os/greeting'
 import {
   countActiveStudies,
-  countPendingLabReviews,
+  countPendingLabWork,
   labOutcomes30d,
   listPriorityItems,
   listStudiesWithReadyDocs,
@@ -78,7 +78,7 @@ async function PendingLabsStat({ ctx }: { ctx: OsContext }) {
     if (!ctx.canSeeSubjects) {
       return <StatCard label="Labs pendientes" value={null} note="Tu rol no ve datos de sujetos" icon={icon} />
     }
-    const total = await countPendingLabReviews(ctx.orgId)
+    const total = await countPendingLabWork(ctx.orgId)
     return (
       <StatCard
         label="Labs pendientes"
@@ -207,7 +207,7 @@ async function LabsCard({ ctx }: { ctx: OsContext }) {
         </Card>
       )
     }
-    const [pending, outcomes] = await Promise.all([countPendingLabReviews(ctx.orgId), labOutcomes30d(ctx.orgId, new Date())])
+    const [pending, outcomes] = await Promise.all([countPendingLabWork(ctx.orgId), labOutcomes30d(ctx.orgId, new Date())])
     const cells = [
       { value: pending, label: 'pendientes' },
       { value: outcomes.confirmed, label: 'confirmados (30 días)' },

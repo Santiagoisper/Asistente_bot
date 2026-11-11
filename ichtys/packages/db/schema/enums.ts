@@ -109,3 +109,11 @@ export type UsageKind = (typeof usageKind)[number]
  */
 export const usageKeySource = ['platform', 'org'] as const
 export type UsageKeySource = (typeof usageKeySource)[number]
+
+/** Estado de un informe de laboratorio subido (Carga de laboratorios). */
+export const labReportStatus = ['pending_review', 'confirmed', 'rejected'] as const
+export type LabReportStatus = (typeof labReportStatus)[number]
+
+/** Cómo se leyó el informe: texto de un PDF digital o imagen recortada. */
+export const labReportSourceKind = ['pdf_text', 'image'] as const
+export type LabReportSourceKind = (typeof labReportSourceKind)[number]
