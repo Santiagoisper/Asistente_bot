@@ -1,6 +1,6 @@
 # Acceso por estudio: funciones y membresía
 
-Estado: **decisiones M1–M12 tomadas el 11/11/2026; sin implementar**. Revisado por Reviewer y por la revisión automática del PR. La sección de funciones se reescribió con la descripción de Santiago de cómo se organiza un centro; conviene que Reviewer la vuelva a mirar.
+Estado: **decisiones M1–M14 tomadas el 11/11/2026; pasos 0, 1 y 2a en PR (#105, #107, #108)**. Revisado por Reviewer y por la revisión automática del PR. La sección de funciones se reescribió con la descripción de Santiago de cómo se organiza un centro; conviene que Reviewer la vuelva a mirar.
 Fecha: 2026-11-11.
 
 ## El problema
@@ -122,7 +122,7 @@ Los validadores no pasan todos por `validateStudyAccess`: `validatePhiStudyAcces
 
 ### 2. Capacidades
 
-Las funciones `canX(role)` de `roles.ts` y `roleSatisfies` se reemplazan por comprobaciones de capacidad sobre el conjunto de funciones de la persona. La primera que se necesita es la de autoría clínica en la ruta de evoluciones.
+`allows(subject, capability, legacyCheck)` en `packages/auth/functions.ts` (PR #108). En modo `open` decide la comprobación por rol que la ruta ya hacía, sin cambios; en `enforced` deciden las funciones y el rol no cuenta. Cada ruta pasa su comprobación histórica como `legacyCheck`, así el modo `open` es idéntico a hoy por construcción. La primera capacidad que se conecta es la de autoría clínica en la ruta de evoluciones.
 
 ### 3. Consultas sobre `studies`
 
@@ -144,9 +144,9 @@ No se puede hacer solo con una migración de datos: los miembros de una organiza
 
 ### Funciones
 
-La migración crea una fila por persona a partir de su rol actual:
+Los roles viven en el proveedor de identidad; una migración no los conoce, así que las funciones no se pueden sembrar con SQL. (La versión anterior de este documento decía lo contrario.) Mientras la organización está en `open`, la autorización sigue siendo la histórica, por rol, por el mismo camino de código que hoy. La pantalla propone una función por persona a partir de su rol:
 
-| Rol de hoy | Función inicial |
+| Rol de hoy | Función sugerida |
 |---|---|
 | `principal_investigator` | Investigador |
 | `site_coordinator` | Study Coordinator |
@@ -162,7 +162,7 @@ El costo de esa prudencia: en las organizaciones existentes, la regla «solo el 
 
 ### Membresías
 
-Modo por organización, guardado en `organizations.os_settings`:
+Modo por organización, en una columna propia (`organizations.access_mode`, con un CHECK en la base) y su fecha límite en `access_open_until`. No va en `os_settings`: un dato de autorización no debe vivir en un JSON que otra pantalla guarda entero. Al leerlo, cualquier valor que no sea exactamente `open` se trata como `enforced`.
 
 - `open` — el comportamiento de hoy. Funciones y membresías se pueden cargar, pero no restringen.
 - `enforced` — valen las reglas de arriba.
@@ -176,7 +176,7 @@ Las dos direcciones no son iguales:
 
 Pasos:
 
-1. La migración crea las tablas y las funciones iniciales. Las organizaciones existentes quedan en `open` con una fecha límite. Nada cambia para nadie.
+1. La migración crea las tablas y las columnas. Las organizaciones existentes quedan en `open`. Nada cambia para nadie. La fecha límite se asigna cuando la pantalla esté disponible, y recién ahí el valor por defecto de la base pasa a `enforced` para las organizaciones nuevas (M1): antes, un centro nuevo quedaría en modo estricto sin pantalla para armar su equipo.
 2. El administrador ve una pantalla «Equipo y accesos»: las personas con sus funciones, los estudios, quién está en cuál y cuántos días quedan. Corrige funciones y carga membresías con el modo todavía en `open`.
 3. Antes de pasar a `enforced`, la pantalla muestra qué cambia: quién deja de ver qué estudios, quién queda sin ningún estudio y quién deja de poder evolucionar. El cambio pide confirmación y queda auditado.
 4. La corrección de un error de carga es acotada y no necesita volver a `open`: quien tiene alcance total entra siempre y agrega la membresía o la función que falta en el momento. Volver a `open` queda disponible solo antes de la fecha límite, auditado; después, no.
@@ -223,11 +223,13 @@ Delegadas por Santiago el 11/11/2026 y resueltas con la recomendación:
 |---|---|---|
 | M8 | Plazo de `open` y qué pasa al vencer | 60 días desde que la pantalla está disponible, con aviso al administrador a 14, 7 y 1 día. Al vencer, pasa solo a `enforced` |
 | M12 | ¿Quien administra la plataforma (ajustes, claves) ve datos clínicos y todos los estudios? | No por esa función sola. Los ve si además tiene otra. En un centro chico la misma persona tendrá las dos |
+| M13 | ¿Quien administra puede asignarse a sí mismo otra función? | Sí. Queda auditado con marca propia de autoasignación y se muestra en la pantalla. Impedirlo dejaría sin salida al centro de una sola persona. Para centros grandes queda abierta la regla de dos personas |
+| M14 | ¿Puede una organización quedar sin nadie que asigne funciones? | No. Quien es administrador de la organización en el proveedor de identidad conserva siempre la administración de la plataforma, que no trae datos clínicos |
 
 ## Orden de trabajo
 
 0. Quitar la consulta sin límite de organización del layout de estudio. PR propio, no depende de nada.
-1. Migración: `member_functions` con las funciones iniciales, `study_memberships` e índice único en `studies`. Sin efecto visible.
+1. Migración `0017`: `member_functions`, `study_memberships`, modo de la organización e índice único en `studies`. Sin efecto visible. (PR #107.)
 2. Capacidades sobre funciones en `packages/auth`, con el comportamiento de hoy mientras el modo sea `open`. Autoría clínica en la ruta de evoluciones, activa en `enforced`.
 3. `assertStudyMembership` en todos los validadores, detrás del modo, con su prueba.
 4. `visibleStudiesFilter`, `visibleStudyIds` y la reescritura de las consultas sobre tablas hijas. Pruebas de fuga por función y prueba estática. Es el paso grande.
