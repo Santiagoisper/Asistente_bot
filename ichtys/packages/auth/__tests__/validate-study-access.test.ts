@@ -342,6 +342,8 @@ function createTenantFixture(): TenantFixture {
       planName: null,
       monthlyBudgetMicros: null,
       osSettings: null,
+      accessMode: 'open',
+      accessOpenUntil: null,
       createdAt,
       updatedAt: createdAt,
     },

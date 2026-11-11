@@ -31,7 +31,9 @@ import {
   labAnalytes,
   labReportImages,
   labReports,
+  memberFunctions,
   organizationIntegrations,
+  studyMemberships,
   studySpecs,
   subjects,
 } from '../../schema'
@@ -69,6 +71,10 @@ const TENANT_TABLES: TenantTableSpec[] = [
   { name: 'agenda_items', table: agendaItems, studyScoped: true },
   // Configuración de la organización, no dato de un estudio.
   { name: 'organization_integrations', table: organizationIntegrations, studyScoped: false },
+  // Acceso por estudio: la función es de la persona en la organización; la
+  // membresía es de un estudio concreto.
+  { name: 'member_functions', table: memberFunctions, studyScoped: false },
+  { name: 'study_memberships', table: studyMemberships, studyScoped: true },
 ]
 
 function findColumn(table: PgTable, columnName: string) {

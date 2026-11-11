@@ -91,8 +91,37 @@ export const auditAction = [
   'lab.export',
   'org.integration.update',
   'org.os_settings.update',
+  'org.access_mode.update',
+  'access.function.grant',
+  'access.function.revoke',
+  'access.membership.grant',
+  'access.membership.update',
+  'access.membership.revoke',
 ] as const
 export type AuditAction = (typeof auditAction)[number]
+
+/**
+ * Funciones de una persona en el centro (docs/decisions/study-membership.md).
+ * Son acumulables: una persona puede tener varias y sus capacidades son la
+ * suma. La capacidad sale de la función; el alcance, de la membresía por
+ * estudio. No hay jerarquía entre ellas.
+ */
+export const memberFunction = [
+  'investigator',
+  'study_coordinator',
+  'lab_assistant',
+  'regulatory_assistant',
+  'crf_assistant',
+  'operations_director',
+  'research_director',
+  'monitor',
+  'platform_admin',
+] as const
+export type MemberFunction = (typeof memberFunction)[number]
+
+/** Modo de acceso por estudio de una organización. */
+export const accessMode = ['open', 'enforced'] as const
+export type AccessMode = (typeof accessMode)[number]
 
 /**
  * Tipo de operación que consume tokens (usage_events.kind). Sirve para mostrarle al cliente
