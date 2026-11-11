@@ -15,7 +15,7 @@ import { canReuseEmbeddedChunks } from './chunk-reuse'
 import { chunkPages } from './chunker'
 import { EmbeddingIndexingError, indexDocumentVersionChunks } from './indexer'
 import { parsePdf, PdfParseError } from './parser'
-import { extractStudySpec, getExtractionModelId, SPEC_EXTRACTION_LLM_PROVIDER } from './spec-extractor'
+import { extractStudySpec, getExtractionModelId, getSpecExtractionProvider } from './spec-extractor'
 import {
   getApprovedSpecExamples,
   getLatestMeaningfulStudySpec,
@@ -275,7 +275,7 @@ function startSpecExtraction(
       const orgLlmKeys = await getOrgLlmApiKeys(input.orgId).catch(() => ({}))
 
       const extracted = await extractStudySpec(specPages, fewShotExamples, {
-        llmProviderPreference: SPEC_EXTRACTION_LLM_PROVIDER,
+        llmProviderPreference: getSpecExtractionProvider(),
         llmApiKeys: orgLlmKeys,
         orgId: input.orgId,
         studyId: input.studyId,
