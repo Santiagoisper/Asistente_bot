@@ -16,6 +16,7 @@ import {
   subjects,
 } from '@ichtys/db'
 import type { ModuleAlert } from '@ichtys/integrations'
+import { orderStudyOptions } from '../labs/upload-form-state'
 import { sortPriorityItems, type PriorityItem } from './priority'
 
 /**
@@ -98,18 +99,32 @@ export async function listPendingLabReports(orgId: string, limit: number): Promi
   }))
 }
 
-/** Estudios activos de la organización, para elegir dónde cargar un informe. */
-export async function listActiveStudies(orgId: string): Promise<StudyOption[]> {
-  const rows = await db
-    .select({ id: studies.id, name: studies.name, protocolNumber: studies.protocolNumber })
-    .from(studies)
-    .where(and(eq(studies.organizationId, orgId), eq(studies.status, 'active')))
-    .orderBy(studies.name)
-    .limit(200)
-  return rows.map((row) => ({
-    id: row.id,
-    label: row.protocolNumber?.trim() ? `${row.protocolNumber.trim()} · ${row.name}` : row.name,
-  }))
+/**
+ * Estudios activos de la organización con su cantidad de sujetos, para elegir
+ * dónde cargar un informe. Primero los que ya tienen sujetos.
+ */
+export async function listActiveStudies(orgId: string): Promise<StudyWithSubjects[]> {
+  const [rows, counts] = await Promise.all([
+    db
+      .select({ id: studies.id, name: studies.name, protocolNumber: studies.protocolNumber })
+      .from(studies)
+      .where(and(eq(studies.organizationId, orgId), eq(studies.status, 'active')))
+      .orderBy(studies.name)
+      .limit(200),
+    db
+      .select({ studyId: subjects.studyId, total: count() })
+      .from(subjects)
+      .where(eq(subjects.organizationId, orgId))
+      .groupBy(subjects.studyId),
+  ])
+  const bySubjectCount = new Map(counts.map((row) => [row.studyId, Number(row.total)]))
+  return orderStudyOptions(
+    rows.map((row) => ({
+      id: row.id,
+      label: row.protocolNumber?.trim() ? `${row.protocolNumber.trim()} · ${row.name}` : row.name,
+      subjectCount: bySubjectCount.get(row.id) ?? 0,
+    })),
+  )
 }
 
 export interface PendingLabReviewRow {
@@ -247,6 +262,11 @@ async function listDraftSpecs(orgId: string, limit: number): Promise<DraftSpecRo
 export interface StudyOption {
   id: string
   label: string
+}
+
+/** Estudio para elegir dónde cargar un informe, con su cantidad de sujetos. */
+export interface StudyWithSubjects extends StudyOption {
+  subjectCount: number
 }
 
 /** Estudios activos que ya tienen al menos un documento listo para consultar. */

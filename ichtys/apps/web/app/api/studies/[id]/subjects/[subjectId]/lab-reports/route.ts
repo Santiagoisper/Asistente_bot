@@ -4,7 +4,7 @@ import { validatePdfUpload } from '../../../../../../../lib/documents/pdf-upload
 import { isOsEnabled } from '../../../../../../../lib/flags'
 import { MAX_LAB_PDF_BYTES } from '../../../../../../../lib/labs/lab-report-content'
 import { labReportErrorResponse } from '../../../../../../../lib/labs/lab-report-http'
-import { createLabReportFromPdf } from '../../../../../../../lib/labs/lab-report-service'
+import { createLabReportFromPdf, LabReportError } from '../../../../../../../lib/labs/lab-report-service'
 import { PhiConfigError } from '../../../../../../../lib/subjects/phi-fields'
 
 export const runtime = 'nodejs'
@@ -33,9 +33,14 @@ export async function POST(
     return handleApiError(err)
   }
 
-  const declared = Number(req.headers.get('content-length'))
-  if (!Number.isFinite(declared) || declared <= 0) return new Response('Length Required', { status: 411 })
-  if (declared > MAX_BODY_BYTES) return new Response('Payload Too Large', { status: 413 })
+  // Corte temprano si el tamaño viene declarado. Si no viene (envío por partes),
+  // el tope lo ponen la plataforma y el control del archivo más abajo.
+  const declaredHeader = req.headers.get('content-length')
+  if (declaredHeader !== null) {
+    const declared = Number(declaredHeader)
+    if (!Number.isFinite(declared) || declared < 0) return new Response('Bad Request', { status: 400 })
+    if (declared > MAX_BODY_BYTES) return new Response('Payload Too Large', { status: 413 })
+  }
 
   let file: FormDataEntryValue | null
   try {
@@ -77,9 +82,17 @@ export async function POST(
 
     return Response.json(created, { status: 201 })
   } catch (err) {
+    // Solo el código y el tamaño: nunca el nombre ni el contenido del archivo.
     const known = labReportErrorResponse(err)
-    if (known) return known
-    if (err instanceof PhiConfigError) return new Response('Service Unavailable', { status: 503 })
+    if (known) {
+      console.warn('[labs/upload] rejected', { code: err instanceof LabReportError ? err.code : 'unknown', bytes: file.size })
+      return known
+    }
+    if (err instanceof PhiConfigError) {
+      console.error('[labs/upload] phi encryption not configured')
+      return new Response('Service Unavailable', { status: 503 })
+    }
+    console.error('[labs/upload] failed', { name: err instanceof Error ? err.name : 'unknown', bytes: file.size })
     return handleApiError(err)
   }
 }

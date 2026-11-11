@@ -1,7 +1,8 @@
 import { z } from 'zod'
 
 /** Topes de entrada externa del módulo de Carga de laboratorios. */
-export const MAX_LAB_PDF_BYTES = 10 * 1024 * 1024
+/** La plataforma corta el cuerpo de un pedido en 4,5 MB: por encima de eso el archivo no llega al servidor. */
+export const MAX_LAB_PDF_BYTES = 4 * 1024 * 1024
 export const MAX_LAB_PDF_PAGES = 20
 export const MAX_LAB_ROWS = 500
 const MAX_TRANSCRIPTION_CHARS = 400_000

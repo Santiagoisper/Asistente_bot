@@ -200,3 +200,74 @@ describe('Carga de laboratorios — PDF digital de punta a punta', () => {
     ).rejects.toBeInstanceOf(LabReportError)
   })
 })
+
+/** PDF de una página con cada texto en su posición: así llegan las tablas de los laboratorios. */
+function buildColumnPdf(cells: Array<[x: number, y: number, text: string]>): Uint8Array {
+  const escape = (text: string) => text.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)')
+  const body = ['BT', '/F1 10 Tf', ...cells.map(([x, y, text]) => `1 0 0 1 ${x} ${y} Tm (${escape(text)}) Tj`), 'ET'].join('\n')
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+    `<< /Length ${body.length} >>\nstream\n${body}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+  ]
+  let pdf = '%PDF-1.4\n'
+  const offsets: number[] = []
+  objects.forEach((object, index) => {
+    offsets.push(pdf.length)
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`
+  })
+  const xref = pdf.length
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`
+  for (const offset of offsets) pdf += `${String(offset).padStart(10, '0')} 00000 n \n`
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
+  return new TextEncoder().encode(pdf)
+}
+
+describe('Carga de laboratorios — informe en columnas, como lo imprimen los laboratorios', () => {
+  it('lee la tabla por columnas: valor, unidad, segundo valor y referencia en varios renglones', async () => {
+    const data = buildColumnPdf([
+      [50, 790, 'LABORATORIO CENTRAL'],
+      [50, 776, 'Paciente:'],
+      [120, 776, 'GOMEZ, ANA'],
+      [50, 762, 'DNI 30111222'],
+      [400, 762, 'Protocolo 884512'],
+      [50, 730, 'Hemoglobina'],
+      [250, 730, '13,5'],
+      [300, 730, 'g/dL'],
+      [400, 730, '12,0 - 16,0'],
+      [50, 716, 'Neutrofilos'],
+      [250, 716, '61,3%'],
+      [300, 716, '4810/mm3'],
+      [400, 716, 'Adultos: 41-69 %'],
+      [400, 702, 'Ninos: 23-61 %'],
+      [50, 680, 'Colesterol HDL'],
+      [50, 666, 'Metodo: Enzimatico'],
+      [50, 652, 'Resultado'],
+      [250, 652, '52 mg/dl'],
+      [400, 652, 'Hombres'],
+      [400, 638, 'Mayor de 55 mg/dl'],
+      [400, 624, 'Mujeres'],
+      [400, 610, 'Mayor de 65 mg/dl'],
+      [400, 580, 'Bioquimica - M.P. 0000'],
+    ])
+    const before = store.reports.length
+    const created = await createLabReportFromPdf({ ...scope, userId: 'user_1', fileName: 'GOMEZ_ANA.pdf', data })
+    expect(created).toMatchObject({ rowCount: 4, reviewCount: 1 })
+
+    const stored = store.reports[before]!
+    const content = labReportContentSchema.parse(JSON.parse(decryptClinicalContent(String(stored.contentEncrypted))))
+    expect(content.rows.map((row) => [row.analyte, row.printedValue, row.value, row.unit, row.referenceRange, row.status])).toEqual([
+      ['Hemoglobina', '13,5', 13.5, 'g/dL', '12,0 - 16,0', 'read'],
+      ['Neutrofilos', '61,3', 61.3, '%', 'Adultos: 41-69 % · Ninos: 23-61 %', 'read'],
+      ['Neutrofilos (/mm3)', '4810', 4810, '/mm3', null, 'review'],
+      ['Colesterol HDL', '52', 52, 'mg/dl', 'Hombres: Mayor de 55 mg/dl · Mujeres: Mayor de 65 mg/dl', 'read'],
+    ])
+    for (const leaked of ['GOMEZ', '30111222', '884512']) expect(content.transcription).not.toContain(leaked)
+    expect(content.unparsedLines).toEqual([])
+    // Cada fila cita un renglón de la transcripción que contiene su valor impreso.
+    const lines = content.transcription.split('\n')
+    expect(content.rows.every((row) => row.sourceLine !== null && lines[row.sourceLine]!.includes(row.printedValue))).toBe(true)
+  })
+})
