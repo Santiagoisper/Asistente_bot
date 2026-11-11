@@ -646,14 +646,30 @@ function validateExtractedVisits(
   }
 }
 
-function safeProviderError(error: unknown): { name: string; code: string; status: string } {
+/**
+ * Lo que se puede registrar de un error del proveedor sin arriesgar texto
+ * libre: nombre de la clase, estado HTTP y el tipo de error que informa el
+ * proveedor. Nunca el mensaje ni el cuerpo.
+ *
+ * El AI SDK expone el estado como `statusCode` (no `status`) y el tipo dentro
+ * de `data.error`. Leer solo `status` y `code` dejaba todo en «n/a» y
+ * «unknown», y no se podía distinguir una clave inválida de falta de saldo o
+ * de un modelo retirado.
+ */
+export function safeProviderError(error: unknown): { name: string; code: string; status: string } {
   const value = error && typeof error === 'object' ? error as Record<string, unknown> : {}
   const safeToken = (candidate: unknown): string | null =>
     typeof candidate === 'string' && /^[a-zA-Z0-9_.-]{1,64}$/.test(candidate) ? candidate : null
+  const asRecord = (candidate: unknown): Record<string, unknown> =>
+    candidate && typeof candidate === 'object' ? candidate as Record<string, unknown> : {}
+  const providerError = asRecord(asRecord(value.data).error)
+  const status = [value.statusCode, value.status].find(
+    (candidate): candidate is number => typeof candidate === 'number' && Number.isFinite(candidate),
+  )
   return {
     name: safeToken(value.name) ?? 'UnknownError',
-    code: safeToken(value.code) ?? 'unknown',
-    status: typeof value.status === 'number' && Number.isFinite(value.status) ? String(value.status) : 'n/a',
+    code: safeToken(value.code) ?? safeToken(providerError.type) ?? safeToken(providerError.code) ?? 'unknown',
+    status: status === undefined ? 'n/a' : String(status),
   }
 }
 
