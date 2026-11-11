@@ -61,6 +61,18 @@ describe('leakage — consultas del OS filtradas por organización', () => {
     }
   })
 
+  it('la configuración del centro solo se escribe en la organización del token', () => {
+    const route = readFileSync(join(WEB_ROOT, 'app/api/os/org-config/route.ts'), 'utf8')
+    expect(route).toContain('await auth()')
+    expect(route).toContain('canAdministerOrg(')
+    expect(route).not.toMatch(/orgId: (body|parsed\.data)/)
+    const service = readFileSync(join(WEB_ROOT, 'lib/os/org-admin-service.ts'), 'utf8')
+    expect(countMatches(service, /organizationId: params\.orgId/g)).toBeGreaterThanOrEqual(countMatches(service, /\.insert\(/g))
+    expect(countMatches(service, /eq\(organizations\.id, params\.orgId\)/g)).toBe(countMatches(service, /\.from\(organizations\)|\.update\(organizations\)/g))
+    expect(service).toContain('eq(organizationIntegrations.organizationId, params.orgId)')
+    expect(service).not.toMatch(/secretsEncrypted/)
+  })
+
   it('las rutas de informes validan el sujeto contra el estudio de la URL', () => {
     const base = 'app/api/studies/[id]/subjects/[subjectId]/lab-reports'
     for (const file of ['route.ts', 'images/route.ts', '[reportId]/route.ts', '[reportId]/image/[page]/route.ts', '[reportId]/confirm/route.ts', '[reportId]/reject/route.ts', '[reportId]/export/route.ts']) {

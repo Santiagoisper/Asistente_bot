@@ -33,7 +33,8 @@ let baseUrl: string
 const ctx = { userId: 'user_1', orgId: 'org_1' }
 
 function env(overrides: Record<string, string | undefined> = {}) {
-  return { OS_QUERIES_URL: baseUrl, OS_SIGNING_PRIVATE_KEY: privateKeyPem, ...overrides }
+  // El servidor de prueba escucha en 127.0.0.1: eso solo vale en la máquina de desarrollo.
+  return { NODE_ENV: 'development', OS_QUERIES_URL: baseUrl, OS_SIGNING_PRIVATE_KEY: privateKeyPem, ...overrides }
 }
 
 function json(body: unknown, status = 200): Handler {
@@ -122,6 +123,37 @@ describe('fetchModuleSummary', () => {
     expect((await fetchModuleSummary('queries', ctx, { env: env({ OS_QUERIES_URL: 'http://queries.example.test' }) })).status).toBe('not_configured')
     expect((await fetchModuleSummary('queries', ctx, { env: env({ OS_QUERIES_URL: 'https://u:p@queries.example.test' }) })).status).toBe('not_configured')
     expect((await fetchModuleSummary('queries', ctx, { env: env({ OS_QUERIES_URL: 'no es una url' }) })).status).toBe('not_configured')
+  })
+
+  it('fuera de la máquina de desarrollo no se pide nada a un destino local ni a una red privada', async () => {
+    let called = false
+    const doFetch = (async () => {
+      called = true
+      return new Response('{}')
+    }) as typeof fetch
+    for (const NODE_ENV of ['production', 'test', undefined]) {
+      // La URL del centro apunta al servidor de prueba, que es local.
+      expect((await fetchModuleSummary('queries', { ...ctx, baseUrl }, { env: env({ NODE_ENV }), fetch: doFetch })).status).toBe('not_configured')
+      // Y la de la instalación tampoco se usa.
+      expect((await fetchModuleSummary('queries', ctx, { env: env({ NODE_ENV }), fetch: doFetch })).status).toBe('not_configured')
+      for (const url of ['https://localhost', 'https://127.0.0.1', 'https://10.1.2.3', 'https://169.254.169.254', 'https://[::1]']) {
+        expect((await fetchModuleSummary('queries', { ...ctx, baseUrl: url }, { env: env({ NODE_ENV }), fetch: doFetch })).status, url).toBe('not_configured')
+      }
+    }
+    expect(called).toBe(false)
+    expect(hits).toBe(0)
+  })
+
+  it('una URL con parámetros o fragmento no se usa: ahí podría viajar un secreto', async () => {
+    let called = false
+    const doFetch = (async () => {
+      called = true
+      return new Response('{}')
+    }) as typeof fetch
+    for (const url of ['https://queries.example.test/?token=secreto', 'https://queries.example.test/#clave']) {
+      expect((await fetchModuleSummary('queries', { ...ctx, baseUrl: url }, { env: env(), fetch: doFetch })).status, url).toBe('not_configured')
+    }
+    expect(called).toBe(false)
   })
 
   it('401 y 403: unauthorized', async () => {
