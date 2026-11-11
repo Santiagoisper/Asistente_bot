@@ -54,7 +54,7 @@ const TAB = '\t'
 /** La referencia impresa sigue en el informe y no entró completa. */
 const MORE_MARK = ' …'
 
-const AMBIGUOUS_REASON = 'Puede ser miles o decimal: confirmá cómo se lee.'
+export const AMBIGUOUS_REASON = 'Puede ser miles o decimal: confirmá cómo se lee.'
 const LONG_NAME_REASON = 'Nombre largo: revisá que sea un analito.'
 const SECOND_VALUE_REASON = 'Segundo valor del mismo renglón: revisá el nombre.'
 const NO_TITLE_REASON = 'No se encontró el nombre del analito: completalo.'
@@ -103,10 +103,35 @@ export function normalizeAnalyteKey(name: string): string {
     .trim()
 }
 
+const isDigitChar = (char: string | undefined): boolean => char !== undefined && char >= '0' && char <= '9'
+const isNumberSeparator = (char: string | undefined): boolean => char === '.' || char === ','
+
+/**
+ * El valor figura en el renglón entero, no como parte de otro número:
+ * "3,5" no figura en "13,5", ni "248" en "248.000".
+ */
+export function containsPrintedValue(line: string, printedValue: string): boolean {
+  const value = printedValue.trim()
+  if (value.length === 0) return false
+  const startsWithDigit = isDigitChar(value[0])
+  const endsWithDigit = isDigitChar(value[value.length - 1])
+  let from = 0
+  for (;;) {
+    const at = line.indexOf(value, from)
+    if (at === -1) return false
+    const before = line[at - 1]
+    const after = line[at + value.length]
+    const cutBefore = startsWithDigit && (isDigitChar(before) || (isNumberSeparator(before) && isDigitChar(line[at - 2])))
+    const cutAfter = endsWithDigit && (isDigitChar(after) || (isNumberSeparator(after) && isDigitChar(line[at + value.length + 1])))
+    if (!cutBefore && !cutAfter) return true
+    from = at + 1
+  }
+}
+
 /** La fila cita un renglón existente que contiene su valor impreso carácter por carácter. */
 export function rowIsGrounded(row: Pick<ParsedLabRow, 'printedValue' | 'sourceLine'>, lines: string[]): boolean {
   const line = lines[row.sourceLine]
-  return typeof line === 'string' && row.printedValue.length > 0 && line.includes(row.printedValue)
+  return typeof line === 'string' && containsPrintedValue(line, row.printedValue)
 }
 
 /** Primera palabra de un renglón que nunca es un analito. */
@@ -358,6 +383,29 @@ function detectLine(rawLine: string): Detected {
   }
   drafts[0]!.referenceRange = referenceFromCells([value.rest, ...body.slice(next)])
   return { kind: 'row', needsTitle: false, drafts }
+}
+
+/**
+ * Tapa los renglones que identifican a una persona en una transcripción ya
+ * armada (la de una imagen), sin mover ningún renglón de lugar.
+ */
+export function redactIdentifyingLines(lines: readonly string[]): { lines: string[]; redacted: number } {
+  let redacted = 0
+  const out = lines.map((line) => {
+    const cells = line.split(/\t| {2,}/)
+    if (cells.some((cell) => IDENTIFYING_LINE.test(cell.trim()))) {
+      redacted += 1
+      return '[Renglón omitido]'
+    }
+    if (EMAIL.test(line)) {
+      EMAIL.lastIndex = 0
+      redacted += 1
+      return line.replace(EMAIL, OMITTED)
+    }
+    EMAIL.lastIndex = 0
+    return line
+  })
+  return { lines: out, redacted }
 }
 
 /** Renglón con números que no se pudo interpretar y que una persona debería mirar. */

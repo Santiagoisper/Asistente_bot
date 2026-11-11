@@ -3,6 +3,7 @@ import { LabUploadForm } from '../../../../components/labs/upload-form'
 import { ButtonLink, Card, EmptyState, LoadError, PageHeader } from '../../../../components/os/ui'
 import { isOsEnabled } from '../../../../lib/flags'
 import { getOsContext } from '../../../../lib/os/context'
+import { evidenceRetention } from '../../../../lib/labs/evidence-policy'
 import { listActiveStudies, type StudyWithSubjects } from '../../../../lib/os/inicio-data'
 
 export const dynamic = 'force-dynamic'
@@ -50,7 +51,7 @@ export default async function CargarLaboratorioPage() {
         {studies.length === 0 ? (
           <EmptyState title="No hay estudios activos" detail="Creá un estudio y sus sujetos antes de cargar laboratorios." action={<ButtonLink href="/studies" variant="solid">Ir a Protocolos</ButtonLink>} />
         ) : (
-          <LabUploadForm studies={studies} />
+          <LabUploadForm studies={studies} evidenceKept={evidenceRetention() === 'keep'} />
         )}
       </Card>
     </div>

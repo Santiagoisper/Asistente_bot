@@ -99,6 +99,7 @@ export function getModelId(provider: LlmProviderId, purpose: LlmPurpose): string
       // Los claude-*-5-5 rechazan `temperature` y tool_choice "tool"/"any", que
       // ai@4 + @ai-sdk/anthropic@1 envían siempre (verificado en prod 2026-10-22):
       // los defaults quedan en 4.x hasta migrar a AI SDK 5. Override por env.
+      if (purpose === 'lab-read') return process.env.LAB_READ_MODEL ?? 'claude-sonnet-4-6'
       if (purpose === 'title') {
         return process.env.TITLE_MODEL ?? 'claude-haiku-4-5'
       }
@@ -108,6 +109,7 @@ export function getModelId(provider: LlmProviderId, purpose: LlmPurpose): string
       if (purpose === 'spec') return process.env.SPEC_EXTRACTION_MODEL ?? 'claude-opus-4-6'
       return process.env.ANSWER_MODEL ?? 'claude-sonnet-4-6'
     case 'openai':
+      if (purpose === 'lab-read') return process.env.OPENAI_LAB_READ_MODEL ?? 'gpt-4o'
       if (purpose === 'title' || purpose === 'clinical-extract') {
         return process.env.OPENAI_TITLE_MODEL ?? 'gpt-4o-mini'
       }
@@ -116,6 +118,7 @@ export function getModelId(provider: LlmProviderId, purpose: LlmPurpose): string
       }
       return process.env.OPENAI_ANSWER_MODEL ?? process.env.ANSWER_MODEL_OPENAI ?? 'gpt-4o'
     case 'google':
+      if (purpose === 'lab-read') return process.env.GOOGLE_LAB_READ_MODEL ?? 'gemini-2.0-flash'
       if (purpose === 'title' || purpose === 'clinical-extract') {
         return process.env.GOOGLE_TITLE_MODEL ?? process.env.GEMINI_TITLE_MODEL ?? 'gemini-2.0-flash'
       }

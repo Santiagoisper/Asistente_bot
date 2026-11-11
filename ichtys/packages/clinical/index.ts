@@ -64,7 +64,19 @@ export {
   numericReadings,
   parseLabReportText,
   parsePrintedNumber,
+  redactIdentifyingLines,
   rowIsGrounded,
   type ParsedLabReport,
   type ParsedLabRow,
 } from './lab-report-parser'
+export {
+  containsPrintedValue,
+  groundReaderRows,
+  mergeImageReadings,
+  mergeTextReadings,
+  type ImageReading,
+  type MergedImageReadings,
+  type MergedLabRow,
+  type MergedTextReadings,
+  type ReaderRow,
+} from './lab-readings'

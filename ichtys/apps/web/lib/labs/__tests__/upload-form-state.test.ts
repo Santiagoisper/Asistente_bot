@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createSubjectError, missingSteps, orderStudyOptions, subjectCodeProblem, subjectCountLabel, uploadError } from '../upload-form-state'
+import { createSubjectError, imagePrepMessage, missingPhotoSteps, missingSteps, orderStudyOptions, subjectCodeProblem, subjectCountLabel, uploadError } from '../upload-form-state'
 
 const base = { studyId: 's1', subjectsState: 'ready' as const, subjectCount: 2, subjectId: 'p1', hasFile: true }
 
@@ -62,5 +62,22 @@ describe('textos del formulario', () => {
     expect(uploadError(413, null)).toBe('El archivo pesa más de 4 MB.')
     expect(uploadError(403, null)).toMatch(/Tu rol/)
     expect(uploadError(500, 'algo_nuevo')).toBe('No se pudo leer el estudio. Probá de nuevo.')
+  })
+})
+
+describe('foto o escaneo', () => {
+  it('pide la imagen y después la zona marcada en cada hoja', () => {
+    expect(missingPhotoSteps([], { pageCount: 0, unmarked: 0 })).toEqual(['elegir la foto o el escaneo'])
+    expect(missingPhotoSteps(['crear el sujeto'], { pageCount: 3, unmarked: 2 })).toEqual(['crear el sujeto', 'marcar la zona de resultados en 2 hojas'])
+    expect(missingPhotoSteps([], { pageCount: 1, unmarked: 1 })).toEqual(['marcar la zona de resultados en una hoja'])
+    expect(missingPhotoSteps([], { pageCount: 2, unmarked: 0 })).toEqual([])
+  })
+
+  it('explica cada problema de la imagen y del lector', () => {
+    expect(imagePrepMessage('unsupported')).toMatch(/JPG o PNG/)
+    expect(imagePrepMessage('pdf_failed')).toMatch(/captura/)
+    expect(imagePrepMessage('otro')).toMatch(/No se pudo abrir/)
+    expect(uploadError(503, 'reader_unavailable')).toMatch(/no se guardó/)
+    expect(uploadError(415, 'bad_image')).toMatch(/JPG o PNG/)
   })
 })

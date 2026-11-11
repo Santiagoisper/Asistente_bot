@@ -1,10 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { Plus, Trash2 } from 'lucide-react'
+import { ExternalLink, Plus, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { LabReportContent } from '../../lib/labs/lab-report-content'
 import {
+  decideValue,
   emptyManualRow,
   formatReading,
   readingChoices,
@@ -30,13 +31,41 @@ interface Props {
   studyLabel: string
   status: 'pending_review' | 'confirmed' | 'rejected'
   content: LabReportContent
+  /** La imagen se conserva después de revisar (política de conservación). */
+  evidenceKept?: boolean
 }
 
 function StatusPill({ row }: { row: ReviewRow }) {
+  if (rowProblem(row) === 'needs_decision') return <span className={`${pillBase} bg-[#FBE3E7] text-[#8C1D3A]`}>Decidir</span>
   if (rowProblem(row) === 'reading_unset') return <span className={`${pillBase} bg-[#FFF1D6] text-[#6B4200]`}>Revisar</span>
+  if (row.reviewReason) return <span className={`${pillBase} bg-[#FFF1D6] text-[#6B4200]`}>Revisar</span>
   if (row.sourceLine === null) return <span className={`${pillBase} bg-[#E2F0F4] text-[#0A4455]`}>Cargado a mano</span>
   if (row.isNewField) return <span className={`${pillBase} bg-[#ECE6F7] text-[#4A2F87]`}>Campo nuevo</span>
   return <span className={`${pillBase} bg-os-tint text-os-accentdim`}>Leído</span>
+}
+
+const READER_NAMES: Record<string, string> = { reglas: 'reglas', anthropic: 'Claude', openai: 'OpenAI', google: 'Gemini' }
+const readerName = (id: string) => READER_NAMES[id] ?? id
+
+/** Cómo se leyó el informe y cuánto respaldo tiene cada valor. */
+function readingSummary(content: LabReportContent): { text: string; warn: boolean } {
+  const readers = content.readers
+  if (content.source === 'image') {
+    if (!readers || readers.second === null) {
+      return { text: 'Leído de una imagen con una sola lectura: ningún valor está comprobado. Comparalos uno por uno con la imagen.', warn: true }
+    }
+    const same = readers.first === readers.second
+    return {
+      text: `Leído de una imagen dos veces${same ? ` (${readerName(readers.first)}, dos pasadas)` : ` (${readerName(readers.first)} y ${readerName(readers.second)})`}. ${
+        readers.disagreements === 0 ? 'Las dos lecturas coinciden en todos los valores.' : readers.disagreements === 1 ? 'Un valor no coincide: hay que decidirlo.' : `${readers.disagreements} valores no coinciden: hay que decidirlos.`
+      }`,
+      warn: readers.disagreements > 0,
+    }
+  }
+  if (readers?.second) {
+    return { text: `Leído del texto del PDF por dos lecturas (reglas y ${readerName(readers.second)}). Cada valor figura tal cual en el informe.`, warn: false }
+  }
+  return { text: 'Leído del texto del PDF por reglas. Cada valor figura tal cual en el informe.', warn: false }
 }
 
 /**
@@ -44,7 +73,7 @@ function StatusPill({ row }: { row: ReviewRow }) {
  * los campos a la derecha. Nada se guarda hasta que la persona confirma, y confirmar
  * guarda en Alphi: no envía nada a la historia clínica ni a otro sistema.
  */
-export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, studyLabel, status, content }: Props) {
+export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, studyLabel, status, content, evidenceKept = false }: Props) {
   const lines = useMemo(() => content.transcription.split('\n'), [content.transcription])
   const unparsed = useMemo(() => new Set(content.unparsedLines), [content.unparsedLines])
   const [rows, setRows] = useState<ReviewRow[]>(() => content.rows.map(toReviewRow))
@@ -53,10 +82,18 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
   const [error, setError] = useState<string | null>(null)
   const [confirmingReject, setConfirmingReject] = useState(false)
   const [profileWarning, setProfileWarning] = useState(false)
+  const [compared, setCompared] = useState(false)
+  const fromImage = content.source === 'image'
+  const imagePages = fromImage ? (content.imagePages ?? 0) : 0
+  const summary = readingSummary(content)
 
   const editable = phase === 'editing'
   const payload = toConfirmPayload(rows)
-  const pendingDecisions = rows.filter((row) => rowProblem(row) === 'reading_unset').length
+  const pendingDecisions = rows.filter((row) => {
+    const problem = rowProblem(row)
+    return problem === 'reading_unset' || problem === 'needs_decision'
+  }).length
+  const canConfirm = payload !== null && (!fromImage || compared)
   const incomplete = rows.filter((row) => {
     const problem = rowProblem(row)
     return problem === 'missing_analyte' || problem === 'missing_value'
@@ -68,14 +105,14 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
   }
 
   async function send(action: 'confirm' | 'reject') {
-    if (action === 'confirm' && !payload) return
+    if (action === 'confirm' && !canConfirm) return
     setPhase('saving')
     setError(null)
     try {
       const response = await fetch(`${base}/${action}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: action === 'confirm' ? JSON.stringify({ rows: payload }) : undefined,
+        body: action === 'confirm' ? JSON.stringify(fromImage ? { rows: payload, comparedWithImage: true } : { rows: payload }) : undefined,
       })
       if (response.status === 409) {
         setPhase('conflict')
@@ -127,6 +164,10 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
         </div>
       </div>
 
+      {phase === 'editing' || phase === 'saving' ? (
+        <p className={`rounded-2xl px-5 py-3 text-sm ${summary.warn ? 'bg-[#FFF1D6] text-[#6B4200]' : 'bg-os-tint text-os-accentdim'}`}>{summary.text}</p>
+      ) : null}
+
       {phase === 'confirmed' ? (
         <div role="status" className="rounded-2xl bg-os-tint px-5 py-4 text-sm text-os-accentdim">
           <p className="font-semibold">Estudio revisado y guardado en Alphi. No se envió a la historia clínica ni a ningún otro sistema.</p>
@@ -155,9 +196,27 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <section className="rounded-2xl border border-alphi-border bg-white p-4 shadow-alphi-card" aria-labelledby="informe-original">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 id="informe-original" className="text-base font-semibold text-os-ink">Texto del informe</h2>
-            <span className="text-xs text-os-subtle">Tal cual figura; el encabezado con datos personales se omitió</span>
+            <h2 id="informe-original" className="text-base font-semibold text-os-ink">{fromImage ? 'Imagen y transcripción' : 'Texto del informe'}</h2>
+            <span className="text-xs text-os-subtle">
+              {fromImage ? 'La imagen es la fuente; la transcripción es lo que leyó el programa' : 'Tal cual figura; el encabezado con datos personales se omitió'}
+            </span>
           </div>
+          {imagePages > 0 && (phase === 'editing' || phase === 'saving' || evidenceKept) ? (
+            <div className="mb-3 flex max-h-[60vh] flex-col gap-3 overflow-auto rounded-xl bg-os-ground p-2">
+              {Array.from({ length: imagePages }, (_, index) => index + 1).map((page) => (
+                <figure key={page} className="flex flex-col gap-1">
+                  <img src={`${base}/image/${page}`} alt={`Hoja ${page} del informe, recortada`} className="w-full rounded-lg border border-alphi-border bg-white" />
+                  <figcaption className="flex items-center justify-between text-xs text-os-subtle">
+                    <span>Hoja {page} de {imagePages}</span>
+                    <a href={`${base}/image/${page}`} target="_blank" rel="noreferrer" className={`inline-flex items-center gap-1 font-semibold text-os-accentdim underline ${focusRing}`}>
+                      <ExternalLink aria-hidden="true" className="h-3.5 w-3.5" />
+                      Abrir en grande
+                    </a>
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          ) : null}
           <ol className="max-h-[70vh] overflow-auto rounded-xl bg-os-ground p-3 font-mono text-[13px] leading-6 text-[#1E293B]">
             {lines.map((line, index) => (
               <li
@@ -191,7 +250,9 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
               return (
                 <li
                   key={row.key}
-                  className={`rounded-xl border p-3 ${problem === 'reading_unset' ? 'border-[#B7791F] bg-[#FFF9EC]' : 'border-alphi-border'}`}
+                  className={`rounded-xl border p-3 ${
+                    problem === 'needs_decision' ? 'border-[#A6314F] bg-[#FFF5F7]' : problem === 'reading_unset' || row.reviewReason ? 'border-[#B7791F] bg-[#FFF9EC]' : 'border-alphi-border'
+                  }`}
                   onFocusCapture={() => setFocusedLine(row.sourceLine)}
                   onMouseEnter={() => setFocusedLine(row.sourceLine)}
                 >
@@ -214,7 +275,29 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
                     </label>
                   </div>
 
-                  {choices.length > 0 ? (
+                  {row.needsDecision ? (
+                    <fieldset className="mt-3">
+                      <legend className="text-sm font-semibold text-[#8C1D3A]">{row.reviewReason ?? 'Las lecturas no coinciden: compará con el informe.'}</legend>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {[row.printedValue, ...(row.alternative ? [row.alternative] : [])].map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            disabled={!editable}
+                            className={`inline-flex min-h-11 items-center rounded-lg border-[1.5px] border-os-accent bg-white px-4 text-sm font-semibold text-os-accentdim hover:bg-os-tint ${focusRing}`}
+                            onClick={() => update(row.key, (current) => decideValue(current, option, lines))}
+                          >
+                            {row.alternative ? `Es ${option.trim()}` : `Lo comparé: es ${option.trim()}`}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-xs text-os-subtle">Si no es ninguno, corregí el valor a mano.</p>
+                    </fieldset>
+                  ) : row.reviewReason && choices.length === 0 ? (
+                    <p className="mt-3 text-sm text-[#6B4200]">{row.reviewReason}</p>
+                  ) : null}
+
+                  {!row.needsDecision && choices.length > 0 ? (
                     <fieldset className="mt-3">
                       <legend className="text-sm font-semibold text-[#6B4200]">“{row.printedValue.trim()}” se puede leer de dos formas. ¿Cuál es?</legend>
                       <div className="mt-2 flex flex-wrap gap-2">
@@ -292,10 +375,16 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
                   Rechazar estudio
                 </button>
               )}
-              <div className="flex flex-col items-end gap-1">
+              <div className="flex flex-col items-end gap-2">
+                {fromImage ? (
+                  <label className="flex max-w-sm cursor-pointer items-start gap-2 text-sm text-os-ink">
+                    <input type="checkbox" className={`mt-0.5 h-5 w-5 shrink-0 accent-[#0B7A6E] ${focusRing}`} checked={compared} disabled={phase === 'saving'} onChange={(event) => setCompared(event.target.checked)} />
+                    <span>Comparé cada valor con la imagen del informe.</span>
+                  </label>
+                ) : null}
                 <button
                   type="button"
-                  disabled={!payload || phase === 'saving'}
+                  disabled={!canConfirm || phase === 'saving'}
                   aria-describedby="confirmar-ayuda"
                   className={`inline-flex min-h-11 items-center rounded-lg bg-os-accent px-5 text-sm font-semibold text-white hover:bg-os-accentdim disabled:opacity-50 ${focusRing}`}
                   onClick={() => void send('confirm')}
@@ -304,7 +393,9 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
                 </button>
                 <p id="confirmar-ayuda" className="text-xs text-os-subtle">
                   {pendingDecisions > 0
-                    ? `Falta decidir ${pendingDecisions === 1 ? 'una lectura' : `${pendingDecisions} lecturas`}.`
+                    ? `Falta decidir ${pendingDecisions === 1 ? 'un valor' : `${pendingDecisions} valores`}.`
+                    : fromImage && !compared && payload !== null
+                      ? 'Falta marcar que comparaste los valores con la imagen.'
                     : incomplete > 0
                       ? 'Hay campos sin completar.'
                       : rows.length === 0

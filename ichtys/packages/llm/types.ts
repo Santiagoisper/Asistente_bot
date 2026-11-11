@@ -7,7 +7,8 @@ export type LlmProviderId = 'anthropic' | 'openai' | 'google' | 'groq' | 'glm'
  */
 export type LlmProviderPreference = LlmProviderId | 'auto'
 
-export type LlmPurpose = 'answer' | 'spec' | 'title' | 'clinical-extract'
+/** `lab-read`: lectura de informes de laboratorio (texto o imagen). Pide un modelo que lea bien cifras. */
+export type LlmPurpose = 'answer' | 'spec' | 'title' | 'clinical-extract' | 'lab-read'
 
 /**
  * Orden en modo automático: titulares primero, backups después.
