@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clientIpRateLimitKey,
   enforceSlidingWindowRateLimit,
+  resetMemoryRateLimitForTests,
   getBulkRateLimitConfig,
   getChatRateLimitConfig,
   getCitationsRateLimitConfig,
@@ -193,6 +194,77 @@ describe('rate limit helper', () => {
       enforceSlidingWindowRateLimit({ key: 'reextract:org:user', limit: 3, windowSeconds: 60 }),
     ).resolves.toEqual({ limited: true, retryAfterSeconds: 60, reason: 'unavailable' })
     expect(globalThis.fetch).toBe(ORIGINAL_FETCH)
+  })
+
+  describe('vista previa de Vercel sin Redis', () => {
+    function sinRedis(): void {
+      vi.stubEnv('UPSTASH_REDIS_REST_URL', '')
+      vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', '')
+      vi.stubEnv('KV_REST_API_URL', '')
+      vi.stubEnv('KV_REST_API_TOKEN', '')
+    }
+
+    beforeEach(() => {
+      resetMemoryRateLimitForTests()
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    })
+
+    it('una operación cara no se rechaza: cuenta el cupo en memoria y corta al llegar', async () => {
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.stubEnv('VERCEL_ENV', 'preview')
+      sinRedis()
+      const params = { key: 'upload:previa:user', limit: 2, windowSeconds: 60 }
+
+      await expect(enforceSlidingWindowRateLimit(params)).resolves.toEqual({ limited: false })
+      await expect(enforceSlidingWindowRateLimit(params)).resolves.toEqual({ limited: false })
+      const third = await enforceSlidingWindowRateLimit(params)
+      expect(third.limited).toBe(true)
+      expect(third).not.toHaveProperty('reason', 'unavailable')
+      expect(globalThis.fetch).toBe(ORIGINAL_FETCH)
+    })
+
+    it('el cupo de la organización también cuenta en memoria', async () => {
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.stubEnv('VERCEL_ENV', 'preview')
+      sinRedis()
+      const base = { limit: 10, windowSeconds: 60, orgKey: 'upload-org:previa', orgLimit: 1 }
+
+      await expect(enforceSlidingWindowRateLimit({ ...base, key: 'upload:previa:user-a' })).resolves.toEqual({ limited: false })
+      const second = await enforceSlidingWindowRateLimit({ ...base, key: 'upload:previa:user-b' })
+      expect(second.limited).toBe(true)
+    })
+
+    it('producción sin Redis se sigue rechazando', async () => {
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.stubEnv('VERCEL_ENV', 'production')
+      sinRedis()
+
+      await expect(
+        enforceSlidingWindowRateLimit({ key: 'upload:prod:user', limit: 2, windowSeconds: 60 }),
+      ).resolves.toEqual({ limited: true, retryAfterSeconds: 60, reason: 'unavailable' })
+    })
+
+    it('sin VERCEL_ENV (otro servidor) se sigue rechazando', async () => {
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.stubEnv('VERCEL_ENV', '')
+      sinRedis()
+
+      await expect(
+        enforceSlidingWindowRateLimit({ key: 'upload:otro:user', limit: 2, windowSeconds: 60 }),
+      ).resolves.toEqual({ limited: true, retryAfterSeconds: 60, reason: 'unavailable' })
+    })
+
+    it('una vista previa con Redis configurado que falla se sigue rechazando', async () => {
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.stubEnv('VERCEL_ENV', 'preview')
+      globalThis.fetch = vi.fn(async () => {
+        throw new Error('caida ficticia')
+      }) as typeof fetch
+
+      await expect(
+        enforceSlidingWindowRateLimit({ key: 'upload:previa:averia', limit: 2, windowSeconds: 60 }),
+      ).resolves.toEqual({ limited: true, retryAfterSeconds: 60, reason: 'unavailable' })
+    })
   })
 
   it('builds 429 responses with JSON body and Retry-After', async () => {
