@@ -1,9 +1,12 @@
 import { notFound } from 'next/navigation'
 import { OS_MODULES } from '@ichtys/integrations'
+import { OrgConfigForm } from '../../../components/os/org-config-form'
 import { ButtonLink, Card, EmptyState, PageHeader, Pill } from '../../../components/os/ui'
 import { isOsEnabled } from '../../../lib/flags'
 import { getOsContext } from '../../../lib/os/context'
 import { MODULE_ROUTES, MODULE_TITLES, statusCopy } from '../../../lib/os/module-status'
+import { loadOrgIntegrations } from '../../../lib/os/org-integrations'
+import { loadOrgTimeZoneSetting } from '../../../lib/os/org-settings'
 import { loadModuleSummary } from '../../../lib/os/summaries'
 
 export const dynamic = 'force-dynamic'
@@ -35,6 +38,13 @@ export default async function IntegracionesPage() {
   }
 
   const results = await Promise.all(OS_MODULES.map((module) => loadModuleSummary(module, ctx.userId, ctx.orgId)))
+  // Si la configuración no se puede leer, el formulario arranca vacío: guardar la vuelve a crear.
+  const rows = await loadOrgIntegrations(ctx.orgId).catch(() => [])
+  const zone = await loadOrgTimeZoneSetting(ctx.orgId)
+  const moduleForms = OS_MODULES.map((module) => {
+    const row = rows.find((candidate) => candidate.category === 'module' && candidate.integrationKey === module)
+    return { module, title: MODULE_TITLES[module], baseUrl: row?.baseUrl ?? '', enabled: row?.enabled ?? false }
+  })
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-5">
@@ -63,8 +73,11 @@ export default async function IntegracionesPage() {
           })}
         </ul>
       </Card>
+      <Card title="Configuración del centro" subtitle="Qué módulos tiene conectados este centro y en qué hora trabaja. Los cambios quedan registrados." labelledBy="configuracion-centro">
+        <OrgConfigForm modules={moduleForms} timeZone={zone.own ?? ''} effectiveTimeZone={zone.effective} />
+      </Card>
       <p className="text-sm text-os-subtle">
-        Cada sistema se enlaza con su URL y la clave pública del OS. El detalle del contrato está en{' '}
+        Cada sistema se enlaza con su dirección y la clave pública del OS. Las credenciales no se cargan desde esta pantalla. El detalle del contrato está en{' '}
         <code className="rounded bg-white px-1.5 py-0.5 text-xs">packages/integrations/README.md</code>.
       </p>
     </div>

@@ -88,6 +88,8 @@ export const auditAction = [
   'lab.confirm',
   'lab.reject',
   'lab.export',
+  'org.integration.update',
+  'org.os_settings.update',
 ] as const
 export type AuditAction = (typeof auditAction)[number]
 
