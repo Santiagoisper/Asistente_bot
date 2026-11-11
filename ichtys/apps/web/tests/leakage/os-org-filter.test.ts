@@ -48,6 +48,19 @@ describe('leakage — consultas del OS filtradas por organización', () => {
     expect(countMatches(source, /organizationId: params\.orgId/g)).toBeGreaterThanOrEqual(inserts)
   })
 
+  it.each(['lib/labs/lab-report-service.ts', 'lib/labs/lab-image-report.ts'])('%s: quien busca un informe por id lo ata también al estudio y al sujeto', (file) => {
+    const source = readFileSync(join(WEB_ROOT, file), 'utf8')
+    const byId = [...source.matchAll(/eq\(labReports\.id, params\.reportId\),/g)]
+    expect(byId.length).toBeGreaterThan(0)
+    for (const match of byId) {
+      // Los filtros de una misma consulta van a continuación del id.
+      const filters = source.slice(match.index, match.index + 320).split('.returning(')[0]!.split('.limit(')[0]!
+      expect(filters).toContain('eq(labReports.organizationId, params.orgId)')
+      expect(filters).toContain('eq(labReports.studyId, params.studyId)')
+      expect(filters).toContain('eq(labReports.subjectId, params.subjectId)')
+    }
+  })
+
   it('las rutas de informes validan el sujeto contra el estudio de la URL', () => {
     const base = 'app/api/studies/[id]/subjects/[subjectId]/lab-reports'
     for (const file of ['route.ts', 'images/route.ts', '[reportId]/route.ts', '[reportId]/image/[page]/route.ts', '[reportId]/confirm/route.ts', '[reportId]/reject/route.ts']) {

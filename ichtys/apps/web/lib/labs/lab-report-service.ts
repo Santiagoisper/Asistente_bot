@@ -270,6 +270,7 @@ export async function confirmLabReport(
       and(
         eq(labReports.id, params.reportId),
         eq(labReports.organizationId, params.orgId),
+        eq(labReports.studyId, params.studyId),
         eq(labReports.subjectId, params.subjectId),
         eq(labReports.status, 'pending_review'),
       ),
