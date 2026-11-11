@@ -7,7 +7,7 @@ import { ProtocolIntelligence } from '../../../components/os/protocol-intelligen
 import { ButtonLink, Card, EmptyState, LoadError, Pill, StatCard, cardClass } from '../../../components/os/ui'
 import { KIND_LABELS, STATUS_LABELS } from '../../../lib/agenda/agenda-schema'
 import { listAgendaDay } from '../../../lib/agenda/agenda-service'
-import { dayKeyInZone, siteTimeZone } from '../../../lib/agenda/agenda-time'
+import { dayKeyInZone } from '../../../lib/agenda/agenda-time'
 import { daySummary, toAgendaCard } from '../../../lib/agenda/agenda-view'
 import { isOsEnabled } from '../../../lib/flags'
 import { getFirstName, getOsContext, type OsContext } from '../../../lib/os/context'
@@ -21,6 +21,7 @@ import {
 } from '../../../lib/os/inicio-data'
 import { formatCounter } from '../../../lib/os/module-status'
 import { isExternalHref } from '../../../lib/os/priority'
+import { loadOrgTimeZone } from '../../../lib/os/org-settings'
 import { loadModuleSummary } from '../../../lib/os/summaries'
 
 export const dynamic = 'force-dynamic'
@@ -63,7 +64,7 @@ async function Greeting() {
 
 async function TodayTurnsStat({ ctx }: { ctx: OsContext }) {
   return guarded('los turnos de hoy', async () => {
-    const timeZone = siteTimeZone()
+    const timeZone = await loadOrgTimeZone(ctx.orgId)
     const live = (await listAgendaDay({ orgId: ctx.orgId, dayKey: dayKeyInZone(new Date(), timeZone), timeZone, includeSubjects: false })).filter((entry) => entry.status !== 'cancelled')
     const pending = live.filter((entry) => entry.status === 'scheduled').length
     return (
@@ -131,7 +132,7 @@ async function OpenQueriesStat({ ctx }: { ctx: OsContext }) {
 /** Turnos de hoy en la hora del sitio. Los cancelados no se listan. */
 async function TodayAgenda({ ctx }: { ctx: OsContext }) {
   return guarded('la jornada de hoy', async () => {
-    const timeZone = siteTimeZone()
+    const timeZone = await loadOrgTimeZone(ctx.orgId)
     const today = dayKeyInZone(new Date(), timeZone)
     const cards = (await listAgendaDay({ orgId: ctx.orgId, dayKey: today, timeZone, includeSubjects: ctx.canSeeSubjects }))
       .map((entry) => toAgendaCard(entry, timeZone))

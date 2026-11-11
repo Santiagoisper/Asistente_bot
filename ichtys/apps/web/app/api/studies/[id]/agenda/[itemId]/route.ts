@@ -1,10 +1,10 @@
 import { validatePhiStudyAccess, handleApiError } from '@ichtys/auth'
 import { updateAgendaItemSchema } from '../../../../../../lib/agenda/agenda-schema'
 import { AgendaError, updateAgendaItem } from '../../../../../../lib/agenda/agenda-service'
-import { siteTimeZone } from '../../../../../../lib/agenda/agenda-time'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../lib/api/body-limit'
 import { writeAuditLog } from '../../../../../../lib/chat/persistence'
 import { isOsEnabled } from '../../../../../../lib/flags'
+import { loadOrgTimeZone } from '../../../../../../lib/os/org-settings'
 
 export const runtime = 'nodejs'
 
@@ -34,7 +34,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!parsed.success) return Response.json({ error: 'invalid_item' }, { status: 400 })
 
   try {
-    const updated = await updateAgendaItem({ orgId: access.orgId, studyId: access.study.id, itemId, userId: access.userId, timeZone: siteTimeZone(), patch: parsed.data })
+    const updated = await updateAgendaItem({ orgId: access.orgId, studyId: access.study.id, itemId, userId: access.userId, timeZone: await loadOrgTimeZone(access.orgId), patch: parsed.data })
     await writeAuditLog({
       action: 'agenda.update',
       orgId: access.orgId,

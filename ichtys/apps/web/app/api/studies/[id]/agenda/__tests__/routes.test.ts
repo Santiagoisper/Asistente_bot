@@ -21,6 +21,7 @@ vi.mock('@ichtys/auth', () => ({
 vi.mock('../../../../../../lib/chat/persistence', () => ({ writeAuditLog: mocks.writeAuditLog }))
 vi.mock('../../../../../../lib/agenda/agenda-service', () => ({ AgendaError: mocks.AgendaError, createAgendaItem: mocks.createAgendaItem, updateAgendaItem: mocks.updateAgendaItem }))
 vi.mock('../../../../../../lib/subjects/phi-fields', () => ({ PhiConfigError: class extends Error {} }))
+vi.mock('../../../../../../lib/os/org-settings', () => ({ loadOrgTimeZone: async (orgId: string) => (orgId === 'org-bogota' ? 'America/Bogota' : 'America/Argentina/Buenos_Aires') }))
 
 import { POST as create } from '../route'
 import { PATCH as update } from '../[itemId]/route'
@@ -66,7 +67,7 @@ describe('POST agenda — agendar un turno', () => {
     const res = await create(request('POST', body), ctx)
     expect(res.status).toBe(201)
     expect(mocks.validatePhiStudyAccess).toHaveBeenCalledWith(STUDY)
-    expect(mocks.createAgendaItem).toHaveBeenCalledWith(expect.objectContaining({ orgId: 'org-1', studyId: STUDY, userId: 'user_1' }))
+    expect(mocks.createAgendaItem).toHaveBeenCalledWith(expect.objectContaining({ orgId: 'org-1', studyId: STUDY, userId: 'user_1', timeZone: 'America/Argentina/Buenos_Aires' }))
     const audit = JSON.stringify(mocks.writeAuditLog.mock.calls[0]?.[0])
     expect(audit).toContain('agenda.create')
     expect(audit).not.toMatch(/PEREZ|ayunas/)
@@ -93,6 +94,10 @@ describe('PATCH agenda/[itemId] — cambiar un turno', () => {
     const res = await update(request('PATCH', { status: 'done' }), itemCtx())
     expect(res.status).toBe(200)
     expect(mocks.updateAgendaItem).toHaveBeenCalledWith(expect.objectContaining({ orgId: 'org-1', studyId: STUDY, itemId: ITEM, patch: { status: 'done' } }))
+    // Otro centro, otra hora: la zona sale de la organización del token.
+    mocks.validatePhiStudyAccess.mockResolvedValue({ userId: 'user_2', orgId: 'org-bogota', study: { id: STUDY } })
+    await update(request('PATCH', { status: 'done' }), itemCtx())
+    expect(mocks.updateAgendaItem).toHaveBeenLastCalledWith(expect.objectContaining({ orgId: 'org-bogota', timeZone: 'America/Bogota' }))
     expect(JSON.stringify(mocks.writeAuditLog.mock.calls[0]?.[0])).toContain('agenda.update')
   })
 

@@ -2,7 +2,8 @@ import { notFound } from 'next/navigation'
 import { AgendaBoard } from '../../../components/agenda/agenda-board'
 import { EmptyState, LoadError, PageHeader } from '../../../components/os/ui'
 import { listAgenda } from '../../../lib/agenda/agenda-service'
-import { dayKeyInZone, dayRange, isDayKey, siteTimeZone, weekOf } from '../../../lib/agenda/agenda-time'
+import { dayKeyInZone, dayRange, isDayKey, weekOf } from '../../../lib/agenda/agenda-time'
+import { loadOrgTimeZone } from '../../../lib/os/org-settings'
 import { countByDay, toAgendaCard, type AgendaCard } from '../../../lib/agenda/agenda-view'
 import { isOsEnabled } from '../../../lib/flags'
 import { getOsContext } from '../../../lib/os/context'
@@ -24,7 +25,7 @@ export default async function AgendaPage({ searchParams }: { searchParams?: Prom
     )
   }
 
-  const timeZone = siteTimeZone()
+  const timeZone = await loadOrgTimeZone(ctx.orgId)
   const today = dayKeyInZone(new Date(), timeZone)
   const requested = (searchParams ? await searchParams : undefined)?.dia
   const day = typeof requested === 'string' && isDayKey(requested) ? requested : today

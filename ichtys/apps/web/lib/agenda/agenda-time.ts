@@ -4,15 +4,21 @@
  */
 export const DEFAULT_SITE_TIMEZONE = 'America/Argentina/Buenos_Aires'
 
-export function siteTimeZone(): string {
-  const configured = process.env.SITE_TIMEZONE?.trim()
-  if (!configured) return DEFAULT_SITE_TIMEZONE
+/** La zona pedida si es una zona IANA válida; si no, la de respaldo. */
+export function resolveTimeZone(candidate: unknown, fallback: string): string {
+  const zone = typeof candidate === 'string' ? candidate.trim() : ''
+  if (!zone) return fallback
   try {
-    new Intl.DateTimeFormat('en-CA', { timeZone: configured })
-    return configured
+    new Intl.DateTimeFormat('en-CA', { timeZone: zone })
+    return zone
   } catch {
-    return DEFAULT_SITE_TIMEZONE
+    return fallback
   }
+}
+
+/** Zona de la instalación. La de cada centro sale de su organización (`loadOrgTimeZone`). */
+export function siteTimeZone(): string {
+  return resolveTimeZone(process.env.SITE_TIMEZONE, DEFAULT_SITE_TIMEZONE)
 }
 
 const DAY_KEY = /^(\d{4})-(\d{2})-(\d{2})$/
