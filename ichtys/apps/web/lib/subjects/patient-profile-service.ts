@@ -10,6 +10,7 @@ import { and, db, eq, getOrgLlmApiKeys, patientProfiles, recordUsage } from '@ic
 import { runWithLlmFallback } from '@ichtys/llm'
 import { generateObject } from 'ai'
 import { z } from 'zod'
+import { labReviewMarker } from './lab-review-marker'
 import { decryptProfileJson, encryptProfileJson } from './phi-fields'
 
 // Exportado para poder testear su tamaño (A7): cada campo extra infla el
@@ -143,7 +144,7 @@ export async function persistPatientProfile(params: {
 
   await db
     .update(patientProfiles)
-    .set({ profileEncrypted, updatedAt: new Date() })
+    .set({ profileEncrypted, ...labReviewMarker(params.profile), updatedAt: new Date() })
     .where(
       and(
         eq(patientProfiles.organizationId, params.orgId),
@@ -171,7 +172,7 @@ export async function refreshPatientProfileFromEvolution(params: {
 
   await db
     .update(patientProfiles)
-    .set({ profileEncrypted, updatedAt: new Date() })
+    .set({ profileEncrypted, ...labReviewMarker(profile), updatedAt: new Date() })
     .where(
       and(
         eq(patientProfiles.organizationId, params.orgId),
