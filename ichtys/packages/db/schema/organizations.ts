@@ -21,6 +21,15 @@ export interface OrgRagConfig {
 }
 
 /**
+ * Ajustes del OS propios de la organización. Todo es opcional: lo que falta
+ * cae en el valor de la instalación.
+ */
+export interface OrgOsSettings {
+  /** Zona horaria del sitio (IANA), p. ej. "America/Argentina/Buenos_Aires". */
+  timeZone?: string
+}
+
+/**
  * organizations — tenant raíz.
  * Cada org se mapea 1:1 con una Clerk Organization (`clerk_org_id`).
  * El `organization_id` que viaja en queries SIEMPRE deriva del token de Clerk.
@@ -44,6 +53,8 @@ export const organizations = pgTable('organizations', {
    * clave de la plataforma; lo que se gasta con una clave propia de la organización no descuenta.
    */
   monthlyBudgetMicros: bigint('monthly_budget_micros', { mode: 'number' }),
+  /** Ajustes del OS por organización (zona horaria). Null = valores de la instalación. */
+  osSettings: jsonb('os_settings').$type<OrgOsSettings>(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })

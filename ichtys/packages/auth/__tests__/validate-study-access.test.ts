@@ -359,6 +359,7 @@ function createTenantFixture(): TenantFixture {
       llmApiKeysEncrypted: null,
       planName: null,
       monthlyBudgetMicros: null,
+      osSettings: null,
       createdAt,
       updatedAt: createdAt,
     },
