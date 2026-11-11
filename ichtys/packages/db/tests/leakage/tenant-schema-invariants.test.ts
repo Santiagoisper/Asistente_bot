@@ -27,6 +27,10 @@ import {
   screeningAssessments,
   sites,
   studies,
+  agendaItems,
+  labAnalytes,
+  labReportImages,
+  labReports,
   studySpecs,
   subjects,
 } from '../../schema'
@@ -58,6 +62,10 @@ const TENANT_TABLES: TenantTableSpec[] = [
   { name: 'clinical_evolutions', table: clinicalEvolutions, studyScoped: true },
   { name: 'patient_profiles', table: patientProfiles, studyScoped: true },
   { name: 'screening_assessments', table: screeningAssessments, studyScoped: true },
+  { name: 'lab_analytes', table: labAnalytes, studyScoped: false },
+  { name: 'lab_reports', table: labReports, studyScoped: true },
+  { name: 'lab_report_images', table: labReportImages, studyScoped: true },
+  { name: 'agenda_items', table: agendaItems, studyScoped: true },
 ]
 
 function findColumn(table: PgTable, columnName: string) {
