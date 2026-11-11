@@ -1,6 +1,6 @@
 # Acceso por estudio: funciones y membresía
 
-Estado: **decisiones M1–M14 tomadas el 11/11/2026; pasos 0, 1 y 2a en PR (#105, #107, #108)**. Revisado por Reviewer y por la revisión automática del PR. La sección de funciones se reescribió con la descripción de Santiago de cómo se organiza un centro; conviene que Reviewer la vuelva a mirar.
+Estado: **decisiones M1–M15 tomadas el 11/11/2026; pasos 0, 1 y 2a en PR (#105, #107, #108)**. Revisado por Reviewer y por la revisión automática del PR. La sección de funciones se reescribió con la descripción de Santiago de cómo se organiza un centro; conviene que Reviewer la vuelva a mirar.
 Fecha: 2026-11-11.
 
 ## El problema
@@ -48,7 +48,7 @@ Tres reglas sobre las funciones:
 
 1. **Son acumulables.** En un centro chico un asistente hace laboratorio, regulatorio y CRF. En uno grande, quien dirige investigación puede ser además médico. Una persona tiene las funciones que le correspondan y sus capacidades son la suma.
 2. **La autoría clínica no se hereda.** Evolucionar y responder queries salen solo de la función Investigador. Ninguna dirección ni la administración las traen consigo.
-3. **Son una matriz, no una escala.** Cada función tiene su lista de capacidades. No existe «al menos tal rol».
+3. **No hay escala global.** No existe «al menos tal rol». Sí hay composición explícita: Dirección de Operaciones contiene todo lo del Study Coordinator, y este todo lo de los tres asistentes. Está escrita una sola vez en el código y la comprueba una prueba, para que agregar una capacidad abajo no deje sin ella a quien está arriba. Cada capacidad nombra el par dato y operación (`clinical.read`, `labs.manage`): así «lee el estudio pero no los datos clínicos» se expresa sin casos especiales.
 
 Criterios adoptados: «autorización total» del investigador es clínica y dentro de sus estudios, no administración del centro (importa para los investigadores externos); la gestión documental queda en el equipo y el investigador la lee.
 
@@ -61,13 +61,13 @@ member_functions
   id               uuid, clave primaria
   organization_id  uuid, no nulo
   user_id          text, no nulo
-  function         text, no nulo        -- lista cerrada
+  function_key     text, no nulo        -- lista cerrada, exigida por un CHECK en la base
   granted_by       text, no nulo
   granted_at       timestamptz, no nulo
   revoked_by       text, nulo
   revoked_at       timestamptz, nulo    -- la baja no borra la fila
 
-  único (organization_id, user_id, function) donde revoked_at es nulo
+  único (organization_id, user_id, function_key) donde revoked_at es nulo
 ```
 
 El proveedor de identidad sigue diciendo quién es la persona y si pertenece a la organización. Qué puede hacer lo dice esta tabla.
@@ -83,6 +83,7 @@ Efecto lateral buscado: quién tenía alcance total en una fecha pasada queda en
 5. Sin membresía la respuesta es **404**, igual que para un estudio que no existe o que es de otra organización. No se confirma la existencia de un estudio a quien no puede verlo.
 6. Un estudio al que la persona no entra tampoco aparece en listados, búsquedas, contadores del Inicio, agenda ni pendientes de laboratorio. Un contador que suma estudios ajenos es una fuga aunque no muestre nombres.
 7. Alta y baja de funciones, alta, baja y cambio de vencimiento de membresías, y el cambio de modo de la organización, quedan en `audit_logs`.
+8. Quien crea una organización recibe, en la misma transacción del alta, las funciones Dirección de Operaciones y Administración de la plataforma. Una organización nueva nace en modo estricto (M1); sin esto su creador no vería nada.
 
 La regla 5 hoy no se cumple entre organizaciones: `apps/web/app/(app)/studies/[id]/layout.tsx` llama a `studyExistsInAnotherOrganization` (`packages/auth/resolve-org.ts`), que consulta el estudio sin límite de organización para distinguir el caso. Se quita en un PR propio, antes que todo lo demás (paso 0).
 
@@ -156,7 +157,12 @@ Los roles viven en el proveedor de identidad; una migración no los conoce, así
 
 Es un punto de partida para que nada se rompa el primer día, no la verdad del centro. El administrador la corrige en pantalla.
 
-**Riesgo principal: dejar a un médico sin poder evolucionar.** Hoy escriben evoluciones personas cuyo rol no es `principal_investigator` (por ejemplo, un director que además es médico). Si la regla de autoría se activa con el mapa inicial, esas personas quedan bloqueadas en medio de una visita. Por eso la autoría clínica se exige recién en modo estricto, y antes la pantalla muestra quién escribió evoluciones sin tener la función Investigador, para que el administrador decida caso por caso. Ese listado sale de la auditoría; hay que verificar que el dato alcance.
+**Riesgo principal: dejar a un médico sin poder evolucionar.** No es un caso raro. Hoy pueden evolucionar cuatro de los cinco roles (`principal_investigator`, `site_coordinator`, `study_admin` y `org_admin`) y la sugerencia inicial le da la función Investigador solo al primero. Si el modo estricto llegara con eso solo, quedaría bloqueado todo el que hoy evoluciona sin ser `principal_investigator`. La autoría clínica se exige recién en modo estricto, y el paso se resuelve en dos tiempos (M15):
+
+- **Antes del cambio**, la pantalla lista a quién afecta: las personas que escribieron evoluciones y no tienen la función Investigador. Sale de `clinical_evolutions.authorUserId`, que es la fuente autoritativa y no depende de cuánto se conserve la auditoría. El administrador resuelve cada una: es médico (se le asigna la función) o no lo es.
+- **Si la fecha límite llega con casos sin resolver**, el cambio a modo estricto ocurre igual y esas personas reciben la función Investigador en forma provisoria, marcada como asignada por el sistema y visible como «pendiente de confirmar». Conservan lo que ya podían hacer: nadie queda bloqueado en medio de una visita. Quien nunca evolucionó pierde la posibilidad desde ese día.
+
+Lo que esto no logra: una persona que no es médica y venía evolucionando sigue pudiendo hasta que alguien la revise. No es peor que hoy, queda a la vista y se le recuerda al administrador hasta que la resuelva. Frenar el cambio mientras queden casos sin resolver se descartó: deja el modo abierto para siempre justo en los centros que no hacen la carga.
 
 El costo de esa prudencia: en las organizaciones existentes, la regla «solo el médico evoluciona» no rige hasta que pasen a modo estricto. La fecha límite (M5) lo acota.
 
@@ -225,6 +231,7 @@ Delegadas por Santiago el 11/11/2026 y resueltas con la recomendación:
 | M12 | ¿Quien administra la plataforma (ajustes, claves) ve datos clínicos y todos los estudios? | No por esa función sola. Los ve si además tiene otra. En un centro chico la misma persona tendrá las dos |
 | M13 | ¿Quien administra puede asignarse a sí mismo otra función? | Sí. Queda auditado con marca propia de autoasignación y se muestra en la pantalla. Impedirlo dejaría sin salida al centro de una sola persona. Para centros grandes queda abierta la regla de dos personas |
 | M14 | ¿Puede una organización quedar sin nadie que asigne funciones? | No. Quien es administrador de la organización en el proveedor de identidad conserva siempre la administración de la plataforma, que no trae datos clínicos |
+| M15 | Fecha límite con personas que evolucionan y no tienen la función Investigador | El cambio ocurre igual. Reciben la función en forma provisoria, marcada y pendiente de confirmar. Nadie queda bloqueado; quien nunca evolucionó ya no puede |
 
 ## Orden de trabajo
 
