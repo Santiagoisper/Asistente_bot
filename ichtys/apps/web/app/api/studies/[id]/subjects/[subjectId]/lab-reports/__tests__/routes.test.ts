@@ -42,6 +42,7 @@ import { POST as upload } from '../route'
 import { GET as read } from '../[reportId]/route'
 import { POST as confirm } from '../[reportId]/confirm/route'
 import { POST as reject } from '../[reportId]/reject/route'
+import { GET as exportCsv } from '../[reportId]/export/route'
 
 const STUDY = '11111111-1111-4111-8111-111111111111'
 const SUBJECT = '22222222-2222-4222-8222-222222222222'
@@ -66,7 +67,7 @@ const jsonRequest = (body: unknown) =>
 beforeEach(() => {
   vi.clearAllMocks()
   process.env.VERCEL_ENV = 'preview'
-  mocks.validateSubjectAccess.mockResolvedValue({ userId: 'user_1', orgId: 'org-1', role: 'site_coordinator', subject: { subjectCode: 'SUJ-1047' } })
+  mocks.validateSubjectAccess.mockResolvedValue({ userId: 'user_1', orgId: 'org-1', role: 'site_coordinator', subject: { subjectCode: 'SUJ-1047' }, study: { name: 'Estudio de demostración', protocolNumber: 'ABC-301' } })
   mocks.createLabReportFromPdf.mockResolvedValue({ reportId: REPORT, rowCount: 6, reviewCount: 1, newFieldCount: 1 })
   mocks.confirmLabReport.mockResolvedValue({ rowCount: 1, newAnalytes: 0, profileUpdated: true })
   mocks.rejectLabReport.mockResolvedValue(undefined)
@@ -220,5 +221,115 @@ describe('POST confirm / reject', () => {
     expect((await reject(new Request('https://os.example.test/x', { method: 'POST' }), reportCtx)).status).toBe(401)
     expect(mocks.confirmLabReport).not.toHaveBeenCalled()
     expect(mocks.rejectLabReport).not.toHaveBeenCalled()
+  })
+})
+
+describe('GET lab-reports/[reportId]/export — sin sistema de destino', () => {
+  const get = () => new Request('https://os.example.test/export')
+  const confirmed = {
+    id: REPORT,
+    status: 'confirmed',
+    createdAt: new Date('2026-11-10T12:00:00Z'),
+    reviewedAt: new Date('2026-11-11T15:30:00Z'),
+    content: { rows: [{ ...row, id: 'r1', status: 'read', isNewField: false, reviewReason: null }] },
+  }
+
+  it('sin acceso al sujeto no se lee el informe', async () => {
+    mocks.validateSubjectAccess.mockRejectedValue(new mocks.AccessError('Forbidden', 403))
+    expect((await exportCsv(get(), reportCtx)).status).toBe(403)
+    expect(mocks.loadLabReport).not.toHaveBeenCalled()
+  })
+
+  it('un id que no es UUID no llega a la base', async () => {
+    const res = await exportCsv(get(), { params: Promise.resolve({ id: STUDY, subjectId: SUBJECT, reportId: '../../x' }) })
+    expect(res.status).toBe(404)
+    expect(mocks.loadLabReport).not.toHaveBeenCalled()
+  })
+
+  it('informe de otro sujeto u organización: 404', async () => {
+    mocks.loadLabReport.mockRejectedValue(new mocks.LabReportError('not_found'))
+    expect((await exportCsv(get(), reportCtx)).status).toBe(404)
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+  })
+
+  it.each(['pending_review', 'rejected'])('un informe %s no se exporta: 409 y no queda registro de exportación', async (status) => {
+    mocks.loadLabReport.mockResolvedValue({ ...confirmed, status, reviewedAt: null })
+    const res = await exportCsv(get(), reportCtx)
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({ error: 'not_reviewed' })
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+  })
+
+  it('informe revisado: descarga el CSV con el código del sujeto, sin caché', async () => {
+    mocks.loadLabReport.mockResolvedValue(confirmed)
+    const res = await exportCsv(get(), reportCtx)
+    expect(res.status).toBe(200)
+    expect(mocks.validateSubjectAccess).toHaveBeenCalledWith(SUBJECT, STUDY)
+    expect(mocks.loadLabReport).toHaveBeenCalledWith({ orgId: 'org-1', studyId: STUDY, subjectId: SUBJECT, reportId: REPORT })
+    expect(res.headers.get('content-type')).toBe('text/csv; charset=utf-8')
+    expect(res.headers.get('content-disposition')).toBe('attachment; filename="laboratorio-ABC-301-SUJ-1047-2026-11-11-33333333.csv"')
+    expect(res.headers.get('cache-control')).toBe('private, no-store')
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff')
+    const bytes = new Uint8Array(await res.arrayBuffer())
+    expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf])
+    const body = new TextDecoder().decode(bytes)
+    expect(body).toContain('ABC-301;SUJ-1047;Hemoglobina;13,5;13,5;g/dL;12,0 - 16,0;2026-11-11 12:30;33333333')
+  })
+
+  it('queda registrado quién exportó y cuántas filas, sin ningún valor', async () => {
+    mocks.loadLabReport.mockResolvedValue(confirmed)
+    await exportCsv(get(), reportCtx)
+    expect(mocks.writeAuditLog).toHaveBeenCalledWith({
+      action: 'lab.export',
+      orgId: 'org-1',
+      studyId: STUDY,
+      userId: 'user_1',
+      resourceType: 'lab_report',
+      resourceId: REPORT,
+      metadata: { subjectId: SUBJECT, rowCount: 1, format: 'csv', destination: 'none' },
+    })
+    const audit = JSON.stringify(mocks.writeAuditLog.mock.calls[0]?.[0])
+    expect(audit).not.toContain('13,5')
+    expect(audit).not.toContain('Hemoglobina')
+  })
+
+  it('copiar también pasa por el servidor: devuelve el texto para pegar y queda registrado', async () => {
+    mocks.loadLabReport.mockResolvedValue(confirmed)
+    const res = await exportCsv(new Request('https://os.example.test/export?formato=texto'), reportCtx)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('text/plain; charset=utf-8')
+    expect(res.headers.get('content-disposition')).toBeNull()
+    expect(res.headers.get('cache-control')).toBe('private, no-store')
+    expect(await res.text()).toBe('Hemoglobina\t13,5\tg/dL')
+    expect(mocks.writeAuditLog).toHaveBeenCalledWith(expect.objectContaining({ action: 'lab.export', metadata: { subjectId: SUBJECT, rowCount: 1, format: 'clipboard', destination: 'none' } }))
+  })
+
+  it('un formato que no existe: 400, sin leer el informe ni registrar nada', async () => {
+    const res = await exportCsv(new Request('https://os.example.test/export?formato=xlsx'), reportCtx)
+    expect(res.status).toBe(400)
+    expect(mocks.loadLabReport).not.toHaveBeenCalled()
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+  })
+
+  it('un estudio sin número de protocolo usa su nombre', async () => {
+    mocks.validateSubjectAccess.mockResolvedValue({ userId: 'user_1', orgId: 'org-1', subject: { subjectCode: 'SUJ-1047' }, study: { name: 'Estudio de demostración', protocolNumber: '  ' } })
+    mocks.loadLabReport.mockResolvedValue(confirmed)
+    const res = await exportCsv(get(), reportCtx)
+    expect(await res.text()).toContain('Estudio de demostración;SUJ-1047;')
+  })
+
+  it('si no se puede dejar registro, no se entrega el archivo', async () => {
+    mocks.loadLabReport.mockResolvedValue(confirmed)
+    mocks.writeAuditLog.mockRejectedValue(new Error('db down'))
+    const res = await exportCsv(get(), reportCtx)
+    expect(res.status).toBe(500)
+    expect(await res.text()).not.toContain('Hemoglobina')
+  })
+
+  it('con el interruptor apagado en producción: 404 antes de autenticar', async () => {
+    process.env.VERCEL_ENV = 'production'
+    delete process.env.ALPHI_OS
+    expect((await exportCsv(get(), reportCtx)).status).toBe(404)
+    expect(mocks.validateSubjectAccess).not.toHaveBeenCalled()
   })
 })

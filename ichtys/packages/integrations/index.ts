@@ -31,3 +31,15 @@ export {
   type ModuleStatus,
   type ModuleSummaryResult,
 } from './client'
+export {
+  CONNECTOR_CAPABILITIES,
+  NO_DESTINATION,
+  describeDelivery,
+  hasCapability,
+  type ConnectorCapability,
+  type ConnectorDescriptor,
+  type DeliveryRecord,
+  type DeliveryStage,
+  type DeliveryView,
+  type ReviewState,
+} from './connector'
