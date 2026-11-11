@@ -31,6 +31,7 @@ import {
   labAnalytes,
   labReportImages,
   labReports,
+  organizationIntegrations,
   studySpecs,
   subjects,
 } from '../../schema'
@@ -66,6 +67,8 @@ const TENANT_TABLES: TenantTableSpec[] = [
   { name: 'lab_reports', table: labReports, studyScoped: true },
   { name: 'lab_report_images', table: labReportImages, studyScoped: true },
   { name: 'agenda_items', table: agendaItems, studyScoped: true },
+  // Configuración de la organización, no dato de un estudio.
+  { name: 'organization_integrations', table: organizationIntegrations, studyScoped: false },
 ]
 
 function findColumn(table: PgTable, columnName: string) {

@@ -126,3 +126,7 @@ export type AgendaItemKind = (typeof agendaItemKind)[number]
 
 export const agendaItemStatus = ['scheduled', 'done', 'cancelled', 'no_show'] as const
 export type AgendaItemStatus = (typeof agendaItemStatus)[number]
+
+/** Módulo del OS (Queries, Viáticos, Operación) o conector a un sistema de destino. */
+export const integrationCategory = ['module', 'connector'] as const
+export type IntegrationCategory = (typeof integrationCategory)[number]
