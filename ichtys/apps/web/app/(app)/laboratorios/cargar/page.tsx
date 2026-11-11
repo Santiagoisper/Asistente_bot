@@ -3,7 +3,7 @@ import { LabUploadForm } from '../../../../components/labs/upload-form'
 import { ButtonLink, Card, EmptyState, LoadError, PageHeader } from '../../../../components/os/ui'
 import { isOsEnabled } from '../../../../lib/flags'
 import { getOsContext } from '../../../../lib/os/context'
-import { listActiveStudies, type StudyOption } from '../../../../lib/os/inicio-data'
+import { listActiveStudies, type StudyWithSubjects } from '../../../../lib/os/inicio-data'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,7 +30,7 @@ export default async function CargarLaboratorioPage() {
     )
   }
 
-  let studies: StudyOption[]
+  let studies: StudyWithSubjects[]
   try {
     studies = await listActiveStudies(ctx.orgId)
   } catch {

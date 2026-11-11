@@ -108,6 +108,34 @@ describe('POST lab-reports — subir PDF', () => {
     expect(mocks.createLabReportFromPdf).not.toHaveBeenCalled()
   })
 
+  it('sin tamaño declarado igual se procesa: el navegador no siempre lo manda', async () => {
+    const req = uploadRequest(pdf())
+    const headers = new Headers(req.headers)
+    headers.delete('content-length')
+    const res = await upload(new Request(req, { headers }), ctx)
+    expect(res.status).toBe(201)
+    expect(mocks.createLabReportFromPdf).toHaveBeenCalledTimes(1)
+  })
+
+  it('sin tamaño declarado, un archivo por encima del tope se rechaza igual: 413', async () => {
+    const big = new File([new Uint8Array(4 * 1024 * 1024 + 1)], 'grande.pdf', { type: 'application/pdf' })
+    const req = uploadRequest(big)
+    const headers = new Headers(req.headers)
+    headers.delete('content-length')
+    expect((await upload(new Request(req, { headers }), ctx)).status).toBe(413)
+    expect(mocks.createLabReportFromPdf).not.toHaveBeenCalled()
+  })
+
+  it('el registro de un rechazo lleva el código y el tamaño, nunca el nombre del archivo', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    mocks.createLabReportFromPdf.mockRejectedValue(new mocks.LabReportError('no_rows'))
+    await upload(uploadRequest(pdf()), ctx)
+    const logged = JSON.stringify(warn.mock.calls)
+    warn.mockRestore()
+    expect(logged).toContain('no_rows')
+    expect(logged).not.toMatch(/\.pdf/)
+  })
+
   it('PDF escaneado sin texto: 422 con código estable', async () => {
     mocks.createLabReportFromPdf.mockRejectedValue(new mocks.LabReportError('no_text'))
     const res = await upload(uploadRequest(pdf()), ctx)
