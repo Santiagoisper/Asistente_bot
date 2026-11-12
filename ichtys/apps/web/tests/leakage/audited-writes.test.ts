@@ -30,7 +30,9 @@ import { describe, expect, it } from 'vitest'
  * - Busca el texto literal `db.insert|update|delete` y `writeAuditLog`; un
  *   alias o un cambio de nombre lo esquivan.
  * - Detecta «escribir y auditar por separado», no «escribir y no auditar
- *   nunca». La instantánea que guarda `screening` vive en un GET y en un
+ *   nunca». Escrituras conocidas sin registro propio, a decidir en el marco:
+ *   la re-extracción de un protocolo (`spec/reextract`) y el título automático
+ *   de una conversación. La instantánea que guarda `screening` vive en un GET y en un
  *   servicio, fuera de este escaneo: su registro en la misma transacción lo
  *   prueba `lib/subjects/__tests__/screening-service.test.ts`.
  *
@@ -60,6 +62,8 @@ const MIGRATED = [
   'app/api/studies/[id]/subjects/[subjectId]/profile/proposals/[evolutionId]/reject/route.ts',
   'app/api/os/org-config/route.ts',
   'app/api/chat/stream/route.ts',
+  'app/api/org/settings/route.ts',
+  'app/api/studies/[id]/spec/[specId]/route.ts',
 ] as const
 
 /** Ruta y verbo → por qué sigue pendiente. Hoy no queda ninguna. */
@@ -101,7 +105,8 @@ function handlers(source: string): Array<{ verb: string; body: string }> {
   return found
 }
 
-const LOOSE_AUDIT = /\b(?:safeWriteAuditLog|writeAuditLog)\s*\(/
+// Una auditoría suelta se puede escribir de dos maneras: con el ayudante o insertando directo en la tabla.
+const LOOSE_AUDIT = /\b(?:safeWriteAuditLog|writeAuditLog)\s*\(|\bdb\s*\.\s*insert\(\s*auditLogs\s*\)/
 const LOOSE_WRITE = /\bdb\s*\.\s*(?:insert|update|delete)\s*\(/
 
 describe('leakage — la auditoría de una escritura va en su misma transacción', () => {
@@ -188,6 +193,8 @@ describe('leakage — la auditoría de una escritura va en su misma transacción
     expect(LOOSE_WRITE.test(withoutComments(bad))).toBe(true)
     expect(handlers(commented).map((handler) => LOOSE_AUDIT.test(handler.body))).toEqual([false])
     expect(handlers("export async function GET() {\n  await writeAuditLog({ action: 'view' })\n}\n")[0]?.verb).toBe('GET')
+    const direct = "export async function PATCH() {\n  await save()\n  await db.insert(auditLogs).values({ action: 'x' })\n}\n"
+    expect(handlers(direct).map((handler) => LOOSE_AUDIT.test(handler.body))).toEqual([true])
     const arrow = "export const POST = async () => {\n  await db.insert(t).values({})\n  await writeAuditLog({ action: 'x' })\n}\n"
     expect(handlers(arrow).map((handler) => `${handler.verb}:${LOOSE_AUDIT.test(handler.body)}`)).toEqual(['POST:true'])
   })
