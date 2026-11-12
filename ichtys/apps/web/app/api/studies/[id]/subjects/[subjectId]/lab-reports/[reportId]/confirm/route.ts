@@ -23,7 +23,7 @@ export async function POST(
 
   let access: Awaited<ReturnType<typeof validateSubjectAccess>>
   try {
-    access = await validateSubjectAccess(subjectId, studyId)
+    access = await validateSubjectAccess(subjectId, studyId, { require: 'labs.manage' })
   } catch (err) {
     return handleApiError(err)
   }

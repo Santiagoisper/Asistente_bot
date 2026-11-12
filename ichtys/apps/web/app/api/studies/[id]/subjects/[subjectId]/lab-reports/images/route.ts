@@ -28,7 +28,7 @@ export async function POST(
   // Auth antes de leer el cuerpo: sin acceso al sujeto no se procesa ninguna imagen.
   let access: Awaited<ReturnType<typeof validateSubjectAccess>>
   try {
-    access = await validateSubjectAccess(subjectId, studyId)
+    access = await validateSubjectAccess(subjectId, studyId, { require: 'labs.manage' })
   } catch (err) {
     return handleApiError(err)
   }

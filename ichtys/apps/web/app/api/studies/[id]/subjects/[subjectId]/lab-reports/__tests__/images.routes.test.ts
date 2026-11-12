@@ -91,7 +91,7 @@ describe('POST lab-reports/images — subir foto o escaneo', () => {
   it('éxito: 201, con la organización del token y auditoría sin nombre de archivo ni valores', async () => {
     const res = await uploadImages(imagesRequest([jpeg(), jpeg('hoja2.jpg')]), ctx)
     expect(res.status).toBe(201)
-    expect(mocks.validateSubjectAccess).toHaveBeenCalledWith(SUBJECT, STUDY)
+    expect(mocks.validateSubjectAccess).toHaveBeenCalledWith(SUBJECT, STUDY, { require: 'labs.manage' })
     const call = mocks.createLabReportFromImages.mock.calls[0]![0] as { orgId: string; images: unknown[] }
     expect(call).toMatchObject({ orgId: 'org-1', studyId: STUDY, subjectId: SUBJECT, userId: 'user_1' })
     expect(call.images).toHaveLength(2)

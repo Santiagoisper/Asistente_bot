@@ -15,7 +15,7 @@ export async function POST(
   if (!isOsEnabled()) return new Response('Not Found', { status: 404 })
 
   try {
-    const access = await validateSubjectAccess(subjectId, studyId)
+    const access = await validateSubjectAccess(subjectId, studyId, { require: 'labs.manage' })
     if (!isUuid(reportId)) return Response.json({ error: 'not_found' }, { status: 404 })
 
     await rejectLabReport({ orgId: access.orgId, studyId, subjectId, reportId, userId: access.userId })

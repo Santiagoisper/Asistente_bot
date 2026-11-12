@@ -13,7 +13,7 @@ export async function POST(
   const { id: routeStudyId, subjectId } = await params
 
   try {
-    const { orgId, userId, study, subject } = await validateSubjectAccess(subjectId, routeStudyId)
+    const { orgId, userId, study, subject } = await validateSubjectAccess(subjectId, routeStudyId, { require: 'labs.manage' })
 
     const profile = await rejectLabOcrReview({
       orgId,
