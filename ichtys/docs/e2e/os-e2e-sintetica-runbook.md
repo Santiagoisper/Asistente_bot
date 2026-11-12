@@ -1,77 +1,80 @@
-# Recorrido E2E sintético — OS-E2E-SINTETICA
+# Recorrido E2E sintético — Ichtys
 
 ## Estado y límites
 
-Este guion queda preparado, no ejecutado. El equipo confirmó que el Neon del
-Preview actual comparte la base de Producción. **No cargar el SQL ni abrir el
-recorrido hasta que Santiago apruebe y exista un entorno de prueba realmente
-aislado**, con deployment Preview, base Neon y tenant Clerk de prueba verificados.
-Nunca usar el dominio ni las credenciales de Producción.
+Este guion todavía no se ejecutó en un deployment. La corrida requiere
+autorización de Santiago y una rama Neon desechable del proyecto
+`sweet-union-82704893`; nunca usar la rama compartida ni Producción. El Preview,
+la base aislada y Clerk de prueba se verifican antes de sembrar. No se asume que
+Preview esté aislado por el solo hecho de ser Preview.
 
-Todo dato de este guion es inventado. No agregar nombres de personas, DNI,
-fechas de nacimiento, teléfonos, direcciones, ni datos tomados de documentos
-reales. El PDF sintético se generó localmente fuera de este repo; no subirlo ni
-adjuntarlo a una organización hasta la autorización de ejecución.
+Todos los datos son inventados y pseudónimos. El PDF local tiene marca de agua
+`DATOS SINTÉTICOS / E2E`, estudio `E2E-PROTOCOLO-001`, sujeto `E2E-SUJ-001` y
+hemoglobina 13,5 g/dL, glucosa 99 mg/dL y creatinina 0,8 mg/dL. Estos códigos
+coinciden con el seed. El PDF no se sube hasta la autorización de la corrida.
 
-La siembra está en `scripts/e2e/seed-os-e2e-sintetica.sql`. Solo usa las
-columnas existentes hasta la migración 0015. Debe apuntar a una base aislada y
-recibir el ID de la organización creada en Clerk de prueba. La variable de
-confirmación `ISOLATED_PREVIEW` es una barrera adicional; no sustituye la
-comprobación del destino en Vercel y Neon.
+El seed busca dos organizaciones preexistentes por `clerk_org_id`, usa sus IDs
+reales de esa base aislada y no las crea ni renombra. Deben llamarse
+`OS-E2E-SINTETICA` y `OS-E2E-SINTETICA-2`. La primera tiene dos estudios y dos
+sujetos (un sujeto en cada estudio); la segunda permite comprobar aislamiento
+entre tenants. También se crean perfiles vacíos `{}` para todos los sujetos,
+según la convención inicial de `patient_profiles`.
 
-## Precondiciones antes de comenzar
+## Precondiciones
 
-- Santiago aprueba crear la organización/usuario de prueba y autoriza la corrida.
-- El deployment pertenece al proyecto Vercel `asistente-bot`, está en Preview,
-  y no resuelve a un alias de Producción.
-- Neon confirma que Preview usa una rama desechable aislada de Producción. Si
-  falta esa rama o el destino no puede comprobarse, detenerse sin escribir.
-- Clerk Preview usa una clave pública `pk_test_` y la organización seleccionada
-  es `OS-E2E-SINTETICA`. No mostrar, copiar ni registrar claves secretas.
-- La migración del entorno aislado llega a 0015.
-- El archivo local es el PDF sintético de una página con la marca de agua
-  `DATOS SINTÉTICOS / E2E`, el estudio `E2E-PROTOCOLO-001`, el sujeto
-  `E2E-SUJ-001` y los valores hemoglobina 13,5 g/dL, glucosa 99 mg/dL y
-  creatinina 0,8 mg/dL.
-- Registrar el identificador/nombre de la rama de Neon, la URL del Preview y
-  la hora de inicio en la evidencia de corrida; no registrar credenciales.
+- Santiago autorizó la corrida, las dos organizaciones y el usuario sintético.
+- El deployment es Preview del proyecto Vercel `asistente-bot`, y la URL no es
+  alias de Producción.
+- Neon confirmó que la conexión apunta a una rama desechable aislada de
+  `sweet-union-82704893`. Si no se puede comprobar, detenerse sin escribir.
+- Clerk Preview usa `pk_test_`; el usuario pertenece a
+  `OS-E2E-SINTETICA` con rol **administrador** (org admin). Confirmar el rol en
+  la sesión y que las acciones administrativas estén habilitadas. No leer ni
+  registrar claves secretas.
+- Hay dos organizaciones Clerk de prueba ya aprovisionadas en esa rama. El seed
+  recibe sus `clerk_org_id` y aborta si los nombres/IDs no coinciden.
+- El esquema de la base desechable está migrado hasta 0015.
+- Registrar URL Preview, nombre de rama Neon y hora en evidencia; nunca
+  credenciales. No incluir datos de pacientes reales.
 
-## Recorrido y resultados esperados
+## Recorrido y resultado esperado
 
 | Paso | Acción | Qué debe verse | Qué queda guardado |
 | --- | --- | --- | --- |
-| 1. Verificar entorno | Abrir la URL del deployment Preview aprobado e iniciar sesión con el usuario ficticio de Clerk de prueba. | Host de Preview confirmado; organización activa `OS-E2E-SINTETICA`. Si aparece Production, otro centro o una organización distinta, parar. | Sesión de prueba de Clerk. Sin cambios en la app. |
-| 2. Sembrar datos | En la rama Neon aislada, ejecutar el SQL de siembra con `clerk_org_id` del tenant de prueba y confirmación `ISOLATED_PREVIEW`. | El resumen SQL informa 2 centros, 2 estudios y 6 sujetos. En `Estudios clínicos` aparecen `E2E Estudio Alfa` y `E2E Estudio Beta`, ambos activos. | Una organización sintética, centros `Centro Ficticio Aurora E2E` y `Centro Ficticio Boreal E2E`, dos estudios y seis códigos `E2E-*` en `organizations`, `sites`, `studies` y `subjects`. |
-| 3. Abrir carga de laboratorio | Ir a `Laboratorios` → `Cargar estudio`; elegir `E2E Estudio Alfa` y `E2E-ALFA-SUJ-001`; adjuntar el PDF local sintético. | Formulario muestra el estudio y sujeto elegidos; al cargar, abre `Revisar y confirmar` con el sujeto/estudio correctos y tres filas legibles. | `lab_reports` recibe un informe `pending_review`; el contenido parseado se guarda cifrado y se registra `lab.extract` en `audit_logs`. Esta ruta no conserva el PDF fuente ni lo sube a Blob. |
-| 4. Revisar y confirmar | Comparar cada fila con el texto visible del PDF; confirmar solo si coincide: hemoglobina 13,5 g/dL, glucosa 99 mg/dL, creatinina 0,8 mg/dL. | Estado de confirmación visible en pantalla; debe indicar que los datos quedan en Alphi y no se envían a un sistema externo. Si aparece un error de perfil, registrarlo aunque el informe quede confirmado. | `lab_reports` pasa a `confirmed`, guarda filas revisadas cifradas y marca revisor/hora; el perfil sintético puede recibir la copia de trabajo de los resultados; `audit_logs` registra `lab.confirm`. |
-| 5. Descargar CSV | Pulsar `Descargar CSV` y revisar localmente el archivo. | Aviso `Descargado`; CSV con los tres analitos, valores y unidades, ligado a los códigos sintéticos. | No agrega otra fila clínica. `audit_logs` registra `lab.export`; el CSV queda solo en Descargas locales hasta limpiarlo. |
-| 6. Copiar valores | Pulsar `Copiar valores`, comprobar el aviso de tres filas y pegar en un editor local sin guardar; después vaciar el portapapeles. | Aviso `Copiado: 3 filas (analito, valor y unidad)`; el texto contiene solo los tres resultados sintéticos. | `audit_logs` registra otra salida `lab.export`; los valores quedan temporalmente en el portapapeles, que se limpia al terminar. |
-| 7. Crear turno | Ir a `Agenda` → `Agendar turno`; seleccionar `E2E Estudio Alfa`, sujeto `E2E-ALFA-SUJ-001`, título `E2E control sintético`, tipo visita, fecha/hora futura permitida y sin notas. Pulsar `Guardar turno`. | La semana/día muestra una tarjeta `E2E control sintético`, con el código sintético y estado programado. | Una fila `agenda_items` en la rama de prueba; notas nulas; `audit_logs` registra `agenda.create` sin guardar título ni notas en sus metadatos. |
-| 8. Revisar Integraciones | Abrir `Integraciones` y solo observar estados; no pulsar configuración, conexión ni envío. | Pantalla `Integraciones`; si no hay conectores configurados, muestra que esta organización no tiene módulos conectados. Si aparece un destino activo inesperado, detenerse y reportarlo. | Sin escrituras esperadas. La pantalla solo consulta el estado; no se conecta ni escribe a sistemas externos. |
+| 1. Validar entorno/rol | Abrir el Preview autorizado e iniciar sesión con el usuario sintético administrador. | Host Preview confirmado; organización `OS-E2E-SINTETICA`; la interfaz permite administración. Si el usuario no tiene rol admin, no seguir. | Sesión Clerk de prueba; sin cambios en la app. |
+| 2. Verificar Integraciones activas | Antes de abrir la pantalla Integraciones, comprobar por el mecanismo de solo lectura aprobado si esta organización tiene alguna integración activa. Si hay una, detener el recorrido y reportar cuál; no abrir Integraciones. | Resultado de la comprobación indica cero conexiones activas. | Ninguna escritura; registrar solo el resultado y su fuente. |
+| 3. Sembrar datos | En la rama Neon desechable, ejecutar `scripts/e2e/seed-os-e2e-sintetica.sql` con ambos `clerk_org_id` y `target_confirmation=ISOLATED_PREVIEW`. | Resumen: org A, 1 centro, 2 estudios, 2 sujetos, 2 perfiles; org B, 1 centro, 1 estudio, 3 sujetos, 3 perfiles. En org A aparecen Alfa y Gamma. | Filas sintéticas en `sites`, `studies`, `subjects` y `patient_profiles`; no se modifican organizaciones existentes. Los estudios Alfa y Gamma pertenecen a la misma organización. |
+| 4. Comprobar aislamiento | En la interfaz de Estudios clínicos, revisar org A y luego cambiar a org B con el usuario de prueba correspondiente; comparar listado y códigos. | En A solo aparecen Alfa/Gamma y `E2E-SUJ-001`/`E2E-SUJ-002`; en B solo Beta y `E2E-BETA-SUJ-001..003`. No hay datos cruzados. | Sin escrituras. Evidencia de ambas vistas. |
+| 5. Cargar laboratorio | En org A, ir a `Laboratorios` → `Cargar estudio`; elegir Alfa y `E2E-SUJ-001`; subir el PDF local sintético. | Revisión muestra exactamente ese estudio/sujeto y tres resultados legibles con los valores del PDF. | `lab_reports` recibe un informe `pending_review`; contenido parseado cifrado y evento `lab.extract` en `audit_logs`. El PDF fuente no se almacena en Blob. |
+| 6. Revisar y confirmar | Comparar las tres filas con el PDF y confirmar solo si coinciden: Hb 13,5 g/dL, glucosa 99 mg/dL y creatinina 0,8 mg/dL. | Estado confirmado visible y asociado a los códigos sintéticos. | `lab_reports` queda `confirmed`, guarda resultados revisados cifrados, revisor/hora y evento `lab.confirm`; se actualiza el perfil del sujeto. |
+| 7. Descargar CSV | Pulsar `Descargar CSV` y revisar el archivo local. | Aviso de descarga; CSV con los tres analitos, valores, unidades y códigos sintéticos. | Evento `lab.export`; CSV solo en Descargas locales hasta limpiar. |
+| 8. Copiar valores | Pulsar `Copiar valores`; pegar en editor local sin guardar y luego vaciar portapapeles. | Aviso de tres filas; el contenido solo incluye los resultados sintéticos. | Otro evento `lab.export`; portapapeles temporal, se limpia al terminar. |
+| 9. Crear turno | En org A, ir a `Agenda` → `Agendar turno`; Alfa, `E2E-SUJ-001`, título `E2E control sintético`, tipo visita, fecha futura válida, sin notas. Guardar. | Tarjeta de agenda muestra ese título y código, con estado programado. | Fila en `agenda_items` de la rama desechable; evento `agenda.create`. |
+| 10. Abrir Integraciones | Solo después de que el paso 2 verificó cero integraciones activas, abrir Integraciones y observar. No configurar, conectar ni enviar. | Pantalla no muestra ninguna conexión activa para la organización. Si aparece una, cerrar la pantalla y reportar. | Ninguna escritura esperada; solo lectura. |
 
 ## Detenerse si
 
-- La URL o la base no se puede identificar como Preview/Neon aislado antes de
-  sembrar o cargar.
-- Clerk muestra `pk_live_`, una organización real o un usuario que no sea de
-  prueba.
-- Un estudio/sujeto no coincide con los códigos anteriores, el lector cambia
-  alguno de los tres valores o el informe muestra datos no sintéticos.
-- La carga reporta cualquier error, la lista de sujetos falla, o la pantalla no
-  deja ver claramente qué se confirmó.
-- Integraciones presenta una conexión inesperada o solicita credenciales.
+- No se puede demostrar que la URL y la base son Preview y rama Neon desechable.
+- Clerk no usa `pk_test_`, la organización activa no es de prueba, o el usuario
+  no tiene rol administrador.
+- La comprobación previa detecta una integración activa o no se puede hacer de
+  solo lectura; no abrir entonces Integraciones.
+- El resumen del seed no coincide con los conteos indicados, los códigos no
+  coinciden con el PDF, o se ven datos no sintéticos.
+- El lector cambia valores, la carga falla o la interfaz no identifica qué se
+  confirmó.
 
-## Limpieza al finalizar una corrida autorizada
+## Limpieza
 
-1. Guardar evidencia mínima sin credenciales: rama Neon, deployment, pantallas
-   sintéticas, CSV revisado y estado de Agenda/Integraciones.
-2. En la rama Neon desechable, borrar primero `audit_logs` filtrando por el
-   `organization_id` de esta org (la tabla no tiene FK de borrado en el esquema
-   hasta 0015). Después borrar `organizations` por el `clerk_org_id` sintético;
-   verificar que desaparezcan sus estudios, centros, sujetos, informes y turnos
-   por cascada. No hacerlo en Producción ni en la base Preview actualmente compartida.
-3. Eliminar la organización y el usuario ficticios en Clerk de prueba.
-4. Borrar PDF/CSV locales, descargas, capturas que contengan resultados y
-   cualquier traza temporal; vaciar el portapapeles.
-5. Confirmar con una consulta de conteo limitada a la org sintética que no quedan
-   filas asociadas en la rama aislada y dejar el resultado en la evidencia.
+1. Conservar evidencia mínima de la corrida sin secretos ni datos reales.
+2. Preferir eliminar la rama Neon desechable completa: el padre/base y los
+   registros preexistentes (incluidos `E2E-FICT-001` y `E2E-001`) quedan intactos.
+   Si se conserva la rama temporalmente, borrar `audit_logs` de las dos orgs
+   sintéticas y después las organizaciones por sus `clerk_org_id`; verificar
+   cascada de estudios, centros, sujetos, perfiles, reportes y turnos.
+3. Eliminar ambas organizaciones y usuarios de prueba en Clerk cuando ya no se
+   necesiten.
+4. Borrar el PDF, CSV, capturas y archivos locales temporales; limpiar el
+   portapapeles.
+5. Verificar en la rama aislada que no quedan filas sintéticas y comprobar que
+   los registros sentinela del padre/base no cambiaron.
