@@ -57,7 +57,16 @@ export async function POST(
         userId: access.userId,
         resourceType: 'lab_report',
         resourceId: reportId,
-        metadata: { subjectId, comparedWithImage: parsed.data.comparedWithImage === true, rowCount: facts.rowCount, newAnalytes: facts.newAnalytes },
+        metadata: {
+          subjectId,
+          comparedWithImage: parsed.data.comparedWithImage === true,
+          rowCount: facts.rowCount,
+          newAnalytes: facts.newAnalytes,
+          imagesPurged: facts.imagesPurged,
+          // Cuentas de la revisión (sin valores): cuánto se aceptó y cuánto se corrigió.
+          review: facts.review,
+          secondsSinceUpload: facts.secondsSinceUpload,
+        },
       }),
     })
 

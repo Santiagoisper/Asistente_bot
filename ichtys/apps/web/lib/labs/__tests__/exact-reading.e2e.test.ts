@@ -11,6 +11,7 @@ const store = vi.hoisted(() => ({
   images: [] as Array<Record<string, unknown>>,
   analytes: [] as Array<Record<string, unknown>>,
   audits: [] as Array<Record<string, unknown>>,
+  deletes: [] as Array<{ via: 'db' | 'tx'; count: number }>,
   failAudit: false,
   persisted: [] as Array<{ labs: Array<{ name: string; value: number; unit?: string }> }>,
 }))
@@ -70,8 +71,14 @@ vi.mock('@ichtys/db', async (importOriginal) => {
       }),
     }),
     delete: (table: unknown) => ({
-      where: async () => {
-        if (is(table, original.labReportImages)) store.images.length = 0
+      where: () => {
+        const deleted = is(table, original.labReportImages) ? store.images.map((image) => ({ page: image.page })) : []
+        if (is(table, original.labReportImages)) {
+          store.images.length = 0
+          store.deletes.push({ via, count: deleted.length })
+        }
+        const done = Promise.resolve(deleted)
+        return Object.assign(done, { returning: () => done })
       },
     }),
   })
@@ -96,8 +103,8 @@ import { decideValue, rowProblem, toConfirmPayload, toReviewRow } from '../revie
 
 const scope = { orgId: 'org-1', studyId: 'study-1', subjectId: 'subject-1' }
 const uploadAudit = (report: { reportId: string; rowCount: number }) => ({ action: 'lab.extract' as const, orgId: 'org-1', studyId: 'study-1', userId: 'user_1', resourceType: 'lab_report', resourceId: report.reportId, metadata: { rowCount: report.rowCount } })
-const audit = (facts?: { rowCount: number; newAnalytes: number }) => ({
-  action: facts ? ('lab.confirm' as const) : ('lab.reject' as const),
+const audit = (facts: { rowCount?: number; newAnalytes?: number; imagesPurged: number; review?: unknown; secondsSinceUpload?: number }) => ({
+  action: facts.rowCount === undefined ? ('lab.reject' as const) : ('lab.confirm' as const),
   orgId: 'org-1',
   studyId: 'study-1',
   userId: 'user_2',
@@ -105,6 +112,7 @@ const audit = (facts?: { rowCount: number; newAnalytes: number }) => ({
   resourceId: 'report',
   metadata: { ...facts },
 })
+const purgeAudit = (facts: { imagesPurged: number }) => ({ action: 'lab.evidence.purge' as const, orgId: 'org-1', studyId: 'study-1', userId: 'user_3', resourceType: 'lab_report', resourceId: 'report', metadata: { ...facts } })
 const savedKey = process.env.PHI_ENCRYPTION_KEY
 const row = (analyte: string, printedValue: string, line: number, unit: string | null = null): ReaderRow => ({ analyte, printedValue, unit, referenceRange: null, line })
 const lastContent = (): LabReportContent => labReportContentSchema.parse(JSON.parse(decryptClinicalContent(String(store.reports[store.reports.length - 1]!.contentEncrypted))))
@@ -159,6 +167,7 @@ beforeEach(() => {
   store.images.length = 0
   store.analytes.length = 0
   store.audits.length = 0
+  store.deletes.length = 0
   store.failAudit = false
   store.persisted.length = 0
 })
@@ -233,7 +242,7 @@ describe('Foto o escaneo — dos lecturas independientes', () => {
     ])
     // Cifrada: el contenido guardado no es el base64 de la imagen.
     expect(String(store.images[0]!.contentEncrypted)).not.toContain(Buffer.from(JPEG).toString('base64'))
-    const loaded = await loadLabReportImage({ ...scope, reportId: created.reportId, page: 1 })
+    const loaded = await loadLabReportImage({ ...scope, reportId: created.reportId, page: 1, purgeAudit })
     expect(loaded.mime).toBe('image/jpeg')
     expect([...loaded.data]).toEqual([...JPEG])
   })
@@ -265,7 +274,15 @@ describe('Foto o escaneo — dos lecturas independientes', () => {
     // R3: el cambio de estado y su registro entran por la misma transacción.
     expect(store.reports[0]).toMatchObject({ status: 'confirmed', claimedVia: 'tx' })
     expect(store.audits.map((entry) => entry.action)).toEqual(['lab.extract', 'lab.confirm'])
-    expect(store.audits[1]).toMatchObject({ via: 'tx', action: 'lab.confirm', metadata: { rowCount: 3, newAnalytes: 3 } })
+    expect(store.audits[1]).toMatchObject({ via: 'tx', action: 'lab.confirm', metadata: { rowCount: 3, newAnalytes: 3, imagesPurged: 0 } })
+    // Medición del piloto: cada fila leída cae en una sola categoría, y el registro lleva solo cuentas.
+    const review = (store.audits[1]!.metadata as { review: Record<string, number>; secondsSinceUpload: number }).review
+    expect(review.machineRows).toBe(3)
+    expect(review.unchanged! + review.valueCorrected! + review.decided! + review.labelCorrected! + review.removed!).toBe(review.machineRows)
+    expect(result.review).toEqual(review)
+    expect((store.audits[1]!.metadata as { secondsSinceUpload: number }).secondsSinceUpload).toBeGreaterThanOrEqual(0)
+    expect(JSON.stringify(store.audits[1]!.metadata)).not.toContain('Hemoglobina')
+    expect(store.deletes).toEqual([])
     expect(store.persisted[0]?.labs).toEqual([
       { name: 'Hemoglobina', value: 18.5, unit: 'g/dL' },
       { name: 'Glucosa', value: 92, unit: 'mg/dL' },
@@ -274,7 +291,7 @@ describe('Foto o escaneo — dos lecturas independientes', () => {
     // Confirmado: por defecto la evidencia se conserva y se puede volver a ver.
     expect(store.images).toHaveLength(2)
     expect(lastContent().imagePages).toBe(2)
-    expect((await loadLabReportImage({ ...scope, reportId: created.reportId, page: 1 })).mime).toBe('image/jpeg')
+    expect((await loadLabReportImage({ ...scope, reportId: created.reportId, page: 1, purgeAudit })).mime).toBe('image/jpeg')
   })
 
   it('con política de borrado, confirmar borra la imagen y ya no se puede pedir', async () => {
@@ -285,8 +302,37 @@ describe('Foto o escaneo — dos lecturas independientes', () => {
       await confirmLabReport({ ...scope, reportId: created.reportId, userId: 'user_2', rows: toConfirmPayload(report.content.rows.map(toReviewRow))!, comparedWithImage: true, audit })
       expect(store.images).toHaveLength(0)
       expect(lastContent().imagePages).toBe(0)
-      await expect(loadLabReportImage({ ...scope, reportId: created.reportId, page: 1 })).rejects.toMatchObject({ code: 'not_found' })
+      // R3: el borrado de la evidencia entra por la misma transacción que la
+      // confirmación, y el registro dice cuántas imágenes se borraron.
+      expect(store.deletes).toEqual([{ via: 'tx', count: 2 }])
+      expect(store.audits.at(-1)).toMatchObject({ via: 'tx', action: 'lab.confirm', metadata: { imagesPurged: 2 } })
+      await expect(loadLabReportImage({ ...scope, reportId: created.reportId, page: 1, purgeAudit })).rejects.toMatchObject({ code: 'not_found' })
+      // No quedaba nada por borrar: pedir la imagen no suma un registro de borrado.
+      expect(store.audits.map((entry) => entry.action)).not.toContain('lab.evidence.purge')
     } finally {
+      delete process.env.LAB_EVIDENCE_RETENTION
+    }
+  })
+
+  it('si la política pasa a borrar después de revisado, la imagen que quedaba se borra con su registro', async () => {
+    const created = await upload({ lines: [], rows: [...main.rows] })
+    const report = await loadLabReport({ ...scope, reportId: created.reportId })
+    await confirmLabReport({ ...scope, reportId: created.reportId, userId: 'user_2', rows: toConfirmPayload(report.content.rows.map(toReviewRow))!, comparedWithImage: true, audit })
+    expect(store.images).toHaveLength(2)
+
+    process.env.LAB_EVIDENCE_RETENTION = 'purge'
+    try {
+      await expect(loadLabReportImage({ ...scope, reportId: created.reportId, page: 1, purgeAudit })).rejects.toMatchObject({ code: 'not_found' })
+      expect(store.images).toHaveLength(0)
+      expect(store.deletes).toEqual([{ via: 'tx', count: 2 }])
+      expect(store.audits.at(-1)).toMatchObject({ via: 'tx', action: 'lab.evidence.purge', metadata: { imagesPurged: 2 } })
+
+      // Si el registro no se puede escribir, la lectura sigue respondiendo «no existe»
+      // y el error no sale hacia afuera.
+      store.failAudit = true
+      await expect(loadLabReportImage({ ...scope, reportId: created.reportId, page: 1, purgeAudit })).rejects.toMatchObject({ code: 'not_found' })
+    } finally {
+      store.failAudit = false
       delete process.env.LAB_EVIDENCE_RETENTION
     }
   })
@@ -349,8 +395,11 @@ describe('Foto o escaneo — dos lecturas independientes', () => {
       store.reports.length = 0
       store.images.length = 0
       const purged = await upload({ lines: [], rows: [...main.rows] })
+      store.deletes.length = 0
       await rejectLabReport({ ...scope, reportId: purged.reportId, userId: 'user_2', audit })
       expect(store.images).toHaveLength(0)
+      expect(store.deletes).toEqual([{ via: 'tx', count: 2 }])
+      expect(store.audits.at(-1)).toMatchObject({ via: 'tx', action: 'lab.reject', metadata: { imagesPurged: 2 } })
     } finally {
       delete process.env.LAB_EVIDENCE_RETENTION
     }

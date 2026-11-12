@@ -31,7 +31,24 @@ export async function GET(
   }
 
   try {
-    const image = await loadLabReportImage({ orgId: access.orgId, studyId, subjectId, reportId, page: pageNumber })
+    const image = await loadLabReportImage({
+      orgId: access.orgId,
+      studyId,
+      subjectId,
+      reportId,
+      page: pageNumber,
+      // Solo se usa si la política cambió a borrar y a este informe, ya
+      // revisado, le quedaba evidencia: el borrado lleva su registro.
+      purgeAudit: (facts) => ({
+        action: 'lab.evidence.purge',
+        orgId: access.orgId,
+        studyId,
+        userId: access.userId,
+        resourceType: 'lab_report',
+        resourceId: reportId,
+        metadata: { subjectId, imagesPurged: facts.imagesPurged, trigger: 'policy_after_review' },
+      }),
+    })
     return new Response(Buffer.from(image.data), {
       headers: {
         'content-type': image.mime,

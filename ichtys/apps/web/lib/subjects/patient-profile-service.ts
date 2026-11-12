@@ -5,43 +5,20 @@ import {
   parsePatientProfile,
   redactPhiForLlm,
   type PatientProfile,
+  type PendingProfileProposal,
 } from '@ichtys/clinical'
 import { and, db, eq, getOrgLlmApiKeys, patientProfiles, recordUsage } from '@ichtys/db'
 import { runWithLlmFallback } from '@ichtys/llm'
 import { generateObject } from 'ai'
-import { z } from 'zod'
 import { insertAuditLog } from '../audit/audited-write'
 import type { AuditLogParams } from '../chat/persistence'
 import { labReviewMarker } from './lab-review-marker'
+import { llmFactsSchema, normalizeLlmFacts } from './llm-facts'
 import { decryptProfileJson, encryptProfileJson } from './phi-fields'
 import { nextVersion, whereProfileUnchanged, type ProfileScope } from './profile-version'
 
-// Exportado para poder testear su tamaño (A7): cada campo extra infla el
-// prompt del extractor clínico que corre sobre texto clínico real.
-export const llmFactsSchema = z.object({
-  ageYears: z.number().int().positive().nullable().optional(),
-  systolic: z.number().int().positive().nullable().optional(),
-  diastolic: z.number().int().positive().nullable().optional(),
-  labs: z
-    .array(
-      z.object({
-        name: z.string().min(1),
-        value: z.number(),
-        unit: z.string().optional(),
-      }),
-    )
-    .default([]),
-  medications: z
-    .array(
-      z.object({
-        name: z.string().min(1),
-        dose: z.string().optional(),
-        frequency: z.string().optional(),
-      }),
-    )
-    .default([]),
-  conditions: z.array(z.string()).default([]),
-})
+// El esquema vive en `llm-facts.ts`; se reexporta porque hay pruebas que miden su tamaño (A7).
+export { llmFactsSchema }
 
 function httpStatusFromError(err: object): number | null {
   for (const candidate of [(err as { status?: unknown }).status, (err as { statusCode?: unknown }).statusCode]) {
@@ -72,7 +49,11 @@ async function extractFactsWithLlm(
 
   try {
     const { result, provider, modelId, usage, keySource } = await runWithLlmFallback(
-      { purpose: 'clinical-extract', orgApiKeys },
+      // Solo Anthropic, sin respaldo en otro proveedor: es el único registrado
+      // para esta función en AI-GOVERNANCE.md, y cambiarlo es un cambio
+      // controlado (R6). Con preferencia explícita la cadena es de uno; si no
+      // responde, quedan las reglas y el texto clínico no sale hacia otro lado.
+      { purpose: 'clinical-extract', orgApiKeys, providerPreference: 'anthropic' },
       async (model, _provider, reportUsage, signal) => {
         const response = await generateObject({
           model,
@@ -83,7 +64,7 @@ async function extractFactsWithLlm(
           providerOptions: { anthropic: { structuredOutputMode: 'jsonTool' } },
           temperature: 0,
           instructions: `Sos un extractor clínico para ensayos. Devolvé SOLO datos estructurados presentes en el texto.
-No inventes valores. Si un dato no está explícito, omitilo o usá null.
+No inventes valores. Si un dato no está explícito, usá null (o una lista vacía).
 Labs comunes: HbA1c (%), glucosa (mg/dL), creatinina, eGFR.
 Medicaciones: nombre genérico, dosis y frecuencia si aparecen.`,
           prompt: redactedContent.slice(0, 8000),
@@ -106,14 +87,7 @@ Medicaciones: nombre genérico, dosis y frecuencia si aparecen.`,
       keySource: keySource === 'none' ? 'platform' : keySource,
     })
 
-    return {
-      ageYears: result.ageYears ?? undefined,
-      systolic: result.systolic ?? undefined,
-      diastolic: result.diastolic ?? undefined,
-      labs: result.labs,
-      medications: result.medications,
-      conditions: result.conditions,
-    }
+    return normalizeLlmFacts(result)
   } catch (err) {
     console.error('[clinical-extract] LLM extraction failed:', summarizeLlmError(err))
     return null
@@ -204,31 +178,108 @@ export async function updatePatientProfile(
   throw new ProfileConflictError()
 }
 
-export async function refreshPatientProfileFromEvolution(params: {
-  orgId: string
-  studyId: string
-  subjectId: string
-  evolutionId: string
-  evolutionContent: string
-  /** Quien guardó la evolución que dispara la extracción. */
-  userId: string
-}): Promise<PatientProfile> {
+export type ProfileProposalErrorCode = 'no_pending_proposal'
+
+export class ProfileProposalError extends Error {
+  constructor(readonly code: ProfileProposalErrorCode) {
+    super(`profile proposal: ${code}`)
+    this.name = 'ProfileProposalError'
+  }
+}
+
+type ProposalScope = ProfileScope & { evolutionId: string; userId: string }
+
+function proposalFactCount(facts: PendingProfileProposal['facts']): number {
+  return (
+    (facts.ageYears ? 1 : 0) +
+    (facts.systolic || facts.diastolic ? 1 : 0) +
+    facts.labs.length +
+    facts.medications.length +
+    facts.conditions.length
+  )
+}
+
+function proposalAudit(params: ProposalScope, action: AuditLogParams['action'], metadata: Record<string, unknown>): AuditLogParams {
+  return {
+    action,
+    orgId: params.orgId,
+    studyId: params.studyId,
+    userId: params.userId,
+    resourceType: 'subject',
+    resourceId: params.subjectId,
+    metadata: { source: 'evolution_extraction', evolutionId: params.evolutionId, ...metadata },
+  }
+}
+
+/**
+ * Lee una evolución (reglas + modelo) y deja lo que encontró como **propuesta**.
+ * No toca los datos del perfil: eso lo hace una persona al aceptarla (R6).
+ * Devuelve cuántos datos propuso; 0 significa que no había nada que revisar.
+ */
+export async function proposeProfileFromEvolution(
+  params: ProposalScope & { evolutionContent: string },
+): Promise<{ factCount: number }> {
   // La extracción (que puede llamar a un modelo) se hace una sola vez, fuera del reintento.
   const heuristic = extractFactsFromEvolution(params.evolutionContent, params.evolutionId)
   const { text: redacted } = redactPhiForLlm(params.evolutionContent)
   const llmFacts = await extractFactsWithLlm(params.orgId, params.studyId, redacted)
   const merged = mergeExtractions(heuristic, llmFacts)
-  return updatePatientProfile(params, (current) => mergeProfileWithExtraction(current, merged, params.evolutionId),
-    // El cambio lo hace el programa con la salida de un modelo, sin que una
-    // persona lo confirme (brecha C2). El registro lo dice tal cual.
-    () => ({
-      action: 'profile.update',
-      orgId: params.orgId,
-      studyId: params.studyId,
-      userId: params.userId,
-      resourceType: 'subject',
-      resourceId: params.subjectId,
-      metadata: { source: 'evolution_extraction', evolutionId: params.evolutionId, automated: true, humanConfirmed: false },
+  const proposal: PendingProfileProposal = {
+    requiresHumanReview: true,
+    evolutionId: params.evolutionId,
+    extractedAt: new Date().toISOString(),
+    facts: merged.facts,
+    fieldConfidence: merged.fieldConfidence,
+  }
+  const factCount = proposalFactCount(proposal.facts)
+  if (factCount === 0) return { factCount }
+
+  await updatePatientProfile(
+    params,
+    (current) => ({
+      ...current,
+      pendingEvolutionProposals: [
+        ...(current.pendingEvolutionProposals ?? []).filter((entry) => entry.evolutionId !== params.evolutionId),
+        proposal,
+      ],
     }),
+    () => proposalAudit(params, 'profile.proposal.create', { automated: true, humanConfirmed: false, factCount }),
+  )
+  return { factCount }
+}
+
+function takeProposal(current: PatientProfile, evolutionId: string): { proposal: PendingProfileProposal; rest: PendingProfileProposal[] } {
+  const pending = current.pendingEvolutionProposals ?? []
+  const proposal = pending.find((entry) => entry.evolutionId === evolutionId)
+  if (!proposal) throw new ProfileProposalError('no_pending_proposal')
+  return { proposal, rest: pending.filter((entry) => entry.evolutionId !== evolutionId) }
+}
+
+function withProposals(profile: PatientProfile, rest: PendingProfileProposal[]): PatientProfile {
+  const { pendingEvolutionProposals: _removed, ...base } = profile
+  return rest.length > 0 ? { ...base, pendingEvolutionProposals: rest } : base
+}
+
+/** Una persona acepta la propuesta: recién ahí sus datos pasan al perfil. */
+export async function confirmProfileProposal(params: ProposalScope): Promise<PatientProfile> {
+  let factCount = 0
+  return updatePatientProfile(
+    params,
+    (current) => {
+      const { proposal, rest } = takeProposal(current, params.evolutionId)
+      factCount = proposalFactCount(proposal.facts)
+      const merged = mergeProfileWithExtraction(current, { facts: proposal.facts, fieldConfidence: proposal.fieldConfidence }, params.evolutionId)
+      return withProposals(merged, rest)
+    },
+    () => proposalAudit(params, 'profile.update', { automated: false, humanConfirmed: true, factCount }),
+  )
+}
+
+/** Una persona descarta la propuesta: el perfil queda como estaba. */
+export async function rejectProfileProposal(params: ProposalScope): Promise<PatientProfile> {
+  return updatePatientProfile(
+    params,
+    (current) => withProposals(current, takeProposal(current, params.evolutionId).rest),
+    () => proposalAudit(params, 'profile.proposal.reject', { humanConfirmed: false }),
   )
 }

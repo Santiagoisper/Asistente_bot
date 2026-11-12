@@ -92,9 +92,11 @@ export async function getOrgLlmApiKeys(orgId: string): Promise<OrgLlmApiKeys> {
   }
 }
 
+/** `executor`: ver `updateOrgRagConfig` — para escribir dentro de la transacción de quien llama. */
 export async function updateOrgLlmApiKeys(
   orgId: string,
   patch: Partial<Record<OrgLlmKeyProvider, string | null>>,
+  executor: Pick<typeof db, 'update'> = db,
 ): Promise<OrgLlmApiKeys> {
   const current = await getOrgLlmApiKeys(orgId)
   const next: OrgLlmApiKeys = { ...current }
@@ -114,7 +116,7 @@ export async function updateOrgLlmApiKeys(
 
   const encrypted = Object.keys(next).length > 0 ? encryptJson(next) : null
 
-  await db
+  await executor
     .update(organizations)
     .set({ llmApiKeysEncrypted: encrypted, updatedAt: new Date() })
     .where(eq(organizations.id, orgId))

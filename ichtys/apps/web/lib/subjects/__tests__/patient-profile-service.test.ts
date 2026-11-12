@@ -65,7 +65,7 @@ vi.mock('../phi-fields', () => ({
   decryptProfileJson: mocks.decryptProfileJson,
 }))
 
-import { llmFactsSchema, refreshPatientProfileFromEvolution } from '../patient-profile-service'
+import { llmFactsSchema, proposeProfileFromEvolution } from '../patient-profile-service'
 
 const PARAMS = {
   orgId: crypto.randomUUID(),
@@ -76,7 +76,7 @@ const PARAMS = {
   userId: 'user_author',
 }
 
-describe('refreshPatientProfileFromEvolution — logging del error del proveedor', () => {
+describe('proposeProfileFromEvolution — logging del error del proveedor', () => {
   let errorSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
@@ -84,7 +84,8 @@ describe('refreshPatientProfileFromEvolution — logging del error del proveedor
     mocks.findFirst.mockResolvedValue({ profileEncrypted: 'encrypted', updatedAt: new Date() })
     mocks.updateWhere.mockReturnValue({ returning: async () => [{ subjectId: 'subject' }] })
     mocks.extractFactsFromEvolution.mockReturnValue({ labs: [] })
-    mocks.mergeExtractions.mockReturnValue({ labs: [] })
+    // La extracción encontró un dato: hay algo que proponer.
+    mocks.mergeExtractions.mockReturnValue({ facts: { labs: [{ name: 'HbA1c', value: 8.2, unit: '%' }], medications: [], conditions: [] }, fieldConfidence: { labs: { hba1c: 'medium' } } })
     mocks.mergeProfileWithExtraction.mockReturnValue({ version: 1, labs: [], medications: [], conditions: [] })
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
   })
@@ -100,23 +101,30 @@ describe('refreshPatientProfileFromEvolution — logging del error del proveedor
     })
     mocks.runWithLlmFallback.mockRejectedValue(providerError)
 
-    const profile = await refreshPatientProfileFromEvolution(PARAMS)
+    const result = await proposeProfileFromEvolution(PARAMS)
 
-    // La extracción fallida no rompe el flujo: se guarda el perfil heurístico.
-    expect(profile).toMatchObject({ version: 1 })
+    // La extracción con modelo falló, pero lo que encontraron las reglas queda
+    // como propuesta. Nada de eso entra a los datos del perfil (R6).
+    expect(result).toEqual({ factCount: 1 })
     expect(mocks.updateWhere).toHaveBeenCalledTimes(1)
+    expect(mocks.mergeProfileWithExtraction).not.toHaveBeenCalled()
+    const written = (mocks.encryptProfileJson.mock.calls as unknown as unknown[][]).at(-1)?.[0] as { labs: unknown[]; pendingEvolutionProposals: Array<Record<string, unknown>> }
+    expect(written.labs).toEqual([])
+    expect(written.pendingEvolutionProposals).toEqual([
+      expect.objectContaining({ requiresHumanReview: true, evolutionId: PARAMS.evolutionId, facts: expect.objectContaining({ labs: [{ name: 'HbA1c', value: 8.2, unit: '%' }] }) }),
+    ])
 
-    // El cambio queda registrado como lo que es: hecho por el programa con la
-    // salida de un modelo, sin confirmación de una persona, y sin texto clínico.
+    // El registro dice lo que pasó: una propuesta automática, sin confirmar, y
+    // sin valores ni texto clínico.
     expect(mocks.auditInsert).toHaveBeenCalledTimes(1)
     expect(mocks.auditInsert).toHaveBeenCalledWith({
-      action: 'profile.update',
+      action: 'profile.proposal.create',
       organizationId: PARAMS.orgId,
       studyId: PARAMS.studyId,
       userId: 'user_author',
       resourceType: 'subject',
       resourceId: PARAMS.subjectId,
-      metadata: { source: 'evolution_extraction', evolutionId: PARAMS.evolutionId, automated: true, humanConfirmed: false },
+      metadata: { source: 'evolution_extraction', evolutionId: PARAMS.evolutionId, automated: true, humanConfirmed: false, factCount: 1 },
     })
     expect(JSON.stringify(mocks.auditInsert.mock.calls)).not.toContain('HbA1c')
 
@@ -130,12 +138,35 @@ describe('refreshPatientProfileFromEvolution — logging del error del proveedor
     expect(logged).not.toContain('HbA1c')
   })
 
+  it('la lectura de evoluciones con modelo va solo a Anthropic: sin respaldo en otro proveedor', async () => {
+    // AI-GOVERNANCE.md registra un solo proveedor para esta función y R6 exige
+    // evaluar antes de cambiarlo. Con preferencia explícita la cadena es de uno:
+    // si Anthropic no responde, el texto clínico no sale hacia otro proveedor.
+    mocks.runWithLlmFallback.mockRejectedValue(new TypeError('x'))
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await proposeProfileFromEvolution({ orgId: 'org-1', studyId: 'study-1', subjectId: 'subject-1', userId: 'user-1', evolutionId: 'evo-1', evolutionContent: 'Paciente de 52 años.' })
+    } finally {
+      spy.mockRestore()
+    }
+    expect(mocks.runWithLlmFallback).toHaveBeenCalledWith(expect.objectContaining({ purpose: 'clinical-extract', providerPreference: 'anthropic' }), expect.any(Function))
+  })
+
+  it('si no se encontró ningún dato, no se propone ni se escribe nada', async () => {
+    mocks.runWithLlmFallback.mockRejectedValue(new TypeError('x'))
+    mocks.mergeExtractions.mockReturnValue({ facts: { labs: [], medications: [], conditions: [] }, fieldConfidence: {} })
+
+    expect(await proposeProfileFromEvolution(PARAMS)).toEqual({ factCount: 0 })
+    expect(mocks.updateWhere).not.toHaveBeenCalled()
+    expect(mocks.auditInsert).not.toHaveBeenCalled()
+  })
+
   it('acepta el campo status (no solo statusCode) de otros proveedores', async () => {
     mocks.runWithLlmFallback.mockRejectedValue(
       Object.assign(new Error('rate limited: prompt was ...'), { name: 'RateLimitError', status: 429 }),
     )
 
-    await refreshPatientProfileFromEvolution(PARAMS)
+    await proposeProfileFromEvolution(PARAMS)
 
     const logged = errorSpy.mock.calls[0]!.map((part) => String(part)).join(' ')
     expect(logged).toBe('[clinical-extract] LLM extraction failed: RateLimitError (status 429)')
@@ -144,20 +175,21 @@ describe('refreshPatientProfileFromEvolution — logging del error del proveedor
   it('con un error sin status loguea solo el nombre de la clase', async () => {
     mocks.runWithLlmFallback.mockRejectedValue(new TypeError('Cannot read properties of undefined'))
 
-    await refreshPatientProfileFromEvolution(PARAMS)
+    await proposeProfileFromEvolution(PARAMS)
 
     const logged = errorSpy.mock.calls[0]!.map((part) => String(part)).join(' ')
     expect(logged).toBe('[clinical-extract] LLM extraction failed: TypeError')
   })
 })
 
-describe('refreshPatientProfileFromEvolution — medición de consumo (A7)', () => {
+describe('proposeProfileFromEvolution — medición de consumo (A7)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.findFirst.mockResolvedValue({ profileEncrypted: 'encrypted', updatedAt: new Date() })
     mocks.updateWhere.mockReturnValue({ returning: async () => [{ subjectId: 'subject' }] })
     mocks.extractFactsFromEvolution.mockReturnValue({ labs: [] })
-    mocks.mergeExtractions.mockReturnValue({ labs: [] })
+    // La extracción encontró un dato: hay algo que proponer.
+    mocks.mergeExtractions.mockReturnValue({ facts: { labs: [{ name: 'HbA1c', value: 8.2, unit: '%' }], medications: [], conditions: [] }, fieldConfidence: { labs: { hba1c: 'medium' } } })
     mocks.mergeProfileWithExtraction.mockReturnValue({ version: 1, labs: [], medications: [], conditions: [] })
   })
 
@@ -188,7 +220,7 @@ describe('refreshPatientProfileFromEvolution — medición de consumo (A7)', () 
       },
     } as never)
 
-    await refreshPatientProfileFromEvolution(PARAMS)
+    await proposeProfileFromEvolution(PARAMS)
 
     expect(mocks.recordUsage).toHaveBeenCalledTimes(1)
     expect(mocks.recordUsage).toHaveBeenCalledWith(

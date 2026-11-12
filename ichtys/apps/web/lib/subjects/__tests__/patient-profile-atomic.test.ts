@@ -177,3 +177,75 @@ describe('perfil del sujeto — escritura cuando dos personas trabajan a la vez'
     expect(store.audits).toHaveLength(1)
   })
 })
+
+describe('perfil del sujeto — lo que se extrae de una evolución espera a una persona (R6)', () => {
+  const EVO = '11111111-1111-4111-8111-111111111111'
+  const OTHER = '22222222-2222-4222-8222-222222222222'
+  const proposal = (evolutionId: string, name: string, value: number) => ({
+    requiresHumanReview: true as const,
+    evolutionId,
+    extractedAt: '2026-11-12T12:00:00.000Z',
+    facts: { labs: [lab(name, value)], medications: [{ name: 'Metformina' }], conditions: [] },
+    fieldConfidence: { labs: { [name.toLowerCase()]: 'medium' as const } },
+  })
+  const pendingLabReview = { requiresHumanReview: true as const, extractedAt: '2026-11-11T10:00:00.000Z', labs: [lab('Urea', 30)], redactedSourcePreview: '' }
+  const who = { ...scope, userId: 'user_md' }
+
+  it('mientras nadie la acepta, la propuesta no forma parte de los datos del perfil', async () => {
+    writeDirectly({ ...stored(), pendingEvolutionProposals: [proposal(EVO, 'HbA1c', 8.2)] })
+    const profile = await loadPatientProfile(scope)
+    expect(profile.labs).toEqual([])
+    expect(profile.medications).toEqual([])
+    expect(profile.pendingEvolutionProposals).toHaveLength(1)
+  })
+
+  it('aceptar pasa los datos al perfil, saca esa propuesta y conserva lo demás que espera revisión', async () => {
+    const { confirmProfileProposal } = await import('../patient-profile-service')
+    writeDirectly({ ...stored(), pendingLabReview, pendingEvolutionProposals: [proposal(EVO, 'HbA1c', 8.2), proposal(OTHER, 'Glucosa', 110)] })
+
+    const profile = await confirmProfileProposal({ ...who, evolutionId: EVO })
+
+    expect(profile.labs.map((entry) => entry.name)).toEqual(['HbA1c'])
+    expect(profile.medications.map((entry) => entry.name)).toEqual(['Metformina'])
+    expect(stored().pendingEvolutionProposals?.map((entry) => entry.evolutionId)).toEqual([OTHER])
+    // La revisión de laboratorio pendiente no se pierde al aceptar otra cosa.
+    expect(stored().pendingLabReview?.labs.map((entry) => entry.name)).toEqual(['Urea'])
+    // El registro dice quién lo aceptó y que hubo confirmación humana; sin valores.
+    expect(store.audits).toEqual([
+      { action: 'profile.update', organizationId: 'org-1', studyId: 'study-1', userId: 'user_md', resourceType: 'subject', resourceId: 'subject-1', metadata: { source: 'evolution_extraction', evolutionId: EVO, automated: false, humanConfirmed: true, factCount: 2 } },
+    ])
+    expect(JSON.stringify(store.audits)).not.toContain('HbA1c')
+    expect(store.looseWrites).toBe(0)
+  })
+
+  it('descartar deja el perfil como estaba y lo registra', async () => {
+    const { rejectProfileProposal } = await import('../patient-profile-service')
+    writeDirectly({ ...stored(), labs: [lab('Creatinina', 0.9)], pendingEvolutionProposals: [proposal(EVO, 'HbA1c', 8.2)] })
+
+    const profile = await rejectProfileProposal({ ...who, evolutionId: EVO })
+
+    expect(profile.labs.map((entry) => entry.name)).toEqual(['Creatinina'])
+    expect(stored().pendingEvolutionProposals).toBeUndefined()
+    expect(store.audits).toEqual([expect.objectContaining({ action: 'profile.proposal.reject', userId: 'user_md', metadata: { source: 'evolution_extraction', evolutionId: EVO, humanConfirmed: false } })])
+  })
+
+  it('sin propuesta para esa evolución: avisa, no escribe y no registra', async () => {
+    const { confirmProfileProposal, rejectProfileProposal } = await import('../patient-profile-service')
+    writeDirectly({ ...stored(), pendingEvolutionProposals: [proposal(OTHER, 'Glucosa', 110)] })
+    const writes = store.writes
+
+    await expect(confirmProfileProposal({ ...who, evolutionId: EVO })).rejects.toMatchObject({ code: 'no_pending_proposal' })
+    await expect(rejectProfileProposal({ ...who, evolutionId: EVO })).rejects.toMatchObject({ code: 'no_pending_proposal' })
+    expect(store.writes).toBe(writes)
+    expect(store.audits).toHaveLength(0)
+  })
+
+  it('aceptar dos veces la misma propuesta no duplica nada', async () => {
+    const { confirmProfileProposal } = await import('../patient-profile-service')
+    writeDirectly({ ...stored(), pendingEvolutionProposals: [proposal(EVO, 'HbA1c', 8.2)] })
+    await confirmProfileProposal({ ...who, evolutionId: EVO })
+    await expect(confirmProfileProposal({ ...who, evolutionId: EVO })).rejects.toMatchObject({ code: 'no_pending_proposal' })
+    expect(stored().labs).toHaveLength(1)
+    expect(store.audits).toHaveLength(1)
+  })
+})

@@ -24,14 +24,14 @@ export async function POST(
       reportId,
       userId: access.userId,
       // Se escribe dentro de la transacción que rechaza el informe (R3).
-      audit: () => ({
+      audit: (facts) => ({
         action: 'lab.reject',
         orgId: access.orgId,
         studyId,
         userId: access.userId,
         resourceType: 'lab_report',
         resourceId: reportId,
-        metadata: { subjectId },
+        metadata: { subjectId, imagesPurged: facts.imagesPurged },
       }),
     })
 

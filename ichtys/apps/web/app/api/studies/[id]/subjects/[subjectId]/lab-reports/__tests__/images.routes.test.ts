@@ -140,7 +140,10 @@ describe('GET lab-reports/[reportId]/image/[page] — ver la imagen al revisar',
     expect(res.headers.get('cache-control')).toBe('private, no-store')
     expect(res.headers.get('x-content-type-options')).toBe('nosniff')
     expect([...new Uint8Array(await res.arrayBuffer())]).toEqual([...JPEG])
-    expect(mocks.loadLabReportImage).toHaveBeenCalledWith({ orgId: 'org-1', studyId: STUDY, subjectId: SUBJECT, reportId: REPORT, page: 1 })
+    expect(mocks.loadLabReportImage).toHaveBeenCalledWith(expect.objectContaining({ orgId: 'org-1', studyId: STUDY, subjectId: SUBJECT, reportId: REPORT, page: 1 }))
+    // Si esta lectura llega a borrar evidencia (cambio de política), el borrado lleva su registro.
+    const { purgeAudit } = mocks.loadLabReportImage.mock.calls[0]![0] as { purgeAudit: (facts: { imagesPurged: number }) => unknown }
+    expect(purgeAudit({ imagesPurged: 2 })).toMatchObject({ action: 'lab.evidence.purge', resourceType: 'lab_report', resourceId: REPORT, metadata: { imagesPurged: 2 } })
   })
 
   it('sin acceso: 403; página o informe inválidos: 404 sin tocar la base', async () => {
