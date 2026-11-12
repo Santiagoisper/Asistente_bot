@@ -21,8 +21,9 @@ import { describe, expect, it } from 'vitest'
  * - Busca el texto literal `db.insert|update|delete` y `writeAuditLog`; un
  *   alias o un cambio de nombre lo esquivan.
  * - Detecta «escribir y auditar por separado», no «escribir y no auditar
- *   nunca». Escritura conocida que audita después y no cae en el escaneo
- *   porque vive en un GET: la instantánea que guarda `screening`.
+ *   nunca». La instantánea que guarda `screening` vive en un GET y en un
+ *   servicio, fuera de este escaneo: su registro en la misma transacción lo
+ *   prueba `lib/subjects/__tests__/screening-service.test.ts`.
  *
  * El perfil del sujeto tiene su propia guarda abajo: dentro de la aplicación
  * (`app/` y `lib/`) se escribe en un solo lugar y ese lugar exige el registro.
@@ -48,13 +49,13 @@ const MIGRATED = [
   'app/api/studies/[id]/subjects/[subjectId]/labs/reject/route.ts',
   'app/api/studies/[id]/subjects/[subjectId]/profile/proposals/[evolutionId]/confirm/route.ts',
   'app/api/studies/[id]/subjects/[subjectId]/profile/proposals/[evolutionId]/reject/route.ts',
+  'app/api/os/org-config/route.ts',
 ] as const
 
 /** Ruta y verbo → por qué sigue pendiente. */
 const PENDING: Record<string, string> = {
   'app/api/chat/route.ts POST': 'registra el pedido y el resultado de una respuesta; guarda mensajes aparte',
   'app/api/chat/stream/route.ts POST': 'ídem, en la variante por flujo',
-  'app/api/os/org-config/route.ts PUT': 'configuración del centro: guarda y después audita',
 }
 
 function routeFiles(dir: string): string[] {
