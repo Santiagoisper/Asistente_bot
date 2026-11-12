@@ -1,15 +1,17 @@
+import { studyScopeFilter, type StudyScope } from '@ichtys/auth/study-scope'
 import { and, db, eq, sql, studies, subjects } from '@ichtys/db'
 import { escapeLike, SEARCH_LIMIT_PER_TYPE, type SearchResults } from './search-query'
 
 /**
  * Buscador del OS sobre lo que Alphi ya tiene. Siempre dentro de la
- * organización activa. Devuelve códigos y nombres de estudio, nunca contenido
+ * organización activa y del alcance de la persona (en modo estricto, solo
+ * sus estudios y los sujetos de sus estudios). Devuelve códigos y nombres de estudio, nunca contenido
  * clínico. Los sujetos solo se buscan si el rol puede ver datos de sujetos.
  */
 export async function searchOs(
   orgId: string,
   query: string,
-  opts: { includeSubjects: boolean },
+  opts: { includeSubjects: boolean; scope: StudyScope },
 ): Promise<SearchResults> {
   const pattern = `%${escapeLike(query)}%`
 
@@ -19,6 +21,7 @@ export async function searchOs(
     .where(
       and(
         eq(studies.organizationId, orgId),
+        studyScopeFilter(opts.scope, studies.id),
         sql`(${studies.name} ILIKE ${pattern} ESCAPE '\\' OR ${studies.protocolNumber} ILIKE ${pattern} ESCAPE '\\')`,
       ),
     )
@@ -37,7 +40,11 @@ export async function searchOs(
         .from(subjects)
         .innerJoin(studies, and(eq(studies.id, subjects.studyId), eq(studies.organizationId, orgId)))
         .where(
-          and(eq(subjects.organizationId, orgId), sql`${subjects.subjectCode} ILIKE ${pattern} ESCAPE '\\'`),
+          and(
+            eq(subjects.organizationId, orgId),
+            studyScopeFilter(opts.scope, subjects.studyId),
+            sql`${subjects.subjectCode} ILIKE ${pattern} ESCAPE '\\'`,
+          ),
         )
         .orderBy(subjects.subjectCode)
         .limit(SEARCH_LIMIT_PER_TYPE)

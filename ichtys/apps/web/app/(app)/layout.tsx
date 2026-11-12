@@ -12,7 +12,7 @@ import { IchtysLogo } from '../../components/ui/ichtys-logo'
 async function priorityCount(): Promise<number | null> {
   try {
     const ctx = await getOsContext()
-    return ctx ? await countNativePriority(ctx.orgId, ctx.canSeeSubjects) : null
+    return ctx ? await countNativePriority(ctx.orgId, ctx.studyScope, ctx.canSeeSubjects) : null
   } catch {
     console.error('[os/layout] priority count failed')
     return null

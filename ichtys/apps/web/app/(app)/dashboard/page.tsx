@@ -1,29 +1,30 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { auth } from '@clerk/nextjs/server'
 import { isOsEnabled } from '../../../lib/flags'
-import { db, eq, organizations, studies, documents } from '@ichtys/db'
+import { studyScopeFilter, type StudyScope } from '@ichtys/auth/study-scope'
+import { and, conversations, db, eq, studies, documents } from '@ichtys/db'
+import { getOsContext } from '../../../lib/os/context'
 
-async function getDashboardData(clerkOrgId: string, userId: string) {
-  const org = await db.query.organizations.findFirst({
-    where: eq(organizations.clerkOrgId, clerkOrgId),
-  })
-  if (!org) return { studyList: [] as typeof studyRows, recentConversations: [] as typeof convRows, docCount: 0 }
-
+/** Todo filtra por organización y por el alcance de la persona (en modo estricto, solo sus estudios). */
+async function getDashboardData(org: { id: string }, userId: string, scope: StudyScope) {
   const studyRows = await db.query.studies.findMany({
-    where: eq(studies.organizationId, org.id),
+    where: and(eq(studies.organizationId, org.id), studyScopeFilter(scope, studies.id)),
     orderBy: (s, ops) => [ops.desc(s.createdAt)],
     limit: 6,
   })
 
   const convRows = await db.query.conversations.findMany({
-    where: (c, ops) => ops.and(ops.eq(c.organizationId, org.id), ops.eq(c.userId, userId)),
+    where: and(
+      eq(conversations.organizationId, org.id),
+      eq(conversations.userId, userId),
+      studyScopeFilter(scope, conversations.studyId),
+    ),
     orderBy: (c, ops) => [ops.desc(c.updatedAt)],
     limit: 5,
   })
 
   const allDocs = await db.query.documents.findMany({
-    where: eq(documents.organizationId, org.id),
+    where: and(eq(documents.organizationId, org.id), studyScopeFilter(scope, documents.studyId)),
   })
 
   return { studyList: studyRows, recentConversations: convRows, docCount: allDocs.length }
@@ -51,10 +52,10 @@ export default async function DashboardPage() {
   // Con la cáscara del OS encendida, la pantalla de inicio es /inicio.
   if (isOsEnabled()) redirect('/inicio')
 
-  const { orgId: clerkOrgId, userId } = await auth()
+  const ctx = await getOsContext()
 
-  const data = (clerkOrgId && userId)
-    ? await getDashboardData(clerkOrgId, userId)
+  const data = ctx
+    ? await getDashboardData({ id: ctx.orgId }, ctx.userId, ctx.studyScope)
     : { studyList: [], recentConversations: [], docCount: 0 }
 
   const { studyList, recentConversations, docCount } = data

@@ -65,7 +65,7 @@ async function Greeting() {
 async function TodayTurnsStat({ ctx }: { ctx: OsContext }) {
   return guarded('los turnos de hoy', async () => {
     const timeZone = await loadOrgTimeZone(ctx.orgId)
-    const live = (await listAgendaDay({ orgId: ctx.orgId, dayKey: dayKeyInZone(new Date(), timeZone), timeZone, includeSubjects: false })).filter((entry) => entry.status !== 'cancelled')
+    const live = (await listAgendaDay({ orgId: ctx.orgId, scope: ctx.studyScope, dayKey: dayKeyInZone(new Date(), timeZone), timeZone, includeSubjects: false })).filter((entry) => entry.status !== 'cancelled')
     const pending = live.filter((entry) => entry.status === 'scheduled').length
     return (
       <StatCard
@@ -81,7 +81,7 @@ async function TodayTurnsStat({ ctx }: { ctx: OsContext }) {
 
 async function ActiveStudiesStat({ ctx }: { ctx: OsContext }) {
   return guarded('los protocolos activos', async () => {
-    const total = await countActiveStudies(ctx.orgId)
+    const total = await countActiveStudies(ctx.orgId, ctx.studyScope)
     return (
       <StatCard
         label="Protocolos activos"
@@ -100,7 +100,7 @@ async function PendingLabsStat({ ctx }: { ctx: OsContext }) {
     if (!ctx.canSeeSubjects) {
       return <StatCard label="Labs pendientes" value={null} note="Tu rol no ve datos de sujetos" icon={icon} />
     }
-    const total = await countPendingLabWork(ctx.orgId)
+    const total = await countPendingLabWork(ctx.orgId, ctx.studyScope)
     return (
       <StatCard
         label="Labs pendientes"
@@ -134,7 +134,7 @@ async function TodayAgenda({ ctx }: { ctx: OsContext }) {
   return guarded('la jornada de hoy', async () => {
     const timeZone = await loadOrgTimeZone(ctx.orgId)
     const today = dayKeyInZone(new Date(), timeZone)
-    const cards = (await listAgendaDay({ orgId: ctx.orgId, dayKey: today, timeZone, includeSubjects: ctx.canSeeSubjects }))
+    const cards = (await listAgendaDay({ orgId: ctx.orgId, scope: ctx.studyScope, dayKey: today, timeZone, includeSubjects: ctx.canSeeSubjects }))
       .map((entry) => toAgendaCard(entry, timeZone))
       .filter((card) => card.status !== 'cancelled')
     if (cards.length === 0) {
@@ -174,7 +174,7 @@ async function PriorityList({ ctx }: { ctx: OsContext }) {
         alerts: (await loadModuleSummary(module, ctx.userId, ctx.orgId)).summary?.alerts ?? [],
       })),
     )
-    const items = await listPriorityItems(ctx.orgId, { includeSubjects: ctx.canSeeSubjects, satellites })
+    const items = await listPriorityItems(ctx.orgId, ctx.studyScope, { includeSubjects: ctx.canSeeSubjects, satellites })
     const visible = items.slice(0, PRIORITY_VISIBLE)
     const rest = items.slice(PRIORITY_VISIBLE)
 
@@ -234,7 +234,7 @@ async function PriorityList({ ctx }: { ctx: OsContext }) {
 
 async function ProtocolIntelligenceCard({ ctx }: { ctx: OsContext }) {
   return guarded('Protocol Intelligence', async () => {
-    const studies = await listStudiesWithReadyDocs(ctx.orgId)
+    const studies = await listStudiesWithReadyDocs(ctx.orgId, ctx.studyScope)
     return (
       <Card
         labelledBy="protocol-intelligence"
@@ -265,7 +265,7 @@ async function LabsCard({ ctx }: { ctx: OsContext }) {
         </Card>
       )
     }
-    const [pending, outcomes] = await Promise.all([countPendingLabWork(ctx.orgId), labOutcomes30d(ctx.orgId, new Date())])
+    const [pending, outcomes] = await Promise.all([countPendingLabWork(ctx.orgId, ctx.studyScope), labOutcomes30d(ctx.orgId, ctx.studyScope, new Date())])
     const cells = [
       { value: pending, label: 'pendientes' },
       { value: outcomes.confirmed, label: 'confirmados (30 días)' },

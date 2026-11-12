@@ -107,7 +107,7 @@ describe('agenda — cambio de un turno', () => {
 })
 
 describe('agenda — listado', () => {
-  const range = { orgId: 'org-1', from: new Date('2026-11-16T03:00:00Z'), to: new Date('2026-11-17T03:00:00Z') }
+  const range = { orgId: 'org-1', scope: { kind: 'all' as const }, from: new Date('2026-11-16T03:00:00Z'), to: new Date('2026-11-17T03:00:00Z') }
 
   it('quien puede ver sujetos recibe el código y las notas descifradas', async () => {
     await createAgendaItem({ ...scope, input })

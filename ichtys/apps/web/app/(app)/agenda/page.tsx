@@ -35,8 +35,8 @@ export default async function AgendaPage({ searchParams }: { searchParams?: Prom
   let studies: Array<{ id: string; label: string }>
   try {
     const [entries, active] = await Promise.all([
-      listAgenda({ orgId: ctx.orgId, from: dayRange(week[0]!, timeZone).start, to: dayRange(week[6]!, timeZone).end, includeSubjects: ctx.canSeeSubjects }),
-      ctx.canSeeSubjects ? listActiveStudies(ctx.orgId) : Promise.resolve([]),
+      listAgenda({ orgId: ctx.orgId, scope: ctx.studyScope, from: dayRange(week[0]!, timeZone).start, to: dayRange(week[6]!, timeZone).end, includeSubjects: ctx.canSeeSubjects }),
+      ctx.canSeeSubjects ? listActiveStudies(ctx.orgId, ctx.studyScope) : Promise.resolve([]),
     ])
     cards = entries.map((entry) => toAgendaCard(entry, timeZone))
     studies = active.map((study) => ({ id: study.id, label: study.label }))
