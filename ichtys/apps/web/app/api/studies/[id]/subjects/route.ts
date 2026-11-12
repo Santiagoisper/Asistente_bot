@@ -152,6 +152,9 @@ export async function POST(
   }
 }
 
+/** Hasta dónde se sigue la cadena de `cause`. Hoy son dos niveles (acceso a datos → Postgres); el resto es margen. */
+const MAX_CAUSE_DEPTH = 6
+
 /**
  * Código repetido dentro del estudio (violación de índice único en Postgres).
  * El acceso a datos envuelve el error de la base y deja el original en `cause`,
@@ -159,7 +162,7 @@ export async function POST(
  * a quien carga y ve un error genérico.
  */
 function isUniqueViolation(err: unknown): boolean {
-  for (let current: unknown = err, depth = 0; current && depth < 4; depth += 1) {
+  for (let current: unknown = err, depth = 0; current && depth < MAX_CAUSE_DEPTH; depth += 1) {
     if (typeof current !== 'object') return false
     if ((current as { code?: unknown }).code === '23505') return true
     current = (current as { cause?: unknown }).cause
