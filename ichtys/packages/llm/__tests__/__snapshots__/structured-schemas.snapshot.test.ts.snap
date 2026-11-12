@@ -295,47 +295,35 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
   "additionalProperties": false,
   "properties": {
     "ageYears": {
-      "anyOf": [
-        {
-          "exclusiveMinimum": 0,
-          "maximum": 9007199254740991,
-          "type": "integer",
-        },
-        {
-          "type": "null",
-        },
+      "type": [
+        "number",
+        "null",
       ],
     },
     "conditions": {
-      "default": [],
       "items": {
         "type": "string",
       },
       "type": "array",
     },
     "diastolic": {
-      "anyOf": [
-        {
-          "exclusiveMinimum": 0,
-          "maximum": 9007199254740991,
-          "type": "integer",
-        },
-        {
-          "type": "null",
-        },
+      "type": [
+        "number",
+        "null",
       ],
     },
     "labs": {
-      "default": [],
       "items": {
         "additionalProperties": false,
         "properties": {
           "name": {
-            "minLength": 1,
             "type": "string",
           },
           "unit": {
-            "type": "string",
+            "type": [
+              "string",
+              "null",
+            ],
           },
           "value": {
             "type": "number",
@@ -344,47 +332,56 @@ exports[`instantáneas de JSON Schema de las llamadas estructuradas (ADR-8 M4) >
         "required": [
           "name",
           "value",
+          "unit",
         ],
         "type": "object",
       },
       "type": "array",
     },
     "medications": {
-      "default": [],
       "items": {
         "additionalProperties": false,
         "properties": {
           "dose": {
-            "type": "string",
+            "type": [
+              "string",
+              "null",
+            ],
           },
           "frequency": {
-            "type": "string",
+            "type": [
+              "string",
+              "null",
+            ],
           },
           "name": {
-            "minLength": 1,
             "type": "string",
           },
         },
         "required": [
           "name",
+          "dose",
+          "frequency",
         ],
         "type": "object",
       },
       "type": "array",
     },
     "systolic": {
-      "anyOf": [
-        {
-          "exclusiveMinimum": 0,
-          "maximum": 9007199254740991,
-          "type": "integer",
-        },
-        {
-          "type": "null",
-        },
+      "type": [
+        "number",
+        "null",
       ],
     },
   },
+  "required": [
+    "ageYears",
+    "systolic",
+    "diastolic",
+    "labs",
+    "medications",
+    "conditions",
+  ],
   "type": "object",
 }
 `;

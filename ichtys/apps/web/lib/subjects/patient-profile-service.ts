@@ -10,39 +10,15 @@ import {
 import { and, db, eq, getOrgLlmApiKeys, patientProfiles, recordUsage } from '@ichtys/db'
 import { runWithLlmFallback } from '@ichtys/llm'
 import { generateObject } from 'ai'
-import { z } from 'zod'
 import { insertAuditLog } from '../audit/audited-write'
 import type { AuditLogParams } from '../chat/persistence'
 import { labReviewMarker } from './lab-review-marker'
+import { llmFactsSchema, normalizeLlmFacts } from './llm-facts'
 import { decryptProfileJson, encryptProfileJson } from './phi-fields'
 import { nextVersion, whereProfileUnchanged, type ProfileScope } from './profile-version'
 
-// Exportado para poder testear su tamaño (A7): cada campo extra infla el
-// prompt del extractor clínico que corre sobre texto clínico real.
-export const llmFactsSchema = z.object({
-  ageYears: z.number().int().positive().nullable().optional(),
-  systolic: z.number().int().positive().nullable().optional(),
-  diastolic: z.number().int().positive().nullable().optional(),
-  labs: z
-    .array(
-      z.object({
-        name: z.string().min(1),
-        value: z.number(),
-        unit: z.string().optional(),
-      }),
-    )
-    .default([]),
-  medications: z
-    .array(
-      z.object({
-        name: z.string().min(1),
-        dose: z.string().optional(),
-        frequency: z.string().optional(),
-      }),
-    )
-    .default([]),
-  conditions: z.array(z.string()).default([]),
-})
+// El esquema vive en `llm-facts.ts`; se reexporta porque hay pruebas que miden su tamaño (A7).
+export { llmFactsSchema }
 
 function httpStatusFromError(err: object): number | null {
   for (const candidate of [(err as { status?: unknown }).status, (err as { statusCode?: unknown }).statusCode]) {
@@ -73,7 +49,11 @@ async function extractFactsWithLlm(
 
   try {
     const { result, provider, modelId, usage, keySource } = await runWithLlmFallback(
-      { purpose: 'clinical-extract', orgApiKeys },
+      // Solo Anthropic, sin respaldo en otro proveedor: es el único registrado
+      // para esta función en AI-GOVERNANCE.md, y cambiarlo es un cambio
+      // controlado (R6). Con preferencia explícita la cadena es de uno; si no
+      // responde, quedan las reglas y el texto clínico no sale hacia otro lado.
+      { purpose: 'clinical-extract', orgApiKeys, providerPreference: 'anthropic' },
       async (model, _provider, reportUsage, signal) => {
         const response = await generateObject({
           model,
@@ -84,7 +64,7 @@ async function extractFactsWithLlm(
           providerOptions: { anthropic: { structuredOutputMode: 'jsonTool' } },
           temperature: 0,
           instructions: `Sos un extractor clínico para ensayos. Devolvé SOLO datos estructurados presentes en el texto.
-No inventes valores. Si un dato no está explícito, omitilo o usá null.
+No inventes valores. Si un dato no está explícito, usá null (o una lista vacía).
 Labs comunes: HbA1c (%), glucosa (mg/dL), creatinina, eGFR.
 Medicaciones: nombre genérico, dosis y frecuencia si aparecen.`,
           prompt: redactedContent.slice(0, 8000),
@@ -107,14 +87,7 @@ Medicaciones: nombre genérico, dosis y frecuencia si aparecen.`,
       keySource: keySource === 'none' ? 'platform' : keySource,
     })
 
-    return {
-      ageYears: result.ageYears ?? undefined,
-      systolic: result.systolic ?? undefined,
-      diastolic: result.diastolic ?? undefined,
-      labs: result.labs,
-      medications: result.medications,
-      conditions: result.conditions,
-    }
+    return normalizeLlmFacts(result)
   } catch (err) {
     console.error('[clinical-extract] LLM extraction failed:', summarizeLlmError(err))
     return null
