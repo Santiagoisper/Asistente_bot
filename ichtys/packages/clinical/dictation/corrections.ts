@@ -15,7 +15,8 @@ export interface SpokenCorrection {
   marker: string
 }
 
-const MARKER = /^(corrijo|correcci[oó]n|perd[oó]n|mejor dicho|quise decir|rectifico)\b[\s:,.-]*/i
+// La transcripción no siempre escribe bien la marca («corijo», «corrigo»): se aceptan las variantes cercanas.
+const MARKER = /^(corr?i[jg]o|correcci[oó]n|perd[oó]n|mejor dicho|quise decir|rectifico)\b[\s:,.-]*/i
 const SENTENCE = /[^.;\n]+[.;\n]?/g
 
 function labelOf(clause: string): string | null {

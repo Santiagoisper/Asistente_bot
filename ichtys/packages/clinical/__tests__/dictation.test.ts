@@ -93,4 +93,25 @@ describe('bloques de la evolución dictada', () => {
     expect(draft.missing).toContain('eventos')
     expect(draft.missing).not.toContain('motivo')
   })
+
+  it('transcripción real de un navegador (voz sintética, Whisper small): encabezados y marca deformados', () => {
+    // Texto devuelto por el navegador el 12/11/2026 para apps/web/lib/dictation/__tests__/fixtures/dictado-sintetico.wav.
+    const draft = buildDictationDraft(
+      'Visita de selección del sufeto demo. Motivos control químico inicial. Medicación actual. Metformina 850 miliramos cada 12 horas. Signos y tales. Presión material 140 sobre 90. Corijo 132 sobre 84. Fecuencia carría K72. Eventos a besos. NIN1. Plan solicitar laboratorio y citar en dos semanas.',
+    )
+    const byId = Object.fromEntries(draft.blocks.map((block) => [block.id, block.text]))
+    expect(byId.apertura).toBe('Visita de selección del sufeto demo.')
+    expect(byId.motivo).toBe('Control químico inicial.')
+    expect(byId.medicacion).toBe('Metformina 850 miliramos cada 12 horas.')
+    expect(byId.vitales).toBe('Presión material 132 sobre 84. Fecuencia carría K72.')
+    expect(byId.eventos).toBe('NIN1.')
+    expect(byId.plan).toBe('Solicitar laboratorio y citar en dos semanas.')
+    expect(draft.corrections).toEqual([{ original: 'Presión material 140 sobre 90', corrected: 'Presión material 132 sobre 84', marker: 'Corijo' }])
+  })
+
+  it('una palabra parecida a un encabezado corto no abre un bloque', () => {
+    const byId = Object.fromEntries(splitIntoBlocks('Motivo: control. Plano de la sala entregado. Pan sin sal.').map((block) => [block.id, block.text]))
+    expect(byId.plan).toBeNull()
+    expect(byId.motivo).toBe('Control. Plano de la sala entregado. Pan sin sal.')
+  })
 })
