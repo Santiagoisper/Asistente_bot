@@ -34,6 +34,7 @@ import { buildTerminologyAnswer } from '@ichtys/rag/terminology-answer'
 import type { TerminologySuggestion } from '@ichtys/rag/medical-annotator'
 import type { Confidence } from '@ichtys/rag'
 import type { Evidence } from '@ichtys/rag'
+import { withUnapprovedSpecNotice } from '../../../../lib/subjects/spec-notice'
 
 /**
  * POST /api/chat/stream -- streaming variant of /api/chat.
@@ -335,6 +336,16 @@ export async function POST(req: Request): Promise<Response> {
           finalConfidence = engineConfidence
           finalEvidences = engineEvidences
           fullAnswer = engineAnswer
+        }
+
+        // 10b-bis. Si la respuesta cita un protocolo extraído que nadie aprobó,
+        //      el aviso va dentro del texto: se emite y se guarda con la respuesta.
+        if (finalConfidence !== 'insufficient_evidence') {
+          const noticed = withUnapprovedSpecNotice(fullAnswer, finalEvidences)
+          if (noticed.appended) {
+            enqueue({ type: 'token', text: noticed.appended })
+            fullAnswer = noticed.answer
+          }
         }
 
         // 10c. Medical annotations — run BEFORE persist so they are stored together.
