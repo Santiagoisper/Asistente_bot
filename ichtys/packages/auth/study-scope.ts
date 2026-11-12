@@ -1,6 +1,6 @@
 import { and, eq, gt, inArray, isNull, or, sql, type AnyColumn, type SQL } from 'drizzle-orm'
 import { db, studyMemberships } from '@ichtys/db'
-import { hasFullStudyScope, type AccessSubject } from './functions'
+import { capabilitiesOf, hasFullStudyScope, type AccessSubject } from './functions'
 
 /**
  * ALCANCE para listados y agregados (docs/decisions/study-membership.md, paso 4).
@@ -11,10 +11,17 @@ import { hasFullStudyScope, type AccessSubject } from './functions'
  * - `all`: modo `open`, o una función con alcance total (las dos direcciones).
  * - `ids`: solo los estudios con membresía vigente. Una lista vacía significa
  *   que no ve ninguno; nunca se interpreta como «sin filtro».
+ *
+ * Alcance y capacidad son ejes independientes y los listados necesitan los dos:
+ * en modo estricto, quien no tiene `study.read` no ve ningún estudio aunque
+ * conserve una membresía (por ejemplo, quien solo administra la plataforma, o
+ * alguien a quien se le dieron de baja las funciones). Es la misma regla que
+ * aplican los validadores, que exigen `study.read` antes de mirar la membresía.
  */
 export type StudyScope = { readonly kind: 'all' } | { readonly kind: 'ids'; readonly studyIds: readonly string[] }
 
 export const ALL_STUDIES: StudyScope = { kind: 'all' }
+const NO_STUDIES: StudyScope = { kind: 'ids', studyIds: [] }
 
 export async function loadStudyScope(params: {
   access: AccessSubject
@@ -23,6 +30,7 @@ export async function loadStudyScope(params: {
   now?: Date
 }): Promise<StudyScope> {
   if (params.access.mode === 'open') return ALL_STUDIES
+  if (!capabilitiesOf(params.access.functions).has('study.read')) return NO_STUDIES
   if (hasFullStudyScope(params.access.functions)) return ALL_STUDIES
 
   const now = params.now ?? new Date()
