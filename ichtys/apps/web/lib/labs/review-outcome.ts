@@ -14,6 +14,11 @@ import type { LabReportRow, LabRowInput } from './lab-report-content'
  * - `removed`: la persona la quitó.
  * `added` son las filas confirmadas que la máquina no había leído (cargadas a
  * mano o tomadas de una línea que no había reconocido).
+ *
+ * Cuando una persona escribe un valor que no está en la línea del informe, la
+ * pantalla deja la fila sin línea de origen. Esa fila sigue siendo la misma:
+ * se empareja por nombre con la fila leída que quedó sin pareja y cuenta como
+ * corrección de valor, no como «una quitada y una agregada».
  */
 export interface ReviewOutcome {
   /** Filas que propuso la máquina. */
@@ -44,12 +49,11 @@ export function reviewOutcome(machine: readonly LabReportRow[], confirmed: reado
 
   // Filas confirmadas todavía sin emparejar, por línea del informe.
   const byLine = new Map<number, LabRowInput[]>()
+  /** Filas confirmadas sin línea de origen: cargadas a mano, o corregidas a mano. */
+  const byHand: LabRowInput[] = []
   for (const row of confirmed) {
-    if (row.sourceLine === null) {
-      outcome.added += 1
-      continue
-    }
-    byLine.set(row.sourceLine, [...(byLine.get(row.sourceLine) ?? []), row])
+    if (row.sourceLine === null) byHand.push(row)
+    else byLine.set(row.sourceLine, [...(byLine.get(row.sourceLine) ?? []), row])
   }
 
   const take = (line: number, pick: (candidates: LabRowInput[]) => number): LabRowInput | undefined => {
@@ -68,8 +72,14 @@ export function reviewOutcome(machine: readonly LabReportRow[], confirmed: reado
     else pending.push(row)
   }
   for (const row of pending) {
-    const match = row.sourceLine === null ? undefined : take(row.sourceLine, () => 0)
-    if (match) pairs.push([row, match])
+    const sameLine = row.sourceLine === null ? undefined : take(row.sourceLine, () => 0)
+    if (sameLine) {
+      pairs.push([row, sameLine])
+      continue
+    }
+    // Sin pareja en su línea: ¿es la fila que alguien corrigió a mano?
+    const index = byHand.findIndex((candidate) => key(candidate.analyte) === key(row.analyte))
+    if (index >= 0) pairs.push([row, byHand.splice(index, 1)[0]!])
     else outcome.removed += 1
   }
 
@@ -80,7 +90,8 @@ export function reviewOutcome(machine: readonly LabReportRow[], confirmed: reado
     else outcome.unchanged += 1
   }
 
-  // Lo que quedó sin emparejar salió de líneas que la máquina no había leído.
+  // Lo que quedó sin emparejar no lo había leído la máquina: a mano, o de una línea que no reconoció.
+  outcome.added += byHand.length
   for (const rest of byLine.values()) outcome.added += rest.length
   return outcome
 }
