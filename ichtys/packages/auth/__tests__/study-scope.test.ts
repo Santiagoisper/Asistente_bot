@@ -64,10 +64,20 @@ describe('loadStudyScope', () => {
   })
 
   it('enforced: sin membresías el alcance es una lista vacía, nunca «todos»', async () => {
-    for (const fn of ['investigator', 'study_coordinator', 'lab_assistant', 'monitor', 'platform_admin'] as const) {
+    for (const fn of ['investigator', 'study_coordinator', 'lab_assistant', 'monitor'] as const) {
       expect(await loadStudyScope({ ...base, access: enforced(fn) }), fn).toEqual({ kind: 'ids', studyIds: [] })
     }
     expect(await loadStudyScope({ ...base, access: enforced() })).toEqual({ kind: 'ids', studyIds: [] })
+  })
+
+  it('enforced: sin `study.read` no ve ningún estudio aunque conserve membresías, y ni siquiera se consultan', async () => {
+    mocks.where.mockResolvedValue([{ studyId: 'a' }])
+    // Quien solo administra la plataforma (M12) y quien quedó sin funciones.
+    expect(await loadStudyScope({ ...base, access: enforced('platform_admin') })).toEqual({ kind: 'ids', studyIds: [] })
+    expect(await loadStudyScope({ ...base, access: enforced() })).toEqual({ kind: 'ids', studyIds: [] })
+    expect(mocks.where).not.toHaveBeenCalled()
+    // Con una función que sí entra a estudios, la misma membresía cuenta.
+    expect(await loadStudyScope({ ...base, access: enforced('platform_admin', 'monitor') })).toEqual({ kind: 'ids', studyIds: ['a'] })
   })
 
   it('la consulta filtra por organización y persona, y descarta bajas y vencidas', async () => {
