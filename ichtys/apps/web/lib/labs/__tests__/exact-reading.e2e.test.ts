@@ -103,7 +103,7 @@ import { decideValue, rowProblem, toConfirmPayload, toReviewRow } from '../revie
 
 const scope = { orgId: 'org-1', studyId: 'study-1', subjectId: 'subject-1' }
 const uploadAudit = (report: { reportId: string; rowCount: number }) => ({ action: 'lab.extract' as const, orgId: 'org-1', studyId: 'study-1', userId: 'user_1', resourceType: 'lab_report', resourceId: report.reportId, metadata: { rowCount: report.rowCount } })
-const audit = (facts: { rowCount?: number; newAnalytes?: number; imagesPurged: number }) => ({
+const audit = (facts: { rowCount?: number; newAnalytes?: number; imagesPurged: number; review?: unknown; secondsSinceUpload?: number }) => ({
   action: facts.rowCount === undefined ? ('lab.reject' as const) : ('lab.confirm' as const),
   orgId: 'org-1',
   studyId: 'study-1',
@@ -275,6 +275,13 @@ describe('Foto o escaneo — dos lecturas independientes', () => {
     expect(store.reports[0]).toMatchObject({ status: 'confirmed', claimedVia: 'tx' })
     expect(store.audits.map((entry) => entry.action)).toEqual(['lab.extract', 'lab.confirm'])
     expect(store.audits[1]).toMatchObject({ via: 'tx', action: 'lab.confirm', metadata: { rowCount: 3, newAnalytes: 3, imagesPurged: 0 } })
+    // Medición del piloto: cada fila leída cae en una sola categoría, y el registro lleva solo cuentas.
+    const review = (store.audits[1]!.metadata as { review: Record<string, number>; secondsSinceUpload: number }).review
+    expect(review.machineRows).toBe(3)
+    expect(review.unchanged! + review.valueCorrected! + review.decided! + review.labelCorrected! + review.removed!).toBe(review.machineRows)
+    expect(result.review).toEqual(review)
+    expect((store.audits[1]!.metadata as { secondsSinceUpload: number }).secondsSinceUpload).toBeGreaterThanOrEqual(0)
+    expect(JSON.stringify(store.audits[1]!.metadata)).not.toContain('Hemoglobina')
     expect(store.deletes).toEqual([])
     expect(store.persisted[0]?.labs).toEqual([
       { name: 'Hemoglobina', value: 18.5, unit: 'g/dL' },

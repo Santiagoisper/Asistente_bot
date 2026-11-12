@@ -181,7 +181,13 @@ describe('Carga de laboratorios — PDF digital de punta a punta', () => {
     const report = await loadLabReport({ ...scope, reportId })
     const decided = report.content.rows.map(toReviewRow).map((row) => (row.analyte === 'Leucocitos' ? { ...row, reading: 7300 } : row))
     const result = await confirmLabReport({ ...scope, reportId, userId: 'user_2', rows: toConfirmPayload(decided)!, audit })
-    expect(result).toEqual({ rowCount: 4, newAnalytes: 3, profileUpdated: true })
+    expect(result).toEqual({
+      rowCount: 4,
+      newAnalytes: 3,
+      profileUpdated: true,
+      // Una fila quedó marcada para decidir (Leucocitos) y la persona aceptó la lectura propuesta: nada se corrigió.
+      review: { machineRows: 4, needingDecision: 1, unchanged: 4, valueCorrected: 0, decided: 0, labelCorrected: 0, removed: 0, added: 0 },
+    })
     expect(store.audits.map((entry) => entry.action)).toEqual(['lab.extract', 'lab.confirm'])
     // La carga del PDF también dejó su registro por la transacción que creó el informe.
     expect(store.audits[0]).toMatchObject({ via: 'tx', action: 'lab.extract', metadata: { rowCount: 4 } })

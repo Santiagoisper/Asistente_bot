@@ -12,6 +12,7 @@ import {
 import { and, db, eq, inArray, labAnalytes, labReportImages, labReports, type LabReportStatus } from '@ichtys/db'
 import { parsePdf, PdfParseError } from '@ichtys/ingestion/parser'
 import { evidenceRetention } from './evidence-policy'
+import { reviewOutcome, type ReviewOutcome } from './review-outcome'
 import { readTextWithModel, secondReaderEnabled } from './lab-model-reader'
 import { updatePatientProfile } from '../subjects/patient-profile-service'
 import { decryptClinicalContent, encryptClinicalContent } from '../subjects/phi-fields'
@@ -272,6 +273,8 @@ export function finalizeRows(input: LabRowInput[], lines: string[], known: Set<s
 export interface ConfirmedLabReport {
   rowCount: number
   newAnalytes: number
+  /** Cuánto hubo que tocar de lo que leyó la máquina (solo cuentas). */
+  review: ReviewOutcome
   /** false si el informe quedó confirmado pero no se pudo sumar al perfil del sujeto. */
   profileUpdated: boolean
 }
@@ -287,7 +290,7 @@ export async function confirmLabReport(
     userId: string
     rows: LabRowInput[]
     comparedWithImage?: boolean
-    audit: (facts: { rowCount: number; newAnalytes: number; imagesPurged: number }) => AuditLogParams
+    audit: (facts: { rowCount: number; newAnalytes: number; imagesPurged: number; review: ReviewOutcome; secondsSinceUpload: number }) => AuditLogParams
   },
 ): Promise<ConfirmedLabReport> {
   const report = await loadLabReport(params)
@@ -303,6 +306,10 @@ export async function confirmLabReport(
   const content: LabReportContent = labReportContentSchema.parse({ ...report.content, rows, ...(keepEvidence ? {} : { imagePages: 0 }) })
 
   const fresh = [...keyOf.entries()].filter(([key]) => !known.has(key))
+  // Medición para el piloto: qué parte de la lectura se aceptó tal cual y
+  // cuánto pasó desde la carga. Son cuentas, sin valores.
+  const review = reviewOutcome(report.content.rows, params.rows)
+  const secondsSinceUpload = Math.max(0, Math.round((Date.now() - report.createdAt.getTime()) / 1000))
 
   // La transición de estado es la que decide: si otra confirmación llegó
   // primero (doble clic), acá no se actualiza ninguna fila y se corta. El
@@ -333,7 +340,7 @@ export async function confirmLabReport(
     // Con política de borrado, la evidencia se borra acá adentro: el borrado y
     // el registro que dice cuántas imágenes se borraron se confirman juntos.
     const imagesPurged = keepEvidence ? 0 : await deleteLabReportImages(tx, params)
-    await insertAuditLog(tx, params.audit({ rowCount: rows.length, newAnalytes: fresh.length, imagesPurged }))
+    await insertAuditLog(tx, params.audit({ rowCount: rows.length, newAnalytes: fresh.length, imagesPurged, review, secondsSinceUpload }))
 
     if (fresh.length > 0) {
       await tx
@@ -382,7 +389,7 @@ export async function confirmLabReport(
     profileUpdated = false
   }
 
-  return { rowCount: rows.length, newAnalytes: fresh.length, profileUpdated }
+  return { rowCount: rows.length, newAnalytes: fresh.length, review, profileUpdated }
 }
 
 /** El rechazo, el borrado de la evidencia (si la política lo pide) y su registro se confirman en la misma transacción (R3). */
