@@ -38,7 +38,13 @@ describe('isProviderChoiceSupported — guard server-side (E2E 2026-10-22)', () 
     expect(isProviderChoiceSupported('anthropic', {})).toBe(true)
   })
 
-  it('auto siempre soportado', () => {
+  it('auto vale solo si su proveedor tiene clave: otras claves no alcanzan', () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', '')
+    vi.stubEnv('OPENAI_API_KEY', 'sk-openai-platform')
+    expect(isProviderChoiceSupported('auto', {})).toBe(false)
+    expect(isProviderChoiceSupported('auto', { openai: 'sk-org-openai-12345678' })).toBe(false)
+    expect(isProviderChoiceSupported('auto', { anthropic: 'sk-ant-org-12345678' })).toBe(true)
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-platform')
     expect(isProviderChoiceSupported('auto', {})).toBe(true)
   })
 })

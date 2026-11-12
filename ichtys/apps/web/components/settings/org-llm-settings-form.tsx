@@ -225,7 +225,8 @@ export function OrgLlmSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
 
         {settings && (
           <p className="mt-3 text-xs text-alphi-muted">
-            Cadena auto: {settings.autoChain.join(' → ')}
+            Proveedor en automático: {settings.autoChain.join(' → ')}. Las evoluciones y los informes de
+            laboratorio van siempre a ese proveedor, cualquiera sea la elección de arriba.
           </p>
         )}
       </div>

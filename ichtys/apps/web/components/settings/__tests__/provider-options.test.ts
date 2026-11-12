@@ -33,8 +33,10 @@ describe('PROVIDER_OPTIONS — descripciones reflejan el mapa real de modelos', 
 })
 
 describe('isProviderSelectable — sin clave disponible, no seleccionable (E2E 2026-10-22)', () => {
-  it('auto siempre seleccionable (la cadena prueba a todos)', () => {
-    expect(isProviderSelectable('auto', [])).toBe(true)
+  it('auto se puede elegir solo con clave de Anthropic: va a ese único proveedor', () => {
+    expect(isProviderSelectable('auto', [])).toBe(false)
+    expect(isProviderSelectable('auto', [{ provider: 'openai', configured: true }])).toBe(false)
+    expect(isProviderSelectable('auto', [{ provider: 'anthropic', configured: true }])).toBe(true)
   })
 
   it('glm ya no es opción (salió del producto, E2E 2026-10-22)', () => {
@@ -50,10 +52,11 @@ describe('isProviderSelectable — sin clave disponible, no seleccionable (E2E 2
     expect(isProviderSelectable('groq', [])).toBe(false)
   })
 
-  it('la opción auto describe la cadena real sin GLM', () => {
+  it('la opción auto dice que va a un solo proveedor, sin respaldo en otro', () => {
     const auto = PROVIDER_OPTIONS.find((o) => o.value === 'auto')
-    expect(auto?.description).toContain('Groq')
-    expect(auto?.description).not.toContain('GLM')
+    expect(auto?.description).toContain('Anthropic')
+    expect(auto?.description).toContain('Sin respaldo')
+    for (const other of ['OpenAI', 'Gemini', 'Groq', 'GLM']) expect(auto?.description).not.toContain(other)
   })
 
   it('el hint de no disponible explica cómo habilitarlo', () => {

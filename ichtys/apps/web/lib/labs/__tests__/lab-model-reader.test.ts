@@ -8,7 +8,12 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@ichtys/db', () => ({ getOrgLlmApiKeys: vi.fn(async () => null), recordUsage: mocks.recordUsage }))
-vi.mock('@ichtys/llm', () => ({ isProviderConfigured: (provider: string) => mocks.configured.has(provider), runWithLlmFallback: mocks.runWithLlmFallback }))
+vi.mock('@ichtys/llm', () => ({
+  isProviderConfigured: (provider: string) => mocks.configured.has(provider),
+  runWithLlmFallback: mocks.runWithLlmFallback,
+  // La tabla real se fija en packages/llm/__tests__/chain.test.ts.
+  PROVIDERS_BY_PURPOSE: { 'lab-read': ['anthropic'], 'lab-read-control': ['anthropic'] },
+}))
 vi.mock('ai', () => ({ generateObject: mocks.generateObject }))
 
 import { readImagesWithModel, readTextWithModel, secondReaderEnabled } from '../lab-model-reader'
@@ -40,12 +45,20 @@ afterEach(() => {
 })
 
 describe('lector con modelo', () => {
-  it('si el primer proveedor falla (sin saldo), responde el siguiente y no se registra contenido', async () => {
+  it('si el proveedor falla (sin saldo), el informe no sale a otro proveedor y no se registra contenido', async () => {
     providerAnswers({ anthropic: new Error('credit balance too low: Hemoglobina 13,5'), openai: { rows: [{ analyte: 'Glucosa', printedValue: '92', unit: null, referenceRange: null, line: 1 }] } })
     const read = await readTextWithModel(scope, ['Paciente omitido', 'Glucosa\t92\tmg/dL'])
-    expect(read).toMatchObject({ provider: 'openai', result: [{ analyte: 'Glucosa', printedValue: '92' }] })
+    expect(read).toBeNull()
+    expect(mocks.runWithLlmFallback.mock.calls.map((call) => (call[0] as { providerPreference: string }).providerPreference)).toEqual(['anthropic'])
     expect(JSON.stringify((console.warn as unknown as { mock: { calls: unknown[] } }).mock.calls)).not.toContain('Hemoglobina')
-    expect(mocks.recordUsage).toHaveBeenCalledWith(expect.objectContaining({ orgId: 'org-1', studyId: 'study-1', provider: 'openai', kind: 'clinical_extraction' }))
+    expect(mocks.recordUsage).not.toHaveBeenCalled()
+  })
+
+  it('cuando responde, queda registrado el consumo con el proveedor', async () => {
+    providerAnswers({ anthropic: { rows: [{ analyte: 'Glucosa', printedValue: '92', unit: null, referenceRange: null, line: 1 }] } })
+    const read = await readTextWithModel(scope, ['Paciente omitido', 'Glucosa\t92\tmg/dL'])
+    expect(read).toMatchObject({ provider: 'anthropic', result: [{ analyte: 'Glucosa', printedValue: '92' }] })
+    expect(mocks.recordUsage).toHaveBeenCalledWith(expect.objectContaining({ orgId: 'org-1', studyId: 'study-1', provider: 'anthropic', kind: 'clinical_extraction' }))
   })
 
   it('al modelo le llegan los renglones numerados, con las columnas marcadas y sin pasarse de largo', async () => {
@@ -57,21 +70,22 @@ describe('lector con modelo', () => {
     expect(prompt.split('\n')[1]!.length).toBeLessThanOrEqual(304)
   })
 
-  it('sin ningún proveedor configurado o con todos caídos devuelve null', async () => {
-    mocks.configured = new Set()
+  it('sin el proveedor configurado o con el proveedor caído devuelve null, aunque haya otros con clave', async () => {
+    mocks.configured = new Set(['openai', 'google'])
     expect(await readTextWithModel(scope, ['Glucosa 92'])).toBeNull()
     expect(mocks.runWithLlmFallback).not.toHaveBeenCalled()
     mocks.configured = new Set(['anthropic', 'openai', 'google'])
-    providerAnswers({ anthropic: new Error('x'), openai: new Error('y'), google: new Error('z') })
+    providerAnswers({ anthropic: new Error('x'), openai: { lines: [], rows: [] }, google: { lines: [], rows: [] } })
     expect(await readImagesWithModel(scope, [image])).toBeNull()
-    expect(mocks.runWithLlmFallback).toHaveBeenCalledTimes(3)
+    expect(mocks.runWithLlmFallback).toHaveBeenCalledTimes(1)
   })
 
-  it('la lectura de control recorre los proveedores al revés y usa su propia consigna', async () => {
+  it('la lectura de control va al mismo proveedor, con otro propósito (otro modelo) y su propia consigna', async () => {
     mocks.configured = new Set(['anthropic', 'openai', 'google'])
     providerAnswers({ anthropic: { lines: [], rows: [] }, openai: { lines: [], rows: [] }, google: { lines: ['a'], rows: [] } })
     expect((await readImagesWithModel(scope, [image]))?.provider).toBe('anthropic')
-    expect((await readImagesWithModel(scope, [image], { control: true }))?.provider).toBe('google')
+    expect((await readImagesWithModel(scope, [image], { control: true }))?.provider).toBe('anthropic')
+    expect(mocks.runWithLlmFallback.mock.calls.map((call) => (call[0] as { purpose: string }).purpose)).toEqual(['lab-read', 'lab-read-control'])
     const [main, control] = mocks.generateObject.mock.calls.map((call) => call[0] as { instructions: string; messages: Array<{ content: Array<{ type: string; mediaType?: string }> }> })
     expect(main!.instructions).not.toContain('lectura de control')
     expect(control!.instructions).toContain('lectura de control')
