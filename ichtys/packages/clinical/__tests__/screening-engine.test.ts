@@ -46,6 +46,51 @@ describe('assessScreening', () => {
     expect(results[0]?.status).toBe('fail')
   })
 
+  describe('una exclusión no se despeja por falta de datos', () => {
+    const exclusion = {
+      inclusionCriteria: [],
+      exclusionCriteria: [{ number: '1', text: 'Antecedente de pancreatitis aguda o crónica.' }],
+    }
+    const withConditions = (conditions: string[]): PatientProfile => ({ version: 1, labs: [], medications: [], conditions })
+
+    it('perfil vacío: queda a revisar, no pasa', () => {
+      const [result] = assessScreening(withConditions([]), exclusion)
+      expect(result?.status).toBe('unknown')
+      expect(result?.reason).toMatch(/no prueba que no exista/)
+    })
+
+    it('otros antecedentes registrados tampoco la despejan', () => {
+      expect(assessScreening(withConditions(['DM2', 'Hipertensión']), exclusion)[0]?.status).toBe('unknown')
+    })
+
+    it.each(['Sin antecedentes de pancreatitis', 'Niega pancreatitis', 'No refiere episodios de pancreatitis'])(
+      'una negación registrada la despeja: %s',
+      (condition) => {
+        expect(assessScreening(withConditions([condition]), exclusion)[0]?.status).toBe('pass')
+      },
+    )
+
+    it('una negación no tapa una mención afirmada', () => {
+      const profile = withConditions(['Sin antecedentes de pancreatitis', 'Pancreatitis aguda en 2019'])
+      expect(assessScreening(profile, exclusion)[0]?.status).toBe('fail')
+    })
+
+    it.each(['Sin fiebre. Pancreatitis crónica', 'Sin fiebre, con pancreatitis crónica', 'No tiene dolor pero tuvo pancreatitis'])(
+      'la negación de otra cosa no niega la pancreatitis: %s',
+      (condition) => {
+        expect(assessScreening(withConditions([condition]), exclusion)[0]?.status).toBe('fail')
+      },
+    )
+
+    it('medicación prohibida que no figura: queda a revisar, no pasa', () => {
+      const [result] = assessScreening(withConditions([]), {
+        inclusionCriteria: [],
+        exclusionCriteria: [{ number: '2', text: 'Uso de metformina (prohibida durante el estudio).' }],
+      })
+      expect(result?.status).toBe('unknown')
+    })
+  })
+
   it('marca unknown si falta HbA1c en perfil', () => {
     const results = assessScreening(
       { version: 1, labs: [], medications: [], conditions: [] },
