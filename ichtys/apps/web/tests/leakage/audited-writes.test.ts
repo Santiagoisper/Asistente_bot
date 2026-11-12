@@ -24,6 +24,8 @@ const MIGRATED = [
   'app/api/studies/[id]/agenda/[itemId]/route.ts',
   'app/api/studies/[id]/subjects/route.ts',
   'app/api/studies/[id]/subjects/[subjectId]/evolutions/route.ts',
+  'app/api/studies/[id]/subjects/[subjectId]/lab-reports/route.ts',
+  'app/api/studies/[id]/subjects/[subjectId]/lab-reports/images/route.ts',
   'app/api/studies/[id]/subjects/[subjectId]/lab-reports/[reportId]/confirm/route.ts',
   'app/api/studies/[id]/subjects/[subjectId]/lab-reports/[reportId]/reject/route.ts',
 ] as const
@@ -33,8 +35,6 @@ const PENDING: Record<string, string> = {
   'app/api/chat/route.ts POST': 'registra el pedido y el resultado de una respuesta; guarda mensajes aparte',
   'app/api/chat/stream/route.ts POST': 'ídem, en la variante por flujo',
   'app/api/os/org-config/route.ts PUT': 'configuración del centro: guarda y después audita',
-  'app/api/studies/[id]/subjects/[subjectId]/lab-reports/route.ts POST': 'alta de informe desde PDF: el servicio guarda y la ruta audita después',
-  'app/api/studies/[id]/subjects/[subjectId]/lab-reports/images/route.ts POST': 'alta de informe desde imagen: ídem',
   'app/api/studies/[id]/subjects/[subjectId]/labs/confirm/route.ts POST': 'circuito anterior de laboratorio (perfil del sujeto)',
   'app/api/studies/[id]/subjects/[subjectId]/labs/extract/route.ts POST': 'circuito anterior de laboratorio',
   'app/api/studies/[id]/subjects/[subjectId]/labs/reject/route.ts POST': 'circuito anterior de laboratorio',

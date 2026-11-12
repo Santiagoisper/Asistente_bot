@@ -1,5 +1,4 @@
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
-import { writeAuditLog } from '../../../../../../../../lib/chat/persistence'
 import { isOsEnabled } from '../../../../../../../../lib/flags'
 import { createLabReportFromImages, validateLabImages } from '../../../../../../../../lib/labs/lab-image-report'
 import { MAX_LAB_IMAGE_BYTES, MAX_LAB_IMAGES, MAX_LAB_PDF_BYTES } from '../../../../../../../../lib/labs/lab-report-content'
@@ -55,23 +54,29 @@ export async function POST(
   const bytes = files.reduce((total, file) => total + file.size, 0)
   try {
     const images = validateLabImages(await Promise.all(files.map(async (file) => ({ data: new Uint8Array(await file.arrayBuffer()) }))))
-    const created = await createLabReportFromImages({ orgId: access.orgId, studyId, subjectId, userId: access.userId, images })
-
-    await writeAuditLog({
-      action: 'lab.extract',
+    const created = await createLabReportFromImages({
       orgId: access.orgId,
       studyId,
+      subjectId,
       userId: access.userId,
-      resourceType: 'lab_report',
-      resourceId: created.reportId,
-      metadata: {
-        subjectId,
-        source: 'image',
-        pages: images.length,
-        rowCount: created.rowCount,
-        reviewCount: created.reviewCount,
-        newFieldCount: created.newFieldCount,
-      },
+      images,
+      // Se escribe en la misma transacción que crea el informe y guarda las imágenes (R3).
+      audit: (report) => ({
+        action: 'lab.extract',
+        orgId: access.orgId,
+        studyId,
+        userId: access.userId,
+        resourceType: 'lab_report',
+        resourceId: report.reportId,
+        metadata: {
+          subjectId,
+          source: 'image',
+          pages: images.length,
+          rowCount: report.rowCount,
+          reviewCount: report.reviewCount,
+          newFieldCount: report.newFieldCount,
+        },
+      }),
     })
 
     return Response.json(created, { status: 201 })

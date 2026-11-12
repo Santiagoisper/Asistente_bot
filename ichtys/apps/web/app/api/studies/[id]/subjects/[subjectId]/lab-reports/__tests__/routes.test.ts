@@ -150,8 +150,12 @@ describe('POST lab-reports — subir PDF', () => {
     const res = await upload(uploadRequest(pdf()), ctx)
     expect(res.status).toBe(201)
     expect(mocks.createLabReportFromPdf).toHaveBeenCalledWith(expect.objectContaining({ orgId: 'org-1', studyId: STUDY, subjectId: SUBJECT, userId: 'user_1' }))
-    const audit = JSON.stringify(mocks.writeAuditLog.mock.calls[0]?.[0])
+    // La ruta le entrega al servicio el registro; el servicio lo escribe al crear el informe (R3).
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+    const build = mocks.createLabReportFromPdf.mock.calls[0]?.[0].audit as (created: unknown) => unknown
+    const audit = JSON.stringify(build({ reportId: REPORT, rowCount: 6, reviewCount: 1, newFieldCount: 1 }))
     expect(audit).toContain('lab.extract')
+    expect(audit).toContain(REPORT)
     expect(audit).not.toContain('PEREZ')
     expect(audit).not.toContain('13,5')
   })
