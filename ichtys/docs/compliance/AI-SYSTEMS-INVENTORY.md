@@ -38,11 +38,13 @@ Referencias de diseño: [ISO/IEC 42001:2023](https://www.iso.org/standard/42001)
 
 ## 3. Diferencias entre lo publicado y el código
 
-Encontradas al armar este inventario. Las tres están registradas en el marco (§6) y ninguna se corrige en este documento.
+Encontradas al armar este inventario. Están registradas en el marco (§6) y ninguna se corrige en este documento.
 
 1. **La página de confianza** ([`trust/page.tsx`](../../apps/web/app/trust/page.tsx)) presenta a OpenAI como proveedor de embeddings que recibe fragmentos de protocolo «sin evoluciones clínicas», y no nombra a Google ni a Groq. En el código, OpenAI y Google pueden leer informes de laboratorio (IA-05), y OpenAI, Google y Groq pueden recibir consultas, historial y fragmentos (IA-01), extracciones de protocolo (IA-03) y títulos (IA-06) cuando rige `auto` y el proveedor anterior de la cadena falla o no tiene clave. Corregir la página o restringir la cadena es una decisión de producto; agregar o habilitar un proveedor es un cambio controlado (R6, R9).
 2. **[`AI-GOVERNANCE.md`](./AI-GOVERNANCE.md)** (versión 1.0, 2026-06-30) registra un proveedor por función, nombra modelos y un servicio de lectura de laboratorio que el código no usa, y no menciona la cadena de respaldo.
 3. **Hecho del 2026-11-12.** La clave de plataforma de Anthropic pertenecía a otra organización de ese proveedor, sin saldo. Con la cadena `auto`, cada lectura de una evolución (IA-04) fallaba en Anthropic y el mismo texto, ya redactado, se enviaba a OpenAI, que rechazaba el pedido por el formato del esquema. Se vio en el entorno de prueba, con datos sintéticos. El PR #123 fijó IA-04 a un solo proveedor y agregó el diagnóstico que permitió verlo. **Sin verificar:** desde cuándo ocurría y si ocurrió en producción con evoluciones reales. Corresponde registrarlo como incidente de IA cuando ese registro exista.
+
+4. **La preferencia de proveedor de la organización no rige en todos los sistemas.** El principio del código es que, con una preferencia explícita, los datos de una organización van solo al proveedor que eligió. Tres sistemas no lo siguen: IA-02 (embeddings: OpenAI por defecto, fuera de la cadena), IA-05 (cadena propia Anthropic → OpenAI → Google) e IA-06 (usa la preferencia de la instalación). IA-04 tampoco la sigue, en sentido contrario: va siempre a Anthropic. **A decidir, una sola vez y por clase de dato:** si esto es un tratamiento distinto buscado o una brecha. Es la misma decisión que la de la página de confianza.
 
 ## Sin verificar
 

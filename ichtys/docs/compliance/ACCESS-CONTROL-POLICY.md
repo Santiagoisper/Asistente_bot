@@ -29,6 +29,8 @@ La identidad y pertenencia a una organización provienen del proveedor de identi
 
 En modo `enforced`, una persona sin capacidad suficiente o sin membresía vigente recibe acceso denegado. Las dos direcciones tienen alcance total solo **dentro de su organización**. Las bajas y vencimientos dejan de conceder alcance. Listados, búsquedas, contadores y recursos hijos deben aplicar la misma frontera.
 
+**La frontera entre organizaciones es la misma en los dos modos:** la organización sale siempre de la sesión y nunca del pedido, y las pruebas de fuga que lo comprueban bloquean la integración. `open` solo afloja lo que pasa adentro de una organización: todo miembro ve todos sus estudios y deciden los roles históricos.
+
 El modo `open` conserva los chequeos históricos por rol mientras una organización se prepara para `enforced`. Es transitorio por decisión (M5 y M8): 60 días desde que la pantalla de equipo está disponible, con aviso al administrador a 14, 7 y 1 día; al vencer, la organización pasa sola a `enforced`. Una organización nueva nace en `enforced` (M1).
 
 **Eso es la regla; el código todavía no la ejecuta.** Tres brechas, registradas en el marco (§6):
