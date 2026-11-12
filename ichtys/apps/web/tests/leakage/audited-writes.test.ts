@@ -15,6 +15,17 @@ import { describe, expect, it } from 'vitest'
  * - PENDING: rutas que todavía auditan fuera de la transacción. La lista es
  *   exacta: una ruta nueva que caiga en el patrón rompe el test, y una ruta
  *   que se corrige obliga a sacarla de acá.
+ *
+ * Límites de este tripwire (la garantía real son las pruebas de
+ * comportamiento de lib/audit y las de punta a punta de lib/labs):
+ * - Busca el texto literal `db.insert|update|delete` y `writeAuditLog`; un
+ *   alias o un cambio de nombre lo esquivan.
+ * - Detecta «escribir y auditar por separado», no «escribir y no auditar
+ *   nunca». Escrituras conocidas sin ningún registro, pendientes de C1:
+ *   `updatePatientProfile` (perfil del sujeto), que hoy llaman la
+ *   confirmación de laboratorio, el circuito anterior de laboratorio y la
+ *   actualización por IA tras una evolución; y la instantánea que guarda
+ *   `screening` dentro de un GET.
  */
 const WEB_ROOT = join(__dirname, '..', '..')
 const API_ROOT = join(WEB_ROOT, 'app', 'api')
@@ -54,7 +65,8 @@ function withoutComments(source: string): string {
 
 /** Cuerpo de cada manejador exportado, por verbo. */
 function handlers(source: string): Array<{ verb: string; body: string }> {
-  const parts = withoutComments(source).split(/^export (?:async )?function (GET|POST|PUT|PATCH|DELETE)\b/m)
+  // Las dos formas válidas de exportar un manejador: función o constante.
+  const parts = withoutComments(source).split(/^export (?:(?:async )?function|const) (GET|POST|PUT|PATCH|DELETE)\b/m)
   const found: Array<{ verb: string; body: string }> = []
   for (let index = 1; index < parts.length; index += 2) found.push({ verb: parts[index]!, body: parts[index + 1]! })
   return found
@@ -93,5 +105,7 @@ describe('leakage — la auditoría de una escritura va en su misma transacción
     expect(LOOSE_WRITE.test(withoutComments(bad))).toBe(true)
     expect(handlers(commented).map((handler) => LOOSE_AUDIT.test(handler.body))).toEqual([false])
     expect(handlers("export async function GET() {\n  await writeAuditLog({ action: 'view' })\n}\n")[0]?.verb).toBe('GET')
+    const arrow = "export const POST = async () => {\n  await db.insert(t).values({})\n  await writeAuditLog({ action: 'x' })\n}\n"
+    expect(handlers(arrow).map((handler) => `${handler.verb}:${LOOSE_AUDIT.test(handler.body)}`)).toEqual(['POST:true'])
   })
 })
