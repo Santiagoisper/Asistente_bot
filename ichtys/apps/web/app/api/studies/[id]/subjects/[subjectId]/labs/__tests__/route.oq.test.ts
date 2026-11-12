@@ -271,8 +271,8 @@ describe('S4 — labs comparan el estudio de la URL', () => {
       { params: Promise.resolve({ id: otherStudyId, subjectId: mocks.SUBJECT_ID }) },
     )
 
-    expect(mocks.validateSubjectAccess).toHaveBeenNthCalledWith(1, mocks.SUBJECT_ID, otherStudyId)
-    expect(mocks.validateSubjectAccess).toHaveBeenNthCalledWith(2, mocks.SUBJECT_ID, otherStudyId)
-    expect(mocks.validateSubjectAccess).toHaveBeenNthCalledWith(3, mocks.SUBJECT_ID, otherStudyId)
+    expect(mocks.validateSubjectAccess).toHaveBeenNthCalledWith(1, mocks.SUBJECT_ID, otherStudyId, { require: 'labs.manage' })
+    expect(mocks.validateSubjectAccess).toHaveBeenNthCalledWith(2, mocks.SUBJECT_ID, otherStudyId, { require: 'labs.manage' })
+    expect(mocks.validateSubjectAccess).toHaveBeenNthCalledWith(3, mocks.SUBJECT_ID, otherStudyId, { require: 'labs.manage' })
   })
 })

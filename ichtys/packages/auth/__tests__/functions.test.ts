@@ -241,6 +241,44 @@ describe('parseAccessMode: ante la duda, se restringe', () => {
   })
 })
 
+describe('ver datos no es poder cambiarlos', () => {
+  const MUTATIONS = ['clinical.author', 'labs.manage', 'agenda.manage', 'subjects.manage', 'documents.manage', 'crf.manage'] as const
+
+  it('quien solo mira (Dirección de Investigación, monitor) no modifica nada', () => {
+    for (const fn of ['research_director', 'monitor'] as const) {
+      const capabilities = capabilitiesOf([fn])
+      for (const mutation of MUTATIONS) expect(capabilities.has(mutation), `${fn} ${mutation}`).toBe(false)
+    }
+  })
+
+  it('el asistente de regulatorio ve datos clínicos pero no carga laboratorios', () => {
+    const capabilities = capabilitiesOf(['regulatory_assistant'])
+    expect(capabilities.has('clinical.read')).toBe(true)
+    expect(capabilities.has('labs.manage')).toBe(false)
+  })
+
+  it('la administración de la plataforma no modifica nada de un estudio', () => {
+    const capabilities = capabilitiesOf(['platform_admin'])
+    for (const mutation of MUTATIONS) expect(capabilities.has(mutation), mutation).toBe(false)
+  })
+})
+
+describe('M16: quién lleva la agenda, los laboratorios y el alta de sujetos', () => {
+  const TEAM = ['investigator', 'study_coordinator', 'lab_assistant', 'regulatory_assistant', 'crf_assistant'] as const
+
+  it('todo el equipo del estudio maneja los turnos y da de alta sujetos', () => {
+    for (const fn of TEAM) {
+      expect(capabilitiesOf([fn]).has('agenda.manage'), fn).toBe(true)
+      expect(capabilitiesOf([fn]).has('subjects.manage'), fn).toBe(true)
+    }
+  })
+
+  it('laboratorios: el asistente de laboratorio, el Study Coordinator y el investigador', () => {
+    const withLabs = TEAM.filter((fn) => capabilitiesOf([fn]).has('labs.manage'))
+    expect(withLabs).toEqual(['investigator', 'study_coordinator', 'lab_assistant'])
+  })
+})
+
 describe('sugerencia inicial desde el rol histórico', () => {
   it('cubre los cinco roles', () => {
     expect(suggestedFunctionsForLegacyRole(ROLES.PRINCIPAL_INVESTIGATOR)).toEqual(['investigator'])

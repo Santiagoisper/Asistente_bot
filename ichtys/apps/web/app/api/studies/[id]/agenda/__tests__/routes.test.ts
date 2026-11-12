@@ -66,7 +66,7 @@ describe('POST agenda — agendar un turno', () => {
   it('éxito: 201 con la organización del token y el estudio de la URL; la auditoría no lleva título ni notas', async () => {
     const res = await create(request('POST', body), ctx)
     expect(res.status).toBe(201)
-    expect(mocks.validatePhiStudyAccess).toHaveBeenCalledWith(STUDY)
+    expect(mocks.validatePhiStudyAccess).toHaveBeenCalledWith(STUDY, { require: 'agenda.manage' })
     expect(mocks.createAgendaItem).toHaveBeenCalledWith(expect.objectContaining({ orgId: 'org-1', studyId: STUDY, userId: 'user_1', timeZone: 'America/Argentina/Buenos_Aires' }))
     const audit = JSON.stringify(mocks.writeAuditLog.mock.calls[0]?.[0])
     expect(audit).toContain('agenda.create')
