@@ -15,7 +15,9 @@ const securityHeaders = [
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
+  // El micrófono se permite solo a la propia aplicación: lo usa el dictado de evoluciones
+  // (docs/decisions/consulta-dictada.md). El audio se transcribe en el navegador y no se sube.
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), geolocation=(), payment=()' },
   { key: 'X-DNS-Prefetch-Control', value: 'off' },
 ]
 

@@ -62,7 +62,9 @@ interface ClassifiedOp {
 function classifyOperator(op: string): ClassifiedOp {
   const normalized = op.toLowerCase()
   if (/mayor o igual|al menos|at least|≥|>=/.test(normalized)) return { side: 'min', inclusive: true }
-  if (/mayor que|more than/.test(normalized) || normalized === '>') return { side: 'min', inclusive: false }
+  if (/mayor(?:es)? (?:que|de|a)\b|superior a|more than/.test(normalized) || normalized === '>') {
+    return { side: 'min', inclusive: false }
+  }
   if (/menor o igual|no m[aá]s de|no more than|at most|hasta|≤|<=/.test(normalized)) {
     return { side: 'max', inclusive: true }
   }
@@ -75,7 +77,7 @@ function parseBoundNumber(raw: string): number {
 }
 
 const BOUND_RE =
-  /(mayor o igual(?: a)?|menor o igual(?: a)?|al menos|at least|no m[aá]s de|no more than|at most|mayor que|more than|menor que|less than|hasta|≥|>=|≤|<=|>|<)\s*(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)/gi
+  /(mayor o igual(?: a)?|menor o igual(?: a)?|al menos|at least|no m[aá]s de|no more than|at most|mayor(?:es)? (?:que|de|a)|superior a|more than|menor(?:es)? (?:que|de|a)|inferior a|less than|hasta|≥|>=|≤|<=|>|<)\s*(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)/gi
 
 function operatorBounds(text: string): { min?: NumericBound; max?: NumericBound } {
   const found: { min?: NumericBound; max?: NumericBound } = {}
@@ -91,7 +93,8 @@ function operatorBounds(text: string): { min?: NumericBound; max?: NumericBound 
 }
 
 function bareRange(text: string): { min: NumericBound; max: NumericBound } | null {
-  const entre = text.match(/entre\s+(\d+(?:\.\d+)?)\s+y\s+(\d+(?:\.\d+)?)/i)
+  // Entre los dos números puede venir la unidad: «entre 7.0 % y 10.5 %».
+  const entre = text.match(/entre\s+(\d+(?:\.\d+)?)\s*(?:%|[a-zA-Z][a-zA-Z0-9/²%.]{0,13})?\s+y\s+(\d+(?:\.\d+)?)/i)
   const to = text.match(/(\d+(?:\.\d+)?)\s+to\s+(\d+(?:\.\d+)?)/i)
   const dash = text.match(/(\d+(?:\.\d+)?)\s*[–—-]\s*(\d+(?:\.\d+)?)/)
   const match = entre ?? to ?? dash
@@ -246,4 +249,51 @@ export function describeBoundComparison(
   if (!bound || !side) return `${analyte} ${display}`
   const clause = boundClause(analyte, display, side, bound, bounds.unit)
   return bounds.warning ? `${clause}. ${bounds.warning}` : clause
+}
+
+/**
+ * Cotas de edad de un criterio («adultos de 18 a 75 años», «mayores de 18
+ * años», «edad mayor o igual a 18 años»). `null` si el texto no es un criterio
+ * de edad.
+ *
+ * Regla: el número tiene que llevar «años» pegado. Una palabra de población
+ * («adultos») no alcanza: «adultos con IMC entre 23 y 40» no es una edad. Y
+ * «años» que mide un plazo («2 años de evolución», «durante 5 años») tampoco.
+ */
+const YEARS = '(?:a[nñ]os|years?)'
+const DURATION_AFTER = new RegExp(`^\\s*${YEARS}\\s+de\\s+(?!edad)`, 'i')
+const DURATION_BEFORE = /(?:durante|desde hace|hace|por|[uú]ltimos|previos|pasados)\s+(?:al menos\s+|m[aá]s de\s+)?$/i
+const DURATION_WORDS = /evoluci[oó]n|diagn[oó]stic|tratamiento|duraci[oó]n|antig[uü]edad|seguimiento|\bdesde\b|\bdurante\b|\bhace\b|[uú]ltimos|previos|\bantes\b/i
+const EXPLICIT_AGE = /\bedad\b|\bage\b|years of age|\baged\b/i
+
+export function parseAgeBounds(text: string): { min?: NumericBound; max?: NumericBound } | null {
+  const normalized = normalizeDecimalCommas(text)
+  const range = new RegExp(
+    `(\\d{1,3})\\s*(?:${YEARS})?\\s*(?:a|y|to|[–—-])\\s*(\\d{1,3})(?=\\s*${YEARS})`,
+    'i',
+  ).exec(normalized)
+  if (range) {
+    const low = Number(range[1])
+    const high = Number(range[2])
+    const after = normalized.slice(range.index + range[0].length)
+    const before = normalized.slice(0, range.index)
+    if (low > high || high > 120) return null
+    if (DURATION_AFTER.test(after) || DURATION_BEFORE.test(before)) return null
+    return { min: { value: low, inclusive: true }, max: { value: high, inclusive: true } }
+  }
+  // Cota con operador: el número lleva «años» pegado y el texto no habla de un plazo,
+  // salvo que nombre la edad de forma expresa.
+  const found: { min?: NumericBound; max?: NumericBound } = {}
+  for (const match of normalized.matchAll(BOUND_RE)) {
+    const end = (match.index ?? 0) + match[0].length
+    if (!new RegExp(`^\\s*${YEARS}\\b`, 'i').test(normalized.slice(end))) continue
+    if (DURATION_AFTER.test(normalized.slice(end))) continue
+    const classified = classifyOperator(match[1] ?? '')
+    if (found[classified.side]) continue
+    found[classified.side] = { value: parseBoundNumber(match[2] ?? ''), inclusive: classified.inclusive }
+  }
+  if (!found.min && !found.max) return null
+  if (!EXPLICIT_AGE.test(normalized) && DURATION_WORDS.test(normalized)) return null
+  if ((found.min?.value ?? 0) > 120 || (found.max?.value ?? 0) > 120) return null
+  return found
 }

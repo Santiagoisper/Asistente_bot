@@ -768,7 +768,7 @@ export async function* answerEngineStream(
 
   const context = buildContext(aboveThreshold)
   const userPrompt = buildUserPrompt(question, context, conversationHistory)
-  const providerOrder = resolveProviderChain(llmProviderPreference)
+  const providerOrder = resolveProviderChain(llmProviderPreference, 'answer')
 
   // 3. Stream answer text token-by-token; fallback en la cadena efectiva
   //    (resolveProviderChain garantiza respaldo Anthropic).

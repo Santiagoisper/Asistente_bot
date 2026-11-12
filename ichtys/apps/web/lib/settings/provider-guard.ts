@@ -1,4 +1,4 @@
-import { isProviderConfigured, type LlmProviderId } from '@ichtys/llm'
+import { AUTO_PROVIDER_CHAIN, isProviderConfigured, type LlmProviderId } from '@ichtys/llm'
 import type { OrgLlmKeyProvider, OrgLlmApiKeys } from '@ichtys/db'
 
 /**
@@ -27,6 +27,7 @@ export function mergeOrgKeys(
 
 /** ¿El proveedor elegido tendrá al menos una clave (org o plataforma)? */
 export function isProviderChoiceSupported(provider: string, keys: OrgLlmApiKeys): boolean {
-  if (provider === 'auto') return true
+  // `auto` ya no recorre varios proveedores: vale solo si el suyo tiene clave.
+  if (provider === 'auto') return AUTO_PROVIDER_CHAIN.some((id) => isProviderConfigured(id, keys))
   return isProviderConfigured(provider as LlmProviderId, keys)
 }

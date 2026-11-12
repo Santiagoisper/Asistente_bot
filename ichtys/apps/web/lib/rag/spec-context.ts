@@ -3,6 +3,11 @@ import { studySpecSchema } from '@ichtys/ingestion'
 import type { StudySpec } from '@ichtys/ingestion'
 import { formatVisitWindow } from '@ichtys/ingestion/visit-window-format'
 import type { RetrievedChunk } from '@ichtys/rag/retriever'
+import {
+  isUnapprovedSpec,
+  UNAPPROVED_SPEC_CONTENT_NOTE,
+  UNAPPROVED_SPEC_TITLE_SUFFIX,
+} from '../subjects/spec-notice'
 
 /**
  * spec-context.ts — inyección de spec como contexto garantizado en el chat.
@@ -152,12 +157,31 @@ const SECTION_TITLES: Record<SpecSection, string> = {
  * Convierte una sección del spec en un RetrievedChunk virtual.
  * similarityScore=1.0 garantiza que siempre pasa el threshold.
  */
+/**
+ * Título y contenido del fragmento según el estado del protocolo extraído. Si
+ * nadie lo aprobó, la cita que ve la persona lo dice y el modelo recibe la
+ * misma advertencia (C5 del marco).
+ */
+export function specChunkText(
+  section: SpecSection,
+  content: string,
+  status: string | null | undefined,
+): { sectionTitle: string; content: string } {
+  if (!isUnapprovedSpec(status)) return { sectionTitle: SECTION_TITLES[section], content }
+  return {
+    sectionTitle: `${SECTION_TITLES[section]}${UNAPPROVED_SPEC_TITLE_SUFFIX}`,
+    content: `${UNAPPROVED_SPEC_CONTENT_NOTE}\n\n${content}`,
+  }
+}
+
 function makeSpecChunk(
   section: SpecSection,
   content: string,
   spec: StudySpec,
   specId: string,
+  status: string | null | undefined,
 ): RetrievedChunk {
+  const text = specChunkText(section, content, status)
   // Tomar las páginas fuente del primer item de la sección para el citation.
   let sourcePages: number[] = []
   if (section === 'eligibility') {
@@ -183,8 +207,8 @@ function makeSpecChunk(
     documentType: 'protocol',
     pageStart,
     pageEnd,
-    sectionTitle: SECTION_TITLES[section],
-    content,
+    sectionTitle: text.sectionTitle,
+    content: text.content,
     similarityScore: 1.0, // Siempre pasa el threshold — es conocimiento estructurado
   }
 }
@@ -235,7 +259,7 @@ export async function getSpecContextChunks(params: {
     for (const section of intents) {
       const content = SECTION_FORMATTERS[section](spec)
       if (content.trim().length === 0) continue
-      chunks.push(makeSpecChunk(section, content, spec, specId))
+      chunks.push(makeSpecChunk(section, content, spec, specId, specRow.status))
     }
 
     return { chunks, specFound: true }

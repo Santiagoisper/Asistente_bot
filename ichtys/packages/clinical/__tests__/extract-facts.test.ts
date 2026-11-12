@@ -14,6 +14,18 @@ describe('extractFactsFromEvolution', () => {
     expect(facts.medications[0]?.name).toBe('Metformina')
   })
 
+  it('lee la presión dictada con «sobre», como la devuelve una transcripción', () => {
+    const facts = extractFactsFromEvolution('Signos vitales: presión arterial 132 sobre 84. Frecuencia cardíaca 72.')
+    expect(facts.systolic).toBe(132)
+    expect(facts.diastolic).toBe(84)
+  })
+
+  it('«sobre» sin dos números no se lee como presión', () => {
+    const facts = extractFactsFromEvolution('Se conversó sobre 3 opciones de tratamiento. Charla sobre adherencia.')
+    expect(facts.systolic).toBeUndefined()
+    expect(facts.diastolic).toBeUndefined()
+  })
+
   it('extrae HbA1c y DM2', () => {
     const facts = extractFactsFromEvolution(
       'Paciente en screening. Metformina 850 mg c/12h. HbA1c 8.2%. Antecedente DM2.',

@@ -154,8 +154,9 @@ export interface LlmRunResult<T> {
 }
 
 /**
- * Ejecuta una llamada LLM. En modo `auto` recorre:
- * Claude → OpenAI → Gemini → Groq → GLM hasta que uno responda.
+ * Ejecuta una llamada LLM contra los proveedores que `resolveProviderChain`
+ * devuelve para esa clase de dato. Hoy es uno solo: si no responde, la llamada
+ * falla y el contenido no sale a otro proveedor.
  *
  * `run` recibe `reportUsage`: el callback debe invocarlo con los tokens reales
  * (`result.usage` de `generateText`/`generateObject`/`streamText`) antes de
@@ -173,7 +174,7 @@ export async function runWithLlmFallback<T>(
   ) => Promise<T>,
 ): Promise<LlmRunResult<T>> {
   const preference = options.providerPreference ?? getDefaultProviderPreference()
-  const providers = resolveProviderChain(preference)
+  const providers = resolveProviderChain(preference, options.purpose)
 
   let lastError: unknown
   let sawQuotaBlock = false
