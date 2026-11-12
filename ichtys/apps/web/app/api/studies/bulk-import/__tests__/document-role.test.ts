@@ -81,7 +81,7 @@ beforeEach(() => {
   mocks.getUploadRateLimitConfig.mockReturnValue({ limit: 10, windowSeconds: 60 })
   mocks.getBulkRateLimitConfig.mockReturnValue({ limit: 10, orgLimit: 40, windowSeconds: 60 })
   mocks.enforceSlidingWindowRateLimit.mockResolvedValue({ limited: false })
-  mocks.resolveOrProvisionOrganization.mockResolvedValue({ id: 'org-interna' })
+  mocks.resolveOrProvisionOrganization.mockResolvedValue({ id: 'org-interna', accessMode: 'open' })
   mocks.putPrivateDocumentPdf.mockResolvedValue({
     url: 'https://blob.example/protocolo-ficticio.pdf',
     pathname: 'clinical-documents/protocolo-ficticio.pdf',
