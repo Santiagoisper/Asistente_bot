@@ -45,7 +45,7 @@ const mocks = vi.hoisted(() => {
     encryptClinicalContent: vi.fn((text: string) => `enc:${text}`),
     decryptClinicalContent: vi.fn((enc: string) => enc.replace(/^enc:/, '')),
     detectPossiblePii: vi.fn().mockReturnValue([]),
-    refreshPatientProfileFromEvolution: vi.fn().mockResolvedValue(undefined),
+    proposeProfileFromEvolution: vi.fn().mockResolvedValue({ factCount: 2 }),
     dbInsertReturning: vi.fn(),
     dbFindMany: vi.fn(),
     looseInsert: vi.fn(),
@@ -103,7 +103,7 @@ vi.mock('../../../../../../../../lib/subjects/phi-fields', () => ({
 }))
 
 vi.mock('../../../../../../../../lib/subjects/patient-profile-service', () => ({
-  refreshPatientProfileFromEvolution: mocks.refreshPatientProfileFromEvolution,
+  proposeProfileFromEvolution: mocks.proposeProfileFromEvolution,
 }))
 
 import { GET, POST } from '../route'
@@ -290,7 +290,7 @@ describe('G14-53-2 — el fallo del perfil no se registra crudo', () => {
     const profileErr = new Error(`fallo con ${marker}`)
     profileErr.stack = `stack ${marker}\nsegunda`
     Object.assign(profileErr, { detail: marker, cause: { message: marker } })
-    mocks.refreshPatientProfileFromEvolution.mockRejectedValueOnce(profileErr)
+    mocks.proposeProfileFromEvolution.mockRejectedValueOnce(profileErr)
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
 
     try {
@@ -307,8 +307,8 @@ describe('G14-53-2 — el fallo del perfil no se registra crudo', () => {
       )
 
       expect(res.status).toBe(201)
-      const body = (await res.json()) as { profileUpdated?: boolean }
-      expect(body.profileUpdated).toBe(false)
+      const body = (await res.json()) as { profileProposal?: string }
+      expect(body.profileProposal).toBe('failed')
       const logged = errorSpy.mock.calls
         .map((args) =>
           args

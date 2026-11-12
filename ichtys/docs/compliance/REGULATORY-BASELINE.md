@@ -1,6 +1,6 @@
 # Marco normativo de desarrollo — Alphi / Clinical Research OS
 
-**Versión:** 1.1 · **Fecha:** 2026-11-12 · **Estado:** propuesta, pendiente de revisión por Calidad y Legales. La 1.1 incorpora la revisión de Reviewer y la revisión automática del PR #114
+**Versión:** 1.2 · **Fecha:** 2026-11-12 · **Estado:** propuesta, pendiente de revisión por Calidad y Legales. La 1.1 incorpora la revisión de Reviewer y la revisión automática del PR #114 La 1.2 actualiza el estado de C1 y C2 tras los PR #116, #117 y el de la propuesta con confirmación humana.
 **Reemplaza:** la tabla «Marco regulatorio cubierto» de [`README.md`](./README.md) donde difieran.
 
 Este documento fija **contra qué normas se desarrolla** y **qué tiene que cumplir cada cambio** antes de integrarse. No es asesoramiento legal ni una declaración de cumplimiento. Distingue tres cosas y las marca: **[H]** hecho verificado con fuente, **[I]** interpretación nuestra, **[P]** pendiente de verificar.
@@ -92,9 +92,9 @@ Cada cambio se revisa contra estas reglas. La columna de la derecha dice de dón
 | Aislamiento entre organizaciones | **Probado** | Pruebas de fuga bloqueantes en CI |
 | Acceso por función y por estudio | **Implementado y probado en entorno de prueba; no activado** | `docs/decisions/study-membership.md`; PR #105–#113 |
 | Rechazo uniforme | **Probado** en los validadores | `packages/auth/__tests__/access-enforced.test.ts` |
-| Audit trail en la misma transacción | **Parcial: hoy incumple R3.** 4 archivos auditan dentro de la transacción; 20 llaman al registro de auditoría **después** de confirmar la escritura (entre ellos el alta de una evolución), de modo que el dato puede quedar guardado sin su registro. Existe además una variante que descarta el error de auditoría. Inalterabilidad a nivel de base **[P]** | `apps/web/lib/chat/persistence.ts`; `docs/decisions/audit-policy.md` |
+| Audit trail en la misma transacción | **Implementado en las escrituras clínicas; quedan casos fuera.** Agenda, alta de sujeto, alta de evolución, informes de laboratorio (carga, confirmación, rechazo), circuito anterior de laboratorio y todo cambio del perfil del sujeto guardan el dato y su registro en una sola transacción (PR #116, #117). Verificado contra la base del entorno de prueba para agenda y perfil (mismo identificador de transacción en las dos filas). **Fuera todavía:** configuración del centro, chat (dos rutas), la instantánea que `screening` guarda dentro de una lectura, el borrado de imágenes por política y tres scripts de operación que escriben el perfil sin registro. La reversión ante una falla del registro es garantía de la base y no está ejercitada por las pruebas. Inalterabilidad a nivel de base **[P]** | `apps/web/lib/audit/audited-write.ts`; `apps/web/tests/leakage/audited-writes.test.ts` |
 | Cifrado de campo | **Parcial.** Las evoluciones se cifran. Las evaluaciones de elegibilidad (`screening_assessments.assessments` y `summary`) se guardan en claro, ligadas al sujeto, y según la revisión automática incluyen valores clínicos. Rotación de clave **[P]** | `docs/decisions/phi-field-encryption.md`; `packages/db/schema/screening-assessments.ts` |
-| Supervisión humana de la IA | **No se cumple en un punto.** Al guardar una evolución, el sistema llama al modelo, extrae hechos y **actualiza el perfil del paciente sin confirmación humana**; ese perfil alimenta la evaluación de elegibilidad. La redacción de datos personales antes del modelo sí existe. Registro de modelo por respuesta **[P]** | `apps/web/lib/subjects/patient-profile-service.ts`; [`AI-GOVERNANCE.md`](./AI-GOVERNANCE.md) |
+| Supervisión humana de la IA | **Implementado en el perfil del sujeto.** Lo que el sistema extrae de una evolución (reglas y modelo) queda como **propuesta**: no entra a los datos del perfil ni a la evaluación de elegibilidad hasta que una persona con permiso para escribir evoluciones la acepta; también puede descartarla. Cada paso deja registro con quién y si hubo confirmación humana. Probado con pruebas automáticas; la verificación contra la base de prueba está en el PR. La redacción de datos personales antes del modelo ya existía. **Fuera todavía:** la evaluación de elegibilidad sigue calculándose sola (es una ayuda que no decide, pero no tiene paso de aceptación); registro de modelo y versión por respuesta **[P]** | `apps/web/lib/subjects/patient-profile-service.ts`; `apps/web/lib/subjects/__tests__/patient-profile-atomic.test.ts`; [`AI-GOVERNANCE.md`](./AI-GOVERNANCE.md) |
 | Validación | **Parcial.** Plan, URS, FRS, matriz y FMEA de julio de 2026. Lo que el repositorio llama «OQ» es hoy una suite de pruebas automáticas. PQ sin ejecutar, informe sin firmar | [`CSV-VALIDATION-PLAN.md`](./CSV-VALIDATION-PLAN.md) |
 | Firma electrónica | **No existe** | — |
 | Procedencia y huella de los archivos | **No existe.** Los archivos guardados no tienen huella que pruebe que no cambiaron; los informes de laboratorio guardan el formato del archivo, no quién lo emitió ni por dónde llegó | `packages/db/schema/lab-reports.ts` |
@@ -104,8 +104,8 @@ Cada cambio se revisa contra estas reglas. La columna de la derecha dice de dón
 
 **De código** (encontradas por la revisión del PR #114 y confirmadas en el código):
 
-- **C1.** Auditoría fuera de la transacción en la mayoría de las escrituras, y una variante que descarta el error. Contradice R3.
-- **C2.** La IA actualiza el perfil del paciente sin confirmación humana. Contradice R6.
+- **C1.** Auditoría fuera de la transacción. **Cerrada para las escrituras clínicas** (PR #116, #117). Sigue abierta en: configuración del centro, chat, la instantánea de `screening`, el borrado de imágenes por política y tres scripts de operación. Contradice R3 en esos puntos.
+- **C2.** La IA actualizaba el perfil del paciente sin confirmación humana. **Cerrada** en esta versión: la extracción queda como propuesta que una persona acepta o descarta (decisión de Santiago del 12/11/2026).
 - **C3.** Evaluaciones de elegibilidad sin cifrar. Contradice R5.
 - **C4.** Archivos sin huella ni procedencia. Impide sostener una copia como copia fiel.
 
