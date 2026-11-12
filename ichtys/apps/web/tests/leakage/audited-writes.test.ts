@@ -24,8 +24,12 @@ import { describe, expect, it } from 'vitest'
  *   nunca». Escritura conocida que audita después y no cae en el escaneo
  *   porque vive en un GET: la instantánea que guarda `screening`.
  *
- * El perfil del sujeto tiene su propia guarda abajo: se escribe en un solo
- * lugar y ese lugar exige el registro.
+ * El perfil del sujeto tiene su propia guarda abajo: dentro de la aplicación
+ * (`app/` y `lib/`) se escribe en un solo lugar y ese lugar exige el registro.
+ * La guarda no mira `ichtys/scripts/`: tres scripts de operación y de prueba
+ * (`backfill-lab-review-pending`, `consolidate-single-org`, `e2e-product-loop`)
+ * escriben la tabla directo y sin registro. No los dispara ninguna ruta;
+ * queda pendiente decidir si un script que toca dato clínico también registra.
  */
 const WEB_ROOT = join(__dirname, '..', '..')
 const API_ROOT = join(WEB_ROOT, 'app', 'api')
