@@ -6,6 +6,7 @@ import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../lib/api/b
 import { zodIssuesForResponse } from '../../../../../../lib/api/zod-issues'
 import { MAX_SPEC_BODY_BYTES } from '../../../../../../lib/api/limits'
 import { insertAuditLog } from '../../../../../../lib/audit/audited-write'
+import { contentFingerprint } from '../../../../../../lib/audit/fingerprint'
 
 interface RouteParams {
   params: Promise<{ id: string; specId: string }>
@@ -105,9 +106,13 @@ export async function PATCH(req: Request, { params }: RouteParams) {
         userId,
         resourceType: 'study_spec',
         resourceId: specId,
-        // Cuentas, no el texto del protocolo.
+        // Cuentas y huellas, no el texto del protocolo. Las huellas permiten
+        // saber qué contenido quedó guardado y si cambió respecto del anterior,
+        // aunque la cantidad de criterios sea la misma.
         metadata: {
           version: target.version,
+          contentSha256: contentFingerprint(spec),
+          previousSha256: contentFingerprint(target.spec ?? null),
           inclusionCriteria: spec.inclusionCriteria.length,
           exclusionCriteria: spec.exclusionCriteria.length,
           endpoints: spec.endpoints.length,
