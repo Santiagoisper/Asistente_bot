@@ -46,6 +46,8 @@ const MIGRATED = [
   'app/api/studies/[id]/subjects/[subjectId]/labs/extract/route.ts',
   'app/api/studies/[id]/subjects/[subjectId]/labs/confirm/route.ts',
   'app/api/studies/[id]/subjects/[subjectId]/labs/reject/route.ts',
+  'app/api/studies/[id]/subjects/[subjectId]/profile/proposals/[evolutionId]/confirm/route.ts',
+  'app/api/studies/[id]/subjects/[subjectId]/profile/proposals/[evolutionId]/reject/route.ts',
 ] as const
 
 /** Ruta y verbo → por qué sigue pendiente. */

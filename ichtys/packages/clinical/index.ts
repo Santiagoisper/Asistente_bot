@@ -12,7 +12,9 @@ export {
   type FieldConfidenceLevel,
   type ProfileFieldConfidence,
   pendingLabReviewSchema,
+  pendingProfileProposalSchema,
   type PendingLabReview,
+  type PendingProfileProposal,
 } from './profile-schema'
 export { extractFactsFromEvolution, mergeProfileWithFacts, type ExtractedFacts } from './extract-facts'
 export {

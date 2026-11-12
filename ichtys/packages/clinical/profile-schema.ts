@@ -37,6 +37,27 @@ export const profileFieldConfidenceSchema = z.object({
 })
 export type ProfileFieldConfidence = z.infer<typeof profileFieldConfidenceSchema>
 
+/**
+ * Lo que un modelo (o las reglas de extracción) leyó en una evolución y todavía
+ * nadie confirmó. No forma parte del perfil hasta que una persona lo acepta
+ * (marco normativo, regla R6): el screening no lo ve.
+ */
+export const pendingProfileProposalSchema = z.object({
+  requiresHumanReview: z.literal(true),
+  evolutionId: z.string().uuid(),
+  extractedAt: z.string(),
+  facts: z.object({
+    ageYears: z.number().int().positive().optional(),
+    systolic: z.number().int().positive().optional(),
+    diastolic: z.number().int().positive().optional(),
+    labs: z.array(labObservationSchema).default([]),
+    medications: z.array(medicationSchema).default([]),
+    conditions: z.array(z.string()).default([]),
+  }),
+  fieldConfidence: profileFieldConfidenceSchema.default({}),
+})
+export type PendingProfileProposal = z.infer<typeof pendingProfileProposalSchema>
+
 export const patientProfileSchema = z.object({
   version: z.literal(1).default(1),
   demographics: z
@@ -58,6 +79,8 @@ export const patientProfileSchema = z.object({
   fieldConfidence: profileFieldConfidenceSchema.optional(),
   /** Labs OCR pendientes de confirmación humana (URS-007). */
   pendingLabReview: pendingLabReviewSchema.optional(),
+  /** Propuestas extraídas de evoluciones, pendientes de confirmación humana (R6). */
+  pendingEvolutionProposals: z.array(pendingProfileProposalSchema).optional(),
   lastUpdatedAt: z.string().optional(),
   lastEvolutionId: z.string().uuid().optional(),
 })
