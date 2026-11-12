@@ -49,13 +49,17 @@ export const CAPABILITIES = [
 ] as const
 export type Capability = (typeof CAPABILITIES)[number]
 
-const TEAM_BASE: readonly Capability[] = ['study.read', 'clinical.read', 'agenda.manage']
+// El equipo ve el estudio y los datos clínicos; no gestiona agenda ni
+// laboratorios. Esas son tareas operativas del Study Coordinator (y del
+// asistente correspondiente), no del equipo entero.
+const TEAM_BASE: readonly Capability[] = ['study.read', 'clinical.read']
 
 const COORDINATION: readonly Capability[] = [
   ...TEAM_BASE,
   'labs.manage',
   'documents.manage',
   'crf.manage',
+  'agenda.manage',
   'study.create',
   'access.manage_study',
 ]
@@ -69,7 +73,7 @@ const COORDINATION: readonly Capability[] = [
  *   - `monitor` lee el estudio y nada más.
  */
 export const FUNCTION_CAPABILITIES: Record<MemberFunction, readonly Capability[]> = {
-  investigator: [...TEAM_BASE, 'clinical.author', 'labs.manage'],
+  investigator: [...TEAM_BASE, 'clinical.author'],
   study_coordinator: COORDINATION,
   lab_assistant: [...TEAM_BASE, 'labs.manage'],
   regulatory_assistant: [...TEAM_BASE, 'documents.manage'],

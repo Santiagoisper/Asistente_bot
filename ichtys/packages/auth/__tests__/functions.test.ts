@@ -194,6 +194,23 @@ describe('equipo del estudio', () => {
     expect(capabilities.has('org.settings')).toBe(false)
   })
 
+  it('el investigador no carga laboratorios ni gestiona la agenda (son tareas del equipo)', () => {
+    const capabilities = capabilitiesOf(['investigator'])
+    expect(capabilities.has('labs.manage')).toBe(false)
+    expect(capabilities.has('agenda.manage')).toBe(false)
+    expect(capabilities.has('clinical.author')).toBe(true)
+  })
+
+  it('los asistentes no gestionan la agenda (es del Study Coordinator)', () => {
+    for (const assistant of ['lab_assistant', 'regulatory_assistant', 'crf_assistant'] as const) {
+      expect(capabilitiesOf([assistant]).has('agenda.manage'), assistant).toBe(false)
+    }
+  })
+
+  it('el Study Coordinator gestiona la agenda', () => {
+    expect(capabilitiesOf(['study_coordinator']).has('agenda.manage')).toBe(true)
+  })
+
   it('el Study Coordinator da acceso en sus estudios pero no administra la organización (M11)', () => {
     const capabilities = capabilitiesOf(['study_coordinator'])
     expect(capabilities.has('access.manage_study')).toBe(true)
