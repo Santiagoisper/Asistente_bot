@@ -1,5 +1,5 @@
 import { auth } from '@clerk/nextjs/server'
-import { auditLogs, db, studies } from '@ichtys/db'
+import { auditLogs, db, studies, studyMemberships } from '@ichtys/db'
 import { canAdministerStudy, handleApiError, normalizeRole, resolveOrProvisionOrganization } from '@ichtys/auth'
 import { loadAccessSubject } from '@ichtys/auth/access-subject'
 import { allows, type AccessSubject } from '@ichtys/auth/functions'
@@ -73,6 +73,25 @@ export async function POST(req: Request): Promise<Response> {
         resourceType: 'study',
         resourceId: created.id,
         metadata: { hasProtocolNumber: created.protocolNumber !== null },
+      })
+
+      // Quien abre un estudio queda como miembro en la misma transacción
+      // (docs/decisions/study-membership.md, regla 3). En modo `open` la fila
+      // no restringe nada; en modo estricto, sin ella su creador no lo vería.
+      await tx.insert(studyMemberships).values({
+        organizationId: org.id,
+        studyId: created.id,
+        userId,
+        createdBy: userId,
+      })
+      await tx.insert(auditLogs).values({
+        action: 'access.membership.grant',
+        organizationId: org.id,
+        studyId: created.id,
+        userId,
+        resourceType: 'study_membership',
+        resourceId: created.id,
+        metadata: { memberUserId: userId, reason: 'study_creator' },
       })
       return created
     })

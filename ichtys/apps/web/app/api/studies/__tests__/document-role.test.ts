@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   resolveOrProvisionOrganization: vi.fn(),
   insert: vi.fn(),
   auditValues: vi.fn(),
+  membershipValues: vi.fn(),
   functionRows: vi.fn(),
 }))
 
@@ -24,11 +25,15 @@ vi.mock('@ichtys/auth', async () => {
 vi.mock('@ichtys/db', () => {
   const studies = { id: 'studies.id' }
   const auditLogs = { id: 'audit_logs.id' }
+  const studyMemberships = { id: 'study_memberships.id' }
   // La transacción de prueba no revierte nada: si el registro de auditoría
   // lanza, la ruta tiene que propagar el error y no devolver 201.
   const tx = {
-    insert: (table: unknown) =>
-      table === auditLogs ? { values: (row: unknown) => mocks.auditValues(row) } : mocks.insert(table),
+    insert: (table: unknown) => {
+      if (table === auditLogs) return { values: (row: unknown) => mocks.auditValues(row) }
+      if (table === studyMemberships) return { values: (row: unknown) => mocks.membershipValues(row) }
+      return mocks.insert(table)
+    },
   }
   return {
     db: {
@@ -38,6 +43,7 @@ vi.mock('@ichtys/db', () => {
     memberFunctions: { functionKey: 'mf.function_key', organizationId: 'mf.organization_id', userId: 'mf.user_id', revokedAt: 'mf.revoked_at' },
     studies,
     auditLogs,
+    studyMemberships,
   }
 })
 
@@ -65,6 +71,7 @@ beforeEach(() => {
     values: () => ({ returning: async () => [STUDY] }),
   })
   mocks.auditValues.mockResolvedValue(undefined)
+  mocks.membershipValues.mockResolvedValue(undefined)
   mocks.functionRows.mockResolvedValue([])
 })
 
@@ -115,7 +122,7 @@ describe('POST /api/studies — gestión documental (S1)', () => {
     const res = await POST(createRequest())
 
     expect(res.status).toBe(201)
-    expect(mocks.auditValues).toHaveBeenCalledTimes(1)
+    expect(mocks.auditValues).toHaveBeenCalledTimes(2)
     const entry = mocks.auditValues.mock.calls[0]?.[0]
     expect(entry).toMatchObject({
       action: 'study.create',
@@ -126,6 +133,40 @@ describe('POST /api/studies — gestión documental (S1)', () => {
       resourceId: STUDY.id,
     })
     expect(JSON.stringify(entry)).not.toContain(STUDY.name)
+  })
+
+  it('quien abre el estudio queda como miembro, y eso también se audita (regla 3)', async () => {
+    mocks.auth.mockResolvedValue({ userId: 'user_1', orgId: 'org_clerk', orgRole: 'org:study_admin' })
+
+    const res = await POST(createRequest())
+
+    expect(res.status).toBe(201)
+    expect(mocks.membershipValues).toHaveBeenCalledTimes(1)
+    expect(mocks.membershipValues.mock.calls[0]?.[0]).toEqual({
+      organizationId: 'org-interna',
+      studyId: STUDY.id,
+      userId: 'user_1',
+      createdBy: 'user_1',
+    })
+    const grant = mocks.auditValues.mock.calls[1]?.[0]
+    expect(grant).toMatchObject({
+      action: 'access.membership.grant',
+      organizationId: 'org-interna',
+      studyId: STUDY.id,
+      userId: 'user_1',
+      resourceType: 'study_membership',
+      metadata: { memberUserId: 'user_1', reason: 'study_creator' },
+    })
+    expect(JSON.stringify(grant)).not.toContain(STUDY.name)
+  })
+
+  it('si la membresía de quien lo abre no se puede guardar, el alta no se informa como hecha', async () => {
+    mocks.auth.mockResolvedValue({ userId: 'user_1', orgId: 'org_clerk', orgRole: 'org:study_admin' })
+    mocks.membershipValues.mockRejectedValue(new Error('falla ficticia'))
+
+    const res = await POST(createRequest())
+
+    expect(res.status).toBe(500)
   })
 
   it('si el registro de auditoría falla, el alta no se informa como hecha', async () => {
@@ -143,6 +184,7 @@ describe('POST /api/studies — gestión documental (S1)', () => {
     await POST(createRequest())
 
     expect(mocks.auditValues).not.toHaveBeenCalled()
+    expect(mocks.membershipValues).not.toHaveBeenCalled()
   })
 })
 
@@ -177,6 +219,8 @@ describe('POST /api/studies — modo estricto', () => {
     const res = await POST(createRequest())
 
     expect(res.status).toBe(201)
-    expect(mocks.auditValues).toHaveBeenCalledTimes(1)
+    expect(mocks.auditValues).toHaveBeenCalledTimes(2)
+    // Sin esta fila, en modo estricto quien abre el estudio no podría entrar a él.
+    expect(mocks.membershipValues).toHaveBeenCalledTimes(1)
   })
 })

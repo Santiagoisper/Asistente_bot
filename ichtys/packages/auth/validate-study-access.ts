@@ -5,6 +5,7 @@ import { loadAccessSubject } from './access-subject'
 import { allows, type AccessSubject, type Capability } from './functions'
 import { normalizeRole, roleSatisfies, type Role } from './roles'
 import { resolveOrProvisionOrganization } from './resolve-org'
+import { canEnterStudy } from './study-membership'
 
 /**
  * Error de acceso. Las API routes lo traducen a 401/403 con mensaje genérico
@@ -33,6 +34,29 @@ export interface StudyAccessContext {
   role: Role
   /** Modo de la organización y funciones de la persona, para decidir capacidades con `allows`. */
   access: AccessSubject
+}
+
+/**
+ * Alcance: la persona tiene que poder entrar a ESTE estudio. Si no, la
+ * respuesta es la misma que para un estudio que no existe o que es de otra
+ * organización. Todo validador de `packages/auth` la llama; una prueba lo
+ * exige (packages/auth/tests/leakage/validators-enforce-membership.test.ts).
+ */
+export async function assertStudyMembership(params: {
+  access: AccessSubject
+  orgId: string
+  studyId: string
+  userId: string
+  /**
+   * Mensaje del rechazo. Cada validador pasa el mismo que usa cuando el objeto
+   * no existe: si difirieran, quien no es miembro podría averiguar qué
+   * identificadores existen en estudios ajenos.
+   */
+  denial?: string
+}): Promise<void> {
+  if (!(await canEnterStudy(params))) {
+    throw new AccessError(params.denial ?? 'Study not found or access denied', 404)
+  }
 }
 
 /** En modo `open` no había comprobación: todo miembro de la organización entraba a sus estudios. */
@@ -85,6 +109,8 @@ export async function validateStudyAccess(
   if (!allows(access, 'study.read', ANY_MEMBER)) {
     throw new AccessError('Study not found or access denied', 404)
   }
+
+  await assertStudyMembership({ access, orgId: org.id, studyId: study.id, userId })
 
   if (requiredRole) {
     const satisfied =

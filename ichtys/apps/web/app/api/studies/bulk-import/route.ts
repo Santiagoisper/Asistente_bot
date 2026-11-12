@@ -3,7 +3,7 @@ import { auth } from '@clerk/nextjs/server'
 import { canAdministerStudy, normalizeRole, resolveOrProvisionOrganization } from '@ichtys/auth'
 import { loadAccessSubject } from '@ichtys/auth/access-subject'
 import { allows } from '@ichtys/auth/functions'
-import { auditLogs, db, documents, documentVersions, ingestionJobs, studies } from '@ichtys/db'
+import { auditLogs, db, documents, documentVersions, ingestionJobs, studies, studyMemberships } from '@ichtys/db'
 import { runSingleIngestionJobById } from '@ichtys/ingestion/ingestion-jobs'
 import { putPrivateDocumentPdf } from '../../documents/upload/blob-storage'
 import {
@@ -196,6 +196,24 @@ export async function POST(req: Request): Promise<Response> {
           })
           .returning()
         if (!study) throw new Error('Study insert did not return a row')
+
+        // Quien abre un estudio queda como miembro en la misma transacción
+        // (docs/decisions/study-membership.md, regla 3).
+        await tx.insert(studyMemberships).values({
+          organizationId: org.id,
+          studyId: study.id,
+          userId,
+          createdBy: userId,
+        })
+        await tx.insert(auditLogs).values({
+          organizationId: org.id,
+          studyId: study.id,
+          userId,
+          action: 'access.membership.grant',
+          resourceType: 'study_membership',
+          resourceId: study.id,
+          metadata: { memberUserId: userId, reason: 'study_creator', batchId },
+        })
 
         const [document] = await tx
           .insert(documents)

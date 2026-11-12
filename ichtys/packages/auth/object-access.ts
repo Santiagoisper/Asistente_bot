@@ -19,7 +19,7 @@ import {
 import { loadAccessSubject } from './access-subject'
 import { allows, type AccessSubject } from './functions'
 import { normalizeRole, type Role } from './roles'
-import { AccessError } from './validate-study-access'
+import { AccessError, assertStudyMembership } from './validate-study-access'
 
 interface ActiveOrganizationContext {
   userId: string
@@ -120,6 +120,14 @@ export async function validateConversationAccess(
 
   const study = await validateStudyBelongsToOrg(conversation.studyId, orgId)
 
+  await assertStudyMembership({
+    access,
+    orgId,
+    studyId: study.id,
+    userId,
+    denial: 'Conversation not found or access denied',
+  })
+
   return { userId, orgId, role, access, studyId: study.id, conversation, study }
 }
 
@@ -135,6 +143,14 @@ export async function validateDocumentAccess(documentId: string): Promise<Docume
   }
 
   const study = await validateStudyBelongsToOrg(document.studyId, orgId)
+
+  await assertStudyMembership({
+    access,
+    orgId,
+    studyId: study.id,
+    userId,
+    denial: 'Document not found or access denied',
+  })
 
   return { userId, orgId, role, access, studyId: study.id, document, study }
 }
@@ -166,6 +182,14 @@ export async function validateDocumentVersionAccess(
 
   const study = await validateStudyBelongsToOrg(documentVersion.studyId, orgId)
 
+  await assertStudyMembership({
+    access,
+    orgId,
+    studyId: study.id,
+    userId,
+    denial: 'Document version not found or access denied',
+  })
+
   return { userId, orgId, role, access, studyId: study.id, document, documentVersion, study }
 }
 
@@ -181,6 +205,14 @@ export async function validateMessageAccess(messageId: string): Promise<MessageA
   }
 
   const study = await validateStudyBelongsToOrg(message.studyId, orgId)
+
+  await assertStudyMembership({
+    access,
+    orgId,
+    studyId: study.id,
+    userId,
+    denial: 'Message not found or access denied',
+  })
 
   return { userId, orgId, role, access, studyId: study.id, message, study }
 }

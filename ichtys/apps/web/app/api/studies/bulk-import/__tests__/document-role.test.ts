@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   rateLimitResponse: vi.fn(),
   insert: vi.fn(),
   transaction: vi.fn(),
+  txValues: vi.fn(),
   after: vi.fn(),
   runSingleIngestionJobById: vi.fn(),
 }))
@@ -55,11 +56,12 @@ vi.mock('@ichtys/db', () => ({
     insert: (...args: unknown[]) => mocks.insert(...args),
     transaction: (cb: (tx: { insert: typeof mocks.insert }) => unknown) => mocks.transaction(cb),
   },
-  studies: {},
-  documents: {},
-  documentVersions: {},
-  ingestionJobs: { id: 'ingestionJobs.id' },
-  auditLogs: {},
+  studies: { __table: 'studies' },
+  documents: { __table: 'documents' },
+  documentVersions: { __table: 'document_versions' },
+  ingestionJobs: { __table: 'ingestion_jobs', id: 'ingestionJobs.id' },
+  auditLogs: { __table: 'audit_logs' },
+  studyMemberships: { __table: 'study_memberships' },
 }))
 
 vi.mock('@ichtys/ingestion/ingestion-jobs', () => ({
@@ -90,7 +92,13 @@ beforeEach(() => {
     values: () => ({ returning: async () => [{ id: 'job-err' }] }),
   })
   mocks.transaction.mockImplementation(async (cb: (tx: { insert: () => unknown }) => unknown) => {
-    const insert = () => ({ values: () => ({ returning: async () => [{ id: 'row-1' }] }) })
+    // Cada fila que la transacción escribe queda registrada con su tabla.
+    const insert = (table?: { __table?: string }) => ({
+      values: (row?: unknown) => {
+        mocks.txValues(table?.__table, row)
+        return { returning: async () => [{ id: 'row-1' }] }
+      },
+    })
     return cb({ insert })
   })
 })
@@ -140,6 +148,31 @@ describe('POST /api/studies/bulk-import — gestión documental (S1)', () => {
     expect(res.status).toBe(202)
     expect(mocks.putPrivateDocumentPdf).toHaveBeenCalledTimes(1)
     expect(mocks.transaction).toHaveBeenCalledTimes(1)
+    // El 202 solo no alcanza: un ítem que falla adentro también devuelve 202.
+    const body = (await res.json()) as { items: Array<{ status: string }> }
+    expect(body.items[0]?.status).not.toBe('error')
+  })
+
+  it('quien importa queda como miembro de cada estudio que abre, en la misma transacción (regla 3)', async () => {
+    mocks.auth.mockResolvedValue({ userId: 'user_1', orgId: 'org_clerk', orgRole: 'org:study_admin' })
+
+    const res = await POST(bulkRequest())
+
+    expect(res.status).toBe(202)
+    const written = mocks.txValues.mock.calls as Array<[string | undefined, Record<string, unknown>]>
+    const membership = written.filter(([table]) => table === 'study_memberships')
+    expect(membership).toHaveLength(1)
+    expect(membership[0]?.[1]).toEqual({
+      organizationId: 'org-interna',
+      studyId: 'row-1',
+      userId: 'user_1',
+      createdBy: 'user_1',
+    })
+    const grants = written.filter(
+      ([table, row]) => table === 'audit_logs' && row.action === 'access.membership.grant',
+    )
+    expect(grants).toHaveLength(1)
+    expect(grants[0]?.[1]).toMatchObject({ studyId: 'row-1', userId: 'user_1', resourceType: 'study_membership' })
   })
 })
 
