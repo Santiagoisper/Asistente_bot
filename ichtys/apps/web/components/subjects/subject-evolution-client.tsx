@@ -3,6 +3,8 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 
+import { bloodPressureProposalLabel } from '../../lib/subjects/proposal-display'
+
 interface EvolutionItem {
   id: string
   visitLabel: string | null
@@ -417,12 +419,8 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
             Esto se leyó automáticamente en una evolución. Todavía no forma parte del perfil ni del screening. Comparalo con la evolución antes de aceptar.
           </p>
           <ul className="mt-2 space-y-1 text-sm text-amber-950">
-            {proposal.facts.ageYears ? <li>Edad: {proposal.facts.ageYears} años</li> : null}
-            {proposal.facts.systolic && proposal.facts.diastolic ? (
-              <li>
-                Presión arterial: {proposal.facts.systolic}/{proposal.facts.diastolic}
-              </li>
-            ) : null}
+            {proposal.facts.ageYears !== undefined ? <li>Edad: {proposal.facts.ageYears} años</li> : null}
+            {bloodPressureProposalLabel(proposal.facts) ? <li>{bloodPressureProposalLabel(proposal.facts)}</li> : null}
             {proposal.facts.labs.map((lab) => (
               <li key={`lab-${lab.name}`}>
                 Laboratorio · {lab.name}: {lab.value}
