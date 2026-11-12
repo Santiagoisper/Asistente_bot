@@ -48,8 +48,8 @@ export default async function LaboratoriosPage() {
   let reports: PendingLabReportRow[]
   try {
     const loaded = await Promise.all([
-      listPendingLabReviews(ctx.orgId, MAX_ROWS),
-      listPendingLabReports(ctx.orgId, MAX_ROWS),
+      listPendingLabReviews(ctx.orgId, ctx.studyScope, MAX_ROWS),
+      listPendingLabReports(ctx.orgId, ctx.studyScope, MAX_ROWS),
     ])
     rows = loaded[0]
     reports = loaded[1]

@@ -1,7 +1,7 @@
 import Link from 'next/link'
-import { auth } from '@clerk/nextjs/server'
-import { resolveOrProvisionOrganization } from '@ichtys/auth'
-import { db, eq, studies } from '@ichtys/db'
+import { studyScopeFilter } from '@ichtys/auth/study-scope'
+import { and, db, eq, studies } from '@ichtys/db'
+import { getOsContext } from '../../../lib/os/context'
 import { CreateStudyForm } from '../../../components/documents/create-study-form'
 
 const STUDY_STATUS_LABEL: Record<string, string> = {
@@ -11,17 +11,15 @@ const STUDY_STATUS_LABEL: Record<string, string> = {
 }
 
 export default async function StudiesPage() {
-  const { orgId: clerkOrgId } = await auth()
+  // Organización, modo y alcance salen del mismo lugar que en el resto del OS.
+  const ctx = await getOsContext()
   let studyList: { id: string; name: string; protocolNumber: string | null; status: string; createdAt: Date }[] = []
 
-  if (clerkOrgId) {
-    const org = await resolveOrProvisionOrganization(clerkOrgId)
-    if (org) {
-      studyList = await db.query.studies.findMany({
-        where: eq(studies.organizationId, org.id),
-        orderBy: (s, ops) => [ops.desc(s.createdAt)],
-      })
-    }
+  if (ctx) {
+    studyList = await db.query.studies.findMany({
+      where: and(eq(studies.organizationId, ctx.orgId), studyScopeFilter(ctx.studyScope, studies.id)),
+      orderBy: (s, ops) => [ops.desc(s.createdAt)],
+    })
   }
 
   const activeCount = studyList.filter((s) => s.status === 'active').length
