@@ -10,7 +10,9 @@
     "./roles": "./roles.ts",
     "./validate-study-access": "./validate-study-access.ts",
     "./api-errors": "./api-errors.ts",
-    "./object-access": "./object-access.ts"
+    "./object-access": "./object-access.ts",
+    "./functions": "./functions.ts",
+    "./access-subject": "./access-subject.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

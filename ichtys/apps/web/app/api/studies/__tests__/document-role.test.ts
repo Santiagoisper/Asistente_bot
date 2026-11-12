@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   resolveOrProvisionOrganization: vi.fn(),
   insert: vi.fn(),
   auditValues: vi.fn(),
+  functionRows: vi.fn(),
 }))
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: mocks.auth }))
@@ -30,7 +31,11 @@ vi.mock('@ichtys/db', () => {
       table === auditLogs ? { values: (row: unknown) => mocks.auditValues(row) } : mocks.insert(table),
   }
   return {
-    db: { transaction: async (run: (t: typeof tx) => Promise<unknown>) => run(tx) },
+    db: {
+      transaction: async (run: (t: typeof tx) => Promise<unknown>) => run(tx),
+      select: () => ({ from: () => ({ where: mocks.functionRows }) }),
+    },
+    memberFunctions: { functionKey: 'mf.function_key', organizationId: 'mf.organization_id', userId: 'mf.user_id', revokedAt: 'mf.revoked_at' },
     studies,
     auditLogs,
   }
@@ -55,11 +60,12 @@ function createRequest(): Request {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.resolveOrProvisionOrganization.mockResolvedValue({ id: 'org-interna' })
+  mocks.resolveOrProvisionOrganization.mockResolvedValue({ id: 'org-interna', accessMode: 'open' })
   mocks.insert.mockReturnValue({
     values: () => ({ returning: async () => [STUDY] }),
   })
   mocks.auditValues.mockResolvedValue(undefined)
+  mocks.functionRows.mockResolvedValue([])
 })
 
 describe('POST /api/studies — gestión documental (S1)', () => {
@@ -137,5 +143,40 @@ describe('POST /api/studies — gestión documental (S1)', () => {
     await POST(createRequest())
 
     expect(mocks.auditValues).not.toHaveBeenCalled()
+  })
+})
+
+describe('POST /api/studies — modo estricto', () => {
+  const strict = (...functions: string[]) => {
+    mocks.resolveOrProvisionOrganization.mockResolvedValue({ id: 'org-interna', accessMode: 'enforced' })
+    mocks.functionRows.mockResolvedValue(functions.map((functionKey) => ({ functionKey })))
+  }
+
+  it('el administrador de la organización, sin una función que abra estudios, no crea un estudio', async () => {
+    strict()
+    mocks.auth.mockResolvedValue({ userId: 'user_1', orgId: 'org_clerk', orgRole: 'org:admin' })
+
+    const res = await POST(createRequest())
+
+    expect(res.status).toBe(403)
+    expect(mocks.insert).not.toHaveBeenCalled()
+    expect(mocks.auditValues).not.toHaveBeenCalled()
+  })
+
+  it('un investigador no abre estudios', async () => {
+    strict('investigator')
+    mocks.auth.mockResolvedValue({ userId: 'user_1', orgId: 'org_clerk', orgRole: 'org:admin' })
+    expect((await POST(createRequest())).status).toBe(403)
+    expect(mocks.insert).not.toHaveBeenCalled()
+  })
+
+  it('el Study Coordinator abre un estudio aunque su rol histórico no alcanzara', async () => {
+    strict('study_coordinator')
+    mocks.auth.mockResolvedValue({ userId: 'user_1', orgId: 'org_clerk', orgRole: 'org:site_coordinator' })
+
+    const res = await POST(createRequest())
+
+    expect(res.status).toBe(201)
+    expect(mocks.auditValues).toHaveBeenCalledTimes(1)
   })
 })

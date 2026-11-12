@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { AccessError, canManageDocuments, handleApiError, validateStudyAccess } from '@ichtys/auth'
+import { allows } from '@ichtys/auth/functions'
 import { auditLogs, db, documents, documentVersions } from '@ichtys/db'
 import { putPrivateDocumentPdf } from './blob-storage'
 import {
@@ -107,7 +108,7 @@ export async function POST(req: Request): Promise<Response> {
     }
 
     const access = await validateStudyAccess(studyId.data)
-    if (!canManageDocuments(access.role)) {
+    if (!allows(access.access, 'documents.manage', canManageDocuments)) {
       throw new AccessError('Forbidden', 403)
     }
     const { userId, orgId, study } = access

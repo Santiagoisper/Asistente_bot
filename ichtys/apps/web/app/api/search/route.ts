@@ -1,5 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { canAccessPhiData, handleApiError, normalizeRole } from '@ichtys/auth'
+import { loadAccessSubject } from '@ichtys/auth/access-subject'
+import { allows } from '@ichtys/auth/functions'
 import { db, eq, organizations } from '@ichtys/db'
 import { isOsEnabled } from '../../../lib/flags'
 import { searchOs } from '../../../lib/os/search'
@@ -26,8 +28,13 @@ export async function GET(req: Request): Promise<Response> {
     })
     if (!org) return Response.json(EMPTY_SEARCH)
 
+    const access = await loadAccessSubject({ org, userId, role: normalizeRole(orgRole) })
+    // Modo estricto: sin una función que permita entrar a estudios, el buscador
+    // no devuelve nada. En modo `open` todo miembro de la organización buscaba.
+    if (!allows(access, 'study.read', () => true)) return Response.json(EMPTY_SEARCH)
+
     const results = await searchOs(org.id, query, {
-      includeSubjects: canAccessPhiData(normalizeRole(orgRole)),
+      includeSubjects: allows(access, 'clinical.read', canAccessPhiData),
     })
     return Response.json(results, { headers: { 'cache-control': 'no-store' } })
   } catch (err) {

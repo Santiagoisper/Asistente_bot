@@ -1,5 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { canAdministerOrg, handleApiError, normalizeRole } from '@ichtys/auth'
+import { loadAccessSubject } from '@ichtys/auth/access-subject'
+import { allows } from '@ichtys/auth/functions'
 import { db, eq, organizations } from '@ichtys/db'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../lib/api/body-limit'
 import { writeAuditLog } from '../../../../lib/chat/persistence'
@@ -20,10 +22,13 @@ export async function PUT(req: Request): Promise<Response> {
 
     const { userId, orgId: clerkOrgId, orgRole } = await auth()
     if (!userId || !clerkOrgId) return new Response('Unauthorized', { status: 401 })
-    if (!canAdministerOrg(normalizeRole(orgRole))) return new Response('Forbidden', { status: 403 })
-
     const org = await db.query.organizations.findFirst({ where: eq(organizations.clerkOrgId, clerkOrgId) })
     if (!org) return new Response('Forbidden', { status: 403 })
+
+    // En modo `open` decide el rol de administrador de la organización; en modo
+    // estricto, la capacidad `org.settings`.
+    const access = await loadAccessSubject({ org, userId, role: normalizeRole(orgRole) })
+    if (!allows(access, 'org.settings', canAdministerOrg)) return new Response('Forbidden', { status: 403 })
 
     let body: unknown
     try {

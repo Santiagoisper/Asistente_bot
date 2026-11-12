@@ -1,11 +1,15 @@
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { canAccessPhiData, canAdministerOrg, normalizeRole, resolveOrProvisionOrganization, type Role } from '@ichtys/auth'
+import { loadAccessSubject } from '@ichtys/auth/access-subject'
+import { allows, type AccessSubject } from '@ichtys/auth/functions'
 
 export interface OsContext {
   userId: string
   /** Id interno de la organización, resuelto desde el token de Clerk. Nunca viene del pedido. */
   orgId: string
   role: Role
+  /** Modo de la organización y funciones de la persona, para decidir capacidades con `allows`. */
+  access: AccessSubject
   /** Puede ver datos de sujetos (códigos, pendientes de laboratorio). */
   canSeeSubjects: boolean
   canAdministerOrg: boolean
@@ -28,12 +32,14 @@ export async function getOsContext(): Promise<OsContext | null> {
   if (!org) return null
 
   const role = normalizeRole(orgRole)
+  const access = await loadAccessSubject({ org, userId, role })
   return {
     userId,
     orgId: org.id,
     role,
-    canSeeSubjects: canAccessPhiData(role),
-    canAdministerOrg: canAdministerOrg(role),
+    access,
+    canSeeSubjects: allows(access, 'clinical.read', canAccessPhiData),
+    canAdministerOrg: allows(access, 'org.settings', canAdministerOrg),
   }
 }
 

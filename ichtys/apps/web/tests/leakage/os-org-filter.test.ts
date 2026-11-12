@@ -64,7 +64,7 @@ describe('leakage — consultas del OS filtradas por organización', () => {
   it('la configuración del centro solo se escribe en la organización del token', () => {
     const route = readFileSync(join(WEB_ROOT, 'app/api/os/org-config/route.ts'), 'utf8')
     expect(route).toContain('await auth()')
-    expect(route).toContain('canAdministerOrg(')
+    expect(route).toContain("allows(access, 'org.settings', canAdministerOrg)")
     expect(route).not.toMatch(/orgId: (body|parsed\.data)/)
     const service = readFileSync(join(WEB_ROOT, 'lib/os/org-admin-service.ts'), 'utf8')
     expect(countMatches(service, /organizationId: params\.orgId/g)).toBeGreaterThanOrEqual(countMatches(service, /\.insert\(/g))

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   findOrg: vi.fn(),
+  functionRows: vi.fn(),
   saveOrgModule: vi.fn(),
   saveOrgTimeZone: vi.fn(),
   writeAuditLog: vi.fn(),
@@ -12,7 +13,11 @@ vi.mock('@clerk/nextjs/server', () => ({ auth: mocks.auth }))
 vi.mock('@ichtys/db', () => ({
   organizations: { clerkOrgId: 'clerk_org_id' },
   eq: (column: unknown, value: unknown) => ({ column, value }),
-  db: { query: { organizations: { findFirst: mocks.findOrg } } },
+  db: {
+    query: { organizations: { findFirst: mocks.findOrg } },
+    select: () => ({ from: () => ({ where: mocks.functionRows }) }),
+  },
+  memberFunctions: { functionKey: 'mf.function_key', organizationId: 'mf.organization_id', userId: 'mf.user_id', revokedAt: 'mf.revoked_at' },
 }))
 vi.mock('../../../../../lib/chat/persistence', () => ({ writeAuditLog: mocks.writeAuditLog }))
 vi.mock('../../../../../lib/os/org-admin-service', () => ({ saveOrgModule: mocks.saveOrgModule, saveOrgTimeZone: mocks.saveOrgTimeZone }))
@@ -27,7 +32,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   process.env.VERCEL_ENV = 'preview'
   mocks.auth.mockResolvedValue({ userId: 'user_1', orgId: 'org_clerk_a', orgRole: 'org:admin' })
-  mocks.findOrg.mockResolvedValue({ id: 'org-a' })
+  mocks.findOrg.mockResolvedValue({ id: 'org-a', accessMode: 'open' })
+  mocks.functionRows.mockResolvedValue([])
 })
 
 afterEach(() => {
@@ -104,5 +110,32 @@ describe('PUT /api/os/org-config — configuración del centro', () => {
     delete process.env.ALPHI_OS
     expect((await PUT(put(moduleBody))).status).toBe(404)
     expect(mocks.auth).not.toHaveBeenCalled()
+  })
+})
+
+describe('PUT /api/os/org-config — modo estricto', () => {
+  const strict = (...functions: string[]) => {
+    mocks.findOrg.mockResolvedValue({ id: 'org-a', accessMode: 'enforced' })
+    mocks.functionRows.mockResolvedValue(functions.map((functionKey) => ({ functionKey })))
+  }
+
+  it('un rol alto sin la función de administración no cambia la configuración', async () => {
+    strict('operations_director', 'study_coordinator')
+    mocks.auth.mockResolvedValue({ userId: 'user_2', orgId: 'org_clerk_a', orgRole: 'org:study_admin' })
+    expect((await PUT(put(moduleBody))).status).toBe(403)
+    expect(mocks.saveOrgModule).not.toHaveBeenCalled()
+  })
+
+  it('con la función de administración sí, aunque el rol histórico fuera el más bajo', async () => {
+    strict('platform_admin')
+    mocks.auth.mockResolvedValue({ userId: 'user_2', orgId: 'org_clerk_a', orgRole: 'org:read_only_monitor' })
+    expect((await PUT(put(moduleBody))).status).toBe(200)
+    expect(mocks.saveOrgModule).toHaveBeenCalledTimes(1)
+  })
+
+  it('M14: el administrador de la organización conserva la administración sin tener la función cargada', async () => {
+    strict()
+    mocks.auth.mockResolvedValue({ userId: 'user_1', orgId: 'org_clerk_a', orgRole: 'org:admin' })
+    expect((await PUT(put(moduleBody))).status).toBe(200)
   })
 })

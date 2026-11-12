@@ -135,6 +135,7 @@ beforeEach(() => {
     orgId: ORG_ID,
     study: { id: STUDY_ID, name: 'Estudio' },
     role: 'site_coordinator',
+    access: { mode: 'open', role: 'site_coordinator', functions: [] },
   })
 })
 
@@ -219,6 +220,7 @@ describe('POST /api/documents/upload — G14-53-1 acceso antes del archivo', () 
       orgId: ORG_ID,
       study: { id: STUDY_ID, name: 'Estudio' },
       role: 'read_only_monitor',
+      access: { mode: 'open', role: 'read_only_monitor', functions: [] },
     })
     let pulls = 0
     const body = new ReadableStream<Uint8Array>({
@@ -351,6 +353,7 @@ describe('POST /api/documents/upload — gestión documental (S1)', () => {
         orgId: ORG_ID,
         study: { id: STUDY_ID, name: 'Estudio' },
         role,
+        access: { mode: 'open', role, functions: [] },
       })
 
       const res = await POST(uploadRequest())
@@ -361,4 +364,39 @@ describe('POST /api/documents/upload — gestión documental (S1)', () => {
       expect(mocks.transaction).not.toHaveBeenCalled()
     },
   )
+})
+
+describe('POST /api/documents/upload — modo estricto', () => {
+  const context = (role: string, functions: string[]) => ({
+    userId: 'user_test',
+    orgId: ORG_ID,
+    study: { id: STUDY_ID, name: 'Estudio' },
+    role,
+    access: { mode: 'enforced', role, functions },
+  })
+
+  it('el rol más alto, sin una función que gestione documentos, no sube el PDF', async () => {
+    mockTransaction()
+    mocks.validateStudyAccess.mockResolvedValue(context('org_admin', ['investigator', 'lab_assistant']))
+
+    const res = await POST(uploadRequest())
+
+    expect(res.status).toBe(403)
+    expect(mocks.putPrivateDocumentPdf).not.toHaveBeenCalled()
+    expect(mocks.transaction).not.toHaveBeenCalled()
+  })
+
+  it('el asistente de regulatorio sube el PDF aunque su rol histórico no gestionara documentos', async () => {
+    mockTransaction()
+    mocks.putPrivateDocumentPdf.mockResolvedValue({
+      url: 'https://s.private.blob/x/protocolo.pdf',
+      pathname: 'x/protocolo.pdf',
+    })
+    mocks.validateStudyAccess.mockResolvedValue(context('principal_investigator', ['regulatory_assistant']))
+
+    const res = await POST(uploadRequest())
+
+    expect(res.status).not.toBe(403)
+    expect(mocks.putPrivateDocumentPdf).toHaveBeenCalledTimes(1)
+  })
 })

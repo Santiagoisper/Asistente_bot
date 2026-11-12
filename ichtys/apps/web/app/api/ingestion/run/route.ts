@@ -1,5 +1,6 @@
 import { after } from 'next/server'
 import { AccessError, canManageDocuments, handleApiError, validateDocumentVersionAccess } from '@ichtys/auth'
+import { allows } from '@ichtys/auth/functions'
 import { runIngestion } from '@ichtys/ingestion'
 import {
   enforceSlidingWindowRateLimit,
@@ -51,7 +52,7 @@ export async function POST(req: Request): Promise<Response> {
 
   try {
     const access = await validateDocumentVersionAccess(parsed.data.documentVersionId)
-    if (!canManageDocuments(access.role)) {
+    if (!allows(access.access, 'documents.manage', canManageDocuments)) {
       throw new AccessError('Forbidden', 403)
     }
     const { userId, orgId, studyId, document, documentVersion } = access
