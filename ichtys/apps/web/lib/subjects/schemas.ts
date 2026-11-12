@@ -24,6 +24,9 @@ export const evolutionSourceSchema = z
     modelRevision: z.string().trim().min(1).max(80),
     corrections: z.number().int().min(0).max(500),
     missingBlocks: z.number().int().min(0).max(50),
+    /** Opcionales: un cliente anterior a este cambio no los manda. */
+    layout: z.enum(['blocks', 'narrative']).optional(),
+    repetitions: z.number().int().min(0).max(50).optional(),
   })
   .strict()
 export type EvolutionSource = z.infer<typeof evolutionSourceSchema>

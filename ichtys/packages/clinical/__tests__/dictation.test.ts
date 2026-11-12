@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { applySpokenCorrections, buildDictationDraft, NOT_MENTIONED, splitIntoBlocks, trimSilence } from '../dictation'
+import {
+  applySpokenCorrections,
+  buildDictationDraft,
+  collapseRepetitions,
+  CORRECTION_WORDS,
+  DICTATION_BLOCKS,
+  DICTATION_CORRECTION_EXAMPLE,
+  DICTATION_GUIDE_STEPS,
+  dictationGuideScript,
+  NOT_MENTIONED,
+  splitIntoBlocks,
+  trimSilence,
+} from '../dictation'
+import { extractFactsFromEvolution } from '../extract-facts'
 
 const RATE = 16_000
 function tone(seconds: number, amplitude = 0.3): Float32Array {
@@ -84,7 +97,7 @@ describe('bloques de la evolución dictada', () => {
   })
 
   it('el borrador escribe «No mencionado» en cada bloque sin dictar y cuenta las correcciones', () => {
-    const draft = buildDictationDraft('Motivo: control.  Signos vitales: presión 140 sobre 90. Corrijo: 130 sobre 85.')
+    const draft = buildDictationDraft('Motivo: control.  Signos vitales: presión 140 sobre 90. Corrijo: 130 sobre 85. Plan: laboratorio.')
     expect(draft.text).toContain('Motivo de la visita: Control.')
     expect(draft.text).toContain('Signos vitales: Presión 130 sobre 85.')
     expect(draft.text).toContain(`Eventos adversos: ${NOT_MENTIONED}`)
@@ -127,5 +140,118 @@ describe('bloques de la evolución dictada', () => {
     const byId = Object.fromEntries(splitIntoBlocks('Motivo: control. Plano de la sala entregado. Pan sin sal.').map((block) => [block.id, block.text]))
     expect(byId.plan).toBeNull()
     expect(byId.motivo).toBe('Control. Plano de la sala entregado. Pan sin sal.')
+  })
+
+  describe('bucles del transcriptor', () => {
+    it('una frase repetida muchas veces queda una sola y se informa', () => {
+      const loop = Array.from({ length: 12 }, () => 'en el primer piso de la sala,').join(' ')
+      const { text, repetitions } = collapseRepetitions(`Se completan los formularios. ${loop} Plan: control en dos semanas.`)
+      expect(text).toBe('Se completan los formularios. en el primer piso de la sala, Plan: control en dos semanas.')
+      expect(repetitions).toEqual([{ phrase: 'en el primer piso de la sala', times: 12 }])
+    })
+
+    it('ignora mayúsculas, acentos y puntuación al comparar', () => {
+      const { repetitions } = collapseRepetitions('Signos vitales. signos vitales, SIGNOS VITALES. Presión 120 sobre 80. Signos vitales bien.')
+      expect(repetitions).toEqual([])
+      const three = collapseRepetitions('Se evalúa al paciente. Se evalua al paciente, SE EVALÚA AL PACIENTE. Plan.')
+      expect(three.repetitions).toEqual([{ phrase: 'Se evalúa al paciente', times: 3 }])
+    })
+
+    it('dos veces no es un bucle, y una palabra repetida tampoco', () => {
+      expect(collapseRepetitions('Sin dolor abdominal. Sin dolor abdominal. Plan.').repetitions).toEqual([])
+      expect(collapseRepetitions('sí sí sí sí, refiere mejoría').repetitions).toEqual([])
+    })
+
+    it('el borrador avisa el bucle y no lo deja en el texto', () => {
+      const loop = Array.from({ length: 5 }, () => 'se indica reposo relativo').join(' ')
+      const draft = buildDictationDraft(`Motivo: control. ${loop}. Plan: volver en un mes.`)
+      expect(draft.repetitions).toHaveLength(1)
+      expect(draft.text.match(/reposo relativo/g)).toHaveLength(1)
+    })
+  })
+
+  describe('texto corrido', () => {
+    const narrative =
+      'En el día de la fecha concurre al centro en ayunas a realizar la visita número 4 del estudio. Se evalúan cambios en procedimientos y en medicamentos. ' +
+      'Refiere buena tolerancia. Se completa el cuestionario en papel. Signos vitales. Sistólica 128, diastólica 95, frecuencia cardíaca 73.'
+
+    it('si casi no se nombraron apartados, respeta el texto y no agrega renglones', () => {
+      const draft = buildDictationDraft(narrative)
+      expect(draft.layout).toBe('narrative')
+      expect(draft.text).not.toContain(NOT_MENTIONED)
+      expect(draft.text).not.toMatch(/^Apertura:/)
+      expect(draft.text.split('\n')).toEqual([
+        'En el día de la fecha concurre al centro en ayunas a realizar la visita número 4 del estudio. Se evalúan cambios en procedimientos y en medicamentos. Refiere buena tolerancia. Se completa el cuestionario en papel.',
+        'Signos vitales: Sistólica 128, diastólica 95, frecuencia cardíaca 73.',
+      ])
+    })
+
+    it('los apartados que no se oyeron quedan como lista de control, fuera del texto', () => {
+      const draft = buildDictationDraft(narrative)
+      expect(draft.missing).toContain('plan')
+      expect(draft.missing).not.toContain('vitales')
+    })
+
+    it('quien nombra los apartados sigue recibiendo el borrador por bloques', () => {
+      const draft = buildDictationDraft('Motivo: control. Medicación actual: metformina. Signos vitales: 120 sobre 80. Plan: laboratorio.')
+      expect(draft.layout).toBe('blocks')
+      expect(draft.text).toContain(`Examen físico: ${NOT_MENTIONED}`)
+    })
+  })
+
+  describe('la guía que lee el médico y lo que el sistema reconoce son lo mismo', () => {
+    const draft = buildDictationDraft(dictationGuideScript())
+
+    it('dictar la guía entera llena todos los apartados, cada frase en el suyo', () => {
+      expect(draft.layout).toBe('blocks')
+      expect(draft.missing).toEqual([])
+      for (const block of DICTATION_BLOCKS) {
+        const got = draft.blocks.find((candidate) => candidate.id === block.id)?.text
+        expect(got, block.title).toBe(block.example)
+      }
+    })
+
+    it('lo que la guía manda decir para abrir un apartado, lo abre', () => {
+      for (const step of DICTATION_GUIDE_STEPS) {
+        if (!step.say) continue
+        const blocks = splitIntoBlocks(`${step.say}. Texto de prueba.`)
+        expect(blocks.filter((block) => block.text !== null).map((block) => block.title), step.say).toEqual([step.title])
+      }
+    })
+
+    it('«Evolución» abre Evolución y no Evaluación, aunque estén a dos letras', () => {
+      const blocks = splitIntoBlocks('Evolución. Refiere mejoría. Evaluación. Estable.')
+      const byId = Object.fromEntries(blocks.map((block) => [block.id, block.text]))
+      expect(byId.evolucion).toBe('Refiere mejoría.')
+      expect(byId.evaluacion).toBe('Estable.')
+    })
+
+    it('una frase que termina como un encabezado largo no lo abre', () => {
+      const blocks = splitIntoBlocks('Eventos adversos. Ninguno desde la última visita.')
+      const byId = Object.fromEntries(blocks.map((block) => [block.id, block.text]))
+      expect(byId.eventos).toBe('Ninguno desde la última visita.')
+      expect(byId.evolucion).toBeNull()
+    })
+
+    it('de la guía dictada salen los datos: edad, presión y medicación', () => {
+      const facts = extractFactsFromEvolution(draft.text)
+      expect(facts.ageYears).toBe(58)
+      expect([facts.systolic, facts.diastolic]).toEqual([132, 84])
+      expect(facts.medications.map((medication) => medication.name)).toEqual(['Metformina'])
+    })
+
+    it('cada palabra de corrección que enseña la guía funciona', () => {
+      for (const word of CORRECTION_WORDS) {
+        const { corrections } = applySpokenCorrections(`Presión arterial 140 sobre 90. ${word}, 132 sobre 84.`)
+        expect(corrections, word).toHaveLength(1)
+      }
+      const example = applySpokenCorrections(DICTATION_CORRECTION_EXAMPLE)
+      expect(example.text).toBe('Presión arterial 132 sobre 84.')
+    })
+
+    it('«Sin novedades» alcanza para que un apartado no figure como faltante', () => {
+      const blocks = splitIntoBlocks('Examen físico. Sin novedades.')
+      expect(blocks.find((block) => block.id === 'examen')?.text).toBe('Sin novedades.')
+    })
   })
 })
