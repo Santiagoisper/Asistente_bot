@@ -1,6 +1,6 @@
 # Acceso por estudio: funciones y membresía
 
-Estado: **decisiones M1–M15 tomadas el 11/11/2026; pasos 0, 1 y 2a en PR (#105, #107, #108)**. Revisado por Reviewer y por la revisión automática del PR. La sección de funciones se reescribió con la descripción de Santiago de cómo se organiza un centro; conviene que Reviewer la vuelva a mirar.
+Estado: **decisiones M1–M16 tomadas el 11/11/2026; pasos 0, 1, 2a y 2b-1 integrados (#105, #107, #108, #109); 2b-2a en PR (#111)**. Revisado por Reviewer y por la revisión automática del PR. La sección de funciones se reescribió con la descripción de Santiago de cómo se organiza un centro; conviene que Reviewer la vuelva a mirar.
 Fecha: 2026-11-11.
 
 ## El problema
@@ -42,7 +42,9 @@ Tomadas de cómo se organiza un centro grande. Un centro chico usa menos: un inv
 | Monitor | El asignado, con vencimiento | Lectura, sin datos clínicos |
 | Administración de la plataforma | Ninguno por esta función sola (M12) | Ajustes de la organización, claves, alta de personas. No ve datos clínicos |
 
-Todo el equipo del estudio ve los datos clínicos de los sujetos de sus estudios; el monitor no, igual que hoy.
+Todo el equipo del estudio (investigador, Study Coordinator y los tres asistentes) ve los datos clínicos de los sujetos de sus estudios, maneja los turnos y da de alta sujetos (M16). El investigador, además de evolucionar, confirma laboratorios. Quien solo mira —Dirección de Investigación y monitor— no modifica nada; el monitor tampoco ve datos clínicos, igual que hoy.
+
+**Ver datos no es poder cambiarlos.** En modo estricto, cada ruta que modifica exige su capacidad: evolucionar, cargar o confirmar un laboratorio, mover un turno, dar de alta un sujeto, gestionar documentos. La tabla de arriba resume; la lista exacta de capacidades por función está en `packages/auth/functions.ts` y sus pruebas.
 
 Tres reglas sobre las funciones:
 
@@ -232,6 +234,7 @@ Delegadas por Santiago el 11/11/2026 y resueltas con la recomendación:
 | M13 | ¿Quien administra puede asignarse a sí mismo otra función? | Sí. Queda auditado con marca propia de autoasignación y se muestra en la pantalla. Impedirlo dejaría sin salida al centro de una sola persona. Para centros grandes queda abierta la regla de dos personas |
 | M14 | ¿Puede una organización quedar sin nadie que asigne funciones? | No. Quien es administrador de la organización en el proveedor de identidad conserva siempre la administración de la plataforma, que no trae datos clínicos |
 | M15 | Fecha límite con personas que evolucionan y no tienen la función Investigador | El cambio ocurre igual. Reciben la función en forma provisoria, marcada y pendiente de confirmar. Nadie queda bloqueado; quien nunca evolucionó ya no puede |
+| M16 | Quién lleva la agenda, el alta de sujetos y los laboratorios | Todo el equipo del estudio maneja turnos y da de alta sujetos: el Study Coordinator tiene asistentes para repartir la operación del día. El investigador «lleva todo» lo clínico: además de evolucionar, confirma laboratorios. No gestiona documentos ni da accesos |
 
 ## Orden de trabajo
 
