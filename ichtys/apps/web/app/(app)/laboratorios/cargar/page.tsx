@@ -33,7 +33,7 @@ export default async function CargarLaboratorioPage() {
 
   let studies: StudyWithSubjects[]
   try {
-    studies = await listActiveStudies(ctx.orgId)
+    studies = await listActiveStudies(ctx.orgId, ctx.studyScope)
   } catch {
     console.error('[os/laboratorios/cargar] studies failed')
     return (

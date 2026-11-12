@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   membershipWhere: vi.fn(),
   conversationsFindFirst: vi.fn(),
   documentsFindFirst: vi.fn(),
+  versionsFindFirst: vi.fn(),
+  messagesFindFirst: vi.fn(),
 }))
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: mocks.auth, clerkClient: vi.fn() }))
@@ -38,6 +40,8 @@ vi.mock('@ichtys/db', () => ({
       studies: { findFirst: mocks.studiesFindFirst },
       conversations: { findFirst: mocks.conversationsFindFirst },
       documents: { findFirst: mocks.documentsFindFirst },
+      documentVersions: { findFirst: mocks.versionsFindFirst },
+      messages: { findFirst: mocks.messagesFindFirst },
     },
     // Dos consultas distintas pasan por `select`: las funciones (se espera el
     // `where`) y la membresía (encadena `.limit(1)`). Se distinguen por tabla.
@@ -85,6 +89,9 @@ import { loadAccessSubject } from '../access-subject'
 import {
   validateConversationAccess,
   validateDocumentAccess,
+  validateDocumentPageAccess,
+  validateDocumentVersionAccess,
+  validateMessageAccess,
 } from '../object-access'
 import { validatePhiStudyAccess, validateSubjectAccess } from '../phi-access'
 import { canEnterStudy } from '../study-membership'
@@ -123,6 +130,8 @@ beforeEach(() => {
   mocks.subjectsFindFirst.mockResolvedValue({ id: SUBJECT_ID, organizationId: ORG_ID, studyId: STUDY_ID })
   mocks.conversationsFindFirst.mockResolvedValue({ id: 'conv-ficticia', organizationId: ORG_ID, studyId: STUDY_ID })
   mocks.documentsFindFirst.mockResolvedValue({ id: 'doc-ficticio', organizationId: ORG_ID, studyId: STUDY_ID })
+  mocks.versionsFindFirst.mockResolvedValue({ id: 'ver-ficticia', organizationId: ORG_ID, studyId: STUDY_ID, documentId: 'doc-ficticio' })
+  mocks.messagesFindFirst.mockResolvedValue({ id: 'msg-ficticio', organizationId: ORG_ID, studyId: STUDY_ID })
   functions()
 })
 
@@ -507,5 +516,56 @@ describe('membresía por estudio (alcance)', () => {
     membership(false)
     await expect(validateSubjectAccess(SUBJECT_ID, STUDY_ID)).resolves.toBeDefined()
     expect(mocks.membershipRows).not.toHaveBeenCalled()
+  })
+
+  // Los tres validadores que solo cubría el tripwire estático (nota de Reviewer en #113).
+  it('versión de documento: sin membresía responde igual que una versión que no existe', async () => {
+    organization('enforced')
+    signIn('org:site_coordinator')
+    functions('regulatory_assistant')
+
+    mocks.versionsFindFirst.mockResolvedValueOnce(undefined)
+    const missing = await validateDocumentVersionAccess('ver-ficticia').catch((error: unknown) => error)
+    membership(false)
+    const foreign = await validateDocumentVersionAccess('ver-ficticia').catch((error: unknown) => error)
+
+    expect(missing).toMatchObject({ status: 404, message: 'Document version not found or access denied' })
+    expect(foreign).toMatchObject({ status: 404, message: 'Document version not found or access denied' })
+
+    membership(true)
+    await expect(validateDocumentVersionAccess('ver-ficticia')).resolves.toMatchObject({ studyId: STUDY_ID })
+  })
+
+  it('mensaje: sin membresía responde igual que un mensaje que no existe', async () => {
+    organization('enforced')
+    signIn('org:site_coordinator')
+    functions('investigator')
+
+    mocks.messagesFindFirst.mockResolvedValueOnce(undefined)
+    const missing = await validateMessageAccess('msg-ficticio').catch((error: unknown) => error)
+    membership(false)
+    const foreign = await validateMessageAccess('msg-ficticio').catch((error: unknown) => error)
+
+    expect(missing).toMatchObject({ status: 404, message: 'Message not found or access denied' })
+    expect(foreign).toMatchObject({ status: 404, message: 'Message not found or access denied' })
+
+    membership(true)
+    await expect(validateMessageAccess('msg-ficticio')).resolves.toMatchObject({ studyId: STUDY_ID })
+  })
+
+  it('página de documento: sin membresía responde igual que un documento que no existe, y no llega a buscar la página', async () => {
+    organization('enforced')
+    signIn('org:site_coordinator')
+    functions('regulatory_assistant')
+
+    mocks.documentsFindFirst.mockResolvedValueOnce(undefined)
+    const missing = await validateDocumentPageAccess('doc-ficticio', 1).catch((error: unknown) => error)
+    membership(false)
+    mocks.versionsFindFirst.mockClear()
+    const foreign = await validateDocumentPageAccess('doc-ficticio', 1).catch((error: unknown) => error)
+
+    expect(missing).toMatchObject({ status: 404, message: 'Document not found or access denied' })
+    expect(foreign).toMatchObject({ status: 404, message: 'Document not found or access denied' })
+    expect(mocks.versionsFindFirst).not.toHaveBeenCalled()
   })
 })

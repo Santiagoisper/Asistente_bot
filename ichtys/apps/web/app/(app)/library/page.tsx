@@ -1,6 +1,6 @@
-import { auth } from '@clerk/nextjs/server'
-import { resolveOrProvisionOrganization } from '@ichtys/auth'
-import { db, eq, studies, documentVersions, studySpecs } from '@ichtys/db'
+import { studyScopeFilter } from '@ichtys/auth/study-scope'
+import { and, db, eq, studies, documentVersions, studySpecs } from '@ichtys/db'
+import { getOsContext } from '../../../lib/os/context'
 import { studySpecSchema, isMeaningfulSpec } from '@ichtys/ingestion'
 import { extractSpecTerminology, parseTerminologyAnnotations, readLegacySpecTerminology } from '../../../lib/rag/spec-terminology'
 import { LibraryClient, type LibraryRow } from '../../../components/library/library-client'
@@ -8,81 +8,80 @@ import { LibraryClient, type LibraryRow } from '../../../components/library/libr
 export const dynamic = 'force-dynamic'
 
 export default async function LibraryPage() {
-  const { orgId: clerkOrgId } = await auth()
+  const ctx = await getOsContext()
   let rows: LibraryRow[] = []
 
-  if (clerkOrgId) {
-    const org = await resolveOrProvisionOrganization(clerkOrgId)
-    if (org) {
-      const [studyList, versions, specs] = await Promise.all([
-        db.query.studies.findMany({
-          where: eq(studies.organizationId, org.id),
-          orderBy: (s, ops) => [ops.desc(s.createdAt)],
-        }),
-        db.query.documentVersions.findMany({
-          where: eq(documentVersions.organizationId, org.id),
-        }),
-        db.query.studySpecs.findMany({
-          where: eq(studySpecs.organizationId, org.id),
-          orderBy: (sp, ops) => [ops.desc(sp.version)],
-        }),
-      ])
+  if (ctx) {
+    const org = { id: ctx.orgId }
+    const scope = ctx.studyScope
+    const [studyList, versions, specs] = await Promise.all([
+      db.query.studies.findMany({
+        where: and(eq(studies.organizationId, org.id), studyScopeFilter(scope, studies.id)),
+        orderBy: (s, ops) => [ops.desc(s.createdAt)],
+      }),
+      db.query.documentVersions.findMany({
+        where: and(eq(documentVersions.organizationId, org.id), studyScopeFilter(scope, documentVersions.studyId)),
+      }),
+      db.query.studySpecs.findMany({
+        where: and(eq(studySpecs.organizationId, org.id), studyScopeFilter(scope, studySpecs.studyId)),
+        orderBy: (sp, ops) => [ops.desc(sp.version)],
+      }),
+    ])
 
-      // Conteo de documentos indexados (versiones 'ready') por estudio.
-      const readyByStudy = new Map<string, number>()
-      for (const v of versions) {
-        if (v.status === 'ready') {
-          readyByStudy.set(v.studyId, (readyByStudy.get(v.studyId) ?? 0) + 1)
-        }
+    // Conteo de documentos indexados (versiones 'ready') por estudio.
+    const readyByStudy = new Map<string, number>()
+    for (const v of versions) {
+      if (v.status === 'ready') {
+        readyByStudy.set(v.studyId, (readyByStudy.get(v.studyId) ?? 0) + 1)
       }
-
-      // Spec de mayor versión con contenido útil por estudio.
-      const specsByStudy = new Map<string, (typeof specs)[number][]>()
-      for (const sp of specs) {
-        const list = specsByStudy.get(sp.studyId) ?? []
-        list.push(sp)
-        specsByStudy.set(sp.studyId, list)
-      }
-
-      rows = studyList.map((study) => {
-        const studySpecsList = specsByStudy.get(study.id) ?? []
-        studySpecsList.sort((a, b) => b.version - a.version)
-        let spec: (typeof specs)[number] | undefined
-        for (const sp of studySpecsList) {
-          const parsed = studySpecSchema.safeParse(sp.spec)
-          if (parsed.success && isMeaningfulSpec(parsed.data)) {
-            spec = sp
-            break
-          }
-        }
-        spec ??= studySpecsList[0]
-        const parsed = spec ? studySpecSchema.safeParse(spec.spec) : null
-        const data = parsed?.success ? parsed.data : null
-
-        // Terminología: columna dedicada → legacy jsonb → on-demand.
-        const terminology =
-          (spec ? parseTerminologyAnnotations(spec.terminologyAnnotations) : null) ??
-          (spec ? readLegacySpecTerminology(spec.spec) : null) ??
-          (data ? extractSpecTerminology(data) : [])
-
-        return {
-          studyId: study.id,
-          name: study.name,
-          protocolCode: data?.identification.protocolCode ?? study.protocolNumber ?? null,
-          title: data?.identification.title ?? null,
-          phase: data?.identification.phase ?? null,
-          specStatus: spec ? (spec.status as 'draft' | 'approved' | 'superseded') : null,
-          indexedDocs: readyByStudy.get(study.id) ?? 0,
-          inclusionCount: data?.inclusionCriteria.length ?? 0,
-          exclusionCount: data?.exclusionCriteria.length ?? 0,
-          endpointCount: data?.endpoints.length ?? 0,
-          visitCount: data?.visits.length ?? 0,
-          terminology: terminology.map((t) => ({ system: t.system, code: t.code, display: t.display })),
-          createdAt: study.createdAt.toISOString(),
-          specPartial: spec ? (parsed?.success ? !isMeaningfulSpec(parsed.data) : true) : false,
-        }
-      })
     }
+
+    // Spec de mayor versión con contenido útil por estudio.
+    const specsByStudy = new Map<string, (typeof specs)[number][]>()
+    for (const sp of specs) {
+      const list = specsByStudy.get(sp.studyId) ?? []
+      list.push(sp)
+      specsByStudy.set(sp.studyId, list)
+    }
+
+    rows = studyList.map((study) => {
+      const studySpecsList = specsByStudy.get(study.id) ?? []
+      studySpecsList.sort((a, b) => b.version - a.version)
+      let spec: (typeof specs)[number] | undefined
+      for (const sp of studySpecsList) {
+        const parsed = studySpecSchema.safeParse(sp.spec)
+        if (parsed.success && isMeaningfulSpec(parsed.data)) {
+          spec = sp
+          break
+        }
+      }
+      spec ??= studySpecsList[0]
+      const parsed = spec ? studySpecSchema.safeParse(spec.spec) : null
+      const data = parsed?.success ? parsed.data : null
+
+      // Terminología: columna dedicada → legacy jsonb → on-demand.
+      const terminology =
+        (spec ? parseTerminologyAnnotations(spec.terminologyAnnotations) : null) ??
+        (spec ? readLegacySpecTerminology(spec.spec) : null) ??
+        (data ? extractSpecTerminology(data) : [])
+
+      return {
+        studyId: study.id,
+        name: study.name,
+        protocolCode: data?.identification.protocolCode ?? study.protocolNumber ?? null,
+        title: data?.identification.title ?? null,
+        phase: data?.identification.phase ?? null,
+        specStatus: spec ? (spec.status as 'draft' | 'approved' | 'superseded') : null,
+        indexedDocs: readyByStudy.get(study.id) ?? 0,
+        inclusionCount: data?.inclusionCriteria.length ?? 0,
+        exclusionCount: data?.exclusionCriteria.length ?? 0,
+        endpointCount: data?.endpoints.length ?? 0,
+        visitCount: data?.visits.length ?? 0,
+        terminology: terminology.map((t) => ({ system: t.system, code: t.code, display: t.display })),
+        createdAt: study.createdAt.toISOString(),
+        specPartial: spec ? (parsed?.success ? !isMeaningfulSpec(parsed.data) : true) : false,
+      }
+    })
   }
 
   return (
