@@ -79,6 +79,59 @@ export function isProviderFallbackError(err: unknown): boolean {
   )
 }
 
+/** Por qué falló una llamada al modelo, en términos que se pueden dejar en un log. */
+export interface LlmFailure {
+  name: string
+  status: number | null
+  kind: 'quota_or_billing' | 'auth' | 'model_not_found' | 'timeout' | 'bad_request' | 'other'
+  /** Palabras de una lista fija que aparecen en el mensaje del proveedor. Nunca el mensaje. */
+  hints: string[]
+}
+
+/**
+ * Palabras que alcanzan para orientar el diagnóstico de un pedido rechazado.
+ * La lista es fija a propósito: el mensaje del proveedor puede repetir el
+ * texto enviado, así que del mensaje solo sale si nombra alguna de estas.
+ */
+const FAILURE_HINTS = [
+  'credit balance',
+  'billing',
+  'quota',
+  'temperature',
+  'max_tokens',
+  'max_output_tokens',
+  'context length',
+  'too long',
+  'schema',
+  'tool',
+  'response_format',
+  'json',
+  'deprecated',
+  'not supported',
+  'unsupported',
+] as const
+
+/**
+ * Resume una falla del proveedor sin copiar su mensaje: código HTTP, categoría
+ * y pistas de `FAILURE_HINTS`. Es lo que se escribe en el log cuando una
+ * llamada falla, para poder saber la causa sin reproducirla.
+ */
+export function describeLlmFailure(err: unknown): LlmFailure {
+  if (typeof err !== 'object' || err === null) return { name: typeof err, status: null, kind: 'other', hints: [] }
+  const name = err instanceof Error && err.name ? err.name : 'Error'
+  const status = statusFromError(err)
+  const message = (err instanceof Error ? err.message : '').toLowerCase()
+  const hints = FAILURE_HINTS.filter((hint) => message.includes(hint))
+
+  let kind: LlmFailure['kind'] = 'other'
+  if (err instanceof LlmCallTimeoutError || name === 'AbortError' || name === 'TimeoutError') kind = 'timeout'
+  else if (isProviderQuotaError(err)) kind = 'quota_or_billing'
+  else if (status === 401 || status === 403 || /invalid x-api-key|api key not valid|authentication|incorrect api key|unauthorized/.test(message)) kind = 'auth'
+  else if (status === 404 || /model_not_found|does not exist|not found for api version/.test(message)) kind = 'model_not_found'
+  else if (status === 400 || status === 422) kind = 'bad_request'
+  return { name, status, kind, hints: [...hints] }
+}
+
 export interface RunWithLlmFallbackOptions {
   purpose: LlmPurpose
   providerPreference?: LlmProviderPreference
@@ -178,10 +231,13 @@ export async function runWithLlmFallback<T>(
       // se limita a 'auto': mientras quede alguien en la cadena, un error de
       // proveedor (cuota/auth/timeout) prueba al siguiente.
       const canFallback = !isLast && isProviderFallbackError(err)
+      // Diagnóstico sin el mensaje del proveedor (puede repetir el texto enviado).
+      const failure = { purpose: options.purpose, provider, modelId: getModelId(provider, options.purpose), keySource, ...describeLlmFailure(err) }
       if (canFallback) {
-        console.warn(`[llm] ${provider} failed — trying next provider (${(err as Error).message?.slice(0, 120)})`)
+        console.warn('[llm] provider failed — trying next provider', JSON.stringify(failure))
         continue
       }
+      console.error('[llm] provider failed — no fallback', JSON.stringify(failure))
       throw err
     }
   }
