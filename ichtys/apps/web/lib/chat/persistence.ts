@@ -315,7 +315,7 @@ export async function generateAndPersistConversationTitle(params: {
  * Metadata permitida: IDs, counts, confidence, codes — nunca texto de usuario,
  * respuestas, chunks, prompts ni PHI.
  */
-type AuditLogParams = {
+export type AuditLogParams = {
   action: AuditAction
   orgId?: string
   studyId?: string

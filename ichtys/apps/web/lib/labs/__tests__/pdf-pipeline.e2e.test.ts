@@ -9,6 +9,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 const store = vi.hoisted(() => ({
   reports: [] as Array<Record<string, unknown>>,
   analytes: [] as Array<Record<string, unknown>>,
+  audits: [] as Array<Record<string, unknown>>,
+  failAudit: false,
   profile: { labs: [] as Array<{ name: string; value: number; unit?: string }> },
   persisted: [] as Array<{ labs: Array<{ name: string; value: number; unit?: string }> }>,
 }))
@@ -16,10 +18,15 @@ const store = vi.hoisted(() => ({
 vi.mock('@ichtys/db', async (importOriginal) => {
   const original = await importOriginal<typeof import('@ichtys/db')>()
   const isReports = (table: unknown) => table === original.labReports
-  const db = {
+  const make = (via: 'db' | 'tx') => ({
     insert: (table: unknown) => ({
       values: (values: Record<string, unknown> | Array<Record<string, unknown>>) => {
         const list = Array.isArray(values) ? values : [values]
+        if (table === original.auditLogs) {
+          if (store.failAudit) return Promise.reject(new Error('audit insert failed'))
+          store.audits.push({ via, ...list[0] })
+          return Promise.resolve()
+        }
         if (isReports(table)) {
           const row = { id: '33333333-3333-4333-8333-333333333333', createdAt: new Date(), reviewedAt: null, ...list[0] }
           store.reports.push(row)
@@ -54,7 +61,8 @@ vi.mock('@ichtys/db', async (importOriginal) => {
         }),
       }),
     }),
-  }
+  })
+  const db = { ...make('db'), transaction: async <T,>(work: (tx: unknown) => Promise<T>) => work(make('tx')) }
   return { ...original, db }
 })
 
@@ -96,6 +104,16 @@ function buildPdf(lines: string[]): Uint8Array {
 }
 
 const scope = { orgId: 'org-1', studyId: 'study-1', subjectId: 'subject-1' }
+const uploadAudit = (report: { reportId: string; rowCount: number }) => ({ action: 'lab.extract' as const, orgId: 'org-1', studyId: 'study-1', userId: 'user_1', resourceType: 'lab_report', resourceId: report.reportId, metadata: { rowCount: report.rowCount } })
+const audit = (facts?: { rowCount: number; newAnalytes: number }) => ({
+  action: facts ? ('lab.confirm' as const) : ('lab.reject' as const),
+  orgId: 'org-1',
+  studyId: 'study-1',
+  userId: 'user_2',
+  resourceType: 'lab_report',
+  resourceId: 'report',
+  metadata: { ...facts },
+})
 const REPORT_LINES = [
   'LABORATORIO CENTRAL',
   'Paciente: PEREZ, JUAN CARLOS',
@@ -122,7 +140,7 @@ describe('Carga de laboratorios — PDF digital de punta a punta', () => {
   let reportId = ''
 
   it('sube el PDF: propone los campos y guarda todo cifrado, sin datos personales', async () => {
-    const created = await createLabReportFromPdf({ ...scope, userId: 'user_1', fileName: 'PEREZ_JUAN.pdf', data: buildPdf(REPORT_LINES) })
+    const created = await createLabReportFromPdf({ ...scope, audit: uploadAudit, userId: 'user_1', fileName: 'PEREZ_JUAN.pdf', data: buildPdf(REPORT_LINES) })
     reportId = created.reportId
     expect(created).toMatchObject({ rowCount: 4, reviewCount: 1, newFieldCount: 3 })
 
@@ -154,7 +172,7 @@ describe('Carga de laboratorios — PDF digital de punta a punta', () => {
     const tampered = report.content.rows.map(toReviewRow).map((row) => (row.analyte === 'Leucocitos' ? { ...row, reading: 7300 } : row))
     const payload = toConfirmPayload(tampered)!
     payload[0] = { ...payload[0]!, printedValue: '18,5', value: 18.5 }
-    await expect(confirmLabReport({ ...scope, reportId, userId: 'user_2', rows: payload })).rejects.toMatchObject({ code: 'invalid_rows' })
+    await expect(confirmLabReport({ ...scope, reportId, userId: 'user_2', rows: payload, audit })).rejects.toMatchObject({ code: 'invalid_rows' })
     expect(store.reports[0]?.status).toBe('pending_review')
     expect(store.persisted).toHaveLength(0)
   })
@@ -162,8 +180,10 @@ describe('Carga de laboratorios — PDF digital de punta a punta', () => {
   it('confirma: estado, catálogo y perfil del sujeto quedan actualizados', async () => {
     const report = await loadLabReport({ ...scope, reportId })
     const decided = report.content.rows.map(toReviewRow).map((row) => (row.analyte === 'Leucocitos' ? { ...row, reading: 7300 } : row))
-    const result = await confirmLabReport({ ...scope, reportId, userId: 'user_2', rows: toConfirmPayload(decided)! })
+    const result = await confirmLabReport({ ...scope, reportId, userId: 'user_2', rows: toConfirmPayload(decided)!, audit })
     expect(result).toEqual({ rowCount: 4, newAnalytes: 3, profileUpdated: true })
+    expect(store.audits.map((entry) => entry.action)).toEqual(['lab.extract', 'lab.confirm'])
+    expect(store.audits[1]).toMatchObject({ via: 'tx', action: 'lab.confirm', metadata: { rowCount: 4, newAnalytes: 3 } })
 
     expect(store.reports[0]).toMatchObject({ status: 'confirmed', reviewedBy: 'user_2' })
     expect(store.analytes.map((entry) => entry.normalizedKey).sort()).toEqual(['glucosa', 'hemoglobina', 'leucocitos', 'proteinas en orina'])
@@ -181,7 +201,9 @@ describe('Carga de laboratorios — PDF digital de punta a punta', () => {
   it('segunda confirmación (doble clic): se rechaza y no duplica nada', async () => {
     const report = await loadLabReport({ ...scope, reportId })
     const payload = toConfirmPayload(report.content.rows.map(toReviewRow))!
-    await expect(confirmLabReport({ ...scope, reportId, userId: 'user_3', rows: payload })).rejects.toBeInstanceOf(LabReportError)
+    await expect(confirmLabReport({ ...scope, reportId, userId: 'user_3', rows: payload, audit })).rejects.toBeInstanceOf(LabReportError)
+    // La segunda no reclamó el informe: tampoco deja un segundo registro de confirmación.
+    expect(store.audits.map((entry) => entry.action)).toEqual(['lab.extract', 'lab.confirm'])
     expect(store.analytes).toHaveLength(4)
     expect(store.persisted).toHaveLength(1)
     expect(store.reports[0]?.reviewedBy).toBe('user_2')
@@ -190,14 +212,14 @@ describe('Carga de laboratorios — PDF digital de punta a punta', () => {
   it('un PDF sin resultados no crea ningún informe', async () => {
     const before = store.reports.length
     await expect(
-      createLabReportFromPdf({ ...scope, userId: 'user_1', fileName: 'x.pdf', data: buildPdf(['Paciente: GOMEZ ANA', 'Sin resultados']) }),
+      createLabReportFromPdf({ ...scope, audit: uploadAudit, userId: 'user_1', fileName: 'x.pdf', data: buildPdf(['Paciente: GOMEZ ANA', 'Sin resultados']) }),
     ).rejects.toMatchObject({ code: 'no_rows' })
     expect(store.reports).toHaveLength(before)
   })
 
   it('bytes que no son un PDF legible: error con código estable', async () => {
     await expect(
-      createLabReportFromPdf({ ...scope, userId: 'user_1', fileName: 'x.pdf', data: new TextEncoder().encode('%PDF-1.4 basura') }),
+      createLabReportFromPdf({ ...scope, audit: uploadAudit, userId: 'user_1', fileName: 'x.pdf', data: new TextEncoder().encode('%PDF-1.4 basura') }),
     ).rejects.toBeInstanceOf(LabReportError)
   })
 })
@@ -254,7 +276,7 @@ describe('Carga de laboratorios — informe en columnas, como lo imprimen los la
       [400, 580, 'Bioquimica - M.P. 0000'],
     ])
     const before = store.reports.length
-    const created = await createLabReportFromPdf({ ...scope, userId: 'user_1', fileName: 'GOMEZ_ANA.pdf', data })
+    const created = await createLabReportFromPdf({ ...scope, audit: uploadAudit, userId: 'user_1', fileName: 'GOMEZ_ANA.pdf', data })
     expect(created).toMatchObject({ rowCount: 4, reviewCount: 1 })
 
     const stored = store.reports[before]!

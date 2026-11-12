@@ -150,8 +150,12 @@ describe('POST lab-reports — subir PDF', () => {
     const res = await upload(uploadRequest(pdf()), ctx)
     expect(res.status).toBe(201)
     expect(mocks.createLabReportFromPdf).toHaveBeenCalledWith(expect.objectContaining({ orgId: 'org-1', studyId: STUDY, subjectId: SUBJECT, userId: 'user_1' }))
-    const audit = JSON.stringify(mocks.writeAuditLog.mock.calls[0]?.[0])
+    // La ruta le entrega al servicio el registro; el servicio lo escribe al crear el informe (R3).
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+    const build = mocks.createLabReportFromPdf.mock.calls[0]?.[0].audit as (created: unknown) => unknown
+    const audit = JSON.stringify(build({ reportId: REPORT, rowCount: 6, reviewCount: 1, newFieldCount: 1 }))
     expect(audit).toContain('lab.extract')
+    expect(audit).toContain(REPORT)
     expect(audit).not.toContain('PEREZ')
     expect(audit).not.toContain('13,5')
   })
@@ -203,7 +207,12 @@ describe('POST confirm / reject', () => {
   it('confirmación: auditoría con conteos, sin valores', async () => {
     const res = await confirm(jsonRequest({ rows: [row] }), reportCtx)
     expect(res.status).toBe(200)
-    const audit = JSON.stringify(mocks.writeAuditLog.mock.calls[0]?.[0])
+    // La ruta no audita por su cuenta: le entrega al servicio el registro para
+    // que lo escriba en la misma transacción que confirma el informe (R3).
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+    const build = mocks.confirmLabReport.mock.calls[0]?.[0].audit as (facts: { rowCount: number; newAnalytes: number }) => unknown
+    expect(build({ rowCount: 1, newAnalytes: 0 })).toMatchObject({ action: 'lab.confirm', resourceType: 'lab_report', resourceId: REPORT, metadata: { rowCount: 1, newAnalytes: 0 } })
+    const audit = JSON.stringify(build({ rowCount: 1, newAnalytes: 0 }))
     expect(audit).toContain('lab.confirm')
     expect(audit).not.toContain('13,5')
     expect(audit).not.toContain('Hemoglobina')
@@ -211,7 +220,9 @@ describe('POST confirm / reject', () => {
 
   it('rechazo: registra lab.reject; ya revisado da 409', async () => {
     expect((await reject(new Request('https://os.example.test/x', { method: 'POST' }), reportCtx)).status).toBe(200)
-    expect(mocks.writeAuditLog).toHaveBeenCalledWith(expect.objectContaining({ action: 'lab.reject' }))
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+    const build = mocks.rejectLabReport.mock.calls[0]?.[0].audit as () => unknown
+    expect(build()).toMatchObject({ action: 'lab.reject', resourceType: 'lab_report', resourceId: REPORT })
     mocks.rejectLabReport.mockRejectedValue(new mocks.LabReportError('already_reviewed'))
     expect((await reject(new Request('https://os.example.test/x', { method: 'POST' }), reportCtx)).status).toBe(409)
   })

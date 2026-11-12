@@ -7,6 +7,7 @@ import {
   patientProfiles,
   subjects,
 } from '@ichtys/db'
+import { auditedWrite } from '../../../../../lib/audit/audited-write'
 import { writeAuditLog } from '../../../../../lib/chat/persistence'
 import {
   encryptProfileJson,
@@ -94,38 +95,42 @@ export async function POST(
 
     const subjectCode = parsed.data.subjectCode.trim().toUpperCase()
 
-    const [subject] = await db
-      .insert(subjects)
-      .values({
-        organizationId: orgId,
-        studyId: study.id,
-        subjectCode,
-        status: 'screening',
-      })
-      .returning()
-
-    if (!subject) {
-      return new Response('Internal Server Error', { status: 500 })
-    }
-
     const emptyProfile = encryptProfileJson({})
 
-    await db.insert(patientProfiles).values({
-      organizationId: orgId,
-      studyId: study.id,
-      subjectId: subject.id,
-      profileEncrypted: emptyProfile,
-    })
+    // El sujeto, su perfil vacío y el registro de auditoría se confirman en la
+    // misma transacción (R3). Antes eran tres escrituras sueltas: podía quedar
+    // un sujeto sin perfil, o un sujeto sin registro de quién lo dio de alta.
+    const subject = await auditedWrite(
+      async (tx) => {
+        const [created] = await tx
+          .insert(subjects)
+          .values({
+            organizationId: orgId,
+            studyId: study.id,
+            subjectCode,
+            status: 'screening',
+          })
+          .returning()
+        if (!created) throw new Error('Subject insert did not return a row')
 
-    await writeAuditLog({
-      action: 'subject.create',
-      orgId,
-      studyId: study.id,
-      userId,
-      resourceType: 'subject',
-      resourceId: subject.id,
-      metadata: { subjectCode },
-    })
+        await tx.insert(patientProfiles).values({
+          organizationId: orgId,
+          studyId: study.id,
+          subjectId: created.id,
+          profileEncrypted: emptyProfile,
+        })
+        return created
+      },
+      (created) => ({
+        action: 'subject.create',
+        orgId,
+        studyId: study.id,
+        userId,
+        resourceType: 'subject',
+        resourceId: created.id,
+        metadata: { subjectCode },
+      }),
+    )
 
     return Response.json(
       {
@@ -147,11 +152,20 @@ export async function POST(
   }
 }
 
+/** Hasta dónde se sigue la cadena de `cause`. Hoy son dos niveles (acceso a datos → Postgres); el resto es margen. */
+const MAX_CAUSE_DEPTH = 6
+
+/**
+ * Código repetido dentro del estudio (violación de índice único en Postgres).
+ * El acceso a datos envuelve el error de la base y deja el original en `cause`,
+ * así que se mira también ahí; si no, el aviso de código repetido nunca llega
+ * a quien carga y ve un error genérico.
+ */
 function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'code' in err &&
-    (err as { code: string }).code === '23505'
-  )
+  for (let current: unknown = err, depth = 0; current && depth < MAX_CAUSE_DEPTH; depth += 1) {
+    if (typeof current !== 'object') return false
+    if ((current as { code?: unknown }).code === '23505') return true
+    current = (current as { cause?: unknown }).cause
+  }
+  return false
 }

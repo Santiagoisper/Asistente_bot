@@ -1,5 +1,4 @@
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
-import { writeAuditLog } from '../../../../../../../../../lib/chat/persistence'
 import { isOsEnabled } from '../../../../../../../../../lib/flags'
 import { isUuid, labReportErrorResponse } from '../../../../../../../../../lib/labs/lab-report-http'
 import { rejectLabReport } from '../../../../../../../../../lib/labs/lab-report-service'
@@ -18,16 +17,22 @@ export async function POST(
     const access = await validateSubjectAccess(subjectId, studyId, { require: 'labs.manage' })
     if (!isUuid(reportId)) return Response.json({ error: 'not_found' }, { status: 404 })
 
-    await rejectLabReport({ orgId: access.orgId, studyId, subjectId, reportId, userId: access.userId })
-
-    await writeAuditLog({
-      action: 'lab.reject',
+    await rejectLabReport({
       orgId: access.orgId,
       studyId,
+      subjectId,
+      reportId,
       userId: access.userId,
-      resourceType: 'lab_report',
-      resourceId: reportId,
-      metadata: { subjectId },
+      // Se escribe dentro de la transacción que rechaza el informe (R3).
+      audit: () => ({
+        action: 'lab.reject',
+        orgId: access.orgId,
+        studyId,
+        userId: access.userId,
+        resourceType: 'lab_report',
+        resourceId: reportId,
+        metadata: { subjectId },
+      }),
     })
 
     return Response.json({ status: 'rejected' })

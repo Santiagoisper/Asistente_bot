@@ -2,7 +2,7 @@ import { validatePhiStudyAccess, handleApiError } from '@ichtys/auth'
 import { updateAgendaItemSchema } from '../../../../../../lib/agenda/agenda-schema'
 import { AgendaError, updateAgendaItem } from '../../../../../../lib/agenda/agenda-service'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../lib/api/body-limit'
-import { writeAuditLog } from '../../../../../../lib/chat/persistence'
+import { auditedWrite } from '../../../../../../lib/audit/audited-write'
 import { isOsEnabled } from '../../../../../../lib/flags'
 import { loadOrgTimeZone } from '../../../../../../lib/os/org-settings'
 
@@ -34,16 +34,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!parsed.success) return Response.json({ error: 'invalid_item' }, { status: 400 })
 
   try {
-    const updated = await updateAgendaItem({ orgId: access.orgId, studyId: access.study.id, itemId, userId: access.userId, timeZone: await loadOrgTimeZone(access.orgId), patch: parsed.data })
-    await writeAuditLog({
+    const timeZone = await loadOrgTimeZone(access.orgId)
+    // El cambio y su registro de auditoría se confirman en la misma transacción (R3).
+    const updated = await auditedWrite(
+      (tx) => updateAgendaItem({ executor: tx, orgId: access.orgId, studyId: access.study.id, itemId, userId: access.userId, timeZone, patch: parsed.data }),
+      (item) => ({
       action: 'agenda.update',
       orgId: access.orgId,
       studyId: access.study.id,
       userId: access.userId,
       resourceType: 'agenda_item',
-      resourceId: updated.id,
-      metadata: { status: updated.status, rescheduledTo: parsed.data.day ?? null },
-    })
+      resourceId: item.id,
+      metadata: { status: item.status, rescheduledTo: parsed.data.day ?? null },
+      }),
+    )
     return Response.json(updated)
   } catch (err) {
     if (err instanceof AgendaError) return Response.json({ error: err.code }, { status: 404 })

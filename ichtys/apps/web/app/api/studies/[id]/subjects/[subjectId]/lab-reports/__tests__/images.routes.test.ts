@@ -95,7 +95,9 @@ describe('POST lab-reports/images — subir foto o escaneo', () => {
     const call = mocks.createLabReportFromImages.mock.calls[0]![0] as { orgId: string; images: unknown[] }
     expect(call).toMatchObject({ orgId: 'org-1', studyId: STUDY, subjectId: SUBJECT, userId: 'user_1' })
     expect(call.images).toHaveLength(2)
-    const audit = JSON.stringify(mocks.writeAuditLog.mock.calls[0]?.[0])
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+    const build = (call as unknown as { audit: (created: unknown) => unknown }).audit
+    const audit = JSON.stringify(build({ reportId: REPORT, rowCount: 12, reviewCount: 2, newFieldCount: 3 }))
     expect(audit).toContain('"source":"image"')
     expect(audit).toContain('"pages":2')
     expect(audit).not.toContain('PEREZ')
@@ -164,7 +166,8 @@ describe('POST confirm — informe leído de una imagen', () => {
   it('pasa al servicio la declaración de que se comparó con la imagen y la deja en la auditoría', async () => {
     expect((await confirm(request({ rows: [row], comparedWithImage: true }), confirmCtx)).status).toBe(200)
     expect(mocks.confirmLabReport).toHaveBeenCalledWith(expect.objectContaining({ comparedWithImage: true }))
-    expect(JSON.stringify(mocks.writeAuditLog.mock.calls[0]?.[0])).toContain('"comparedWithImage":true')
+    const build = mocks.confirmLabReport.mock.calls[0]?.[0].audit as (facts: { rowCount: number; newAnalytes: number }) => unknown
+    expect(JSON.stringify(build({ rowCount: 1, newAnalytes: 0 }))).toContain('"comparedWithImage":true')
   })
 
   it('un campo que no es del contrato se rechaza', async () => {

@@ -1,3 +1,5 @@
+import { insertAuditLog } from '../audit/audited-write'
+import type { AuditLogParams } from '../chat/persistence'
 import {
   mergeConfirmedLabs,
   mergeTextReadings,
@@ -79,8 +81,12 @@ export interface LabReaders {
  * responde, quedan las filas de las reglas. El informe queda pendiente de
  * revisión.
  */
+/**
+ * `audit` arma el registro con lo que se creó. Se escribe en la misma
+ * transacción que el informe (R3): no queda un informe sin registro de quién lo subió.
+ */
 export async function createLabReportFromPdf(
-  params: SubjectScope & { userId: string; fileName: string; data: Uint8Array },
+  params: SubjectScope & { userId: string; fileName: string; data: Uint8Array; audit: (created: CreatedLabReport) => AuditLogParams },
   readers: LabReaders = { readText: readTextWithModel },
 ): Promise<CreatedLabReport> {
   let text: string
@@ -139,27 +145,32 @@ export async function createLabReportFromPdf(
     },
   })
 
-  const [created] = await db
-    .insert(labReports)
-    .values({
-      organizationId: params.orgId,
-      studyId: params.studyId,
-      subjectId: params.subjectId,
-      status: 'pending_review',
-      sourceKind: 'pdf_text',
-      contentEncrypted: encryptClinicalContent(JSON.stringify(content)),
-      rowCount: rows.length,
-      createdBy: params.userId,
-    })
-    .returning({ id: labReports.id })
-  if (!created) throw new LabReportError('unreadable')
-
-  return {
-    reportId: created.id,
+  const counts = {
     rowCount: rows.length,
     reviewCount: rows.filter((row) => row.status === 'review').length,
     newFieldCount: rows.filter((row) => row.isNewField).length,
   }
+
+  return db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(labReports)
+      .values({
+        organizationId: params.orgId,
+        studyId: params.studyId,
+        subjectId: params.subjectId,
+        status: 'pending_review',
+        sourceKind: 'pdf_text',
+        contentEncrypted: encryptClinicalContent(JSON.stringify(content)),
+        rowCount: rows.length,
+        createdBy: params.userId,
+      })
+      .returning({ id: labReports.id })
+    if (!created) throw new LabReportError('unreadable')
+
+    const report: CreatedLabReport = { reportId: created.id, ...counts }
+    await insertAuditLog(tx, params.audit(report))
+    return report
+  })
 }
 
 export interface LoadedLabReport {
@@ -240,8 +251,19 @@ export interface ConfirmedLabReport {
   profileUpdated: boolean
 }
 
+/**
+ * `audit` arma el registro de auditoría con lo que se sabe al confirmar. Se
+ * escribe en la misma transacción que el cambio de estado (R3): un informe no
+ * puede quedar confirmado sin el registro de quién lo confirmó.
+ */
 export async function confirmLabReport(
-  params: SubjectScope & { reportId: string; userId: string; rows: LabRowInput[]; comparedWithImage?: boolean },
+  params: SubjectScope & {
+    reportId: string
+    userId: string
+    rows: LabRowInput[]
+    comparedWithImage?: boolean
+    audit: (facts: { rowCount: number; newAnalytes: number }) => AuditLogParams
+  },
 ): Promise<ConfirmedLabReport> {
   const report = await loadLabReport(params)
   if (report.status !== 'pending_review') throw new LabReportError('already_reviewed')
@@ -255,45 +277,52 @@ export async function confirmLabReport(
   const keepEvidence = evidenceRetention() === 'keep'
   const content: LabReportContent = labReportContentSchema.parse({ ...report.content, rows, ...(keepEvidence ? {} : { imagePages: 0 }) })
 
-  // La transición de estado es la que decide: si otra confirmación llegó
-  // primero (doble clic), acá no se actualiza ninguna fila y se corta.
-  const claimed = await db
-    .update(labReports)
-    .set({
-      status: 'confirmed',
-      contentEncrypted: encryptClinicalContent(JSON.stringify(content)),
-      rowCount: rows.length,
-      reviewedBy: params.userId,
-      reviewedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(labReports.id, params.reportId),
-        eq(labReports.organizationId, params.orgId),
-        eq(labReports.studyId, params.studyId),
-        eq(labReports.subjectId, params.subjectId),
-        eq(labReports.status, 'pending_review'),
-      ),
-    )
-    .returning({ id: labReports.id })
-  if (claimed.length === 0) throw new LabReportError('already_reviewed')
-  if (!keepEvidence) await purgeLabReportImages(params)
-
   const fresh = [...keyOf.entries()].filter(([key]) => !known.has(key))
-  if (fresh.length > 0) {
-    await db
-      .insert(labAnalytes)
-      .values(
-        fresh.map(([key, row]) => ({
-          organizationId: params.orgId,
-          name: row.analyte,
-          normalizedKey: key,
-          unit: row.unit,
-          createdBy: params.userId,
-        })),
+
+  // La transición de estado es la que decide: si otra confirmación llegó
+  // primero (doble clic), acá no se actualiza ninguna fila y se corta. El
+  // cambio de estado, su registro de auditoría y el alta de analitos nuevos en
+  // el catálogo se confirman juntos o no se confirma ninguno.
+  await db.transaction(async (tx) => {
+    const claimed = await tx
+      .update(labReports)
+      .set({
+        status: 'confirmed',
+        contentEncrypted: encryptClinicalContent(JSON.stringify(content)),
+        rowCount: rows.length,
+        reviewedBy: params.userId,
+        reviewedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(labReports.id, params.reportId),
+          eq(labReports.organizationId, params.orgId),
+          eq(labReports.studyId, params.studyId),
+          eq(labReports.subjectId, params.subjectId),
+          eq(labReports.status, 'pending_review'),
+        ),
       )
-      .onConflictDoNothing()
-  }
+      .returning({ id: labReports.id })
+    if (claimed.length === 0) throw new LabReportError('already_reviewed')
+
+    await insertAuditLog(tx, params.audit({ rowCount: rows.length, newAnalytes: fresh.length }))
+
+    if (fresh.length > 0) {
+      await tx
+        .insert(labAnalytes)
+        .values(
+          fresh.map(([key, row]) => ({
+            organizationId: params.orgId,
+            name: row.analyte,
+            normalizedKey: key,
+            unit: row.unit,
+            createdBy: params.userId,
+          })),
+        )
+        .onConflictDoNothing()
+    }
+  })
+  if (!keepEvidence) await purgeLabReportImages(params)
 
   // El perfil del sujeto es una copia de trabajo para screening. Si falla, el
   // informe ya quedó confirmado: se avisa en vez de esconderlo.
@@ -317,20 +346,25 @@ export async function confirmLabReport(
   return { rowCount: rows.length, newAnalytes: fresh.length, profileUpdated }
 }
 
-export async function rejectLabReport(params: SubjectScope & { reportId: string; userId: string }): Promise<void> {
-  const rejected = await db
-    .update(labReports)
-    .set({ status: 'rejected', reviewedBy: params.userId, reviewedAt: new Date() })
-    .where(
-      and(
-        eq(labReports.id, params.reportId),
-        eq(labReports.organizationId, params.orgId),
-        eq(labReports.studyId, params.studyId),
-        eq(labReports.subjectId, params.subjectId),
-        eq(labReports.status, 'pending_review'),
-      ),
-    )
-    .returning({ id: labReports.id })
+/** El rechazo y su registro de auditoría se confirman en la misma transacción (R3). */
+export async function rejectLabReport(params: SubjectScope & { reportId: string; userId: string; audit: () => AuditLogParams }): Promise<void> {
+  const rejected = await db.transaction(async (tx) => {
+    const rows = await tx
+      .update(labReports)
+      .set({ status: 'rejected', reviewedBy: params.userId, reviewedAt: new Date() })
+      .where(
+        and(
+          eq(labReports.id, params.reportId),
+          eq(labReports.organizationId, params.orgId),
+          eq(labReports.studyId, params.studyId),
+          eq(labReports.subjectId, params.subjectId),
+          eq(labReports.status, 'pending_review'),
+        ),
+      )
+      .returning({ id: labReports.id })
+    if (rows.length > 0) await insertAuditLog(tx, params.audit())
+    return rows
+  })
   if (rejected.length > 0) {
     if (evidenceRetention() === 'purge') await purgeLabReportImages(params)
     return

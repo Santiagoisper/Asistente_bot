@@ -38,10 +38,13 @@ vi.mock('@ichtys/db', async (importOriginal) => {
   return { ...original, db }
 })
 
+import { db } from '@ichtys/db'
 import { AgendaError, createAgendaItem, listAgenda, updateAgendaItem } from '../agenda-service'
 
 const BA = 'America/Argentina/Buenos_Aires'
-const scope = { orgId: 'org-1', studyId: 'study-1', userId: 'user_1', timeZone: BA }
+// El servicio escribe por el ejecutor que recibe (en producción, la transacción
+// que también guarda la auditoría). Acá es la base simulada.
+const scope = { executor: db, orgId: 'org-1', studyId: 'study-1', userId: 'user_1', timeZone: BA }
 const input = { subjectId: 'subj-1', title: 'Visita 3', kind: 'visit' as const, day: '2026-11-16', time: '09:30', durationMinutes: 30, notes: 'Viene en ayunas' }
 const savedKey = process.env.PHI_ENCRYPTION_KEY
 

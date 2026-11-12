@@ -40,6 +40,8 @@ const mocks = vi.hoisted(() => {
     encryptProfileJson: vi.fn(() => 'enc-profile-empty'),
     dbInsertReturning: vi.fn(),
     dbFindMany: vi.fn(),
+    looseInsert: vi.fn(),
+    tx: { insert: vi.fn() },
   }
 })
 
@@ -51,11 +53,8 @@ vi.mock('@ichtys/auth', () => ({
 
 vi.mock('@ichtys/db', () => ({
   db: {
-    insert: vi.fn(() => ({
-      values: vi.fn(() => ({
-        returning: mocks.dbInsertReturning,
-      })),
-    })),
+    // Una escritura por la conexión suelta queda fuera de la transacción.
+    insert: mocks.looseInsert,
     query: {
       subjects: {
         findMany: mocks.dbFindMany,
@@ -67,6 +66,17 @@ vi.mock('@ichtys/db', () => ({
   and: vi.fn(),
   desc: vi.fn(),
   eq: vi.fn(),
+}))
+
+// La escritura y su auditoría van juntas (R3). Acá se simula el envoltorio: corre
+// la escritura con la transacción y, solo si salió bien, asienta la auditoría.
+// Que las dos entren de verdad en una transacción se prueba en lib/audit.
+vi.mock('../../../../../../lib/audit/audited-write', () => ({
+  auditedWrite: async <T,>(write: (tx: unknown) => Promise<T>, audit: (result: T) => unknown) => {
+    const result = await write(mocks.tx)
+    await mocks.writeAuditLog(audit(result))
+    return result
+  },
 }))
 
 vi.mock('../../../../../../lib/chat/persistence', () => ({
@@ -96,6 +106,9 @@ function studyContext() {
     study: { id: mocks.STUDY_ID },
   }
 }
+
+// Toda escritura de la ruta entra por la transacción que recibe de auditedWrite.
+mocks.tx.insert.mockImplementation(() => ({ values: () => ({ returning: mocks.dbInsertReturning }) }))
 
 beforeEach(() => vi.clearAllMocks())
 afterEach(() => vi.clearAllMocks())
@@ -163,8 +176,42 @@ describe('OQ-S04 — POST happy path', () => {
 
     expect(res.status).toBe(201)
     expect(mocks.encryptProfileJson).toHaveBeenCalledWith({})
+    // Sujeto y perfil vacío entran por la transacción; nada por la conexión suelta.
+    expect(mocks.tx.insert).toHaveBeenCalledTimes(2)
+    expect(mocks.looseInsert).not.toHaveBeenCalled()
     const body = (await res.json()) as { subjectCode: string }
     expect(body.subjectCode).toBe('TEST-001')
+  })
+})
+
+describe('OQ-S04b — código de sujeto repetido', () => {
+  const post = () =>
+    POST(
+      new Request('http://localhost/api/subjects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subjectCode: 'test-001' }),
+      }),
+      makeParams(),
+    )
+
+  it('409 con código estable aunque el error de la base llegue envuelto, y sin auditoría', async () => {
+    mocks.validatePhiStudyAccess.mockResolvedValue(studyContext())
+    // Así llega desde el acceso a datos: el error de Postgres queda en `cause`.
+    mocks.dbInsertReturning.mockRejectedValueOnce(Object.assign(new Error('Failed query: insert into "subjects"'), { cause: Object.assign(new Error('duplicate key'), { code: '23505' }) }))
+    const wrapped = await post()
+    expect(wrapped.status).toBe(409)
+    expect(await wrapped.json()).toEqual({ error: 'subject_code_exists' })
+
+    mocks.dbInsertReturning.mockRejectedValueOnce(Object.assign(new Error('duplicate key'), { code: '23505' }))
+    expect((await post()).status).toBe(409)
+
+    // Otro error de la base no se disfraza de código repetido.
+    mocks.dbInsertReturning.mockRejectedValueOnce(Object.assign(new Error('Failed query'), { cause: Object.assign(new Error('connection lost'), { code: '08006' }) }))
+    expect((await post()).status).toBe(500)
+
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+    mocks.validatePhiStudyAccess.mockReset()
   })
 })
 

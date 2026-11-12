@@ -1,5 +1,7 @@
 import { mergeImageReadings, normalizeAnalyteKey, redactIdentifyingLines } from '@ichtys/clinical'
 import { and, db, eq, labReportImages, labReports } from '@ichtys/db'
+import { insertAuditLog } from '../audit/audited-write'
+import type { AuditLogParams } from '../chat/persistence'
 import { encryptClinicalContent, decryptClinicalContent } from '../subjects/phi-fields'
 import { evidenceRetention } from './evidence-policy'
 import { readImagesWithModel, type LabImage } from './lab-model-reader'
@@ -51,8 +53,12 @@ export interface LabImageReaders {
  * coincide queda leído; lo que no, queda para que una persona decida mirando
  * la imagen. Si ninguna lectura responde, no se crea nada.
  */
+/**
+ * `audit` arma el registro con lo que se creó. El informe, sus imágenes y el
+ * registro de auditoría se confirman en la misma transacción (R3).
+ */
 export async function createLabReportFromImages(
-  params: SubjectScope & { userId: string; images: LabImage[] },
+  params: SubjectScope & { userId: string; images: LabImage[]; audit: (created: CreatedLabReport) => AuditLogParams },
   readers: LabImageReaders = { readImages: readImagesWithModel },
 ): Promise<CreatedLabReport> {
   const scope = { orgId: params.orgId, studyId: params.studyId }
@@ -105,7 +111,13 @@ export async function createLabReportFromImages(
     },
   })
 
-  const reportId = await db.transaction(async (tx) => {
+  const counts = {
+    rowCount: rows.length,
+    reviewCount: rows.filter((row) => row.status === 'review').length,
+    newFieldCount: rows.filter((row) => row.isNewField).length,
+  }
+
+  return db.transaction(async (tx) => {
     const [created] = await tx
       .insert(labReports)
       .values({
@@ -130,15 +142,10 @@ export async function createLabReportFromImages(
         contentEncrypted: encryptClinicalContent(Buffer.from(image.data).toString('base64')),
       })),
     )
-    return created.id
+    const report: CreatedLabReport = { reportId: created.id, ...counts }
+    await insertAuditLog(tx, params.audit(report))
+    return report
   })
-
-  return {
-    reportId,
-    rowCount: rows.length,
-    reviewCount: rows.filter((row) => row.status === 'review').length,
-    newFieldCount: rows.filter((row) => row.isNewField).length,
-  }
 }
 
 /** Imagen de un informe. Después de revisado, sigue disponible salvo que la política sea borrar. */
