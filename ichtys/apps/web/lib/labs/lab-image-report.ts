@@ -14,7 +14,7 @@ import {
   type LabReportContent,
   type LabReportRow,
 } from './lab-report-content'
-import { knownAnalyteKeys, LabReportError, purgeLabReportImages, type CreatedLabReport, type SubjectScope } from './lab-report-service'
+import { knownAnalyteKeys, LabReportError, purgeLabReportImages, type CreatedLabReport, type EvidencePurgeFacts, type SubjectScope } from './lab-report-service'
 
 /**
  * Informes subidos como foto o escaneo. La imagen llega recortada desde el
@@ -148,8 +148,14 @@ export async function createLabReportFromImages(
   })
 }
 
-/** Imagen de un informe. Después de revisado, sigue disponible salvo que la política sea borrar. */
-export async function loadLabReportImage(params: SubjectScope & { reportId: string; page: number }): Promise<LabImage> {
+/**
+ * Imagen de un informe. Después de revisado, sigue disponible salvo que la
+ * política sea borrar. `purgeAudit` arma el registro del borrado que esta
+ * lectura puede disparar si quedaba evidencia de antes de un cambio de política.
+ */
+export async function loadLabReportImage(
+  params: SubjectScope & { reportId: string; page: number; purgeAudit: (facts: EvidencePurgeFacts) => AuditLogParams },
+): Promise<LabImage> {
   const [report] = await db
     .select({ status: labReports.status })
     .from(labReports)
@@ -165,7 +171,7 @@ export async function loadLabReportImage(params: SubjectScope & { reportId: stri
   if (!report) throw new LabReportError('not_found')
   // Con política de borrado, un informe ya revisado no tiene imagen (y si quedó alguna, se borra ahora).
   if (report.status !== 'pending_review' && evidenceRetention() === 'purge') {
-    await purgeLabReportImages(params)
+    await purgeLabReportImages({ orgId: params.orgId, reportId: params.reportId, audit: params.purgeAudit })
     throw new LabReportError('not_found')
   }
 

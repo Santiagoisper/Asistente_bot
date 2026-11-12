@@ -16,7 +16,6 @@ import {
   loadConversationHistory,
   persistAssistantMessageAndCitations,
   persistUserMessage,
-  writeAuditLog,
 } from '../../../../lib/chat/persistence'
 import {
   enforceSlidingWindowRateLimit,
@@ -142,24 +141,24 @@ export async function POST(req: Request): Promise<Response> {
     return new Response('Internal Server Error', { status: 500 })
   }
 
-  // 8. Persist user message before streaming starts.
+  // 8–9. Persist user message + audit «requested» en la misma transacción (R3),
+  //      antes de empezar el stream.
   let userMessageId: string
   try {
-    userMessageId = await persistUserMessage({ conversationId, orgId, studyId, question })
-  } catch {
-    return new Response('Internal Server Error', { status: 500 })
-  }
-
-  // 9. Audit -- requested.
-  try {
-    await writeAuditLog({
-      action: 'rag.answer.requested',
+    userMessageId = await persistUserMessage({
+      conversationId,
       orgId,
       studyId,
-      userId,
-      resourceType: 'conversation',
-      resourceId: conversationId,
-      metadata: { documentType: documentType ?? null, topK: topK ?? null, historyTurns: conversationHistory.length, streaming: true },
+      question,
+      audit: {
+        action: 'rag.answer.requested',
+        orgId,
+        studyId,
+        userId,
+        resourceType: 'conversation',
+        resourceId: conversationId,
+        metadata: { documentType: documentType ?? null, topK: topK ?? null, historyTurns: conversationHistory.length, streaming: true },
+      },
     })
   } catch {
     return new Response('Internal Server Error', { status: 500 })
@@ -353,7 +352,9 @@ export async function POST(req: Request): Promise<Response> {
           (e) => !e.chunkId.startsWith('spec:'),
         )
 
-        // 10e. Persist assistant message + citations + annotations atomically.
+        // 10e. Persist assistant message + citations + annotations + audit
+        //      «completed» en una sola transacción (R3). Si el registro falla,
+        //      la respuesta no queda guardada y el stream termina en error.
         const assistantMessageId = await persistAssistantMessageAndCitations({
           conversationId,
           orgId,
@@ -362,18 +363,16 @@ export async function POST(req: Request): Promise<Response> {
           confidence: finalConfidence,
           evidences: persistableEvidences,
           annotations: annotations.length > 0 ? annotations : undefined,
+          audit: {
+            action: 'rag.answer.completed',
+            orgId,
+            studyId,
+            userId,
+            resourceType: 'conversation',
+            resourceId: conversationId,
+            metadata: { confidence: finalConfidence, evidenceCount: finalEvidences.length, retrievalCount, annotationCount: annotations.length, streaming: true },
+          },
         })
-
-        // 10e. Audit -- completed.
-        await writeAuditLog({
-          action: 'rag.answer.completed',
-          orgId,
-          studyId,
-          userId,
-          resourceType: 'conversation',
-          resourceId: conversationId,
-          metadata: { confidence: finalConfidence, evidenceCount: finalEvidences.length, retrievalCount, annotationCount: annotations.length, streaming: true },
-        }).catch(() => {/* non-critical */})
 
         log(makeRecord({ requestId, level: 'info', event: 'api.request.completed', endpoint: '/api/chat/stream', method: 'POST', userId, conversationId, statusCode: 200 }))
 

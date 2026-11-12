@@ -15,6 +15,15 @@ import { describe, expect, it } from 'vitest'
  * - PENDING: rutas que todavía auditan fuera de la transacción. La lista es
  *   exacta: una ruta nueva que caiga en el patrón rompe el test, y una ruta
  *   que se corrige obliga a sacarla de acá.
+ * - FAILURE_AUDIT_ONLY: rutas ya corregidas que conservan una auditoría suelta
+ *   para registrar una falla, donde no se guardó ningún dato.
+ *
+ * El borrado de la evidencia de un informe (política `purge`) tiene su propia
+ * guarda abajo: un solo lugar, siempre dentro de una transacción.
+ *
+ * El chat guarda cada mensaje con su registro dentro de `lib/chat/persistence`
+ * (lo prueba `lib/chat/__tests__/persistence-audit.test.ts`); crear la
+ * conversación no lleva registro propio: queda cubierta por el del primer pedido.
  *
  * Límites de este tripwire (la garantía real son las pruebas de
  * comportamiento de lib/audit y las de punta a punta de lib/labs):
@@ -50,12 +59,25 @@ const MIGRATED = [
   'app/api/studies/[id]/subjects/[subjectId]/profile/proposals/[evolutionId]/confirm/route.ts',
   'app/api/studies/[id]/subjects/[subjectId]/profile/proposals/[evolutionId]/reject/route.ts',
   'app/api/os/org-config/route.ts',
+  'app/api/chat/stream/route.ts',
 ] as const
 
-/** Ruta y verbo → por qué sigue pendiente. */
-const PENDING: Record<string, string> = {
-  'app/api/chat/route.ts POST': 'registra el pedido y el resultado de una respuesta; guarda mensajes aparte',
-  'app/api/chat/stream/route.ts POST': 'ídem, en la variante por flujo',
+/** Ruta y verbo → por qué sigue pendiente. Hoy no queda ninguna. */
+const PENDING: Record<string, string> = {}
+
+/**
+ * Rutas que escriben con su registro dentro de la transacción y además
+ * registran, suelto, que algo falló. Ese registro no acompaña a ningún dato
+ * (no se guardó nada), así que no hay transacción que compartir. La lista de
+ * acciones permitidas es exacta: cualquier otra auditoría suelta rompe el test.
+ */
+const FAILURE_AUDIT_ONLY: Record<string, readonly string[]> = {
+  'app/api/chat/route.ts POST': ['rag.answer.failed'],
+}
+
+/** Acción de cada auditoría suelta de un manejador (`writeAuditLog({ action: '…'`). */
+function looseAuditActions(body: string): string[] {
+  return [...body.matchAll(/\b(?:safeWriteAuditLog|writeAuditLog)\s*\(\s*\{\s*action:\s*'([^']+)'/g)].map((match) => match[1]!)
 }
 
 function routeFiles(dir: string): string[] {
@@ -102,7 +124,19 @@ describe('leakage — la auditoría de una escritura va en su misma transacción
           .map((handler) => `${file} ${handler.verb}`)
       })
       .sort()
-    expect(found).toEqual(Object.keys(PENDING).sort())
+    expect(found).toEqual([...Object.keys(PENDING), ...Object.keys(FAILURE_AUDIT_ONLY)].sort())
+  })
+
+  it.each(Object.entries(FAILURE_AUDIT_ONLY))('%s: la única auditoría suelta es la de una falla, y no escribe por la conexión suelta', (key, allowed) => {
+    const [file, verb] = key.split(' ') as [string, string]
+    const source = readFileSync(join(WEB_ROOT, file), 'utf8')
+    const handler = handlers(source).find((candidate) => candidate.verb === verb)
+    expect(handler).toBeDefined()
+    expect(withoutComments(source)).not.toMatch(LOOSE_WRITE)
+    // Tantas acciones reconocidas como llamadas sueltas: ninguna se escapa del patrón.
+    const calls = handler!.body.match(new RegExp(LOOSE_AUDIT.source, 'g')) ?? []
+    expect(looseAuditActions(handler!.body)).toHaveLength(calls.length)
+    expect(looseAuditActions(handler!.body).sort()).toEqual([...allowed].sort())
   })
 
   it('el perfil del sujeto se escribe en un solo lugar, que exige el registro de auditoría', () => {
@@ -127,6 +161,24 @@ describe('leakage — la auditoría de una escritura va en su misma transacción
     expect(service).not.toMatch(/\bdb\s*\.\s*update\(/)
     // El registro es un parámetro obligatorio, no opcional.
     expect(service).toMatch(/audit: \(next: PatientProfile\) => AuditLogParams,\n\): Promise<PatientProfile>/)
+  })
+
+  it('la evidencia de un informe de laboratorio se borra en un solo lugar, dentro de una transacción', () => {
+    const sources = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const full = join(dir, entry.name)
+        if (entry.isDirectory()) return ['__tests__', 'node_modules', '.next'].includes(entry.name) ? [] : sources(full)
+        return /\.tsx?$/.test(entry.name) ? [full] : []
+      })
+    const deleters = [join(WEB_ROOT, 'app'), join(WEB_ROOT, 'lib')]
+      .flatMap(sources)
+      .filter((full) => /\.delete\(\s*labReportImages\s*\)/.test(withoutComments(readFileSync(full, 'utf8'))))
+      .map((full) => relative(WEB_ROOT, full).split(sep).join('/'))
+    expect(deleters).toEqual(['lib/labs/lab-report-service.ts'])
+
+    const service = withoutComments(readFileSync(join(WEB_ROOT, 'lib/labs/lab-report-service.ts'), 'utf8'))
+    expect(service).toMatch(/tx\s*\.delete\(labReportImages\)/)
+    expect(service).not.toMatch(/\bdb\s*\.\s*delete\(/)
   })
 
   it('el detector reconoce el patrón que busca', () => {

@@ -221,8 +221,9 @@ describe('POST confirm / reject', () => {
   it('rechazo: registra lab.reject; ya revisado da 409', async () => {
     expect((await reject(new Request('https://os.example.test/x', { method: 'POST' }), reportCtx)).status).toBe(200)
     expect(mocks.writeAuditLog).not.toHaveBeenCalled()
-    const build = mocks.rejectLabReport.mock.calls[0]?.[0].audit as () => unknown
-    expect(build()).toMatchObject({ action: 'lab.reject', resourceType: 'lab_report', resourceId: REPORT })
+    const build = mocks.rejectLabReport.mock.calls[0]?.[0].audit as (facts: { imagesPurged: number }) => unknown
+    // El registro dice cuántas imágenes de evidencia se borraron con el rechazo.
+    expect(build({ imagesPurged: 2 })).toMatchObject({ action: 'lab.reject', resourceType: 'lab_report', resourceId: REPORT, metadata: { imagesPurged: 2 } })
     mocks.rejectLabReport.mockRejectedValue(new mocks.LabReportError('already_reviewed'))
     expect((await reject(new Request('https://os.example.test/x', { method: 'POST' }), reportCtx)).status).toBe(409)
   })
