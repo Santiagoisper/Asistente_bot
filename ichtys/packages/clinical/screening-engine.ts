@@ -178,13 +178,14 @@ function assessMedicationCriterion(
 }
 
 /**
- * Negación pegada a la mención: «sin antecedentes de pancreatitis», «niega pancreatitis»,
- * «no refiere episodios de pancreatitis». Entre la negación y la palabra solo se admite un
- * puñado de palabras de relleno: «sin fiebre, con pancreatitis crónica» NO es una negación.
- * Ante la duda la mención cuenta como afirmada, que es el lado que obliga a mirar.
+ * Negación pura: TODA la condición registrada es la negación. «Sin antecedentes de
+ * pancreatitis», «Niega pancreatitis», «No refiere episodios de pancreatitis aguda».
+ * Si la frase dice algo más («Niega pancreatitis, pero tuvo una en 2019», «sin fiebre,
+ * con pancreatitis crónica», «niega pancreatitis aunque tuvo un episodio») no despeja
+ * nada: cuenta como antecedente. Ante la duda gana el lado que obliga a mirar.
  */
 const NEGATED_PANCREATITIS =
-  /\b(?:sin|niega|descarta|no\s+(?:presenta|refiere|tiene|registra|hay))\s+(?:(?:antecedentes?|historia|episodios?|cuadros?|diagn[oó]stico)\s+)?(?:(?:previos?|personal(?:es)?)\s+)?(?:de\s+)?pancreatitis/i
+  /^\s*(?:sin|niega|descarta|no\s+(?:presenta|refiere|tiene|registra|hay))\s+(?:(?:antecedentes?|historia|episodios?|cuadros?|diagn[oó]stico)\s+)?(?:(?:previ[oa]s?|personal(?:es)?)\s+)?(?:de\s+)?pancreatitis(?:\s+(?:aguda|cr[oó]nica|previa|conocida))*\s*\.?\s*$/i
 
 function assessConditionCriterion(
   criterion: EligibilityCriterionInput,
@@ -195,8 +196,9 @@ function assessConditionCriterion(
   if (!/pancreatitis/i.test(criterion.text)) return null
 
   // Una exclusión no se despeja por falta de datos: que el antecedente no figure en el
-  // perfil no prueba que no exista. Solo una negación registrada ("sin antecedentes de
-  // pancreatitis") la despeja; una mención sin negar la activa; sin mención, queda a revisar.
+  // perfil no prueba que no exista. Solo una negación pura registrada ("sin antecedentes de
+  // pancreatitis", y nada más en esa frase) la despeja; cualquier otra mención la activa;
+  // sin mención, queda a revisar.
   const mentions = profile.conditions.filter((c) => /pancreatitis/i.test(c))
   const affirmed = mentions.some((c) => !NEGATED_PANCREATITIS.test(c))
   const status = affirmed ? 'fail' : mentions.length > 0 ? 'pass' : 'unknown'
