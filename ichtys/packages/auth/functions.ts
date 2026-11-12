@@ -38,6 +38,8 @@ export const CAPABILITIES = [
   'crf.manage',
   /** Turnos y agenda del estudio. */
   'agenda.manage',
+  /** Dar de alta sujetos en el estudio. */
+  'subjects.manage',
   /** Crear estudios. */
   'study.create',
   /** Dar y quitar acceso a los estudios propios. */
@@ -49,7 +51,11 @@ export const CAPABILITIES = [
 ] as const
 export type Capability = (typeof CAPABILITIES)[number]
 
-const TEAM_BASE: readonly Capability[] = ['study.read', 'clinical.read', 'agenda.manage']
+// Lo que hace cualquiera que trabaja en un estudio: verlo, ver sus datos
+// clínicos, manejar los turnos del día y dar de alta sujetos. Los asistentes
+// llevan la agenda junto con el Study Coordinator (M16). Quien solo mira
+// (Dirección de Investigación, monitor) NO tiene esta base.
+const TEAM_BASE: readonly Capability[] = ['study.read', 'clinical.read', 'agenda.manage', 'subjects.manage']
 
 const COORDINATION: readonly Capability[] = [
   ...TEAM_BASE,
@@ -69,6 +75,8 @@ const COORDINATION: readonly Capability[] = [
  *   - `monitor` lee el estudio y nada más.
  */
 export const FUNCTION_CAPABILITIES: Record<MemberFunction, readonly Capability[]> = {
+  // M16: el investigador «lleva todo» lo clínico de sus estudios. Además de
+  // evolucionar, confirma laboratorios. No gestiona documentos ni da accesos.
   investigator: [...TEAM_BASE, 'clinical.author', 'labs.manage'],
   study_coordinator: COORDINATION,
   lab_assistant: [...TEAM_BASE, 'labs.manage'],

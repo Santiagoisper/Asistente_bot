@@ -18,7 +18,7 @@ export async function POST(
   // delta zod). Tope de bytes antes del parse (413, H7).
   let access: Awaited<ReturnType<typeof validateSubjectAccess>>
   try {
-    access = await validateSubjectAccess(subjectId, routeStudyId)
+    access = await validateSubjectAccess(subjectId, routeStudyId, { require: 'labs.manage' })
   } catch (err) {
     return handleApiError(err)
   }

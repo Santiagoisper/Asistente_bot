@@ -20,7 +20,7 @@ export async function POST(
   // JSON.parse y del safeParse (H7).
   let access: Awaited<ReturnType<typeof validateSubjectAccess>>
   try {
-    access = await validateSubjectAccess(subjectId, routeStudyId)
+    access = await validateSubjectAccess(subjectId, routeStudyId, { require: 'labs.manage' })
   } catch (err) {
     return handleApiError(err)
   }

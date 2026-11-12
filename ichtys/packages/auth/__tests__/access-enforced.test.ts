@@ -191,6 +191,59 @@ describe('autoría clínica en validateSubjectAccess', () => {
   })
 })
 
+describe('las rutas que modifican nombran su capacidad', () => {
+  it('enforced: Dirección de Investigación ve datos clínicos pero no mueve turnos ni da de alta sujetos', async () => {
+    organization('enforced')
+    signIn('org:admin')
+    functions('research_director')
+
+    await expect(validatePhiStudyAccess(STUDY_ID)).resolves.toBeDefined()
+    for (const require of ['agenda.manage', 'subjects.manage'] as const) {
+      await expect(validatePhiStudyAccess(STUDY_ID, { require }), require).rejects.toMatchObject({
+        status: 403,
+        message: 'Forbidden',
+      })
+    }
+    // Rechazado por la capacidad: el estudio solo se buscó en la llamada sin requisito.
+    expect(mocks.studiesFindFirst).toHaveBeenCalledTimes(1)
+  })
+
+  it('enforced: el asistente de regulatorio no carga ni confirma laboratorios; el de laboratorio sí', async () => {
+    organization('enforced')
+    signIn('org:site_coordinator')
+
+    functions('regulatory_assistant')
+    await expect(validateSubjectAccess(SUBJECT_ID, STUDY_ID, { require: 'labs.manage' })).rejects.toMatchObject({
+      status: 403,
+      message: 'Forbidden',
+    })
+    expect(mocks.subjectsFindFirst).not.toHaveBeenCalled()
+
+    functions('lab_assistant')
+    await expect(validateSubjectAccess(SUBJECT_ID, STUDY_ID, { require: 'labs.manage' })).resolves.toBeDefined()
+  })
+
+  it('enforced: cualquier integrante del equipo maneja la agenda', async () => {
+    organization('enforced')
+    signIn('org:read_only_monitor')
+    for (const fn of ['investigator', 'study_coordinator', 'lab_assistant', 'regulatory_assistant', 'crf_assistant']) {
+      functions(fn)
+      await expect(validatePhiStudyAccess(STUDY_ID, { require: 'agenda.manage' }), fn).resolves.toBeDefined()
+    }
+  })
+
+  it('open: el requisito no agrega nada; decide el rol, como siempre', async () => {
+    organization('open')
+    signIn('org:site_coordinator')
+    await expect(validatePhiStudyAccess(STUDY_ID, { require: 'agenda.manage' })).resolves.toBeDefined()
+    await expect(validateSubjectAccess(SUBJECT_ID, STUDY_ID, { require: 'labs.manage' })).resolves.toBeDefined()
+
+    signIn('org:read_only_monitor')
+    await expect(validatePhiStudyAccess(STUDY_ID, { require: 'agenda.manage' })).rejects.toMatchObject({ status: 403 })
+    expect(mocks.functionRows).not.toHaveBeenCalled()
+  })
+})
+
 describe('entrada a un estudio en validateStudyAccess', () => {
   it('open: cualquier miembro de la organización entra, como siempre', async () => {
     organization('open')

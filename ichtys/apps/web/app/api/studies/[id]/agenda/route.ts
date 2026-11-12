@@ -19,7 +19,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   let access: Awaited<ReturnType<typeof validatePhiStudyAccess>>
   try {
-    access = await validatePhiStudyAccess(studyId)
+    access = await validatePhiStudyAccess(studyId, { require: 'agenda.manage' })
   } catch (err) {
     return handleApiError(err)
   }

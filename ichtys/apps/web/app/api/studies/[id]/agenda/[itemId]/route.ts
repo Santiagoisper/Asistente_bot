@@ -17,7 +17,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   let access: Awaited<ReturnType<typeof validatePhiStudyAccess>>
   try {
-    access = await validatePhiStudyAccess(studyId)
+    access = await validatePhiStudyAccess(studyId, { require: 'agenda.manage' })
   } catch (err) {
     return handleApiError(err)
   }

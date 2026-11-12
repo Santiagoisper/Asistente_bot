@@ -69,7 +69,7 @@ export async function POST(
   // zod). Tope de bytes antes del parse (413, H7).
   let access: Awaited<ReturnType<typeof validatePhiStudyAccess>>
   try {
-    access = await validatePhiStudyAccess(studyId)
+    access = await validatePhiStudyAccess(studyId, { require: 'subjects.manage' })
   } catch (err) {
     return handleApiError(err)
   }

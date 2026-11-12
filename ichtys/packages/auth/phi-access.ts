@@ -12,12 +12,30 @@ import { allows, type Capability } from './functions'
 import { canAccessPhiData, normalizeRole } from './roles'
 import { AccessError, type StudyAccessContext } from './validate-study-access'
 
+export interface ClinicalAccessOptions {
+  /**
+   * Capacidad adicional que la ruta exige en modo estricto, además de ver
+   * datos clínicos: `clinical.author` para escribir una evolución,
+   * `labs.manage` para cargar o confirmar un laboratorio, `agenda.manage` para
+   * mover un turno. Ver datos no es poder cambiarlos: toda ruta que MODIFICA
+   * nombra la suya. En modo `open` no agrega nada: históricamente, quien podía
+   * ver datos clínicos podía también hacer lo que hoy pide esta capacidad.
+   */
+  require?: Capability
+}
+
+/** En modo `open` la capacidad adicional no existía como comprobación aparte. */
+const NO_EXTRA_CHECK = (): boolean => true
+
 /**
  * Valida acceso al estudio + datos clínicos.
  * Modo `open`: por rol (coordinador, PI, study_admin, org_admin), como siempre.
  * Modo estricto: capacidad `clinical.read` de las funciones de la persona.
  */
-export async function validatePhiStudyAccess(studyId: string): Promise<StudyAccessContext> {
+export async function validatePhiStudyAccess(
+  studyId: string,
+  options: ClinicalAccessOptions = {},
+): Promise<StudyAccessContext> {
   const { userId, orgId: clerkOrgId, orgRole } = await auth()
 
   if (!userId || !clerkOrgId) {
@@ -37,6 +55,9 @@ export async function validatePhiStudyAccess(studyId: string): Promise<StudyAcce
   if (!allows(access, 'clinical.read', canAccessPhiData)) {
     throw new AccessError('Forbidden', 403)
   }
+  if (options.require && !allows(access, options.require, NO_EXTRA_CHECK)) {
+    throw new AccessError('Forbidden', 403)
+  }
 
   const study = await db.query.studies.findFirst({
     where: and(eq(studies.id, studyId), eq(studies.organizationId, org.id)),
@@ -53,18 +74,7 @@ export interface SubjectAccessContext extends StudyAccessContext {
   subject: Subject
 }
 
-export interface SubjectAccessOptions {
-  /**
-   * Capacidad adicional que la ruta exige en modo estricto, además de ver
-   * datos clínicos. Por ejemplo `clinical.author` para escribir una evolución.
-   * En modo `open` no agrega nada: históricamente, quien podía ver datos
-   * clínicos podía también hacer lo que hoy pide esta capacidad.
-   */
-  require?: Capability
-}
-
-/** En modo `open` la capacidad adicional no existía como comprobación aparte. */
-const NO_EXTRA_CHECK = (): boolean => true
+export type SubjectAccessOptions = ClinicalAccessOptions
 
 /**
  * Valida que el sujeto pertenece a la org activa y al estudio de la URL.

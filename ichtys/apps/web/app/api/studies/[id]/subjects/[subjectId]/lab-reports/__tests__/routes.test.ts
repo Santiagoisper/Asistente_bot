@@ -91,7 +91,7 @@ describe('POST lab-reports — subir PDF', () => {
 
   it('valida el sujeto contra el estudio de la URL', async () => {
     await upload(uploadRequest(pdf()), ctx)
-    expect(mocks.validateSubjectAccess).toHaveBeenCalledWith(SUBJECT, STUDY)
+    expect(mocks.validateSubjectAccess).toHaveBeenCalledWith(SUBJECT, STUDY, { require: 'labs.manage' })
   })
 
   it('un archivo que no es PDF: 415', async () => {
