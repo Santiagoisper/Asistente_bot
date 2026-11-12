@@ -86,6 +86,7 @@ beforeEach(() => {
     orgId: ORG_ID,
     studyId: crypto.randomUUID(),
     role: 'site_coordinator',
+    access: { mode: 'open', role: 'site_coordinator', functions: [] },
     document: { id: crypto.randomUUID() },
     documentVersion: { id: DOC_VERSION_ID },
   })
@@ -150,6 +151,7 @@ describe('POST /api/ingestion/run — rate limit', () => {
         orgId: crypto.randomUUID(),
         studyId: crypto.randomUUID(),
         role,
+        access: { mode: 'open', role, functions: [] },
         document: { id: crypto.randomUUID() },
         documentVersion: { id: DOC_VERSION_ID },
       })

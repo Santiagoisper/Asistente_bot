@@ -1,4 +1,5 @@
 import { AccessError, canManageDocuments, handleApiError, validateStudyAccess } from '@ichtys/auth'
+import { allows } from '@ichtys/auth/functions'
 import { canUsePlatformKey, getOrgLlmApiKeys, getOrgLlmKeySource, getQuotaStatus } from '@ichtys/db'
 import { getLatestSpecAttempt, isMeaningfulSpec, specRichness, studySpecSchema } from '@ichtys/ingestion'
 import {
@@ -40,7 +41,7 @@ export async function POST(
 
   try {
     const access = await validateStudyAccess(studyId)
-    if (!canManageDocuments(access.role)) {
+    if (!allows(access.access, 'documents.manage', canManageDocuments)) {
       throw new AccessError('Forbidden', 403)
     }
     const { orgId, userId } = access

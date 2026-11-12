@@ -1,6 +1,8 @@
 import { auth } from '@clerk/nextjs/server'
 import { auditLogs, db, studies } from '@ichtys/db'
 import { canAdministerStudy, handleApiError, normalizeRole, resolveOrProvisionOrganization } from '@ichtys/auth'
+import { loadAccessSubject } from '@ichtys/auth/access-subject'
+import { allows, type AccessSubject } from '@ichtys/auth/functions'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../lib/api/body-limit'
 import { createStudyInput } from '../../../lib/api/input-schemas'
 
@@ -11,8 +13,21 @@ export async function POST(req: Request): Promise<Response> {
   if (!userId || !clerkOrgId) {
     return new Response('Unauthorized', { status: 401 })
   }
-  // Crear un estudio es administrar el estudio: el coordinador sube documentos, no abre estudios.
-  if (!canAdministerStudy(normalizeRole(orgRole))) {
+  // La organización se resuelve antes de decidir: de ella sale el modo de
+  // acceso. En modo `open` decide el rol, como siempre (crear un estudio es
+  // administrarlo: el coordinador sube documentos, no abre estudios); en modo
+  // estricto, la capacidad `study.create`.
+  let org: NonNullable<Awaited<ReturnType<typeof resolveOrProvisionOrganization>>>
+  let access: AccessSubject
+  try {
+    const resolved = await resolveOrProvisionOrganization(clerkOrgId)
+    if (!resolved) throw new Error('Failed to provision organization')
+    org = resolved
+    access = await loadAccessSubject({ org, userId, role: normalizeRole(orgRole) })
+  } catch (err) {
+    return handleApiError(err)
+  }
+  if (!allows(access, 'study.create', canAdministerStudy)) {
     return new Response('Forbidden', { status: 403 })
   }
 
@@ -34,9 +49,6 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   try {
-    const org = await resolveOrProvisionOrganization(clerkOrgId)
-    if (!org) throw new Error('Failed to provision organization')
-
     // El alta y su registro de auditoría van en la misma transacción
     // (docs/decisions/audit-policy.md): o quedan los dos, o ninguno. Si el
     // registro falla, el estudio no existe y reintentar no lo duplica.

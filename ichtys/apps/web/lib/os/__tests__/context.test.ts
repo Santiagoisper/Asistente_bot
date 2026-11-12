@@ -31,7 +31,7 @@ describe('contexto de las pantallas del OS', () => {
     // Antes solo se daba de alta al pasar por Protocolos; Inicio, Agenda y Laboratorios
     // le decían «Elegí una organización» a alguien que ya tenía una activa.
     mocks.auth.mockResolvedValue({ userId: 'user_1', orgId: 'org_clerk_nueva', orgRole: 'org:admin' })
-    mocks.resolveOrProvisionOrganization.mockResolvedValue({ id: 'org-interna-1', clerkOrgId: 'org_clerk_nueva', name: 'Centro nuevo' })
+    mocks.resolveOrProvisionOrganization.mockResolvedValue({ id: 'org-interna-1', clerkOrgId: 'org_clerk_nueva', name: 'Centro nuevo', accessMode: 'open' })
     const ctx = await getOsContext()
     expect(mocks.resolveOrProvisionOrganization).toHaveBeenCalledWith('org_clerk_nueva')
     expect(ctx).toMatchObject({ userId: 'user_1', orgId: 'org-interna-1', role: 'org_admin', canAdministerOrg: true })
@@ -39,7 +39,7 @@ describe('contexto de las pantallas del OS', () => {
 
   it('la organización sale del token, y el rol se normaliza cerrado', async () => {
     mocks.auth.mockResolvedValue({ userId: 'user_2', orgId: 'org_clerk_a', orgRole: 'org:rol_desconocido' })
-    mocks.resolveOrProvisionOrganization.mockResolvedValue({ id: 'org-a', clerkOrgId: 'org_clerk_a', name: 'A' })
+    mocks.resolveOrProvisionOrganization.mockResolvedValue({ id: 'org-a', clerkOrgId: 'org_clerk_a', name: 'A', accessMode: 'open' })
     const ctx = await getOsContext()
     expect(ctx?.orgId).toBe('org-a')
     expect(ctx?.canAdministerOrg).toBe(false)

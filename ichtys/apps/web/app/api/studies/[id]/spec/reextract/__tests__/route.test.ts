@@ -106,6 +106,7 @@ beforeEach(() => {
     orgId: ORG_ID,
     userId: USER_ID,
     role: 'site_coordinator',
+    access: { mode: 'open', role: 'site_coordinator', functions: [] },
   })
   mocks.enforceSlidingWindowRateLimit.mockResolvedValue({ limited: false })
   mocks.getSpecReextractRateLimitConfig.mockReturnValue({ limit: 3, orgLimit: 12, windowSeconds: 60 })
@@ -224,6 +225,7 @@ describe('POST /api/studies/[id]/spec/reextract — gestión documental (S1)', (
         orgId: ORG_ID,
         userId: USER_ID,
         role,
+        access: { mode: 'open', role, functions: [] },
       })
 
       const res = await callPost('?force=1')

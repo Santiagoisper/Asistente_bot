@@ -1,7 +1,9 @@
 import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { AccessError, handleApiError, resolveOrProvisionOrganization } from '@ichtys/auth'
-import { ROLES, isRole, roleSatisfies } from '@ichtys/auth/roles'
+import { loadAccessSubject } from '@ichtys/auth/access-subject'
+import { allows } from '@ichtys/auth/functions'
+import { ROLES, isRole, roleSatisfies, type Role } from '@ichtys/auth/roles'
 import {
   auditLogs,
   buildOrgLlmKeyStatuses,
@@ -50,8 +52,13 @@ async function resolveOrgContext() {
     throw new AccessError('Organization not found', 403)
   }
 
-  return { userId, orgId: org.id, role: normalizeRole(orgRole) }
+  const role = normalizeRole(orgRole)
+  const access = await loadAccessSubject({ org, userId, role })
+  return { userId, orgId: org.id, role, access }
 }
+
+/** Hasta el acceso por función, cambiar ajustes pedía rol study_admin o superior. */
+const couldChangeSettings = (role: Role): boolean => roleSatisfies(role, ROLES.STUDY_ADMIN)
 
 /**
  * GET /api/org/settings — configuración RAG/LLM + estado de keys (enmascaradas).
@@ -94,8 +101,8 @@ export async function GET(): Promise<Response> {
  */
 export async function PATCH(req: Request): Promise<Response> {
   try {
-    const { orgId, userId, role } = await resolveOrgContext()
-    if (!roleSatisfies(role, ROLES.STUDY_ADMIN)) {
+    const { orgId, userId, access } = await resolveOrgContext()
+    if (!allows(access, 'org.settings', couldChangeSettings)) {
       throw new AccessError('Insufficient role', 403)
     }
 
@@ -189,8 +196,8 @@ async function dbInsertAudit(orgId: string, userId: string, providers: string[])
  */
 export async function POST(): Promise<Response> {
   try {
-    const { orgId, role } = await resolveOrgContext()
-    if (!roleSatisfies(role, ROLES.STUDY_ADMIN)) {
+    const { orgId, access } = await resolveOrgContext()
+    if (!allows(access, 'org.settings', couldChangeSettings)) {
       throw new AccessError('Insufficient role', 403)
     }
 

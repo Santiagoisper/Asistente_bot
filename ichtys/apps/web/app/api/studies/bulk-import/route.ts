@@ -1,6 +1,8 @@
 import { after } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { canAdministerStudy, normalizeRole, resolveOrProvisionOrganization } from '@ichtys/auth'
+import { loadAccessSubject } from '@ichtys/auth/access-subject'
+import { allows } from '@ichtys/auth/functions'
 import { auditLogs, db, documents, documentVersions, ingestionJobs, studies } from '@ichtys/db'
 import { runSingleIngestionJobById } from '@ichtys/ingestion/ingestion-jobs'
 import { putPrivateDocumentPdf } from '../../documents/upload/blob-storage'
@@ -98,8 +100,15 @@ export async function POST(req: Request): Promise<Response> {
 
   const { userId, orgId: clerkOrgId, orgRole } = await auth()
   if (!userId || !clerkOrgId) return new Response('Unauthorized', { status: 401 })
-  // El lote crea estudios: hace falta administrar el estudio, no solo subir documentos.
-  if (!canAdministerStudy(normalizeRole(orgRole))) {
+  // La organización se resuelve antes de decidir: de ella sale el modo de
+  // acceso. El lote crea estudios: en modo `open` hace falta el rol que
+  // administra estudios; en modo estricto, la capacidad `study.create`.
+  const org = await resolveOrProvisionOrganization(clerkOrgId)
+  if (!org) {
+    return new Response('Internal Server Error', { status: 500 })
+  }
+  const access = await loadAccessSubject({ org, userId, role: normalizeRole(orgRole) })
+  if (!allows(access, 'study.create', canAdministerStudy)) {
     return new Response('Forbidden', { status: 403 })
   }
 
@@ -134,11 +143,6 @@ export async function POST(req: Request): Promise<Response> {
   if (files.length === 0) return new Response('Bad Request', { status: 400 })
   if (files.length > MAX_FILES_PER_BATCH) {
     return new Response(`Too many files (max ${MAX_FILES_PER_BATCH})`, { status: 413 })
-  }
-
-  const org = await resolveOrProvisionOrganization(clerkOrgId)
-  if (!org) {
-    return new Response('Internal Server Error', { status: 500 })
   }
 
   const batchId = crypto.randomUUID()

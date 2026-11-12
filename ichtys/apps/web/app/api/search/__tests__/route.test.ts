@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   findOrg: vi.fn(),
+  functionRows: vi.fn(),
   searchOs: vi.fn(),
 }))
 
@@ -13,7 +14,11 @@ vi.mock('@ichtys/auth', () => ({
   handleApiError: () => new Response('Internal Server Error', { status: 500 }),
 }))
 vi.mock('@ichtys/db', () => ({
-  db: { query: { organizations: { findFirst: mocks.findOrg } } },
+  db: {
+    query: { organizations: { findFirst: mocks.findOrg } },
+    select: () => ({ from: () => ({ where: mocks.functionRows }) }),
+  },
+  memberFunctions: { functionKey: 'mf.function_key', organizationId: 'mf.organization_id', userId: 'mf.user_id', revokedAt: 'mf.revoked_at' },
   eq: (...args: unknown[]) => args,
   organizations: { clerkOrgId: 'clerk_org_id' },
 }))
@@ -28,7 +33,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   process.env.VERCEL_ENV = 'preview'
   mocks.auth.mockResolvedValue({ userId: 'user_1', orgId: 'org_clerk_1', orgRole: 'org:site_coordinator' })
-  mocks.findOrg.mockResolvedValue({ id: 'org-interna-1' })
+  mocks.findOrg.mockResolvedValue({ id: 'org-interna-1', accessMode: 'open' })
+  mocks.functionRows.mockResolvedValue([])
   mocks.searchOs.mockResolvedValue({ studies: [{ id: 's1', label: 'EST-201', detail: 'Estudio', href: '/studies/s1/chat' }], subjects: [] })
 })
 
@@ -86,5 +92,35 @@ describe('GET /api/search', () => {
     delete process.env.ALPHI_OS
     expect((await GET(url('EST'))).status).toBe(404)
     expect(mocks.auth).not.toHaveBeenCalled()
+  })
+})
+
+describe('GET /api/search — modo estricto', () => {
+  const strict = (...functions: string[]) => {
+    mocks.findOrg.mockResolvedValue({ id: 'org-interna-1', accessMode: 'enforced' })
+    mocks.functionRows.mockResolvedValue(functions.map((functionKey) => ({ functionKey })))
+  }
+
+  it('sin una función que permita entrar a estudios, no busca nada, tenga el rol que tenga', async () => {
+    strict()
+    mocks.auth.mockResolvedValue({ userId: 'user_1', orgId: 'org_clerk_1', orgRole: 'org:admin' })
+    const res = await GET(url('EST-201'))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ studies: [], subjects: [] })
+    expect(mocks.searchOs).not.toHaveBeenCalled()
+  })
+
+  it('el monitor busca estudios pero no sujetos, aunque su rol histórico viera datos clínicos', async () => {
+    strict('monitor')
+    mocks.auth.mockResolvedValue({ userId: 'user_1', orgId: 'org_clerk_1', orgRole: 'org:site_coordinator' })
+    await GET(url('SUJ-10'))
+    expect(mocks.searchOs).toHaveBeenCalledWith('org-interna-1', 'SUJ-10', { includeSubjects: false })
+  })
+
+  it('quien tiene una función del equipo busca sujetos, aunque su rol histórico fuera de solo lectura', async () => {
+    strict('lab_assistant')
+    mocks.auth.mockResolvedValue({ userId: 'user_1', orgId: 'org_clerk_1', orgRole: 'org:read_only_monitor' })
+    await GET(url('SUJ-10'))
+    expect(mocks.searchOs).toHaveBeenCalledWith('org-interna-1', 'SUJ-10', { includeSubjects: true })
   })
 })
