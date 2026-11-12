@@ -60,7 +60,7 @@ vi.mock('@ichtys/db', () => {
     auditLogs: { __name: 'audit_logs' },
     buildOrgLlmKeyStatuses: () => [],
     getOrgLlmApiKeys: async () => ({}),
-    getOrgRagConfig: async () => ({ llmProvider: 'openai', similarityThreshold: 0.2, topK: 8 }),
+    getOrgRagConfig: async () => ({ llmProvider: 'anthropic', similarityThreshold: 0.2, topK: 8 }),
     resolveLlmApiKey: () => null,
     updateOrgRagConfig: mocks.updateOrgRagConfig,
     updateOrgLlmApiKeys: mocks.updateOrgLlmApiKeys,
@@ -102,7 +102,8 @@ describe('PATCH /api/org/settings — cambios con registro', () => {
           userId: 'user-1',
           resourceType: 'organization',
           resourceId: 'org-1',
-          metadata: { type: 'org.rag_config.updated', fields: ['llmProvider', 'topK'], llmProvider: 'openai' },
+          // Valores nuevos y anteriores de lo que cambió (no son secretos): se sabe qué quedó aplicado.
+          metadata: { type: 'org.rag_config.updated', fields: ['llmProvider', 'topK'], llmProvider: 'openai', values: { llmProvider: 'openai', topK: 6 }, previous: { llmProvider: 'anthropic', topK: 8 } },
         }),
       },
     ])
@@ -115,7 +116,8 @@ describe('PATCH /api/org/settings — cambios con registro', () => {
     expect(mocks.transactions).toBe(1)
     expect(mocks.updateOrgLlmApiKeys).toHaveBeenCalledWith('org-1', { openai: SECRET, groq: null }, mocks.tx)
     expect(mocks.audits).toHaveLength(1)
-    expect(mocks.audits[0]).toMatchObject({ via: 'tx', values: { metadata: { type: 'org.llm_keys.updated', providers: ['openai', 'groq'] } } })
+    // Por proveedor queda si la clave se cargó o se quitó; nunca la clave.
+    expect(mocks.audits[0]).toMatchObject({ via: 'tx', values: { metadata: { type: 'org.llm_keys.updated', providers: ['openai', 'groq'], operations: { openai: 'set', groq: 'removed' } } } })
     expect(JSON.stringify(mocks.audits)).not.toContain(SECRET)
   })
 

@@ -105,8 +105,29 @@ describe('PATCH spec/[specId] — editar un borrador deja registro', () => {
       userId: 'user-1',
       resourceType: 'study_spec',
       resourceId: SPEC_ID,
-      metadata: { version: 3, inclusionCriteria: 2, exclusionCriteria: 1, endpoints: 0, visits: 0 },
+      metadata: expect.objectContaining({ version: 3, inclusionCriteria: 2, exclusionCriteria: 1, endpoints: 0, visits: 0 }),
     })
+    expect(JSON.stringify(mocks.writes[1]!.values)).not.toContain('inventad')
+  })
+
+  it('el registro lleva la huella de lo guardado y de lo anterior: dos ediciones con la misma estructura se distinguen', async () => {
+    type Meta = { contentSha256: string; previousSha256: string }
+    // Lo anterior, como lo devuelve la base: mismas claves en otro orden.
+    const previous = { visits: [], endpoints: [], exclusionCriteria: body.spec.exclusionCriteria, inclusionCriteria: body.spec.inclusionCriteria, identification: body.spec.identification }
+    mocks.findFirst.mockResolvedValue({ id: SPEC_ID, status: 'draft', version: 3, organizationId: 'org-1', studyId: STUDY_ID, spec: previous })
+    await patch()
+    const same = mocks.writes[1]!.values!.metadata as Meta
+    expect(same.contentSha256).toMatch(/^[0-9a-f]{64}$/)
+    // Guardar lo mismo que había: la huella no depende del orden de las claves.
+    expect(same.contentSha256).toBe(same.previousSha256)
+
+    // Cambia solo el texto de un criterio: mismas cuentas, otra huella.
+    mocks.writes.length = 0
+    mocks.findFirst.mockResolvedValue({ id: SPEC_ID, status: 'draft', version: 3, organizationId: 'org-1', studyId: STUDY_ID, spec: { ...previous, inclusionCriteria: [criterion('1', 'Criterio inventado uno, antes'), criterion('2', 'Criterio inventado dos')] } })
+    await patch()
+    const edited = mocks.writes[1]!.values!.metadata as Meta
+    expect(edited.contentSha256).toBe(same.contentSha256)
+    expect(edited.previousSha256).not.toBe(edited.contentSha256)
     expect(JSON.stringify(mocks.writes[1]!.values)).not.toContain('inventad')
   })
 

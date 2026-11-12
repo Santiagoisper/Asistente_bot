@@ -143,7 +143,7 @@ export async function PATCH(req: Request): Promise<Response> {
     if (body.similarityThreshold !== undefined) ragPatch.similarityThreshold = body.similarityThreshold
     if (body.topK !== undefined) ragPatch.topK = body.topK
 
-    const ragFields = Object.keys(ragPatch)
+    const ragFields = Object.keys(ragPatch) as Array<keyof typeof ragPatch>
     let keysPatch: Partial<Record<OrgLlmKeyProvider, string | null>> | null = null
     if (body.llmApiKeys) {
       keysPatch = {}
@@ -157,6 +157,9 @@ export async function PATCH(req: Request): Promise<Response> {
     // lo hizo y a cuál se pasó. De las claves queda el proveedor, nunca la clave.
     if (ragFields.length > 0 || keysPatch) {
       const keys = keysPatch
+      // Valores anteriores de lo que cambia: no son secretos y hacen falta para
+      // saber qué configuración había y cuál quedó.
+      const before = ragFields.length > 0 ? await getOrgRagConfig(orgId) : null
       await db.transaction(async (tx) => {
         if (ragFields.length > 0) {
           await updateOrgRagConfig(orgId, ragPatch, tx)
@@ -170,6 +173,8 @@ export async function PATCH(req: Request): Promise<Response> {
               type: 'org.rag_config.updated',
               fields: ragFields,
               ...(ragPatch.llmProvider !== undefined ? { llmProvider: ragPatch.llmProvider } : {}),
+              values: Object.fromEntries(ragFields.map((field) => [field, ragPatch[field]])),
+              previous: Object.fromEntries(ragFields.map((field) => [field, before?.[field] ?? null])),
             },
           })
         }
@@ -181,7 +186,12 @@ export async function PATCH(req: Request): Promise<Response> {
             userId,
             resourceType: 'organization',
             resourceId: orgId,
-            metadata: { type: 'org.llm_keys.updated', providers: Object.keys(keys) },
+            // Por proveedor: si la clave se cargó o se quitó. Nunca la clave.
+            metadata: {
+              type: 'org.llm_keys.updated',
+              providers: Object.keys(keys),
+              operations: Object.fromEntries(Object.entries(keys).map(([provider, value]) => [provider, value === null || value === '' ? 'removed' : 'set'])),
+            },
           })
         }
       })
