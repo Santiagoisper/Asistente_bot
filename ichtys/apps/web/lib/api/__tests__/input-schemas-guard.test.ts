@@ -20,6 +20,9 @@ import {
   createStudyInput,
   patchSchema,
   specDiffQueryInput,
+  teamFunctionInput,
+  teamMembershipInput,
+  teamMembershipRevokeInput,
   triggerInput,
   uploadMetaInput,
 } from '../input-schemas'
@@ -32,6 +35,9 @@ import {
 import { studySpecSchema } from '@ichtys/ingestion'
 
 const EXTERNAL_SCHEMAS = {
+  teamFunctionInput,
+  teamMembershipInput,
+  teamMembershipRevokeInput,
   chatInput,
   answerTestInput,
   triggerInput,
