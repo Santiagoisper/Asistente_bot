@@ -44,7 +44,7 @@ beforeEach(() => {
     orgId: 'org_clerk_ficticia',
     orgRole: 'org:site_coordinator',
   })
-  mocks.organizationsFindFirst.mockResolvedValue({ id: ORG_ID })
+  mocks.organizationsFindFirst.mockResolvedValue({ id: ORG_ID, accessMode: 'open' })
   mocks.subjectsFindFirst.mockResolvedValue({
     id: SUBJECT_ID,
     organizationId: ORG_ID,

@@ -28,7 +28,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   const { id: studyId, specId } = await params
 
   try {
-    const { orgId } = await validateStudyAccess(studyId, 'study_admin')
+    const { orgId } = await validateStudyAccess(studyId, 'study_admin', 'documents.manage')
 
     // Verify spec belongs to this tenant + study and is still draft — ANTES de
     // leer el cuerpo (Sicario vuelta 3): no se parsea nada para un specId

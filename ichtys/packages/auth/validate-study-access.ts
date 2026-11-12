@@ -1,6 +1,8 @@
 import { auth } from '@clerk/nextjs/server'
 import { and, eq } from 'drizzle-orm'
 import { db, studies, type Study } from '@ichtys/db'
+import { loadAccessSubject } from './access-subject'
+import { allows, type AccessSubject, type Capability } from './functions'
 import { normalizeRole, roleSatisfies, type Role } from './roles'
 import { resolveOrProvisionOrganization } from './resolve-org'
 
@@ -29,14 +31,22 @@ export interface StudyAccessContext {
   study: Study
   /** Rol normalizado del token. La gestión documental lo vuelve a evaluar. */
   role: Role
+  /** Modo de la organización y funciones de la persona, para decidir capacidades con `allows`. */
+  access: AccessSubject
 }
+
+/** En modo `open` no había comprobación: todo miembro de la organización entraba a sus estudios. */
+const ANY_MEMBER = (): boolean => true
 
 /**
  * Valida, server-side, que el usuario autenticado:
  *  1. tiene sesión y org activa (Clerk),
  *  2. la org existe en nuestra DB,
  *  3. el study pertenece a esa org (boundary de tenant),
- *  4. (opcional) su rol satisface `requiredRole`.
+ *  4. en modo estricto, tiene alguna función que permita entrar a estudios,
+ *  5. (opcional) cumple el requisito de la ruta: `requiredRole` en modo `open`,
+ *     `requiredCapability` en modo estricto. Una ruta que en modo estricto
+ *     pide un rol sin nombrar la capacidad equivalente queda cerrada.
  *
  * Devuelve el contexto con el `organizationId` interno para usar en queries.
  * Cualquier ruta de datos DEBE pasar por acá antes de tocar el retrieval.
@@ -44,6 +54,7 @@ export interface StudyAccessContext {
 export async function validateStudyAccess(
   studyId: string,
   requiredRole?: Role,
+  requiredCapability?: Capability,
 ): Promise<StudyAccessContext> {
   const { userId, orgId: clerkOrgId, orgRole } = await auth()
 
@@ -66,9 +77,22 @@ export async function validateStudyAccess(
     throw new AccessError('Study not found or access denied', 404)
   }
 
-  if (requiredRole && !roleSatisfies(normalizeRole(orgRole), requiredRole)) {
-    throw new AccessError('Insufficient role', 403)
+  const role = normalizeRole(orgRole)
+  const access = await loadAccessSubject({ org, userId, role })
+
+  // Misma respuesta que para un estudio que no existe: no se confirma su
+  // existencia a quien no puede entrar.
+  if (!allows(access, 'study.read', ANY_MEMBER)) {
+    throw new AccessError('Study not found or access denied', 404)
   }
 
-  return { userId, orgId: org.id, study, role: normalizeRole(orgRole) }
+  if (requiredRole) {
+    const satisfied =
+      access.mode === 'open'
+        ? roleSatisfies(role, requiredRole)
+        : requiredCapability !== undefined && allows(access, requiredCapability, ANY_MEMBER)
+    if (!satisfied) throw new AccessError('Insufficient role', 403)
+  }
+
+  return { userId, orgId: org.id, study, role, access }
 }

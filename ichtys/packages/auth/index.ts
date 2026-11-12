@@ -1,6 +1,7 @@
 export * from './resolve-org'
 export * from './roles'
 export * from './functions'
+export * from './access-subject'
 export * from './validate-study-access'
 export * from './api-errors'
 export * from './object-access'

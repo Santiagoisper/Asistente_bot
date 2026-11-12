@@ -7,11 +7,15 @@ import {
   subjects,
   type Subject,
 } from '@ichtys/db'
+import { loadAccessSubject } from './access-subject'
+import { allows, type Capability } from './functions'
 import { canAccessPhiData, normalizeRole } from './roles'
 import { AccessError, type StudyAccessContext } from './validate-study-access'
 
 /**
- * Valida acceso al estudio + permiso PHI (coordinador, PI, study_admin, org_admin).
+ * Valida acceso al estudio + datos clínicos.
+ * Modo `open`: por rol (coordinador, PI, study_admin, org_admin), como siempre.
+ * Modo estricto: capacidad `clinical.read` de las funciones de la persona.
  */
 export async function validatePhiStudyAccess(studyId: string): Promise<StudyAccessContext> {
   const { userId, orgId: clerkOrgId, orgRole } = await auth()
@@ -20,17 +24,18 @@ export async function validatePhiStudyAccess(studyId: string): Promise<StudyAcce
     throw new AccessError('Unauthorized', 401)
   }
 
-  const role = normalizeRole(orgRole)
-  if (!canAccessPhiData(role)) {
-    throw new AccessError('Forbidden', 403)
-  }
-
   const org = await db.query.organizations.findFirst({
     where: eq(organizations.clerkOrgId, clerkOrgId),
   })
 
   if (!org) {
     throw new AccessError('Organization not found', 403)
+  }
+
+  const role = normalizeRole(orgRole)
+  const access = await loadAccessSubject({ org, userId, role })
+  if (!allows(access, 'clinical.read', canAccessPhiData)) {
+    throw new AccessError('Forbidden', 403)
   }
 
   const study = await db.query.studies.findFirst({
@@ -41,12 +46,25 @@ export async function validatePhiStudyAccess(studyId: string): Promise<StudyAcce
     throw new AccessError('Study not found or access denied', 404)
   }
 
-  return { userId, orgId: org.id, study, role }
+  return { userId, orgId: org.id, study, role, access }
 }
 
 export interface SubjectAccessContext extends StudyAccessContext {
   subject: Subject
 }
+
+export interface SubjectAccessOptions {
+  /**
+   * Capacidad adicional que la ruta exige en modo estricto, además de ver
+   * datos clínicos. Por ejemplo `clinical.author` para escribir una evolución.
+   * En modo `open` no agrega nada: históricamente, quien podía ver datos
+   * clínicos podía también hacer lo que hoy pide esta capacidad.
+   */
+  require?: Capability
+}
+
+/** En modo `open` la capacidad adicional no existía como comprobación aparte. */
+const NO_EXTRA_CHECK = (): boolean => true
 
 /**
  * Valida que el sujeto pertenece a la org activa y al estudio de la URL.
@@ -55,20 +73,12 @@ export interface SubjectAccessContext extends StudyAccessContext {
 export async function validateSubjectAccess(
   subjectId: string,
   expectedStudyId: string,
+  options: SubjectAccessOptions = {},
 ): Promise<SubjectAccessContext> {
   const { userId, orgId: clerkOrgId, orgRole } = await auth()
 
   if (!userId || !clerkOrgId) {
     throw new AccessError('Unauthorized', 401)
-  }
-
-  const role = normalizeRole(orgRole)
-  if (!canAccessPhiData(role)) {
-    throw new AccessError('Forbidden', 403)
-  }
-
-  if (!expectedStudyId) {
-    throw new AccessError('Not Found', 404)
   }
 
   const org = await db.query.organizations.findFirst({
@@ -77,6 +87,19 @@ export async function validateSubjectAccess(
 
   if (!org) {
     throw new AccessError('Organization not found', 403)
+  }
+
+  const role = normalizeRole(orgRole)
+  const access = await loadAccessSubject({ org, userId, role })
+  if (!allows(access, 'clinical.read', canAccessPhiData)) {
+    throw new AccessError('Forbidden', 403)
+  }
+  if (options.require && !allows(access, options.require, NO_EXTRA_CHECK)) {
+    throw new AccessError('Forbidden', 403)
+  }
+
+  if (!expectedStudyId) {
+    throw new AccessError('Not Found', 404)
   }
 
   const subject = await db.query.subjects.findFirst({
@@ -100,5 +123,5 @@ export async function validateSubjectAccess(
     throw new AccessError('Not Found', 404)
   }
 
-  return { userId, orgId: org.id, study, subject, role }
+  return { userId, orgId: org.id, study, subject, role, access }
 }
