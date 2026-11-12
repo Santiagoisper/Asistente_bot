@@ -1,6 +1,6 @@
 # Marco normativo de desarrollo — Alphi / Clinical Research OS
 
-**Versión:** 1.5 · **Fecha:** 2026-11-12 · **Estado:** propuesta, pendiente de revisión por Calidad y Legales. La 1.1 incorpora la revisión de Reviewer y la revisión automática del PR #114 La 1.2 actualiza el estado de C1 y C2 tras los PR #116, #117 y el de la propuesta con confirmación humana. La 1.3 suma a C1 la configuración del centro y la instantánea de la evaluación de elegibilidad. La 1.4 suma el chat y el borrado de evidencia de laboratorio. La 1.5 suma la edición del borrador de un protocolo y los ajustes del modelo por organización, y anota las escrituras que todavía no tienen registro propio.
+**Versión:** 1.6 · **Fecha:** 2026-11-12 · **Estado:** propuesta, pendiente de revisión por Calidad y Legales. La 1.1 incorpora la revisión de Reviewer y la revisión automática del PR #114 La 1.2 actualiza el estado de C1 y C2 tras los PR #116, #117 y el de la propuesta con confirmación humana. La 1.3 suma a C1 la configuración del centro y la instantánea de la evaluación de elegibilidad. La 1.4 suma el chat y el borrado de evidencia de laboratorio. La 1.5 suma la edición del borrador de un protocolo y los ajustes del modelo por organización, y anota las escrituras que todavía no tienen registro propio. La 1.6 suma las brechas C5 y C6, la diferencia con la página de confianza, la falta de un inventario de claves y el corte de sesión sin verificar, encontradas al escribir y revisar los borradores de la política de accesos y del inventario de IA.
 **Reemplaza:** la tabla «Marco regulatorio cubierto» de [`README.md`](./README.md) donde difieran.
 
 Este documento fija **contra qué normas se desarrolla** y **qué tiene que cumplir cada cambio** antes de integrarse. No es asesoramiento legal ni una declaración de cumplimiento. Distingue tres cosas y las marca: **[H]** hecho verificado con fuente, **[I]** interpretación nuestra, **[P]** pendiente de verificar.
@@ -78,7 +78,7 @@ Cada cambio se revisa contra estas reglas. La columna de la derecha dice de dón
 **Reglas que hoy son objetivo y todavía no se pueden sostener con evidencia.** Un PR las responde «objetivo: falta la base» hasta que se cierren las brechas de §6, en vez de marcar una casilla que no puede probar:
 
 - **R2:** la matriz de trazabilidad es de julio de 2026 y no cubre el OS ni el acceso por estudio. Hoy vale la prueba automática; la fila en la matriz, no.
-- **R3:** la mayoría de las escrituras no audita dentro de la transacción (ver §5).
+- **R3:** sostenida en la aplicación para las escrituras que hoy se auditan; quedan los casos de C1 (ver §5 y §6).
 - **R5, retención:** existe [`DATA-RETENTION-POLICY.md`](./DATA-RETENTION-POLICY.md), sin verificar que el sistema la ejecute.
 - **R9:** el registro de proveedores ([`DPA-BAA-TRACKER.md`](./DPA-BAA-TRACKER.md)) no enlaza evidencia de los acuerdos.
 - **R10, restauración:** no consta una restauración probada.
@@ -108,17 +108,22 @@ Cada cambio se revisa contra estas reglas. La columna de la derecha dice de dón
 - **C2.** La IA actualizaba el perfil del paciente sin confirmación humana. **Cerrada** en esta versión: la extracción queda como propuesta que una persona acepta o descarta (decisión de Santiago del 12/11/2026).
 - **C3.** Evaluaciones de elegibilidad sin cifrar. Contradice R5.
 - **C4.** Archivos sin huella ni procedencia. Impide sostener una copia como copia fiel.
+- **C5.** El protocolo extraído por IA se usa sin aprobar. La evaluación de elegibilidad pide el último protocolo extraído sin exigir que esté aprobado y guarda su resultado; el asistente lo inyecta como contexto de sus respuestas. El paso de aprobación existe y no condiciona ninguno de los dos usos. Contradice R6. Encontrada por la revisión automática del PR #124 y confirmada en el código (`screening/route.ts`, `spec-context.ts`). **A decidir:** exigir aprobación en los dos consumidores, o mostrar en pantalla que el resultado sale de un borrador sin revisar.
+- **C6.** El paso de `open` a `enforced` está decidido y sin construir. La fecha límite (`organizations.access_open_until`) no la lee nadie; el valor por defecto del modo es `open` cuando la decisión M1 pide `enforced` para organizaciones nuevas; y no hay ruta ni pantalla para asignar funciones, dar de alta o de baja a otra persona en un estudio, ni cambiar el modo. La única escritura de permisos que existe (la membresía de quien crea un estudio) sí va con su registro en la misma transacción. Deja R4 a medio sostener: el modelo está probado y no se puede operar. Se cierra con la pantalla «Equipo y accesos».
 
 **Documentales:**
 
 1. Ningún documento del repositorio cita la **Disposición ANMAT 7516/2025** ni la **Ley 25.326**. La base normativa argentina falta.
 2. El `README.md` de esta carpeta trata a la ISO 27701 como «extensión»; desde 2025 es independiente.
-3. `ACCESS-CONTROL-POLICY.md` describe el modelo de roles anterior al acceso por función y por estudio.
+3. `ACCESS-CONTROL-POLICY.md`: reescrita como **borrador** sobre el acceso por función y por estudio; pendiente de revisión por Calidad, Seguridad y los responsables del centro. Falta el inventario de claves con dueño y rotación.
 4. La matriz de trazabilidad, la URS y la FRS son de julio de 2026 y no cubren el OS ni el acceso por estudio.
 5. El `README.md` da por firmados o aprobados acuerdos con proveedores, DPIA y evaluación HIPAA. **[P]**: no hay evidencia enlazada. Figura como responsable una organización que ya no lo es.
 6. La revisión trimestral prevista para el 2026-09-30 no consta.
-7. `AI-GOVERNANCE.md` necesita contrastarse con los modelos realmente en uso y pasar de «lite» a un inventario con evaluación de impacto por sistema.
+7. `AI-GOVERNANCE.md` sigue en su versión de junio y no coincide con el código. El inventario nuevo, [`AI-SYSTEMS-INVENTORY.md`](./AI-SYSTEMS-INVENTORY.md), es un **borrador** hecho desde el código; faltan la ficha de impacto por sistema y los modelos efectivos en producción.
 8. Falta leer los anexos oficiales de la Disposición 7516/2025 y extraer lo que digan sobre sistemas informatizados, firma, documentos fuente y conservación.
+9. **La página de confianza publicada no coincide con el código.** Dice que OpenAI recibe fragmentos de protocolo «sin evoluciones clínicas» y no nombra a Google ni a Groq. Con la cadena de respaldo, OpenAI y Google pueden leer informes de laboratorio, y OpenAI, Google y Groq pueden recibir consultas, historial y fragmentos del asistente. La lectura de evoluciones va solo a Anthropic desde el PR #123; antes, cuando Anthropic fallaba, el texto redactado salía al proveedor siguiente (visto el 2026-11-12 en el entorno de prueba; en producción, sin verificar). Contradice R9 y R11. **A decidir:** restringir la cadena por clase de dato o corregir la página y el registro de proveedores. Va junto con otra inconsistencia: la preferencia de proveedor que elige una organización no rige para embeddings, lectura de laboratorio ni títulos (detalle en [`AI-SYSTEMS-INVENTORY.md`](./AI-SYSTEMS-INVENTORY.md), §3).
+10. **No hay inventario de claves** con dueño, cuenta u organización del proveedor a la que pertenece cada una, entorno y fecha de rotación. Es la causa de fondo del hecho del 2026-11-12: la clave de plataforma de un proveedor de modelos era de otra organización de ese proveedor, sin saldo, y nada lo decía. Contradice R9. **A decidir:** quién lo lleva y cada cuánto se rota.
+11. **Corte de una sesión abierta después de una baja:** sin verificar cuánto tarda. Un acceso revocado que sigue activo contradice R4.
 
 ## 7. Mantenimiento
 
