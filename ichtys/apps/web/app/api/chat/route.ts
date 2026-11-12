@@ -145,32 +145,31 @@ export async function POST(req: Request): Promise<Response> {
     return new Response('Internal Server Error', { status: 500 })
   }
 
-  // 8. Persist user message.
+  // 8–9. Persist user message + audit «requested» en la misma transacción (R3).
+  //      Metadata segura: sin texto de la pregunta ni PHI.
   let userMessageId: string
   try {
-    userMessageId = await persistUserMessage({ conversationId, orgId, studyId, question })
-  } catch {
-    await devLogError('persistUserMessage')
-    return new Response('Internal Server Error', { status: 500 })
-  }
-
-  // 9. Audit — requested. Best-effort, safe metadata only (no question text / PHI).
-  try {
-    await writeAuditLog({
-      action: 'rag.answer.requested',
+    userMessageId = await persistUserMessage({
+      conversationId,
       orgId,
       studyId,
-      userId,
-      resourceType: 'conversation',
-      resourceId: conversationId,
-      metadata: {
-        documentType: documentType ?? null,
-        topK: topK ?? null,
-        historyTurns: conversationHistory.length,
+      question,
+      audit: {
+        action: 'rag.answer.requested',
+        orgId,
+        studyId,
+        userId,
+        resourceType: 'conversation',
+        resourceId: conversationId,
+        metadata: {
+          documentType: documentType ?? null,
+          topK: topK ?? null,
+          historyTurns: conversationHistory.length,
+        },
       },
     })
   } catch {
-    await devLogError('writeAuditLog_requested')
+    await devLogError('persistUserMessage')
     return new Response('Internal Server Error', { status: 500 })
   }
 
@@ -181,6 +180,7 @@ export async function POST(req: Request): Promise<Response> {
   } catch (ragErr) {
     const code = ragErr instanceof AnswerOrchestratorError ? ragErr.code : 'answer_failed'
     console.error('[POST /api/chat] generateAnswerForStudy failed', { code })
+    // No se guardó ninguna respuesta: este registro no acompaña a un dato.
     try {
       await writeAuditLog({
         action: 'rag.answer.failed',
@@ -213,7 +213,8 @@ export async function POST(req: Request): Promise<Response> {
     return new Response('Internal Server Error', { status: 500 })
   }
 
-  // 11. Persist assistant message + citations atomically.
+  // 11–12. Persist assistant message + citations + audit «completed» en una
+  //        sola transacción (R3). Metadata segura.
   let assistantMessageId: string
   try {
     assistantMessageId = await persistAssistantMessageAndCitations({
@@ -223,29 +224,22 @@ export async function POST(req: Request): Promise<Response> {
       answer: result.answer,
       confidence: result.confidence,
       evidences: result.evidences,
-    })
-  } catch {
-    await devLogError('persistAssistantMessageAndCitations')
-    return new Response('Internal Server Error', { status: 500 })
-  }
-
-  // 12. Audit — completed. Best-effort, safe metadata only.
-  try {
-    await writeAuditLog({
-      action: 'rag.answer.completed',
-      orgId,
-      studyId,
-      userId,
-      resourceType: 'conversation',
-      resourceId: conversationId,
-      metadata: {
-        confidence: result.confidence,
-        evidenceCount: result.evidences.length,
-        retrievalCount: result.retrievalCount,
+      audit: {
+        action: 'rag.answer.completed',
+        orgId,
+        studyId,
+        userId,
+        resourceType: 'conversation',
+        resourceId: conversationId,
+        metadata: {
+          confidence: result.confidence,
+          evidenceCount: result.evidences.length,
+          retrievalCount: result.retrievalCount,
+        },
       },
     })
   } catch {
-    await devLogError('writeAuditLog_completed')
+    await devLogError('persistAssistantMessageAndCitations')
     return new Response('Internal Server Error', { status: 500 })
   }
 
