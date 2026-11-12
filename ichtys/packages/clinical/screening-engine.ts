@@ -109,16 +109,26 @@ function assessMedicationCriterion(
       criterionNumber: criterion.number,
       criterionText: criterion.text,
       kind,
-      status: hasMetformin ? 'fail' : 'pass',
+      // Misma regla que en los antecedentes: que no figure no despeja la exclusión.
+      status: hasMetformin ? 'fail' : 'unknown',
       reason: hasMetformin
         ? 'Metformina presente — revisar contra exclusión.'
-        : 'Metformina no detectada.',
+        : 'Metformina no figura en la medicación registrada: que no figure no prueba que no la tome. Confirmar con la persona.',
       sourcePages: criterion.sourcePages,
     }
   }
 
   return null
 }
+
+/**
+ * Negación pegada a la mención: «sin antecedentes de pancreatitis», «niega pancreatitis»,
+ * «no refiere episodios de pancreatitis». Entre la negación y la palabra solo se admite un
+ * puñado de palabras de relleno: «sin fiebre, con pancreatitis crónica» NO es una negación.
+ * Ante la duda la mención cuenta como afirmada, que es el lado que obliga a mirar.
+ */
+const NEGATED_PANCREATITIS =
+  /\b(?:sin|niega|descarta|no\s+(?:presenta|refiere|tiene|registra|hay))\s+(?:(?:antecedentes?|historia|episodios?|cuadros?|diagn[oó]stico)\s+)?(?:(?:previos?|personal(?:es)?)\s+)?(?:de\s+)?pancreatitis/i
 
 function assessConditionCriterion(
   criterion: EligibilityCriterionInput,
@@ -128,15 +138,23 @@ function assessConditionCriterion(
   if (kind !== 'exclusion') return null
   if (!/pancreatitis/i.test(criterion.text)) return null
 
-  const hasHistory = profile.conditions.some((c) => /pancreatitis/i.test(c))
+  // Una exclusión no se despeja por falta de datos: que el antecedente no figure en el
+  // perfil no prueba que no exista. Solo una negación registrada ("sin antecedentes de
+  // pancreatitis") la despeja; una mención sin negar la activa; sin mención, queda a revisar.
+  const mentions = profile.conditions.filter((c) => /pancreatitis/i.test(c))
+  const affirmed = mentions.some((c) => !NEGATED_PANCREATITIS.test(c))
+  const status = affirmed ? 'fail' : mentions.length > 0 ? 'pass' : 'unknown'
   return {
     criterionNumber: criterion.number,
     criterionText: criterion.text,
     kind,
-    status: hasHistory ? 'fail' : 'pass',
-    reason: hasHistory
-      ? 'Antecedente de pancreatitis documentado en el perfil.'
-      : 'Sin antecedente de pancreatitis en el perfil.',
+    status,
+    reason:
+      status === 'fail'
+        ? 'Antecedente de pancreatitis documentado en el perfil.'
+        : status === 'pass'
+          ? 'El perfil registra que no hay antecedente de pancreatitis.'
+          : 'El perfil no registra antecedentes de pancreatitis: que no figure no prueba que no exista. Confirmar en la historia clínica.',
     sourcePages: criterion.sourcePages,
   }
 }
