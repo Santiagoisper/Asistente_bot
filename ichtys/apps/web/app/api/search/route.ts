@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { canAccessPhiData, handleApiError, normalizeRole } from '@ichtys/auth'
 import { loadAccessSubject } from '@ichtys/auth/access-subject'
+import { loadStudyScope } from '@ichtys/auth/study-scope'
 import { allows } from '@ichtys/auth/functions'
 import { db, eq, organizations } from '@ichtys/db'
 import { isOsEnabled } from '../../../lib/flags'
@@ -33,8 +34,12 @@ export async function GET(req: Request): Promise<Response> {
     // no devuelve nada. En modo `open` todo miembro de la organización buscaba.
     if (!allows(access, 'study.read', () => true)) return Response.json(EMPTY_SEARCH)
 
+    // Alcance: en modo estricto el buscador solo recorre los estudios donde la
+    // persona tiene membresía vigente, y los sujetos de esos estudios.
+    const scope = await loadStudyScope({ access, orgId: org.id, userId })
     const results = await searchOs(org.id, query, {
       includeSubjects: allows(access, 'clinical.read', canAccessPhiData),
+      scope,
     })
     return Response.json(results, { headers: { 'cache-control': 'no-store' } })
   } catch (err) {

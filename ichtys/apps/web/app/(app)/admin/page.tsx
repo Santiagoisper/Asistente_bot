@@ -1,29 +1,16 @@
-import { auth } from '@clerk/nextjs/server'
-import { db, eq, organizations, studies, documents, documentVersions, auditLogs } from '@ichtys/db'
+import { ROLES, roleSatisfies, type Role } from '@ichtys/auth/roles'
+import { allows } from '@ichtys/auth/functions'
+import { studyScopeFilter, studyScopeOrOrgLevelFilter } from '@ichtys/auth/study-scope'
+import { and, db, eq, studies, documents, documentVersions, auditLogs } from '@ichtys/db'
+import { getOsContext } from '../../../lib/os/context'
 
-function normalizeRole(orgRole: string | null | undefined): string {
-  if (!orgRole) return 'read_only_monitor'
-  const stripped = orgRole.replace(/^org:/, '')
-  if (stripped === 'admin') return 'org_admin'
-  return stripped
-}
+/** Comprobación histórica: administrador del estudio o de la organización. */
+const couldAdminister = (role: Role): boolean => roleSatisfies(role, ROLES.STUDY_ADMIN)
 
 export default async function AdminPage() {
-  const { orgId: clerkOrgId, orgRole } = await auth()
-  const role = normalizeRole(orgRole)
+  const ctx = await getOsContext()
 
-  if (role !== 'org_admin' && role !== 'study_admin') {
-    return (
-      <section className="mx-auto max-w-3xl space-y-4">
-        <h1 className="text-2xl font-semibold text-alphi-navy">Administración</h1>
-        <p className="rounded-md border border-alphi-amber/30 bg-alphi-amber/10 px-4 py-3 text-sm text-alphi-amber">
-          Acceso restringido a roles <code>org_admin</code> o <code>study_admin</code>.
-        </p>
-      </section>
-    )
-  }
-
-  if (!clerkOrgId) {
+  if (!ctx) {
     return (
       <section className="mx-auto max-w-3xl space-y-4">
         <h1 className="text-2xl font-semibold text-alphi-navy">Administración</h1>
@@ -32,31 +19,38 @@ export default async function AdminPage() {
     )
   }
 
-  const org = await db.query.organizations.findFirst({
-    where: eq(organizations.clerkOrgId, clerkOrgId),
-  })
-
-  if (!org) {
+  // Por rol en modo `open`; en modo estricto, por la capacidad de administrar
+  // accesos de la organización (Dirección de Operaciones, administración de la
+  // plataforma). Un Study Coordinator ya no entra solo por su rol histórico.
+  if (!allows(ctx.access, 'access.manage_org', couldAdminister)) {
     return (
       <section className="mx-auto max-w-3xl space-y-4">
         <h1 className="text-2xl font-semibold text-alphi-navy">Administración</h1>
-        <p className="text-sm text-alphi-muted">No se encontró la organización en base de datos.</p>
+        <p className="rounded-md border border-alphi-amber/30 bg-alphi-amber/10 px-4 py-3 text-sm text-alphi-amber">
+          No tenés permiso para ver la administración de la organización.
+        </p>
       </section>
     )
   }
 
+  // Listas y contadores respetan el alcance: quien administra la plataforma sin
+  // ser parte de ningún estudio (M12) no ve estudios ni documentos, y del
+  // registro de auditoría solo ve los eventos de la organización.
+  const org = { id: ctx.orgId }
+  const scope = ctx.studyScope
+
   const studyList = await db.query.studies.findMany({
-    where: eq(studies.organizationId, org.id),
+    where: and(eq(studies.organizationId, org.id), studyScopeFilter(scope, studies.id)),
     orderBy: (s, { desc: descBy }) => [descBy(s.createdAt)],
   })
 
   const docs = await db.query.documents.findMany({
-    where: eq(documents.organizationId, org.id),
+    where: and(eq(documents.organizationId, org.id), studyScopeFilter(scope, documents.studyId)),
     orderBy: (d, { desc: descBy }) => [descBy(d.createdAt)],
   })
 
   const versions = await db.query.documentVersions.findMany({
-    where: eq(documentVersions.organizationId, org.id),
+    where: and(eq(documentVersions.organizationId, org.id), studyScopeFilter(scope, documentVersions.studyId)),
     orderBy: (v, { desc: descBy }) => [descBy(v.createdAt)],
   })
 
@@ -68,7 +62,10 @@ export default async function AdminPage() {
   }
 
   const recentAudit = await db.query.auditLogs.findMany({
-    where: eq(auditLogs.organizationId, org.id),
+    where: and(
+      eq(auditLogs.organizationId, org.id),
+      studyScopeOrOrgLevelFilter(scope, auditLogs.studyId),
+    ),
     orderBy: (a, { desc: descBy }) => [descBy(a.createdAt)],
     limit: 50,
   })
@@ -77,8 +74,7 @@ export default async function AdminPage() {
     <section className="mx-auto max-w-5xl space-y-6">
       <h1 className="text-2xl font-semibold text-alphi-navy">Administración</h1>
       <p className="text-alphi-muted">
-        Gestión de organización, estudios, documentos y usuarios. Restringido a
-        roles <code>org_admin</code> / <code>study_admin</code>.
+        Gestión de organización, estudios, documentos y usuarios.
       </p>
 
       <div className="grid gap-4 sm:grid-cols-3">

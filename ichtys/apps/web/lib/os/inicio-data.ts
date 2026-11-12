@@ -15,48 +15,51 @@ import {
   studySpecs,
   subjects,
 } from '@ichtys/db'
+import { studyScopeFilter, type StudyScope } from '@ichtys/auth/study-scope'
 import type { ModuleAlert } from '@ichtys/integrations'
 import { orderStudyOptions } from '../labs/upload-form-state'
 import { sortPriorityItems, type PriorityItem } from './priority'
 
 /**
  * Datos del Inicio. Regla de este archivo: toda consulta filtra por la
- * organización (`organizationId`, `orgId`) en cada tabla que toca, y ninguna
- * descifra PHI. tests/leakage/os-org-filter.test.ts lo vigila.
+ * organización (`organizationId`, `orgId`) en cada tabla que toca y por el
+ * alcance de la persona (`studyScopeFilter`: en modo estricto, solo sus
+ * estudios), y ninguna descifra PHI. tests/leakage/os-org-filter.test.ts y
+ * tests/leakage/os-study-scope.test.ts lo vigilan.
  */
 
 function studyLabel(row: { protocolNumber: string | null; studyName: string }): string {
   return row.protocolNumber?.trim() || row.studyName
 }
 
-export async function countActiveStudies(orgId: string): Promise<number> {
+export async function countActiveStudies(orgId: string, scope: StudyScope): Promise<number> {
   const [row] = await db
     .select({ value: count() })
     .from(studies)
-    .where(and(eq(studies.organizationId, orgId), eq(studies.status, 'active')))
+    .where(and(eq(studies.organizationId, orgId), studyScopeFilter(scope, studies.id), eq(studies.status, 'active')))
   return row?.value ?? 0
 }
 
-export async function countPendingLabReviews(orgId: string): Promise<number> {
+export async function countPendingLabReviews(orgId: string, scope: StudyScope): Promise<number> {
   const [row] = await db
     .select({ value: count() })
     .from(patientProfiles)
-    .where(and(eq(patientProfiles.organizationId, orgId), eq(patientProfiles.labReviewPending, true)))
+    .where(and(eq(patientProfiles.organizationId, orgId), studyScopeFilter(scope, patientProfiles.studyId), eq(patientProfiles.labReviewPending, true)))
   return row?.value ?? 0
 }
 
 /** Informes de laboratorio subidos que esperan revisión (Carga de laboratorios). */
-export async function countPendingLabReports(orgId: string): Promise<number> {
+export async function countPendingLabReports(orgId: string, scope: StudyScope): Promise<number> {
   const [row] = await db
     .select({ value: count() })
     .from(labReports)
-    .where(and(eq(labReports.organizationId, orgId), eq(labReports.status, 'pending_review')))
+    .where(and(eq(labReports.organizationId, orgId), studyScopeFilter(scope, labReports.studyId), eq(labReports.status, 'pending_review')))
   return row?.value ?? 0
 }
 
 /** Todo lo de laboratorio que espera a una persona: revisiones del perfil e informes subidos. */
-export async function countPendingLabWork(orgId: string): Promise<number> {
-  const [reviews, reports] = await Promise.all([countPendingLabReviews(orgId), countPendingLabReports(orgId)])
+export async function countPendingLabWork(orgId: string, scope: StudyScope): Promise<number> {
+  const [reviews, reports] = await Promise.all([countPendingLabReviews(orgId, scope), countPendingLabReports(orgId, scope)])
   return reviews + reports
 }
 
@@ -70,7 +73,7 @@ export interface PendingLabReportRow {
   since: Date
 }
 
-export async function listPendingLabReports(orgId: string, limit: number): Promise<PendingLabReportRow[]> {
+export async function listPendingLabReports(orgId: string, scope: StudyScope, limit: number): Promise<PendingLabReportRow[]> {
   const rows = await db
     .select({
       reportId: labReports.id,
@@ -85,7 +88,7 @@ export async function listPendingLabReports(orgId: string, limit: number): Promi
     .from(labReports)
     .innerJoin(subjects, and(eq(subjects.id, labReports.subjectId), eq(subjects.organizationId, orgId)))
     .innerJoin(studies, and(eq(studies.id, labReports.studyId), eq(studies.organizationId, orgId)))
-    .where(and(eq(labReports.organizationId, orgId), eq(labReports.status, 'pending_review')))
+    .where(and(eq(labReports.organizationId, orgId), studyScopeFilter(scope, labReports.studyId), eq(labReports.status, 'pending_review')))
     .orderBy(labReports.createdAt)
     .limit(limit)
   return rows.map((row) => ({
@@ -103,18 +106,18 @@ export async function listPendingLabReports(orgId: string, limit: number): Promi
  * Estudios activos de la organización con su cantidad de sujetos, para elegir
  * dónde cargar un informe. Primero los que ya tienen sujetos.
  */
-export async function listActiveStudies(orgId: string): Promise<StudyWithSubjects[]> {
+export async function listActiveStudies(orgId: string, scope: StudyScope): Promise<StudyWithSubjects[]> {
   const [rows, counts] = await Promise.all([
     db
       .select({ id: studies.id, name: studies.name, protocolNumber: studies.protocolNumber })
       .from(studies)
-      .where(and(eq(studies.organizationId, orgId), eq(studies.status, 'active')))
+      .where(and(eq(studies.organizationId, orgId), studyScopeFilter(scope, studies.id), eq(studies.status, 'active')))
       .orderBy(studies.name)
       .limit(200),
     db
       .select({ studyId: subjects.studyId, total: count() })
       .from(subjects)
-      .where(eq(subjects.organizationId, orgId))
+      .where(and(eq(subjects.organizationId, orgId), studyScopeFilter(scope, subjects.studyId)))
       .groupBy(subjects.studyId),
   ])
   const bySubjectCount = new Map(counts.map((row) => [row.studyId, Number(row.total)]))
@@ -135,7 +138,7 @@ export interface PendingLabReviewRow {
   since: Date | null
 }
 
-export async function listPendingLabReviews(orgId: string, limit: number): Promise<PendingLabReviewRow[]> {
+export async function listPendingLabReviews(orgId: string, scope: StudyScope, limit: number): Promise<PendingLabReviewRow[]> {
   const rows = await db
     .select({
       subjectId: subjects.id,
@@ -148,7 +151,7 @@ export async function listPendingLabReviews(orgId: string, limit: number): Promi
     .from(patientProfiles)
     .innerJoin(subjects, and(eq(subjects.id, patientProfiles.subjectId), eq(subjects.organizationId, orgId)))
     .innerJoin(studies, and(eq(studies.id, patientProfiles.studyId), eq(studies.organizationId, orgId)))
-    .where(and(eq(patientProfiles.organizationId, orgId), eq(patientProfiles.labReviewPending, true)))
+    .where(and(eq(patientProfiles.organizationId, orgId), studyScopeFilter(scope, patientProfiles.studyId), eq(patientProfiles.labReviewPending, true)))
     .orderBy(sql`${patientProfiles.labReviewPendingSince} ASC NULLS LAST`)
     .limit(limit)
   return rows.map((row) => ({
@@ -166,7 +169,7 @@ export interface LabOutcomes {
 }
 
 /** Confirmaciones y rechazos de laboratorio de los últimos 30 días, desde el registro de auditoría. */
-export async function labOutcomes30d(orgId: string, now: Date): Promise<LabOutcomes> {
+export async function labOutcomes30d(orgId: string, scope: StudyScope, now: Date): Promise<LabOutcomes> {
   const since = new Date(now.getTime() - 30 * 86_400_000).toISOString()
   const rows = await db
     .select({ action: auditLogs.action, value: count() })
@@ -174,6 +177,7 @@ export async function labOutcomes30d(orgId: string, now: Date): Promise<LabOutco
     .where(
       and(
         eq(auditLogs.organizationId, orgId),
+        studyScopeFilter(scope, auditLogs.studyId),
         inArray(auditLogs.action, ['lab.confirm', 'lab.reject']),
         sql`${auditLogs.createdAt} >= ${since}::timestamptz`,
       ),
@@ -192,7 +196,7 @@ interface FailedIngestionRow {
 }
 
 /** Versiones con ingesta en error que no fueron reemplazadas por una versión posterior. */
-async function listFailedIngestions(orgId: string, limit: number): Promise<FailedIngestionRow[]> {
+async function listFailedIngestions(orgId: string, scope: StudyScope, limit: number): Promise<FailedIngestionRow[]> {
   const rows = await db
     .select({
       versionId: documentVersions.id,
@@ -208,6 +212,7 @@ async function listFailedIngestions(orgId: string, limit: number): Promise<Faile
     .where(
       and(
         eq(documentVersions.organizationId, orgId),
+        studyScopeFilter(scope, documentVersions.studyId),
         eq(documentVersions.status, 'error'),
         sql`NOT EXISTS (
           SELECT 1 FROM document_versions newer
@@ -235,7 +240,7 @@ interface DraftSpecRow {
   createdAt: Date
 }
 
-async function listDraftSpecs(orgId: string, limit: number): Promise<DraftSpecRow[]> {
+async function listDraftSpecs(orgId: string, scope: StudyScope, limit: number): Promise<DraftSpecRow[]> {
   const rows = await db
     .select({
       specId: studySpecs.id,
@@ -247,7 +252,7 @@ async function listDraftSpecs(orgId: string, limit: number): Promise<DraftSpecRo
     })
     .from(studySpecs)
     .innerJoin(studies, and(eq(studies.id, studySpecs.studyId), eq(studies.organizationId, orgId)))
-    .where(and(eq(studySpecs.organizationId, orgId), eq(studySpecs.status, 'draft')))
+    .where(and(eq(studySpecs.organizationId, orgId), studyScopeFilter(scope, studySpecs.studyId), eq(studySpecs.status, 'draft')))
     .orderBy(desc(studySpecs.createdAt))
     .limit(limit)
   return rows.map((row) => ({
@@ -270,7 +275,7 @@ export interface StudyWithSubjects extends StudyOption {
 }
 
 /** Estudios activos que ya tienen al menos un documento listo para consultar. */
-export async function listStudiesWithReadyDocs(orgId: string): Promise<StudyOption[]> {
+export async function listStudiesWithReadyDocs(orgId: string, scope: StudyScope): Promise<StudyOption[]> {
   const rows = await db
     .selectDistinct({ id: studies.id, name: studies.name, protocolNumber: studies.protocolNumber })
     .from(studies)
@@ -282,7 +287,7 @@ export async function listStudiesWithReadyDocs(orgId: string): Promise<StudyOpti
         eq(documentVersions.status, 'ready'),
       ),
     )
-    .where(and(eq(studies.organizationId, orgId), eq(studies.status, 'active')))
+    .where(and(eq(studies.organizationId, orgId), studyScopeFilter(scope, studies.id), eq(studies.status, 'active')))
     .orderBy(studies.name)
     .limit(50)
   return rows.map((row) => ({
@@ -304,13 +309,14 @@ export interface SatelliteAlerts {
  */
 export async function listPriorityItems(
   orgId: string,
+  scope: StudyScope,
   opts: { includeSubjects: boolean; satellites?: SatelliteAlerts[] },
 ): Promise<PriorityItem[]> {
   const [labs, reports, ingestions, specs] = await Promise.all([
-    opts.includeSubjects ? listPendingLabReviews(orgId, PRIORITY_FETCH_LIMIT) : Promise.resolve([]),
-    opts.includeSubjects ? listPendingLabReports(orgId, PRIORITY_FETCH_LIMIT) : Promise.resolve([]),
-    listFailedIngestions(orgId, PRIORITY_FETCH_LIMIT),
-    listDraftSpecs(orgId, PRIORITY_FETCH_LIMIT),
+    opts.includeSubjects ? listPendingLabReviews(orgId, scope, PRIORITY_FETCH_LIMIT) : Promise.resolve([]),
+    opts.includeSubjects ? listPendingLabReports(orgId, scope, PRIORITY_FETCH_LIMIT) : Promise.resolve([]),
+    listFailedIngestions(orgId, scope, PRIORITY_FETCH_LIMIT),
+    listDraftSpecs(orgId, scope, PRIORITY_FETCH_LIMIT),
   ])
 
   const items: PriorityItem[] = [
@@ -366,15 +372,16 @@ export async function listPriorityItems(
 }
 
 /** Cantidad exacta para la campana: solo lo que Alphi sabe sin consultar satélites. */
-export async function countNativePriority(orgId: string, includeSubjects: boolean): Promise<number> {
+export async function countNativePriority(orgId: string, scope: StudyScope, includeSubjects: boolean): Promise<number> {
   const [labs, [ingestions], [specs]] = await Promise.all([
-    includeSubjects ? countPendingLabWork(orgId) : Promise.resolve(0),
+    includeSubjects ? countPendingLabWork(orgId, scope) : Promise.resolve(0),
     db
       .select({ value: count() })
       .from(documentVersions)
       .where(
         and(
           eq(documentVersions.organizationId, orgId),
+          studyScopeFilter(scope, documentVersions.studyId),
           eq(documentVersions.status, 'error'),
           sql`NOT EXISTS (
             SELECT 1 FROM document_versions newer
@@ -386,7 +393,7 @@ export async function countNativePriority(orgId: string, includeSubjects: boolea
     db
       .select({ value: count() })
       .from(studySpecs)
-      .where(and(eq(studySpecs.organizationId, orgId), eq(studySpecs.status, 'draft'))),
+      .where(and(eq(studySpecs.organizationId, orgId), studyScopeFilter(scope, studySpecs.studyId), eq(studySpecs.status, 'draft'))),
   ])
   return labs + (ingestions?.value ?? 0) + (specs?.value ?? 0)
 }

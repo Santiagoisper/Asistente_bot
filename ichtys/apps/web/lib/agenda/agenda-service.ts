@@ -1,3 +1,4 @@
+import { studyScopeFilter, type StudyScope } from '@ichtys/auth/study-scope'
 import { agendaItems, and, asc, db, eq, gte, inArray, lt, studies, subjects, type AgendaItemKind, type AgendaItemStatus } from '@ichtys/db'
 import { decryptClinicalContent, encryptClinicalContent } from '../subjects/phi-fields'
 import type { CreateAgendaItemInput, UpdateAgendaItemInput } from './agenda-schema'
@@ -91,11 +92,18 @@ function safeNotes(encrypted: string | null): string | null {
 }
 
 /** Turnos entre dos instantes, ordenados por hora. */
-export async function listAgenda(params: { orgId: string; from: Date; to: Date; includeSubjects: boolean }): Promise<AgendaEntry[]> {
+export async function listAgenda(params: { orgId: string; scope: StudyScope; from: Date; to: Date; includeSubjects: boolean }): Promise<AgendaEntry[]> {
   const rows = await db
     .select()
     .from(agendaItems)
-    .where(and(eq(agendaItems.organizationId, params.orgId), gte(agendaItems.startsAt, params.from), lt(agendaItems.startsAt, params.to)))
+    .where(
+      and(
+        eq(agendaItems.organizationId, params.orgId),
+        studyScopeFilter(params.scope, agendaItems.studyId),
+        gte(agendaItems.startsAt, params.from),
+        lt(agendaItems.startsAt, params.to),
+      ),
+    )
     .orderBy(asc(agendaItems.startsAt))
     .limit(500)
   if (rows.length === 0) return []
@@ -133,7 +141,7 @@ export async function listAgenda(params: { orgId: string; from: Date; to: Date; 
 }
 
 /** Turnos de un día del sitio. */
-export function listAgendaDay(params: { orgId: string; dayKey: string; timeZone: string; includeSubjects: boolean }): Promise<AgendaEntry[]> {
+export function listAgendaDay(params: { orgId: string; scope: StudyScope; dayKey: string; timeZone: string; includeSubjects: boolean }): Promise<AgendaEntry[]> {
   const { start, end } = dayRange(params.dayKey, params.timeZone)
-  return listAgenda({ orgId: params.orgId, from: start, to: end, includeSubjects: params.includeSubjects })
+  return listAgenda({ orgId: params.orgId, scope: params.scope, from: start, to: end, includeSubjects: params.includeSubjects })
 }
