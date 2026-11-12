@@ -332,11 +332,23 @@ export async function confirmLabReport(
       .filter((row): row is LabReportRow & { value: number } => row.value !== null)
       .map((row) => ({ name: row.analyte, value: row.value, ...(row.unit ? { unit: row.unit } : {}) }))
     if (numeric.length > 0) {
-      await updatePatientProfile(params, (profile) => ({
-        ...profile,
-        labs: mergeConfirmedLabs(profile.labs, numeric),
-        lastUpdatedAt: new Date().toISOString(),
-      }))
+      await updatePatientProfile(
+        params,
+        (profile) => ({
+          ...profile,
+          labs: mergeConfirmedLabs(profile.labs, numeric),
+          lastUpdatedAt: new Date().toISOString(),
+        }),
+        () => ({
+          action: 'profile.update',
+          orgId: params.orgId,
+          studyId: params.studyId,
+          userId: params.userId,
+          resourceType: 'subject',
+          resourceId: params.subjectId,
+          metadata: { source: 'lab_report', reportId: params.reportId, valueCount: numeric.length },
+        }),
+      )
     }
   } catch {
     console.error('[labs] profile merge failed after confirm')

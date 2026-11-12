@@ -10,6 +10,8 @@ import { and, db, eq, getOrgLlmApiKeys, patientProfiles, recordUsage } from '@ic
 import { runWithLlmFallback } from '@ichtys/llm'
 import { generateObject } from 'ai'
 import { z } from 'zod'
+import { insertAuditLog } from '../audit/audited-write'
+import type { AuditLogParams } from '../chat/persistence'
 import { labReviewMarker } from './lab-review-marker'
 import { decryptProfileJson, encryptProfileJson } from './phi-fields'
 import { nextVersion, whereProfileUnchanged, type ProfileScope } from './profile-version'
@@ -160,9 +162,16 @@ const MAX_PROFILE_WRITE_ATTEMPTS = 5
  * pisan. `mutate` puede correr más de una vez: tiene que depender solo del
  * perfil que recibe.
  */
+/**
+ * `audit` arma el registro del cambio a partir del perfil que se va a guardar.
+ * Es obligatorio: el perfil guarda datos clínicos del sujeto y todo cambio deja
+ * registro, en la misma transacción que la escritura (R3). El registro lleva
+ * conteos e identificadores, nunca valores del perfil.
+ */
 export async function updatePatientProfile(
   params: ProfileScope,
   mutate: (current: PatientProfile) => PatientProfile | Promise<PatientProfile>,
+  audit: (next: PatientProfile) => AuditLogParams,
 ): Promise<PatientProfile> {
   for (let attempt = 0; attempt < MAX_PROFILE_WRITE_ATTEMPTS; attempt += 1) {
     const row = await db.query.patientProfiles.findFirst({
@@ -175,16 +184,22 @@ export async function updatePatientProfile(
     if (!row) throw new ProfileMissingError()
 
     const next = await mutate(parsePatientProfile(decryptProfileJson(row.profileEncrypted)))
-    const written = await db
-      .update(patientProfiles)
-      .set({
-        profileEncrypted: encryptProfileJson(next as Record<string, unknown>),
-        ...labReviewMarker(next),
-        updatedAt: nextVersion(row.updatedAt),
-      })
-      .where(whereProfileUnchanged(params, row.updatedAt))
-      .returning({ subjectId: patientProfiles.subjectId })
-    if (written.length > 0) return next
+    const written = await db.transaction(async (tx) => {
+      const rows = await tx
+        .update(patientProfiles)
+        .set({
+          profileEncrypted: encryptProfileJson(next as Record<string, unknown>),
+          ...labReviewMarker(next),
+          updatedAt: nextVersion(row.updatedAt),
+        })
+        .where(whereProfileUnchanged(params, row.updatedAt))
+        .returning({ subjectId: patientProfiles.subjectId })
+      // Solo quien de verdad escribió deja registro: un intento que perdió la
+      // carrera no cambió nada.
+      if (rows.length > 0) await insertAuditLog(tx, audit(next))
+      return rows.length > 0
+    })
+    if (written) return next
   }
   throw new ProfileConflictError()
 }
@@ -195,11 +210,25 @@ export async function refreshPatientProfileFromEvolution(params: {
   subjectId: string
   evolutionId: string
   evolutionContent: string
+  /** Quien guardó la evolución que dispara la extracción. */
+  userId: string
 }): Promise<PatientProfile> {
   // La extracción (que puede llamar a un modelo) se hace una sola vez, fuera del reintento.
   const heuristic = extractFactsFromEvolution(params.evolutionContent, params.evolutionId)
   const { text: redacted } = redactPhiForLlm(params.evolutionContent)
   const llmFacts = await extractFactsWithLlm(params.orgId, params.studyId, redacted)
   const merged = mergeExtractions(heuristic, llmFacts)
-  return updatePatientProfile(params, (current) => mergeProfileWithExtraction(current, merged, params.evolutionId))
+  return updatePatientProfile(params, (current) => mergeProfileWithExtraction(current, merged, params.evolutionId),
+    // El cambio lo hace el programa con la salida de un modelo, sin que una
+    // persona lo confirme (brecha C2). El registro lo dice tal cual.
+    () => ({
+      action: 'profile.update',
+      orgId: params.orgId,
+      studyId: params.studyId,
+      userId: params.userId,
+      resourceType: 'subject',
+      resourceId: params.subjectId,
+      metadata: { source: 'evolution_extraction', evolutionId: params.evolutionId, automated: true, humanConfirmed: false },
+    }),
+  )
 }
