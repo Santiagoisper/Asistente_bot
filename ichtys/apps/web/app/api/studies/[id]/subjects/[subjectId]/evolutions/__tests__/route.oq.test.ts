@@ -48,6 +48,8 @@ const mocks = vi.hoisted(() => {
     refreshPatientProfileFromEvolution: vi.fn().mockResolvedValue(undefined),
     dbInsertReturning: vi.fn(),
     dbFindMany: vi.fn(),
+    looseInsert: vi.fn(),
+    tx: { insert: vi.fn() },
   }
 })
 
@@ -59,11 +61,8 @@ vi.mock('@ichtys/auth', () => ({
 
 vi.mock('@ichtys/db', () => ({
   db: {
-    insert: vi.fn(() => ({
-      values: vi.fn(() => ({
-        returning: mocks.dbInsertReturning,
-      })),
-    })),
+    // Una escritura por la conexión suelta queda fuera de la transacción.
+    insert: mocks.looseInsert,
     query: {
       clinicalEvolutions: {
         findMany: mocks.dbFindMany,
@@ -74,6 +73,17 @@ vi.mock('@ichtys/db', () => ({
   and: vi.fn(),
   desc: vi.fn(),
   eq: vi.fn(),
+}))
+
+// La escritura y su auditoría van juntas (R3). Acá se simula el envoltorio: corre
+// la escritura con la transacción y, solo si salió bien, asienta la auditoría.
+// Que las dos entren de verdad en una transacción se prueba en lib/audit.
+vi.mock('../../../../../../../../lib/audit/audited-write', () => ({
+  auditedWrite: async <T,>(write: (tx: unknown) => Promise<T>, audit: (result: T) => unknown) => {
+    const result = await write(mocks.tx)
+    await mocks.writeAuditLog(audit(result))
+    return result
+  },
 }))
 
 vi.mock('../../../../../../../../lib/chat/persistence', () => ({
@@ -117,6 +127,9 @@ function subjectContext() {
     },
   }
 }
+
+// Toda escritura de la ruta entra por la transacción que recibe de auditedWrite.
+mocks.tx.insert.mockImplementation(() => ({ values: () => ({ returning: mocks.dbInsertReturning }) }))
 
 beforeEach(() => vi.clearAllMocks())
 afterEach(() => vi.clearAllMocks())

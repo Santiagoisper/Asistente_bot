@@ -2,7 +2,7 @@ import { validatePhiStudyAccess, handleApiError } from '@ichtys/auth'
 import { createAgendaItemSchema } from '../../../../../lib/agenda/agenda-schema'
 import { AgendaError, createAgendaItem } from '../../../../../lib/agenda/agenda-service'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../lib/api/body-limit'
-import { writeAuditLog } from '../../../../../lib/chat/persistence'
+import { auditedWrite } from '../../../../../lib/audit/audited-write'
 import { isOsEnabled } from '../../../../../lib/flags'
 import { loadOrgTimeZone } from '../../../../../lib/os/org-settings'
 import { PhiConfigError } from '../../../../../lib/subjects/phi-fields'
@@ -35,17 +35,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!parsed.success) return Response.json({ error: 'invalid_item' }, { status: 400 })
 
   try {
-    const created = await createAgendaItem({ orgId: access.orgId, studyId: access.study.id, userId: access.userId, timeZone: await loadOrgTimeZone(access.orgId), input: parsed.data })
-    await writeAuditLog({
+    const timeZone = await loadOrgTimeZone(access.orgId)
+    // El turno y su registro de auditoría se confirman en la misma transacción (R3).
+    const created = await auditedWrite(
+      (tx) => createAgendaItem({ executor: tx, orgId: access.orgId, studyId: access.study.id, userId: access.userId, timeZone, input: parsed.data }),
+      (item) => ({
       action: 'agenda.create',
       orgId: access.orgId,
       studyId: access.study.id,
       userId: access.userId,
       resourceType: 'agenda_item',
-      resourceId: created.id,
+      resourceId: item.id,
       // Sin título ni notas: pueden traer texto libre.
       metadata: { kind: parsed.data.kind, day: parsed.data.day, hasSubject: parsed.data.subjectId !== null },
-    })
+      }),
+    )
     return Response.json(created, { status: 201 })
   } catch (err) {
     if (err instanceof AgendaError) return Response.json({ error: err.code }, { status: err.code === 'subject_mismatch' ? 400 : 404 })

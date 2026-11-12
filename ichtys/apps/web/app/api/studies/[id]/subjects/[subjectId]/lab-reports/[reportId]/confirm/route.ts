@@ -1,6 +1,5 @@
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../../../../lib/api/body-limit'
-import { writeAuditLog } from '../../../../../../../../../lib/chat/persistence'
 import { isOsEnabled } from '../../../../../../../../../lib/flags'
 import { labConfirmSchema } from '../../../../../../../../../lib/labs/lab-report-content'
 import { isUuid, labReportErrorResponse } from '../../../../../../../../../lib/labs/lab-report-http'
@@ -48,16 +47,18 @@ export async function POST(
       userId: access.userId,
       rows: parsed.data.rows,
       comparedWithImage: parsed.data.comparedWithImage,
-    })
-
-    await writeAuditLog({
-      action: 'lab.confirm',
-      orgId: access.orgId,
-      studyId,
-      userId: access.userId,
-      resourceType: 'lab_report',
-      resourceId: reportId,
-      metadata: { subjectId, comparedWithImage: parsed.data.comparedWithImage === true, rowCount: result.rowCount, newAnalytes: result.newAnalytes, profileUpdated: result.profileUpdated },
+      // Se escribe dentro de la transacción que confirma el informe (R3). Si el
+      // perfil del sujeto se pudo actualizar después no es parte de este
+      // registro: eso ocurre ya confirmado y se le informa a quien confirma.
+      audit: (facts) => ({
+        action: 'lab.confirm',
+        orgId: access.orgId,
+        studyId,
+        userId: access.userId,
+        resourceType: 'lab_report',
+        resourceId: reportId,
+        metadata: { subjectId, comparedWithImage: parsed.data.comparedWithImage === true, rowCount: facts.rowCount, newAnalytes: facts.newAnalytes },
+      }),
     })
 
     return Response.json(result)

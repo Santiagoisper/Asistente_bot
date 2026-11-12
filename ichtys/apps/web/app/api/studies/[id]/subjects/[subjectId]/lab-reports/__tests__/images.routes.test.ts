@@ -164,7 +164,8 @@ describe('POST confirm — informe leído de una imagen', () => {
   it('pasa al servicio la declaración de que se comparó con la imagen y la deja en la auditoría', async () => {
     expect((await confirm(request({ rows: [row], comparedWithImage: true }), confirmCtx)).status).toBe(200)
     expect(mocks.confirmLabReport).toHaveBeenCalledWith(expect.objectContaining({ comparedWithImage: true }))
-    expect(JSON.stringify(mocks.writeAuditLog.mock.calls[0]?.[0])).toContain('"comparedWithImage":true')
+    const build = mocks.confirmLabReport.mock.calls[0]?.[0].audit as (facts: { rowCount: number; newAnalytes: number }) => unknown
+    expect(JSON.stringify(build({ rowCount: 1, newAnalytes: 0 }))).toContain('"comparedWithImage":true')
   })
 
   it('un campo que no es del contrato se rechaza', async () => {

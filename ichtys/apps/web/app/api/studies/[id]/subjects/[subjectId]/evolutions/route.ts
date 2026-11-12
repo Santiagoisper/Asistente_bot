@@ -1,5 +1,6 @@
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
 import { and, clinicalEvolutions, db, desc, eq } from '@ichtys/db'
+import { auditedWrite } from '../../../../../../../lib/audit/audited-write'
 import { writeAuditLog } from '../../../../../../../lib/chat/persistence'
 import {
   decryptClinicalContent,
@@ -100,35 +101,38 @@ export async function POST(
     const piiWarnings = detectPossiblePii(parsed.data.content)
     const contentEncrypted = encryptClinicalContent(parsed.data.content)
 
-    const [evolution] = await db
-      .insert(clinicalEvolutions)
-      .values({
-        organizationId: orgId,
-        studyId: study.id,
-        subjectId: subject.id,
-        authorUserId: userId,
-        visitLabel: parsed.data.visitLabel?.trim() || null,
-        contentEncrypted,
-      })
-      .returning()
-
-    if (!evolution) {
-      return new Response('Internal Server Error', { status: 500 })
-    }
-
-    await writeAuditLog({
-      action: 'evolution.create',
-      orgId,
-      studyId: study.id,
-      userId,
-      resourceType: 'clinical_evolution',
-      resourceId: evolution.id,
-      metadata: {
-        subjectId: subject.id,
-        contentLength: parsed.data.content.length,
-        piiWarningCount: piiWarnings.length,
+    // La evolución y su registro de auditoría se confirman en la misma
+    // transacción (R3): si el registro falla, la evolución no queda guardada.
+    const evolution = await auditedWrite(
+      async (tx) => {
+        const [created] = await tx
+          .insert(clinicalEvolutions)
+          .values({
+            organizationId: orgId,
+            studyId: study.id,
+            subjectId: subject.id,
+            authorUserId: userId,
+            visitLabel: parsed.data.visitLabel?.trim() || null,
+            contentEncrypted,
+          })
+          .returning()
+        if (!created) throw new Error('Evolution insert did not return a row')
+        return created
       },
-    })
+      (created) => ({
+        action: 'evolution.create',
+        orgId,
+        studyId: study.id,
+        userId,
+        resourceType: 'clinical_evolution',
+        resourceId: created.id,
+        metadata: {
+          subjectId: subject.id,
+          contentLength: parsed.data.content.length,
+          piiWarningCount: piiWarnings.length,
+        },
+      }),
+    )
 
     let profileUpdated = false
     try {
