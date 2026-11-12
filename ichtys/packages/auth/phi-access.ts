@@ -10,7 +10,7 @@ import {
 import { loadAccessSubject } from './access-subject'
 import { allows, type Capability } from './functions'
 import { canAccessPhiData, normalizeRole } from './roles'
-import { AccessError, type StudyAccessContext } from './validate-study-access'
+import { AccessError, assertStudyMembership, type StudyAccessContext } from './validate-study-access'
 
 export interface ClinicalAccessOptions {
   /**
@@ -66,6 +66,8 @@ export async function validatePhiStudyAccess(
   if (!study) {
     throw new AccessError('Study not found or access denied', 404)
   }
+
+  await assertStudyMembership({ access, orgId: org.id, studyId: study.id, userId })
 
   return { userId, orgId: org.id, study, role, access }
 }
@@ -132,6 +134,8 @@ export async function validateSubjectAccess(
   if (!study) {
     throw new AccessError('Not Found', 404)
   }
+
+  await assertStudyMembership({ access, orgId: org.id, studyId: study.id, userId, denial: 'Not Found' })
 
   return { userId, orgId: org.id, study, subject, role, access }
 }
