@@ -62,6 +62,11 @@ describe('normalizeLlmFacts — lo que el esquema ya no valida, se valida acá',
     })
   })
 
+  it('descarta enteros fuera del rango seguro (el esquema anterior los rechazaba)', () => {
+    const facts = normalizeLlmFacts({ ageYears: 1e30, systolic: Number.MAX_SAFE_INTEGER + 2, diastolic: 80, labs: [], medications: [], conditions: [] })
+    expect(facts).toMatchObject({ ageYears: undefined, systolic: undefined, diastolic: 80 })
+  })
+
   it('descarta números que no pueden ser una edad o una presión, y textos vacíos', () => {
     expect(
       normalizeLlmFacts({

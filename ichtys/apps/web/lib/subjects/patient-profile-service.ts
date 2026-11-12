@@ -49,7 +49,11 @@ async function extractFactsWithLlm(
 
   try {
     const { result, provider, modelId, usage, keySource } = await runWithLlmFallback(
-      { purpose: 'clinical-extract', orgApiKeys },
+      // Solo Anthropic, sin respaldo en otro proveedor: es el único registrado
+      // para esta función en AI-GOVERNANCE.md, y cambiarlo es un cambio
+      // controlado (R6). Con preferencia explícita la cadena es de uno; si no
+      // responde, quedan las reglas y el texto clínico no sale hacia otro lado.
+      { purpose: 'clinical-extract', orgApiKeys, providerPreference: 'anthropic' },
       async (model, _provider, reportUsage, signal) => {
         const response = await generateObject({
           model,

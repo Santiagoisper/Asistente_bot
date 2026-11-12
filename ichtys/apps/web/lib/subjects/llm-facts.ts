@@ -3,6 +3,10 @@ import { z } from 'zod'
 /**
  * Lo que se le pide al modelo al leer una evolución.
  *
+ * Hoy esta lectura va solo a Anthropic (ver `extractFactsWithLlm`). El esquema
+ * queda apto para cualquier proveedor para que cambiarlo, el día que se
+ * evalúe y se decida, no dependa de volver a tocar el formato.
+ *
  * Todas las propiedades son requeridas y las que pueden faltar son anulables:
  * los proveedores que validan la salida de forma estricta rechazan el pedido
  * (HTTP 400) si una propiedad es opcional o si el esquema trae restricciones
@@ -42,7 +46,8 @@ export interface NormalizedLlmFacts {
   conditions: string[]
 }
 
-const positiveInt = (value: number | null): number | undefined => (value !== null && Number.isInteger(value) && value > 0 ? value : undefined)
+// Entero seguro: `Number.isInteger(1e30)` es verdadero, y el esquema anterior rechazaba esos valores.
+const positiveInt = (value: number | null): number | undefined => (value !== null && Number.isSafeInteger(value) && value > 0 ? value : undefined)
 const text = (value: string | null): string | undefined => {
   const trimmed = value?.trim() ?? ''
   return trimmed.length > 0 ? trimmed : undefined
