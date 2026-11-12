@@ -82,3 +82,4 @@ export {
   type MergedTextReadings,
   type ReaderRow,
 } from './lab-readings'
+export * from './dictation'

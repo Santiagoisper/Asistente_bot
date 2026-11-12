@@ -130,6 +130,8 @@ export async function POST(
           subjectId: subject.id,
           contentLength: parsed.data.content.length,
           piiWarningCount: piiWarnings.length,
+          // Evolución dictada: origen, modelo y revisión quedan en el registro (R6). Sin contenido.
+          ...(parsed.data.source ? { source: parsed.data.source } : {}),
         },
       }),
     )
