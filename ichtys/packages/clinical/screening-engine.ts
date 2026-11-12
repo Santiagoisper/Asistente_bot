@@ -4,6 +4,7 @@ import {
   compareWithBounds,
   describeBoundComparison,
   formatClinicalNumber,
+  parseAgeBounds,
   parseAnalyteBounds,
   textMentionsAnalyte,
 } from './numeric-criteria'
@@ -19,19 +20,20 @@ export interface ScreeningInput {
   exclusionCriteria: EligibilityCriterionInput[]
 }
 
-function findHbA1cLab(profile: PatientProfile): LabObservation | undefined {
-  return profile.labs.find((lab) => textMentionsAnalyte(lab.name, 'HbA1c'))
+function findAnalyteLab(profile: PatientProfile, analyte: LabAnalyte): LabObservation | undefined {
+  return profile.labs.find((lab) => textMentionsAnalyte(lab.name, analyte))
 }
 
-function assessHbA1cCriterion(
+function assessAnalyteCriterion(
+  analyte: LabAnalyte,
   criterion: EligibilityCriterionInput,
   kind: 'inclusion' | 'exclusion',
   profile: PatientProfile,
 ): CriterionAssessment | null {
-  if (!textMentionsAnalyte(criterion.text, 'HbA1c')) return null
+  if (!textMentionsAnalyte(criterion.text, analyte)) return null
 
-  const bounds = parseAnalyteBounds(criterion.text, 'HbA1c')
-  const lab = findHbA1cLab(profile)
+  const bounds = parseAnalyteBounds(criterion.text, analyte)
+  const lab = findAnalyteLab(profile, analyte)
 
   const base = {
     criterionNumber: criterion.number,
@@ -44,7 +46,7 @@ function assessHbA1cCriterion(
     return {
       ...base,
       status: 'unknown',
-      reason: 'HbA1c no documentado en el perfil del sujeto.',
+      reason: `${analyte} no documentado en el perfil del sujeto.`,
     }
   }
 
@@ -52,7 +54,7 @@ function assessHbA1cCriterion(
     return {
       ...base,
       status: 'unknown',
-      reason: `HbA1c ${formatClinicalNumber(lab.value)} registrado; no se pudo parsear el rango del criterio automáticamente.`,
+      reason: `${analyte} ${formatClinicalNumber(lab.value)} registrado; no se pudo parsear el rango del criterio automáticamente.`,
     }
   }
 
@@ -62,7 +64,7 @@ function assessHbA1cCriterion(
   }
 
   const satisfies = compareWithBounds(aligned.value, bounds)
-  const citation = describeBoundComparison('HbA1c', aligned.value, bounds, satisfies)
+  const citation = describeBoundComparison(analyte, aligned.value, bounds, satisfies)
 
   if (kind === 'inclusion') {
     return {
@@ -78,6 +80,60 @@ function assessHbA1cCriterion(
     reason: satisfies
       ? `${citation}: activaría este criterio de exclusión.`
       : `${citation} no activa este criterio de exclusión.`,
+  }
+}
+
+/** Analitos de laboratorio que el motor sabe comparar contra el criterio. */
+type LabAnalyte = 'HbA1c' | 'eGFR'
+const LAB_ANALYTES: readonly LabAnalyte[] = ['HbA1c', 'eGFR']
+
+function assessLabCriterion(
+  criterion: EligibilityCriterionInput,
+  kind: 'inclusion' | 'exclusion',
+  profile: PatientProfile,
+): CriterionAssessment | null {
+  for (const analyte of LAB_ANALYTES) {
+    const assessment = assessAnalyteCriterion(analyte, criterion, kind, profile)
+    if (assessment) return assessment
+  }
+  return null
+}
+
+function ageBoundsText(bounds: { min?: { value: number }; max?: { value: number } }): string {
+  if (bounds.min && bounds.max) return `entre ${bounds.min.value} y ${bounds.max.value} años`
+  if (bounds.min) return `mínimo ${bounds.min.value} años`
+  return `máximo ${bounds.max?.value} años`
+}
+
+/** Criterio de edad contra la edad del perfil (que una persona aceptó). */
+function assessAgeCriterion(
+  criterion: EligibilityCriterionInput,
+  kind: 'inclusion' | 'exclusion',
+  profile: PatientProfile,
+): CriterionAssessment | null {
+  const bounds = parseAgeBounds(criterion.text)
+  if (!bounds) return null
+  const base = {
+    criterionNumber: criterion.number,
+    criterionText: criterion.text,
+    kind,
+    sourcePages: criterion.sourcePages,
+  }
+  const age = profile.demographics?.ageYears
+  if (age === undefined) {
+    return { ...base, status: 'unknown', reason: 'Edad no documentada en el perfil del sujeto.' }
+  }
+  const inside =
+    (!bounds.min || (bounds.min.inclusive ? age >= bounds.min.value : age > bounds.min.value)) &&
+    (!bounds.max || (bounds.max.inclusive ? age <= bounds.max.value : age < bounds.max.value))
+  const citation = `Edad ${age} años; el criterio pide ${ageBoundsText(bounds)}`
+  if (kind === 'inclusion') {
+    return { ...base, status: inside ? 'pass' : 'fail', reason: inside ? citation : `${citation}: no se cumple` }
+  }
+  return {
+    ...base,
+    status: inside ? 'fail' : 'pass',
+    reason: inside ? `${citation}: activaría este criterio de exclusión.` : `${citation}: no activa este criterio de exclusión.`,
   }
 }
 
@@ -167,7 +223,8 @@ export function assessScreening(
 
   for (const criterion of input.inclusionCriteria) {
     results.push(
-      assessHbA1cCriterion(criterion, 'inclusion', profile) ??
+      assessLabCriterion(criterion, 'inclusion', profile) ??
+        assessAgeCriterion(criterion, 'inclusion', profile) ??
         assessMedicationCriterion(criterion, 'inclusion', profile) ??
         assessGeneric(criterion, 'inclusion'),
     )
@@ -175,7 +232,8 @@ export function assessScreening(
 
   for (const criterion of input.exclusionCriteria) {
     results.push(
-      assessHbA1cCriterion(criterion, 'exclusion', profile) ??
+      assessLabCriterion(criterion, 'exclusion', profile) ??
+        assessAgeCriterion(criterion, 'exclusion', profile) ??
         assessMedicationCriterion(criterion, 'exclusion', profile) ??
         assessConditionCriterion(criterion, 'exclusion', profile) ??
         assessGeneric(criterion, 'exclusion'),
