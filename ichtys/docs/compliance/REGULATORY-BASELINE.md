@@ -50,7 +50,7 @@ Verificado el 2026-11-12 salvo donde dice **[P]**.
 | **UE — Anexo 11 (EudraLex vol. 4)** | Versión de 2011 vigente. Es norma de **fabricación (GMP)**, no de ensayos clínicos. Revisión y nuevo **Anexo 22 (IA)** en borrador desde el 7/7/2025; **sin texto final a octubre de 2026** **[H]** | Fabricantes | Referencia de buenas prácticas. El borrador del Anexo 22 excluye modelos generativos de aplicaciones críticas: seguirlo de cerca |
 | **ICH E6 (BPC)** | Revisión R3 **[P]** | Patrocinador, investigador | Gobierno del dato, proporcionalidad al riesgo, sistemas informatizados aptos para su uso |
 
-**Correcciones de vocabulario.** No existe una «Parte 11 de la EMA»: el equivalente europeo para ensayos clínicos es la guía de 2023; el Anexo 11 es de fabricación. La sigla «COFETIr» recibida en el pedido original **no pudo identificarse** y no se incorpora hasta confirmarla.
+**Correcciones de vocabulario.** No existe una «Parte 11 de la EMA»: el equivalente europeo para ensayos clínicos es la guía de 2023; el Anexo 11 es de fabricación. La sigla «COFETIr» que figuraba en el pedido original no corresponde a ningún organismo identificable y fue **descartada** por Santiago el 12/11/2026.
 
 **No aplican por sí mismas a un centro argentino**, aunque el repositorio las cita: HIPAA (EE. UU.) y GDPR (UE). Entran solo por contrato con un patrocinador o por tratar datos de residentes de esas jurisdicciones. La ley de base acá es la 25.326.
 
