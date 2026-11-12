@@ -6,7 +6,13 @@ import type { LanguageModel } from 'ai'
 import { withAnthropicPromptCache } from './anthropic-cache'
 import { resolveKeyForProvider } from './keys'
 import type { OrgLlmApiKeys } from './keys'
-import { AUTO_PROVIDER_CHAIN, type LlmProviderId, type LlmProviderPreference, type LlmPurpose } from './types'
+import {
+  PATIENT_DATA_PURPOSES,
+  PROVIDERS_BY_PURPOSE,
+  type LlmProviderId,
+  type LlmProviderPreference,
+  type LlmPurpose,
+} from './types'
 
 export type { OrgLlmApiKeys }
 
@@ -65,11 +71,16 @@ export function isGlmConfigured(orgKeys?: OrgLlmApiKeys | null): boolean {
   return isProviderConfigured('glm', orgKeys)
 }
 
-export function resolveProviderChain(preference?: LlmProviderPreference): LlmProviderId[] {
+export function resolveProviderChain(
+  preference?: LlmProviderPreference,
+  purpose: LlmPurpose = 'answer',
+): LlmProviderId[] {
+  // Datos de sujetos: el destino no depende de ninguna preferencia.
+  if (PATIENT_DATA_PURPOSES.includes(purpose)) return [...PROVIDERS_BY_PURPOSE[purpose]]
   const resolved = preference ?? getDefaultProviderPreference()
-  // 'auto' es la ÚNICA cadena multi-proveedor (respaldo cruzado completo,
-  // anthropic primero, GLM solo como red final).
-  if (resolved === 'auto') return [...AUTO_PROVIDER_CHAIN]
+  // 'auto' = los proveedores aprobados para esa clase de dato. Ya no es una
+  // cadena de respaldo entre proveedores (ver PROVIDERS_BY_PURPOSE).
+  if (resolved === 'auto') return [...PROVIDERS_BY_PURPOSE[purpose]]
   // Preferencia explícita (de la org o de LLM_PROVIDER) = cadena de 1, SIN
   // respaldo cruzado: los datos de una org solo van al proveedor que eligió
   // — decisión de tratamiento de datos del Foreman 2026-10-22, ver
@@ -108,6 +119,8 @@ export function getModelId(provider: LlmProviderId, purpose: LlmPurpose): string
       // ai@4 + @ai-sdk/anthropic@1 envían siempre (verificado en prod 2026-10-22):
       // los defaults quedan en 4.x hasta migrar a AI SDK 5. Override por env.
       if (purpose === 'lab-read') return process.env.LAB_READ_MODEL ?? 'claude-sonnet-4-6'
+      // Otro modelo que la lectura principal, para que las dos no repitan el mismo error.
+      if (purpose === 'lab-read-control') return process.env.LAB_READ_CONTROL_MODEL ?? 'claude-opus-4-6'
       if (purpose === 'title') {
         return process.env.TITLE_MODEL ?? 'claude-haiku-4-5'
       }
@@ -117,7 +130,7 @@ export function getModelId(provider: LlmProviderId, purpose: LlmPurpose): string
       if (purpose === 'spec') return process.env.SPEC_EXTRACTION_MODEL ?? 'claude-opus-4-6'
       return process.env.ANSWER_MODEL ?? 'claude-sonnet-4-6'
     case 'openai':
-      if (purpose === 'lab-read') return process.env.OPENAI_LAB_READ_MODEL ?? 'gpt-4o'
+      if (purpose === 'lab-read' || purpose === 'lab-read-control') return process.env.OPENAI_LAB_READ_MODEL ?? 'gpt-4o'
       if (purpose === 'title' || purpose === 'clinical-extract') {
         return process.env.OPENAI_TITLE_MODEL ?? 'gpt-4o-mini'
       }
@@ -126,7 +139,7 @@ export function getModelId(provider: LlmProviderId, purpose: LlmPurpose): string
       }
       return process.env.OPENAI_ANSWER_MODEL ?? process.env.ANSWER_MODEL_OPENAI ?? 'gpt-4o'
     case 'google':
-      if (purpose === 'lab-read') return process.env.GOOGLE_LAB_READ_MODEL ?? 'gemini-2.0-flash'
+      if (purpose === 'lab-read' || purpose === 'lab-read-control') return process.env.GOOGLE_LAB_READ_MODEL ?? 'gemini-2.0-flash'
       if (purpose === 'title' || purpose === 'clinical-extract') {
         return process.env.GOOGLE_TITLE_MODEL ?? process.env.GEMINI_TITLE_MODEL ?? 'gemini-2.0-flash'
       }

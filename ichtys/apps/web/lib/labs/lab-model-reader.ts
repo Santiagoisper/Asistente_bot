@@ -1,6 +1,6 @@
 import type { ImageReading, ReaderRow } from '@ichtys/clinical'
 import { getOrgLlmApiKeys, recordUsage } from '@ichtys/db'
-import { isProviderConfigured, runWithLlmFallback, type LlmProviderId } from '@ichtys/llm'
+import { isProviderConfigured, PROVIDERS_BY_PURPOSE, runWithLlmFallback, type LlmProviderId } from '@ichtys/llm'
 import { generateObject } from 'ai'
 import { z } from 'zod'
 
@@ -12,8 +12,11 @@ import { z } from 'zod'
  * navegador.
  */
 
-/** Proveedores que leen bien cifras, en texto y en imagen. */
-const READER_CHAIN: readonly LlmProviderId[] = ['anthropic', 'openai', 'google']
+/**
+ * Un informe de laboratorio es un dato de un sujeto: va solo a los proveedores
+ * aprobados para esa clase de dato (`PROVIDERS_BY_PURPOSE` en @ichtys/llm).
+ */
+const READER_CHAIN: readonly LlmProviderId[] = PROVIDERS_BY_PURPOSE['lab-read']
 const READER_TIMEOUT_MS = 50_000
 /** Tope de toda la cadena de proveedores: la ruta tiene que responder antes de que la plataforma la corte. */
 const READER_BUDGET_MS = 85_000
@@ -71,16 +74,16 @@ export interface ReaderResult<T> {
 type Call<T> = (model: Parameters<Parameters<typeof runWithLlmFallback>[1]>[0], signal: AbortSignal) => Promise<{ object: T; usage?: { inputTokens?: number; outputTokens?: number } }>
 
 /** Prueba los proveedores en orden hasta que uno responda. null si ninguno pudo. */
-async function runReader<T>(scope: ReaderScope, order: readonly LlmProviderId[], call: Call<T>): Promise<ReaderResult<T> | null> {
+async function runReader<T>(scope: ReaderScope, purpose: 'lab-read' | 'lab-read-control', call: Call<T>): Promise<ReaderResult<T> | null> {
   const orgApiKeys = await getOrgLlmApiKeys(scope.orgId).catch(() => null)
   const deadline = Date.now() + READER_BUDGET_MS
-  for (const provider of order) {
+  for (const provider of READER_CHAIN) {
     if (!isProviderConfigured(provider, orgApiKeys)) continue
     const remaining = deadline - Date.now()
     // Sin margen para otra llamada completa: mejor una sola lectura que ninguna respuesta.
     if (remaining < 5_000) break
     try {
-      const run = await runWithLlmFallback({ purpose: 'lab-read', providerPreference: provider, orgApiKeys }, async (model, _provider, reportUsage, signal) => {
+      const run = await runWithLlmFallback({ purpose, providerPreference: provider, orgApiKeys }, async (model, _provider, reportUsage, signal) => {
         const response = await call(model, AbortSignal.any([signal, AbortSignal.timeout(Math.min(READER_TIMEOUT_MS, remaining))]))
         reportUsage({ inputTokens: response.usage?.inputTokens ?? 0, outputTokens: response.usage?.outputTokens ?? 0 })
         return response.object
@@ -98,7 +101,7 @@ async function runReader<T>(scope: ReaderScope, order: readonly LlmProviderId[],
       }).catch(() => undefined)
       return { result: run.result, provider: run.provider }
     } catch (err) {
-      // Sin saldo, sin clave o sin respuesta: se prueba el siguiente. Nunca se registra contenido.
+      // Sin saldo, sin clave o sin respuesta. Nunca se registra contenido.
       console.warn('[labs/reader] provider failed', { provider, name: err instanceof Error ? err.name : 'unknown' })
     }
   }
@@ -111,7 +114,7 @@ export async function readTextWithModel(scope: ReaderScope, lines: readonly stri
     .slice(0, MAX_TEXT_LINES)
     .map((line, index) => `${index}| ${line.replace(/\t/g, ' | ').slice(0, MAX_LINE_CHARS)}`)
     .join('\n')
-  const read = await runReader(scope, READER_CHAIN, (model, signal) =>
+  const read = await runReader(scope, 'lab-read', (model, signal) =>
     generateObject({
       model,
       abortSignal: signal,
@@ -132,17 +135,17 @@ export interface LabImage {
 }
 
 /**
- * Lee las imágenes recortadas de un informe. La lectura de control recorre los
- * proveedores en orden inverso, para que las dos lecturas vengan de modelos
- * distintos siempre que haya más de uno disponible.
+ * Lee las imágenes recortadas de un informe. La lectura de control va al mismo
+ * proveedor con otro modelo y otra consigna, para que las dos lecturas no
+ * repitan el mismo error. Antes iba a otro proveedor; eso sacaba el informe a
+ * un destino no declarado para ese dato.
  */
 export async function readImagesWithModel(
   scope: ReaderScope,
   images: readonly LabImage[],
   options: { control?: boolean } = {},
 ): Promise<ReaderResult<ImageReading> | null> {
-  const order = options.control ? [...READER_CHAIN].reverse() : READER_CHAIN
-  return runReader(scope, order, (model, signal) =>
+  return runReader(scope, options.control ? 'lab-read-control' : 'lab-read', (model, signal) =>
     generateObject({
       model,
       abortSignal: signal,
