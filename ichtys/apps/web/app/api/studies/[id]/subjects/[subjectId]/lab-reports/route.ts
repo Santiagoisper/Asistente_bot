@@ -1,5 +1,4 @@
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
-import { writeAuditLog } from '../../../../../../../lib/chat/persistence'
 import { validatePdfUpload } from '../../../../../../../lib/documents/pdf-upload-validation'
 import { isOsEnabled } from '../../../../../../../lib/flags'
 import { MAX_LAB_PDF_BYTES } from '../../../../../../../lib/labs/lab-report-content'
@@ -63,22 +62,22 @@ export async function POST(
       userId: access.userId,
       fileName: file.name,
       data: new Uint8Array(await file.arrayBuffer()),
-    })
-
-    await writeAuditLog({
-      action: 'lab.extract',
-      orgId: access.orgId,
-      studyId,
-      userId: access.userId,
-      resourceType: 'lab_report',
-      resourceId: created.reportId,
-      metadata: {
-        subjectId,
-        source: 'pdf_text',
-        rowCount: created.rowCount,
-        reviewCount: created.reviewCount,
-        newFieldCount: created.newFieldCount,
-      },
+      // Se escribe en la misma transacción que crea el informe (R3).
+      audit: (report) => ({
+        action: 'lab.extract',
+        orgId: access.orgId,
+        studyId,
+        userId: access.userId,
+        resourceType: 'lab_report',
+        resourceId: report.reportId,
+        metadata: {
+          subjectId,
+          source: 'pdf_text',
+          rowCount: report.rowCount,
+          reviewCount: report.reviewCount,
+          newFieldCount: report.newFieldCount,
+        },
+      }),
     })
 
     return Response.json(created, { status: 201 })

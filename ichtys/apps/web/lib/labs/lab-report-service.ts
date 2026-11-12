@@ -81,8 +81,12 @@ export interface LabReaders {
  * responde, quedan las filas de las reglas. El informe queda pendiente de
  * revisión.
  */
+/**
+ * `audit` arma el registro con lo que se creó. Se escribe en la misma
+ * transacción que el informe (R3): no queda un informe sin registro de quién lo subió.
+ */
 export async function createLabReportFromPdf(
-  params: SubjectScope & { userId: string; fileName: string; data: Uint8Array },
+  params: SubjectScope & { userId: string; fileName: string; data: Uint8Array; audit: (created: CreatedLabReport) => AuditLogParams },
   readers: LabReaders = { readText: readTextWithModel },
 ): Promise<CreatedLabReport> {
   let text: string
@@ -141,27 +145,32 @@ export async function createLabReportFromPdf(
     },
   })
 
-  const [created] = await db
-    .insert(labReports)
-    .values({
-      organizationId: params.orgId,
-      studyId: params.studyId,
-      subjectId: params.subjectId,
-      status: 'pending_review',
-      sourceKind: 'pdf_text',
-      contentEncrypted: encryptClinicalContent(JSON.stringify(content)),
-      rowCount: rows.length,
-      createdBy: params.userId,
-    })
-    .returning({ id: labReports.id })
-  if (!created) throw new LabReportError('unreadable')
-
-  return {
-    reportId: created.id,
+  const counts = {
     rowCount: rows.length,
     reviewCount: rows.filter((row) => row.status === 'review').length,
     newFieldCount: rows.filter((row) => row.isNewField).length,
   }
+
+  return db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(labReports)
+      .values({
+        organizationId: params.orgId,
+        studyId: params.studyId,
+        subjectId: params.subjectId,
+        status: 'pending_review',
+        sourceKind: 'pdf_text',
+        contentEncrypted: encryptClinicalContent(JSON.stringify(content)),
+        rowCount: rows.length,
+        createdBy: params.userId,
+      })
+      .returning({ id: labReports.id })
+    if (!created) throw new LabReportError('unreadable')
+
+    const report: CreatedLabReport = { reportId: created.id, ...counts }
+    await insertAuditLog(tx, params.audit(report))
+    return report
+  })
 }
 
 export interface LoadedLabReport {

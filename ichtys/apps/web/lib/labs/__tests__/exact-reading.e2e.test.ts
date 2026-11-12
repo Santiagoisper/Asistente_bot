@@ -95,6 +95,7 @@ import { confirmLabReport, createLabReportFromPdf, LabReportError, loadLabReport
 import { decideValue, rowProblem, toConfirmPayload, toReviewRow } from '../review-rows'
 
 const scope = { orgId: 'org-1', studyId: 'study-1', subjectId: 'subject-1' }
+const uploadAudit = (report: { reportId: string; rowCount: number }) => ({ action: 'lab.extract' as const, orgId: 'org-1', studyId: 'study-1', userId: 'user_1', resourceType: 'lab_report', resourceId: report.reportId, metadata: { rowCount: report.rowCount } })
 const audit = (facts?: { rowCount: number; newAnalytes: number }) => ({
   action: facts ? ('lab.confirm' as const) : ('lab.reject' as const),
   orgId: 'org-1',
@@ -164,7 +165,7 @@ beforeEach(() => {
 
 describe('PDF con texto — reglas más segunda lectura', () => {
   const upload = (readText: Parameters<typeof createLabReportFromPdf>[1] extends infer R ? (R extends { readText: infer F } ? F : never) : never) =>
-    createLabReportFromPdf({ ...scope, userId: 'user_1', fileName: 'informe.pdf', data: ODD_LAYOUT }, { readText })
+    createLabReportFromPdf({ ...scope, audit: uploadAudit, userId: 'user_1', fileName: 'informe.pdf', data: ODD_LAYOUT }, { readText })
 
   it('el modelo encuentra lo que las reglas no, y solo entra lo que figura en el texto', async () => {
     let seen: readonly string[] = []
@@ -217,7 +218,7 @@ describe('Foto o escaneo — dos lecturas independientes', () => {
     }),
   })
   const images = [{ mime: 'image/jpeg' as const, data: JPEG }, { mime: 'image/png' as const, data: PNG }]
-  const upload = (control: ImageReading | null, primary: ImageReading | null = main) => createLabReportFromImages({ ...scope, userId: 'user_1', images }, readers(control, primary))
+  const upload = (control: ImageReading | null, primary: ImageReading | null = main) => createLabReportFromImages({ ...scope, audit: uploadAudit, userId: 'user_1', images }, readers(control, primary))
 
   it('las dos coinciden: todo leído, imagen guardada cifrada y sin datos personales en la transcripción', async () => {
     const created = await upload({ lines: [], rows: [...main.rows] })
@@ -255,14 +256,16 @@ describe('Foto o escaneo — dos lecturas independientes', () => {
     await expect(confirmLabReport({ ...scope, reportId: created.reportId, userId: 'user_2', rows: payload, audit })).rejects.toMatchObject({ code: 'invalid_rows' })
     expect(store.reports[0]?.status).toBe('pending_review')
     expect(store.images).toHaveLength(2)
-    // Lo que no se confirmó no deja registro de confirmación.
-    expect(store.audits).toHaveLength(0)
+    // Lo que no se confirmó no deja registro de confirmación: solo está el de la carga,
+    // escrito en la misma transacción que creó el informe.
+    expect(store.audits).toEqual([expect.objectContaining({ via: 'tx', action: 'lab.extract', resourceId: created.reportId, metadata: { rowCount: 3 } })])
 
     const result = await confirmLabReport({ ...scope, reportId: created.reportId, userId: 'user_2', rows: payload, comparedWithImage: true, audit })
     expect(result).toMatchObject({ rowCount: 3, profileUpdated: true })
     // R3: el cambio de estado y su registro entran por la misma transacción.
     expect(store.reports[0]).toMatchObject({ status: 'confirmed', claimedVia: 'tx' })
-    expect(store.audits).toEqual([expect.objectContaining({ via: 'tx', action: 'lab.confirm', metadata: { rowCount: 3, newAnalytes: 3 } })])
+    expect(store.audits.map((entry) => entry.action)).toEqual(['lab.extract', 'lab.confirm'])
+    expect(store.audits[1]).toMatchObject({ via: 'tx', action: 'lab.confirm', metadata: { rowCount: 3, newAnalytes: 3 } })
     expect(store.persisted[0]?.labs).toEqual([
       { name: 'Hemoglobina', value: 18.5, unit: 'g/dL' },
       { name: 'Glucosa', value: 92, unit: 'mg/dL' },
@@ -319,11 +322,12 @@ describe('Foto o escaneo — dos lecturas independientes', () => {
     const kept = await upload({ lines: [], rows: [...main.rows] })
     await rejectLabReport({ ...scope, reportId: kept.reportId, userId: 'user_2', audit })
     expect(store.reports[0]).toMatchObject({ status: 'rejected', claimedVia: 'tx' })
-    expect(store.audits).toEqual([expect.objectContaining({ via: 'tx', action: 'lab.reject' })])
+    expect(store.audits.map((entry) => entry.action)).toEqual(['lab.extract', 'lab.reject'])
+    expect(store.audits[1]).toMatchObject({ via: 'tx', action: 'lab.reject' })
 
     // Rechazar de nuevo lo ya rechazado se corta y no suma otro registro.
     await expect(rejectLabReport({ ...scope, reportId: kept.reportId, userId: 'user_2', audit })).rejects.toMatchObject({ code: 'already_reviewed' })
-    expect(store.audits).toHaveLength(1)
+    expect(store.audits).toHaveLength(2)
 
     // Si el registro no se puede escribir, el rechazo falla entero: no se da por hecho.
     store.reports.length = 0
@@ -331,6 +335,8 @@ describe('Foto o escaneo — dos lecturas independientes', () => {
     const unaudited = await upload({ lines: [], rows: [...main.rows] })
     store.failAudit = true
     await expect(rejectLabReport({ ...scope, reportId: unaudited.reportId, userId: 'user_2', audit })).rejects.toThrow('audit insert failed')
+    // Lo mismo al cargar: sin registro, la carga falla y no devuelve un informe.
+    await expect(upload({ lines: [], rows: [...main.rows] })).rejects.toThrow('audit insert failed')
     store.failAudit = false
     store.reports.length = 0
     store.images.length = 0

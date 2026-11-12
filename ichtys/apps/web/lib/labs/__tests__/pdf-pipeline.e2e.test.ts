@@ -104,6 +104,7 @@ function buildPdf(lines: string[]): Uint8Array {
 }
 
 const scope = { orgId: 'org-1', studyId: 'study-1', subjectId: 'subject-1' }
+const uploadAudit = (report: { reportId: string; rowCount: number }) => ({ action: 'lab.extract' as const, orgId: 'org-1', studyId: 'study-1', userId: 'user_1', resourceType: 'lab_report', resourceId: report.reportId, metadata: { rowCount: report.rowCount } })
 const audit = (facts?: { rowCount: number; newAnalytes: number }) => ({
   action: facts ? ('lab.confirm' as const) : ('lab.reject' as const),
   orgId: 'org-1',
@@ -139,7 +140,7 @@ describe('Carga de laboratorios — PDF digital de punta a punta', () => {
   let reportId = ''
 
   it('sube el PDF: propone los campos y guarda todo cifrado, sin datos personales', async () => {
-    const created = await createLabReportFromPdf({ ...scope, userId: 'user_1', fileName: 'PEREZ_JUAN.pdf', data: buildPdf(REPORT_LINES) })
+    const created = await createLabReportFromPdf({ ...scope, audit: uploadAudit, userId: 'user_1', fileName: 'PEREZ_JUAN.pdf', data: buildPdf(REPORT_LINES) })
     reportId = created.reportId
     expect(created).toMatchObject({ rowCount: 4, reviewCount: 1, newFieldCount: 3 })
 
@@ -181,7 +182,8 @@ describe('Carga de laboratorios — PDF digital de punta a punta', () => {
     const decided = report.content.rows.map(toReviewRow).map((row) => (row.analyte === 'Leucocitos' ? { ...row, reading: 7300 } : row))
     const result = await confirmLabReport({ ...scope, reportId, userId: 'user_2', rows: toConfirmPayload(decided)!, audit })
     expect(result).toEqual({ rowCount: 4, newAnalytes: 3, profileUpdated: true })
-    expect(store.audits).toEqual([expect.objectContaining({ via: 'tx', action: 'lab.confirm', metadata: { rowCount: 4, newAnalytes: 3 } })])
+    expect(store.audits.map((entry) => entry.action)).toEqual(['lab.extract', 'lab.confirm'])
+    expect(store.audits[1]).toMatchObject({ via: 'tx', action: 'lab.confirm', metadata: { rowCount: 4, newAnalytes: 3 } })
 
     expect(store.reports[0]).toMatchObject({ status: 'confirmed', reviewedBy: 'user_2' })
     expect(store.analytes.map((entry) => entry.normalizedKey).sort()).toEqual(['glucosa', 'hemoglobina', 'leucocitos', 'proteinas en orina'])
@@ -200,8 +202,8 @@ describe('Carga de laboratorios — PDF digital de punta a punta', () => {
     const report = await loadLabReport({ ...scope, reportId })
     const payload = toConfirmPayload(report.content.rows.map(toReviewRow))!
     await expect(confirmLabReport({ ...scope, reportId, userId: 'user_3', rows: payload, audit })).rejects.toBeInstanceOf(LabReportError)
-    // La segunda no reclamó el informe: tampoco deja un segundo registro.
-    expect(store.audits).toHaveLength(1)
+    // La segunda no reclamó el informe: tampoco deja un segundo registro de confirmación.
+    expect(store.audits.map((entry) => entry.action)).toEqual(['lab.extract', 'lab.confirm'])
     expect(store.analytes).toHaveLength(4)
     expect(store.persisted).toHaveLength(1)
     expect(store.reports[0]?.reviewedBy).toBe('user_2')
@@ -210,14 +212,14 @@ describe('Carga de laboratorios — PDF digital de punta a punta', () => {
   it('un PDF sin resultados no crea ningún informe', async () => {
     const before = store.reports.length
     await expect(
-      createLabReportFromPdf({ ...scope, userId: 'user_1', fileName: 'x.pdf', data: buildPdf(['Paciente: GOMEZ ANA', 'Sin resultados']) }),
+      createLabReportFromPdf({ ...scope, audit: uploadAudit, userId: 'user_1', fileName: 'x.pdf', data: buildPdf(['Paciente: GOMEZ ANA', 'Sin resultados']) }),
     ).rejects.toMatchObject({ code: 'no_rows' })
     expect(store.reports).toHaveLength(before)
   })
 
   it('bytes que no son un PDF legible: error con código estable', async () => {
     await expect(
-      createLabReportFromPdf({ ...scope, userId: 'user_1', fileName: 'x.pdf', data: new TextEncoder().encode('%PDF-1.4 basura') }),
+      createLabReportFromPdf({ ...scope, audit: uploadAudit, userId: 'user_1', fileName: 'x.pdf', data: new TextEncoder().encode('%PDF-1.4 basura') }),
     ).rejects.toBeInstanceOf(LabReportError)
   })
 })
@@ -274,7 +276,7 @@ describe('Carga de laboratorios — informe en columnas, como lo imprimen los la
       [400, 580, 'Bioquimica - M.P. 0000'],
     ])
     const before = store.reports.length
-    const created = await createLabReportFromPdf({ ...scope, userId: 'user_1', fileName: 'GOMEZ_ANA.pdf', data })
+    const created = await createLabReportFromPdf({ ...scope, audit: uploadAudit, userId: 'user_1', fileName: 'GOMEZ_ANA.pdf', data })
     expect(created).toMatchObject({ rowCount: 4, reviewCount: 1 })
 
     const stored = store.reports[before]!
