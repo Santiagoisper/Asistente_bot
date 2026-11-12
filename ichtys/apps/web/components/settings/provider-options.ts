@@ -26,7 +26,7 @@ export const PROVIDER_OPTIONS: { value: LlmProvider; label: string; description:
     value: 'auto',
     label: 'Automático (recomendado)',
     description:
-      'Claude → OpenAI → Gemini → Groq. Si uno falla, prueba el siguiente.',
+      'Claude (Anthropic). Sin respaldo en otro proveedor: si no responde, la función avisa y el dato no sale a otro lado.',
   },
   {
     value: 'anthropic',

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 
 import { bloodPressureProposalLabel } from '../../lib/subjects/proposal-display'
+import { unapprovedSpecNotice } from '../../lib/subjects/spec-notice'
 
 interface EvolutionItem {
   id: string
@@ -127,6 +128,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const [assessments, setAssessments] = useState<ScreeningAssessment[]>([])
   const [protocolDocumentId, setProtocolDocumentId] = useState<string | null>(null)
   const [specAvailable, setSpecAvailable] = useState(false)
+  const [specNotice, setSpecNotice] = useState<string | null>(null)
   const [content, setContent] = useState('')
   const [visitLabel, setVisitLabel] = useState('')
   const [loading, setLoading] = useState(true)
@@ -145,11 +147,14 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         profile: PatientProfileView
         assessments: ScreeningAssessment[]
         specAvailable: boolean
+        specStatus?: string | null
+        specVersion?: number | null
         protocolDocumentId?: string | null
       }
       setProfile(data.profile)
       setAssessments(data.assessments)
       setSpecAvailable(data.specAvailable)
+      setSpecNotice(data.specAvailable ? unapprovedSpecNotice(data.specStatus, data.specVersion) : null)
       setProtocolDocumentId(data.protocolDocumentId ?? null)
     } catch {
       // screening es complementario — no bloquea la página
@@ -563,6 +568,15 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
           ) : assessments.length === 0 ? (
             <p className="text-sm text-alphi-muted">Sin criterios en el spec del estudio.</p>
           ) : (
+            <>
+            {specNotice ? (
+              <p
+                role="note"
+                className="mb-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900"
+              >
+                {specNotice}
+              </p>
+            ) : null}
             <ul className="max-h-80 space-y-2 overflow-y-auto">
               {assessments.map((a) => (
                 <li
@@ -577,6 +591,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                 </li>
               ))}
             </ul>
+            </>
           )}
           <p className="mt-3 text-[10px] leading-relaxed text-alphi-muted">
             Apoyo a la decisión — el investigador valida inclusión/exclusión final. Reglas automáticas solo
