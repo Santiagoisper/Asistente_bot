@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   findFirst: vi.fn(),
   updateSet: vi.fn(),
   updateWhere: vi.fn(),
+  auditInsert: vi.fn(async () => undefined),
   getOrgLlmApiKeys: vi.fn(async () => ({})),
   recordUsage: vi.fn(async () => undefined),
   runWithLlmFallback: vi.fn(),
@@ -29,13 +30,19 @@ vi.mock('@ichtys/clinical', () => ({
 vi.mock('@ichtys/db', () => ({
   db: {
     query: { patientProfiles: { findFirst: mocks.findFirst } },
-    update: () => ({
-      set: (values: unknown) => {
-        mocks.updateSet(values)
-        return { where: mocks.updateWhere }
-      },
-    }),
+    // El perfil y su registro de auditoría entran por la transacción.
+    transaction: async (work: (tx: unknown) => Promise<unknown>) =>
+      work({
+        update: () => ({
+          set: (values: unknown) => {
+            mocks.updateSet(values)
+            return { where: mocks.updateWhere }
+          },
+        }),
+        insert: () => ({ values: mocks.auditInsert }),
+      }),
   },
+  auditLogs: {},
   and: (...args: unknown[]) => args,
   eq: (column: unknown, value: unknown) => ({ column, value }),
   getOrgLlmApiKeys: mocks.getOrgLlmApiKeys,
@@ -66,6 +73,7 @@ const PARAMS = {
   subjectId: crypto.randomUUID(),
   evolutionId: crypto.randomUUID(),
   evolutionContent: 'Paciente Juan Pérez, HbA1c 8.2%.',
+  userId: 'user_author',
 }
 
 describe('refreshPatientProfileFromEvolution — logging del error del proveedor', () => {
@@ -97,6 +105,20 @@ describe('refreshPatientProfileFromEvolution — logging del error del proveedor
     // La extracción fallida no rompe el flujo: se guarda el perfil heurístico.
     expect(profile).toMatchObject({ version: 1 })
     expect(mocks.updateWhere).toHaveBeenCalledTimes(1)
+
+    // El cambio queda registrado como lo que es: hecho por el programa con la
+    // salida de un modelo, sin confirmación de una persona, y sin texto clínico.
+    expect(mocks.auditInsert).toHaveBeenCalledTimes(1)
+    expect(mocks.auditInsert).toHaveBeenCalledWith({
+      action: 'profile.update',
+      organizationId: PARAMS.orgId,
+      studyId: PARAMS.studyId,
+      userId: 'user_author',
+      resourceType: 'subject',
+      resourceId: PARAMS.subjectId,
+      metadata: { source: 'evolution_extraction', evolutionId: PARAMS.evolutionId, automated: true, humanConfirmed: false },
+    })
+    expect(JSON.stringify(mocks.auditInsert.mock.calls)).not.toContain('HbA1c')
 
     expect(errorSpy).toHaveBeenCalledTimes(1)
     const logged = errorSpy.mock.calls[0]!.map((part) => String(part)).join(' ')

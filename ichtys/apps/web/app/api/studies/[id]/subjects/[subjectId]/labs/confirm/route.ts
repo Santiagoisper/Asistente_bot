@@ -1,5 +1,4 @@
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
-import { writeAuditLog } from '../../../../../../../../lib/chat/persistence'
 import { confirmLabOcrReview, LabReviewError } from '../../../../../../../../lib/subjects/lab-review-service'
 import { PhiConfigError } from '../../../../../../../../lib/subjects/phi-fields'
 import { labOcrConfirmSchema } from '../../../../../../../../lib/subjects/schemas'
@@ -50,16 +49,15 @@ export async function POST(
       studyId: study.id,
       subjectId: subject.id,
       labsOverride: parsed.data.labs,
-    })
-
-    await writeAuditLog({
-      action: 'lab.confirm',
-      orgId,
-      studyId: study.id,
-      userId,
-      resourceType: 'subject',
-      resourceId: subject.id,
-      metadata: { labCount: profile.labs.length },
+      audit: (facts) => ({
+        action: 'lab.confirm',
+        orgId,
+        studyId: study.id,
+        userId,
+        resourceType: 'subject',
+        resourceId: subject.id,
+        metadata: { labCount: facts.labCount },
+      }),
     })
 
     return Response.json({

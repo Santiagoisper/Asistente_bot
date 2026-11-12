@@ -82,6 +82,7 @@ export const auditAction = [
   'evolution.create',
   'evolution.view',
   'profile.view',
+  'profile.update',
   'screening.view',
   'lab.extract',
   'agenda.create',

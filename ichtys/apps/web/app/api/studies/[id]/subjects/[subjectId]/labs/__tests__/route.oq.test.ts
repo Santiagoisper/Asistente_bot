@@ -183,6 +183,16 @@ describe('OQ-L03 — extract no persiste en labs[]', () => {
   })
 })
 
+/**
+ * La ruta ya no audita por su cuenta: le entrega el registro al servicio, que
+ * lo escribe en la misma transacción que modifica el perfil (R3). Acá se toma
+ * el registro que la ruta entregó y se lo arma con los datos del servicio.
+ */
+function auditHandedTo(service: { mock: { calls: unknown[][] } }, facts?: Record<string, number>): { action: string; resourceType?: string; metadata?: Record<string, unknown> } {
+  const build = (service.mock.calls[0]?.[0] as { audit: (facts?: Record<string, number>) => never }).audit
+  return build(facts)
+}
+
 describe('OQ-L04/L05 — audit sin PHI', () => {
   it('lab.extract — metadata sin texto OCR', async () => {
     mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
@@ -201,7 +211,9 @@ describe('OQ-L04/L05 — audit sin PHI', () => {
       makeParams(),
     )
 
-    expect(mocks.writeAuditLog).toHaveBeenCalledWith(
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+    const auditCall = auditHandedTo(mocks.proposeLabOcrReview, { labCount: 1, piiRedactedCount: 1 })
+    expect(auditCall).toEqual(
       expect.objectContaining({
         action: 'lab.extract',
         metadata: expect.objectContaining({
@@ -210,7 +222,6 @@ describe('OQ-L04/L05 — audit sin PHI', () => {
         }),
       }),
     )
-    const auditCall = mocks.writeAuditLog.mock.calls[0]?.[0] as { metadata?: Record<string, unknown> }
     expect(auditCall.metadata).not.toHaveProperty('text')
     expect(auditCall.metadata).not.toHaveProperty('criterionText')
   })
@@ -221,7 +232,8 @@ describe('OQ-L04/L05 — audit sin PHI', () => {
 
     await confirmPost(new Request('http://localhost/api/labs/confirm', { method: 'POST' }), makeParams())
 
-    expect(mocks.writeAuditLog).toHaveBeenCalledWith(
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+    expect(auditHandedTo(mocks.confirmLabOcrReview, { labCount: 1 })).toEqual(
       expect.objectContaining({
         action: 'lab.confirm',
         metadata: { labCount: 1 },
@@ -235,13 +247,14 @@ describe('OQ-L04/L05 — audit sin PHI', () => {
 
     await rejectPost(new Request('http://localhost/api/labs/reject', { method: 'POST' }), makeParams())
 
-    expect(mocks.writeAuditLog).toHaveBeenCalledWith(
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+    const auditCall = auditHandedTo(mocks.rejectLabOcrReview)
+    expect(auditCall).toEqual(
       expect.objectContaining({
         action: 'lab.reject',
         resourceType: 'subject',
       }),
     )
-    const auditCall = mocks.writeAuditLog.mock.calls[0]?.[0] as { metadata?: unknown }
     expect(auditCall.metadata).toBeUndefined()
   })
 })

@@ -1,5 +1,4 @@
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
-import { writeAuditLog } from '../../../../../../../../lib/chat/persistence'
 import { LabReviewError, rejectLabOcrReview } from '../../../../../../../../lib/subjects/lab-review-service'
 import { PhiConfigError } from '../../../../../../../../lib/subjects/phi-fields'
 
@@ -19,15 +18,14 @@ export async function POST(
       orgId,
       studyId: study.id,
       subjectId: subject.id,
-    })
-
-    await writeAuditLog({
-      action: 'lab.reject',
-      orgId,
-      studyId: study.id,
-      userId,
-      resourceType: 'subject',
-      resourceId: subject.id,
+      audit: () => ({
+        action: 'lab.reject',
+        orgId,
+        studyId: study.id,
+        userId,
+        resourceType: 'subject',
+        resourceId: subject.id,
+      }),
     })
 
     return Response.json({
