@@ -9,6 +9,8 @@ Documentación de cumplimiento regulatorio para el módulo de **datos clínicos 
 
 ---
 
+> **Leer primero:** [`REGULATORY-BASELINE.md`](./REGULATORY-BASELINE.md) (2026-11-12) fija las normas vigentes, las reglas de desarrollo y el estado real de cada control. Donde este índice y ese documento difieran, vale ese documento. Varias afirmaciones de esta página (ISO 27701 como «extensión», acuerdos «firmados», responsable, fecha de revisión) están señaladas allí como desactualizadas o sin evidencia enlazada.
+
 ## Objetivo de la Fase 0
 
 Establecer la base **antes de procesar PHI** (Protected Health Information / datos de salud identificables). Ningún dato de paciente real debe ingresar a producción hasta completar los ítems bloqueantes de esta checklist.

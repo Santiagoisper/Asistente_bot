@@ -26,3 +26,10 @@
 - Troubleshooting RAG: extracción de specs **siempre Claude** (`SPEC_EXTRACTION_LLM_PROVIDER=anthropic`), independiente del LLM de chat en `/settings`; modelo `SPEC_EXTRACTION_MODEL` (default claude-sonnet-4-6); criterios anidados (romanos/letras) = filas atómicas con numeración string preservada (`"(iii)(a)"`); re-extract batch `scripts/reextract-org-batch.ts` (`--skip-mock`), unitario `reextract-one-study.ts`, diag `diag-study-spec.ts`; bulk import puede dejar specs parciales; chat con doc `ready` pero «evidencia insuficiente» suele ser retrieval (pregunta corta o umbral en `rag_config`, ver `query-expander`).
 - Materiales pitch/accionistas: informe en `ichtys/docs/pitch/ALPHI-SHAREHOLDER-REPORT-2026.{md,docx}` (PDF en `output/pdf/`); páginas GTM públicas `/pricing` y `/trust` (`MarketingShell`) — no hay HTML standalone de accionistas en el repo.
 - Módulo clínico (Fase 0–2.5): tablas `subjects`/`clinical_evolutions`/`patient_profiles` (`0006`), `screening_assessments` (`0007`); PHI cifrado en reposo (`@ichtys/crypto`); pre-redacción PHI antes del LLM (`phi-redact`, `extract-merge` en `@ichtys/clinical`); badges de confianza en UI; rutas bajo estudios.
+
+## Marco normativo (obligatorio para todo agente)
+
+- Antes de proponer o escribir un cambio en `ichtys/`, leer `ichtys/docs/compliance/REGULATORY-BASELINE.md`. Fija las normas contra las que se desarrolla (ISO/IEC 27001, 27701:2025 y 42001; ANMAT Disp. 7516/2025; Ley 25.326; FDA 21 CFR Part 11; guía EMA de sistemas informatizados en ensayos clínicos) y las reglas R1–R11.
+- Alphi es un complemento de la HCE y del CRF; no es ninguno de los dos. Toda función declara si es de apoyo o de registro.
+- No afirmar «cumple» ni «certificado». No citar una norma, edición o fecha sin haberla verificado en su fuente; distinguir hecho, interpretación y pendiente.
+- Todo PR responde la lista de `.github/pull_request_template.md`.
