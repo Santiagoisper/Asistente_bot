@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => {
       super(code)
     }
   }
-  return { AccessError: MockAccessError, AgendaError: MockAgendaError, validatePhiStudyAccess: vi.fn(), writeAuditLog: vi.fn(), createAgendaItem: vi.fn(), updateAgendaItem: vi.fn() }
+  return { AccessError: MockAccessError, AgendaError: MockAgendaError, validatePhiStudyAccess: vi.fn(), writeAuditLog: vi.fn(), tx: { transaction: 'tx' }, createAgendaItem: vi.fn(), updateAgendaItem: vi.fn() }
 })
 
 vi.mock('@ichtys/auth', () => ({
@@ -19,6 +19,16 @@ vi.mock('@ichtys/auth', () => ({
   handleApiError: (err: unknown) => (err instanceof mocks.AccessError ? new Response('denied', { status: err.status }) : new Response('error', { status: 500 })),
 }))
 vi.mock('../../../../../../lib/chat/persistence', () => ({ writeAuditLog: mocks.writeAuditLog }))
+// La escritura y su auditoría van juntas (R3). Acá se simula el envoltorio: corre
+// la escritura con la transacción y, solo si salió bien, asienta la auditoría.
+// Que las dos entren de verdad en una transacción se prueba en lib/audit.
+vi.mock('../../../../../../lib/audit/audited-write', () => ({
+  auditedWrite: async <T,>(write: (tx: unknown) => Promise<T>, audit: (result: T) => unknown) => {
+    const result = await write(mocks.tx)
+    await mocks.writeAuditLog(audit(result))
+    return result
+  },
+}))
 vi.mock('../../../../../../lib/agenda/agenda-service', () => ({ AgendaError: mocks.AgendaError, createAgendaItem: mocks.createAgendaItem, updateAgendaItem: mocks.updateAgendaItem }))
 vi.mock('../../../../../../lib/subjects/phi-fields', () => ({ PhiConfigError: class extends Error {} }))
 vi.mock('../../../../../../lib/os/org-settings', () => ({ loadOrgTimeZone: async (orgId: string) => (orgId === 'org-bogota' ? 'America/Bogota' : 'America/Argentina/Buenos_Aires') }))
@@ -67,7 +77,7 @@ describe('POST agenda — agendar un turno', () => {
     const res = await create(request('POST', body), ctx)
     expect(res.status).toBe(201)
     expect(mocks.validatePhiStudyAccess).toHaveBeenCalledWith(STUDY, { require: 'agenda.manage' })
-    expect(mocks.createAgendaItem).toHaveBeenCalledWith(expect.objectContaining({ orgId: 'org-1', studyId: STUDY, userId: 'user_1', timeZone: 'America/Argentina/Buenos_Aires' }))
+    expect(mocks.createAgendaItem).toHaveBeenCalledWith(expect.objectContaining({ executor: mocks.tx, orgId: 'org-1', studyId: STUDY, userId: 'user_1', timeZone: 'America/Argentina/Buenos_Aires' }))
     const audit = JSON.stringify(mocks.writeAuditLog.mock.calls[0]?.[0])
     expect(audit).toContain('agenda.create')
     expect(audit).not.toMatch(/PEREZ|ayunas/)
@@ -93,7 +103,7 @@ describe('PATCH agenda/[itemId] — cambiar un turno', () => {
   it('cambia el estado dentro del estudio de la URL y lo audita', async () => {
     const res = await update(request('PATCH', { status: 'done' }), itemCtx())
     expect(res.status).toBe(200)
-    expect(mocks.updateAgendaItem).toHaveBeenCalledWith(expect.objectContaining({ orgId: 'org-1', studyId: STUDY, itemId: ITEM, patch: { status: 'done' } }))
+    expect(mocks.updateAgendaItem).toHaveBeenCalledWith(expect.objectContaining({ executor: mocks.tx, orgId: 'org-1', studyId: STUDY, itemId: ITEM, patch: { status: 'done' } }))
     // Otro centro, otra hora: la zona sale de la organización del token.
     mocks.validatePhiStudyAccess.mockResolvedValue({ userId: 'user_2', orgId: 'org-bogota', study: { id: STUDY } })
     await update(request('PATCH', { status: 'done' }), itemCtx())

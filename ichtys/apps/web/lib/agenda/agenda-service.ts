@@ -1,3 +1,4 @@
+import type { DbExecutor } from '../audit/audited-write'
 import { agendaItems, and, asc, db, eq, gte, inArray, lt, studies, subjects, type AgendaItemKind, type AgendaItemStatus } from '@ichtys/db'
 import { decryptClinicalContent, encryptClinicalContent } from '../subjects/phi-fields'
 import type { CreateAgendaItemInput, UpdateAgendaItemInput } from './agenda-schema'
@@ -33,18 +34,23 @@ export interface AgendaEntry {
   notes: string | null
 }
 
-export async function createAgendaItem(params: { orgId: string; studyId: string; userId: string; timeZone: string; input: CreateAgendaItemInput }): Promise<{ id: string }> {
-  const { input } = params
+/**
+ * `executor` es la transacción de la escritura auditada que la envuelve
+ * (lib/audit/audited-write.ts): el turno y su registro de auditoría se
+ * confirman juntos.
+ */
+export async function createAgendaItem(params: { executor: DbExecutor; orgId: string; studyId: string; userId: string; timeZone: string; input: CreateAgendaItemInput }): Promise<{ id: string }> {
+  const { input, executor } = params
   if (input.subjectId !== null) {
     // El sujeto tiene que ser de este estudio y de esta organización.
-    const [subject] = await db
+    const [subject] = await executor
       .select({ id: subjects.id })
       .from(subjects)
       .where(and(eq(subjects.organizationId, params.orgId), eq(subjects.studyId, params.studyId), eq(subjects.id, input.subjectId)))
       .limit(1)
     if (!subject) throw new AgendaError('subject_mismatch')
   }
-  const [created] = await db
+  const [created] = await executor
     .insert(agendaItems)
     .values({
       organizationId: params.orgId,
@@ -62,10 +68,10 @@ export async function createAgendaItem(params: { orgId: string; studyId: string;
   return created
 }
 
-export async function updateAgendaItem(params: { orgId: string; studyId: string; itemId: string; userId: string; timeZone: string; patch: UpdateAgendaItemInput }): Promise<{ id: string; status: AgendaItemStatus }> {
+export async function updateAgendaItem(params: { executor: DbExecutor; orgId: string; studyId: string; itemId: string; userId: string; timeZone: string; patch: UpdateAgendaItemInput }): Promise<{ id: string; status: AgendaItemStatus }> {
   const { patch } = params
   const moved = patch.day !== undefined && patch.time !== undefined
-  const [updated] = await db
+  const [updated] = await params.executor
     .update(agendaItems)
     .set({
       ...(patch.status !== undefined ? { status: patch.status } : {}),

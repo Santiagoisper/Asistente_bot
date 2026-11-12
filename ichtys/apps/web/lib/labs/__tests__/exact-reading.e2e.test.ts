@@ -10,16 +10,25 @@ const store = vi.hoisted(() => ({
   reports: [] as Array<Record<string, unknown>>,
   images: [] as Array<Record<string, unknown>>,
   analytes: [] as Array<Record<string, unknown>>,
+  audits: [] as Array<Record<string, unknown>>,
+  failAudit: false,
   persisted: [] as Array<{ labs: Array<{ name: string; value: number; unit?: string }> }>,
 }))
 
 vi.mock('@ichtys/db', async (importOriginal) => {
   const original = await importOriginal<typeof import('@ichtys/db')>()
   const is = (table: unknown, target: unknown) => table === target
-  const db = {
+  // `via` deja asentado por dónde entró cada escritura: por la conexión suelta
+  // ('db') o por la transacción ('tx').
+  const make = (via: 'db' | 'tx') => ({
     insert: (table: unknown) => ({
       values: (values: Record<string, unknown> | Array<Record<string, unknown>>) => {
         const list = Array.isArray(values) ? values : [values]
+        if (is(table, original.auditLogs)) {
+          if (store.failAudit) return Promise.reject(new Error('audit insert failed'))
+          store.audits.push({ via, ...list[0] })
+          return Promise.resolve()
+        }
         if (is(table, original.labReports)) {
           const row = { id: `0000000${store.reports.length + 1}-0000-4000-8000-000000000000`, createdAt: new Date(), reviewedAt: null, ...list[0] }
           store.reports.push(row)
@@ -54,7 +63,7 @@ vi.mock('@ichtys/db', async (importOriginal) => {
           returning: async () => {
             const report = store.reports[store.reports.length - 1]
             if (!report || report.status !== 'pending_review') return []
-            Object.assign(report, values)
+            Object.assign(report, values, { claimedVia: via })
             return [{ id: report.id }]
           },
         }),
@@ -65,8 +74,8 @@ vi.mock('@ichtys/db', async (importOriginal) => {
         if (is(table, original.labReportImages)) store.images.length = 0
       },
     }),
-    transaction: async <T,>(work: (tx: unknown) => Promise<T>) => work(db),
-  }
+  })
+  const db = { ...make('db'), transaction: async <T,>(work: (tx: unknown) => Promise<T>) => work(make('tx')) }
   return { ...original, db }
 })
 
@@ -86,6 +95,15 @@ import { confirmLabReport, createLabReportFromPdf, LabReportError, loadLabReport
 import { decideValue, rowProblem, toConfirmPayload, toReviewRow } from '../review-rows'
 
 const scope = { orgId: 'org-1', studyId: 'study-1', subjectId: 'subject-1' }
+const audit = (facts?: { rowCount: number; newAnalytes: number }) => ({
+  action: facts ? ('lab.confirm' as const) : ('lab.reject' as const),
+  orgId: 'org-1',
+  studyId: 'study-1',
+  userId: 'user_2',
+  resourceType: 'lab_report',
+  resourceId: 'report',
+  metadata: { ...facts },
+})
 const savedKey = process.env.PHI_ENCRYPTION_KEY
 const row = (analyte: string, printedValue: string, line: number, unit: string | null = null): ReaderRow => ({ analyte, printedValue, unit, referenceRange: null, line })
 const lastContent = (): LabReportContent => labReportContentSchema.parse(JSON.parse(decryptClinicalContent(String(store.reports[store.reports.length - 1]!.contentEncrypted))))
@@ -139,6 +157,8 @@ beforeEach(() => {
   store.reports.length = 0
   store.images.length = 0
   store.analytes.length = 0
+  store.audits.length = 0
+  store.failAudit = false
   store.persisted.length = 0
 })
 
@@ -232,12 +252,17 @@ describe('Foto o escaneo — dos lecturas independientes', () => {
     const payload = toConfirmPayload(decided)!
 
     // Sin la declaración de que comparó con la imagen, el servidor no confirma.
-    await expect(confirmLabReport({ ...scope, reportId: created.reportId, userId: 'user_2', rows: payload })).rejects.toMatchObject({ code: 'invalid_rows' })
+    await expect(confirmLabReport({ ...scope, reportId: created.reportId, userId: 'user_2', rows: payload, audit })).rejects.toMatchObject({ code: 'invalid_rows' })
     expect(store.reports[0]?.status).toBe('pending_review')
     expect(store.images).toHaveLength(2)
+    // Lo que no se confirmó no deja registro de confirmación.
+    expect(store.audits).toHaveLength(0)
 
-    const result = await confirmLabReport({ ...scope, reportId: created.reportId, userId: 'user_2', rows: payload, comparedWithImage: true })
+    const result = await confirmLabReport({ ...scope, reportId: created.reportId, userId: 'user_2', rows: payload, comparedWithImage: true, audit })
     expect(result).toMatchObject({ rowCount: 3, profileUpdated: true })
+    // R3: el cambio de estado y su registro entran por la misma transacción.
+    expect(store.reports[0]).toMatchObject({ status: 'confirmed', claimedVia: 'tx' })
+    expect(store.audits).toEqual([expect.objectContaining({ via: 'tx', action: 'lab.confirm', metadata: { rowCount: 3, newAnalytes: 3 } })])
     expect(store.persisted[0]?.labs).toEqual([
       { name: 'Hemoglobina', value: 18.5, unit: 'g/dL' },
       { name: 'Glucosa', value: 92, unit: 'mg/dL' },
@@ -254,7 +279,7 @@ describe('Foto o escaneo — dos lecturas independientes', () => {
     try {
       const created = await upload({ lines: [], rows: [...main.rows] })
       const report = await loadLabReport({ ...scope, reportId: created.reportId })
-      await confirmLabReport({ ...scope, reportId: created.reportId, userId: 'user_2', rows: toConfirmPayload(report.content.rows.map(toReviewRow))!, comparedWithImage: true })
+      await confirmLabReport({ ...scope, reportId: created.reportId, userId: 'user_2', rows: toConfirmPayload(report.content.rows.map(toReviewRow))!, comparedWithImage: true, audit })
       expect(store.images).toHaveLength(0)
       expect(lastContent().imagePages).toBe(0)
       await expect(loadLabReportImage({ ...scope, reportId: created.reportId, page: 1 })).rejects.toMatchObject({ code: 'not_found' })
@@ -292,8 +317,25 @@ describe('Foto o escaneo — dos lecturas independientes', () => {
 
   it('rechazar conserva la imagen por defecto y la borra solo con política de borrado', async () => {
     const kept = await upload({ lines: [], rows: [...main.rows] })
-    await rejectLabReport({ ...scope, reportId: kept.reportId, userId: 'user_2' })
-    expect(store.reports[0]?.status).toBe('rejected')
+    await rejectLabReport({ ...scope, reportId: kept.reportId, userId: 'user_2', audit })
+    expect(store.reports[0]).toMatchObject({ status: 'rejected', claimedVia: 'tx' })
+    expect(store.audits).toEqual([expect.objectContaining({ via: 'tx', action: 'lab.reject' })])
+
+    // Rechazar de nuevo lo ya rechazado se corta y no suma otro registro.
+    await expect(rejectLabReport({ ...scope, reportId: kept.reportId, userId: 'user_2', audit })).rejects.toMatchObject({ code: 'already_reviewed' })
+    expect(store.audits).toHaveLength(1)
+
+    // Si el registro no se puede escribir, el rechazo falla entero: no se da por hecho.
+    store.reports.length = 0
+    store.audits.length = 0
+    const unaudited = await upload({ lines: [], rows: [...main.rows] })
+    store.failAudit = true
+    await expect(rejectLabReport({ ...scope, reportId: unaudited.reportId, userId: 'user_2', audit })).rejects.toThrow('audit insert failed')
+    store.failAudit = false
+    store.reports.length = 0
+    store.images.length = 0
+    const kept2 = await upload({ lines: [], rows: [...main.rows] })
+    expect(kept2.reportId).toBeTruthy()
     expect(store.images).toHaveLength(2)
 
     process.env.LAB_EVIDENCE_RETENTION = 'purge'
@@ -301,7 +343,7 @@ describe('Foto o escaneo — dos lecturas independientes', () => {
       store.reports.length = 0
       store.images.length = 0
       const purged = await upload({ lines: [], rows: [...main.rows] })
-      await rejectLabReport({ ...scope, reportId: purged.reportId, userId: 'user_2' })
+      await rejectLabReport({ ...scope, reportId: purged.reportId, userId: 'user_2', audit })
       expect(store.images).toHaveLength(0)
     } finally {
       delete process.env.LAB_EVIDENCE_RETENTION
