@@ -223,7 +223,7 @@ export function DictationPanel({ onUse }: { onUse: (text: string, source: Dictat
           ) : null}
           {missingCount > 0 ? (
             <p className="text-xs font-semibold text-amber-900">
-              {missingCount} {missingCount === 1 ? 'bloque figura' : 'bloques figuran'} como «{NOT_MENTIONED}». Completalos o dejalos así a sabiendas.
+              {missingCount} {missingCount === 1 ? 'bloque figura' : 'bloques figuran'} como «{NOT_MENTIONED}». Si lo dictaste, puede haber quedado dentro del bloque anterior: el título no se reconoció. Completalos o dejalos así a sabiendas.
             </p>
           ) : null}
           <textarea

@@ -109,6 +109,20 @@ describe('bloques de la evolución dictada', () => {
     expect(draft.corrections).toEqual([{ original: 'Presión material 140 sobre 90', corrected: 'Presión material 132 sobre 84', marker: 'Corijo' }])
   })
 
+  it('límite conocido: un encabezado muy deformado no abre su bloque y queda avisado como «No mencionado»', () => {
+    // Mismo audio, decodificador en precisión completa (12/11/2026): «Eventos adversos» llegó como «Entos a besos».
+    // No se ensancha la tolerancia para alcanzarlo: abriría bloques con palabras comunes. Lo dictado queda en el bloque
+    // anterior, a la vista, y el bloque sin título figura entre los faltantes para que la persona lo revise.
+    const draft = buildDictationDraft(
+      'Signos y tales. Presión material 132 sobre 84. Fecuencia cardíaca 72. Entos a besos. Nín 1. Plan. Solicitar laboratorio y citar en dos semanas.',
+    )
+    const byId = Object.fromEntries(draft.blocks.map((block) => [block.id, block.text]))
+    expect(byId.eventos).toBeNull()
+    expect(byId.vitales).toContain('Entos a besos. Nín 1.')
+    expect(draft.missing).toContain('eventos')
+    expect(byId.plan).toBe('Solicitar laboratorio y citar en dos semanas.')
+  })
+
   it('una palabra parecida a un encabezado corto no abre un bloque', () => {
     const byId = Object.fromEntries(splitIntoBlocks('Motivo: control. Plano de la sala entregado. Pan sin sal.').map((block) => [block.id, block.text]))
     expect(byId.plan).toBeNull()
