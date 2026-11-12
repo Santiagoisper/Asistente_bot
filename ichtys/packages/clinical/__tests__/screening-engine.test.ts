@@ -98,6 +98,32 @@ describe('assessScreening — criterios escritos como en un protocolo en castell
     expect(one(profile, 'Diagnostico de diabetes tipo 2 de al menos 2 años de evolucion.').reason).not.toContain('Edad')
   })
 
+  it('«adultos» no convierte en edad un rango de otra cosa (hallazgo de Reviewer en #126)', () => {
+    const profile = { ...base, demographics: { ageYears: 58 } }
+    for (const text of [
+      'Adultos con indice de masa corporal entre 23 y 40 kg/m2.',
+      'Adultos con hemoglobina entre 8 y 10 g/dL.',
+      'Adultos con tratamiento de entre 3 y 6 ciclos.',
+      'Adultos con diabetes de al menos 2 años de evolucion.',
+      'Tratamiento con metformina durante al menos 2 años.',
+      'Evolucion de la enfermedad mayor a 5 años.',
+    ]) {
+      const result = one(profile, text)
+      expect(result.reason, text).not.toContain('Edad')
+      expect(result.status, text).not.toBe('fail')
+    }
+  })
+
+  it('la edad se reconoce aunque el texto no diga «edad» ni «adultos»', () => {
+    const at = (ageYears: number, text: string) => one({ ...base, demographics: { ageYears } }, text).status
+    expect(at(58, 'Pacientes de 18 a 75 años.')).toBe('pass')
+    expect(at(30, 'Mujeres de 45 a 60 años.')).toBe('fail')
+    expect(at(17, 'Mayores de 18 años.')).toBe('fail')
+    expect(at(18, 'Mayores de 18 años.')).toBe('fail')
+    expect(at(19, 'Mayores de 18 años.')).toBe('pass')
+    expect(at(58, 'Pacientes de 18 a 75 años con diagnostico de diabetes tipo 2.')).toBe('pass')
+  })
+
   it('filtrado glomerular como criterio de exclusión: «menor de 45 mL/min»', () => {
     const text = 'Tasa de filtrado glomerular estimada menor de 45 mL/min/1,73 m2.'
     const withLab = (value: number) => ({ ...base, labs: [{ name: 'Filtrado glomerular estimado', value, unit: 'mL/min' }] })

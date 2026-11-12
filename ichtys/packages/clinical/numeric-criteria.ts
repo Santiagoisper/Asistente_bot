@@ -253,26 +253,47 @@ export function describeBoundComparison(
 
 /**
  * Cotas de edad de un criterio («adultos de 18 a 75 años», «mayores de 18
- * años», «entre 18 y 65 años»). `null` si el texto no es un criterio de edad:
- * tiene que nombrar la edad o decir «años» pegado al número, para no leer como
- * edad un plazo de tratamiento.
+ * años», «edad mayor o igual a 18 años»). `null` si el texto no es un criterio
+ * de edad.
+ *
+ * Regla: el número tiene que llevar «años» pegado. Una palabra de población
+ * («adultos») no alcanza: «adultos con IMC entre 23 y 40» no es una edad. Y
+ * «años» que mide un plazo («2 años de evolución», «durante 5 años») tampoco.
  */
+const YEARS = '(?:a[nñ]os|years?)'
+const DURATION_AFTER = new RegExp(`^\\s*${YEARS}\\s+de\\s+(?!edad)`, 'i')
+const DURATION_BEFORE = /(?:durante|desde hace|hace|por|[uú]ltimos|previos|pasados)\s+(?:al menos\s+|m[aá]s de\s+)?$/i
+const DURATION_WORDS = /evoluci[oó]n|diagn[oó]stic|tratamiento|duraci[oó]n|antig[uü]edad|seguimiento|\bdesde\b|\bdurante\b|\bhace\b|[uú]ltimos|previos|\bantes\b/i
+const EXPLICIT_AGE = /\bedad\b|\bage\b|years of age|\baged\b/i
+
 export function parseAgeBounds(text: string): { min?: NumericBound; max?: NumericBound } | null {
   const normalized = normalizeDecimalCommas(text)
-  const aboutAge = /\bedad\b|\bage\b|years of age|\baged\b|\badult[oa]?s?\b/i.test(normalized)
-  const YEARS = '(?:a[nñ]os|years?)'
-  const range =
-    normalized.match(new RegExp(`(\\d{1,3})\\s*(?:a|y|to|[–—-])\\s*(\\d{1,3})\\s*${YEARS}`, 'i')) ??
-    (aboutAge ? normalized.match(/entre\s+(\d{1,3})\s*(?:a[nñ]os)?\s+y\s+(\d{1,3})/i) : null)
+  const range = new RegExp(
+    `(\\d{1,3})\\s*(?:${YEARS})?\\s*(?:a|y|to|[–—-])\\s*(\\d{1,3})(?=\\s*${YEARS})`,
+    'i',
+  ).exec(normalized)
   if (range) {
     const low = Number(range[1])
     const high = Number(range[2])
-    if (!aboutAge || low > high || high > 120) return null
+    const after = normalized.slice(range.index + range[0].length)
+    const before = normalized.slice(0, range.index)
+    if (low > high || high > 120) return null
+    if (DURATION_AFTER.test(after) || DURATION_BEFORE.test(before)) return null
     return { min: { value: low, inclusive: true }, max: { value: high, inclusive: true } }
   }
-  if (!aboutAge || !new RegExp(`\\d{1,3}\\s*${YEARS}`, 'i').test(normalized)) return null
-  const bounds = operatorBounds(normalized)
-  if (!bounds.min && !bounds.max) return null
-  if ((bounds.min?.value ?? 0) > 120 || (bounds.max?.value ?? 0) > 120) return null
-  return bounds
+  // Cota con operador: el número lleva «años» pegado y el texto no habla de un plazo,
+  // salvo que nombre la edad de forma expresa.
+  const found: { min?: NumericBound; max?: NumericBound } = {}
+  for (const match of normalized.matchAll(BOUND_RE)) {
+    const end = (match.index ?? 0) + match[0].length
+    if (!new RegExp(`^\\s*${YEARS}\\b`, 'i').test(normalized.slice(end))) continue
+    if (DURATION_AFTER.test(normalized.slice(end))) continue
+    const classified = classifyOperator(match[1] ?? '')
+    if (found[classified.side]) continue
+    found[classified.side] = { value: parseBoundNumber(match[2] ?? ''), inclusive: classified.inclusive }
+  }
+  if (!found.min && !found.max) return null
+  if (!EXPLICIT_AGE.test(normalized) && DURATION_WORDS.test(normalized)) return null
+  if ((found.min?.value ?? 0) > 120 || (found.max?.value ?? 0) > 120) return null
+  return found
 }
