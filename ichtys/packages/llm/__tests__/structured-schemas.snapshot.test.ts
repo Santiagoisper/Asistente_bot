@@ -88,9 +88,13 @@ describe('límite de 10 opcionales del modo nativo (ADR-8 M5)', () => {
     })
   }
 
-  it('llmFacts queda en 9 (al límite, sin margen para campos nuevos opcionales)', () => {
+  // Cambio deliberado (12/11/2026): antes eran 9 opcionales, al límite del
+  // modo nativo de Anthropic. OpenAI, que es el respaldo de la cadena, rechaza
+  // con 400 cualquier propiedad opcional en su salida estricta; el esquema
+  // pasó a todo requerido y anulable. Ver apps/web/lib/subjects/llm-facts.ts.
+  it('llmFacts no tiene propiedades opcionales (apto para proveedores con salida estricta)', () => {
     const jsonSchema = zodSchema(llmFactsSchema).jsonSchema as unknown
-    expect(countOptionalProperties(jsonSchema)).toBe(9)
+    expect(countOptionalProperties(jsonSchema)).toBe(0)
   })
 })
 
@@ -148,10 +152,13 @@ describe('veredictos de validación sin cambio (ADR-8 M7)', () => {
     },
     confidenceOnly: { confidence: 'high' },
     answer: { answer: 'Sí, con cita [1].', confidence: 'medium', citationIndices: [1] },
+    // Todo requerido y anulable desde el 12/11/2026 (ver llm-facts.ts).
     llmFacts: {
       ageYears: 63,
+      systolic: null,
+      diastolic: null,
       labs: [{ name: 'HbA1c', value: 8.2, unit: '%' }],
-      medications: [{ name: 'Metformina', dose: '850 mg' }],
+      medications: [{ name: 'Metformina', dose: '850 mg', frequency: null }],
       conditions: ['Diabetes tipo 2'],
     },
   }
