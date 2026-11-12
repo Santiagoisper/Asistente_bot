@@ -14,6 +14,10 @@ const mocks = vi.hoisted(() => ({
   subjectsFindFirst: vi.fn(),
   studiesFindFirst: vi.fn(),
   functionRows: vi.fn(),
+  membershipRows: vi.fn(),
+  membershipWhere: vi.fn(),
+  conversationsFindFirst: vi.fn(),
+  documentsFindFirst: vi.fn(),
 }))
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: mocks.auth, clerkClient: vi.fn() }))
@@ -22,6 +26,8 @@ vi.mock('drizzle-orm', () => ({
   and: vi.fn((...conditions: unknown[]) => ({ conditions })),
   eq: vi.fn((left: unknown, right: unknown) => ({ left, right })),
   isNull: vi.fn((column: unknown) => ({ isNull: column })),
+  gt: vi.fn((left: unknown, right: unknown) => ({ gt: left, than: right })),
+  or: vi.fn((...alternatives: unknown[]) => ({ alternatives })),
 }))
 
 vi.mock('@ichtys/db', () => ({
@@ -30,24 +36,58 @@ vi.mock('@ichtys/db', () => ({
       organizations: { findFirst: mocks.organizationsFindFirst },
       subjects: { findFirst: mocks.subjectsFindFirst },
       studies: { findFirst: mocks.studiesFindFirst },
+      conversations: { findFirst: mocks.conversationsFindFirst },
+      documents: { findFirst: mocks.documentsFindFirst },
     },
-    select: vi.fn(() => ({ from: vi.fn(() => ({ where: mocks.functionRows })) })),
+    // Dos consultas distintas pasan por `select`: las funciones (se espera el
+    // `where`) y la membresía (encadena `.limit(1)`). Se distinguen por tabla.
+    select: vi.fn(() => ({
+      from: vi.fn((table: { __table?: string }) =>
+        table.__table === 'study_memberships'
+          ? {
+              where: (condition: unknown) => {
+                mocks.membershipWhere(condition)
+                return { limit: mocks.membershipRows }
+              },
+            }
+          : { where: mocks.functionRows },
+      ),
+    })),
   },
   organizations: { clerkOrgId: 'organizations.clerkOrgId' },
   studies: { id: 'studies.id', organizationId: 'studies.organizationId' },
   subjects: { id: 'subjects.id', organizationId: 'subjects.organizationId' },
+  conversations: { id: 'conversations.id', organizationId: 'conversations.organizationId', userId: 'conversations.userId' },
+  documents: { id: 'documents.id', organizationId: 'documents.organizationId', studyId: 'documents.studyId' },
+  documentVersions: {},
+  messages: {},
+  pages: {},
   memberFunctions: {
     functionKey: 'member_functions.function_key',
     organizationId: 'member_functions.organization_id',
     userId: 'member_functions.user_id',
     revokedAt: 'member_functions.revoked_at',
   },
+  studyMemberships: {
+    __table: 'study_memberships',
+    id: 'study_memberships.id',
+    organizationId: 'study_memberships.organization_id',
+    studyId: 'study_memberships.study_id',
+    userId: 'study_memberships.user_id',
+    revokedAt: 'study_memberships.revoked_at',
+    expiresAt: 'study_memberships.expires_at',
+  },
 }))
 
 vi.mock('../resolve-org', () => ({ resolveOrProvisionOrganization: mocks.resolveOrg }))
 
 import { loadAccessSubject } from '../access-subject'
+import {
+  validateConversationAccess,
+  validateDocumentAccess,
+} from '../object-access'
 import { validatePhiStudyAccess, validateSubjectAccess } from '../phi-access'
+import { canEnterStudy } from '../study-membership'
 import { validateStudyAccess } from '../validate-study-access'
 
 const ORG_ID = '11111111-1111-4111-8111-111111111111'
@@ -69,10 +109,20 @@ function functions(...keys: string[]): void {
   mocks.functionRows.mockResolvedValue(keys.map((functionKey) => ({ functionKey })))
 }
 
+/** La base devuelve (o no) una membresía vigente para la consulta de alcance. */
+function membership(present: boolean): void {
+  mocks.membershipRows.mockResolvedValue(present ? [{ id: 'membresia-ficticia' }] : [])
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
+  // Por defecto la persona es miembro del estudio: los bloques de capacidad
+  // de más abajo prueban el otro eje. El bloque de alcance lo cambia.
+  membership(true)
   mocks.studiesFindFirst.mockResolvedValue({ id: STUDY_ID, organizationId: ORG_ID })
   mocks.subjectsFindFirst.mockResolvedValue({ id: SUBJECT_ID, organizationId: ORG_ID, studyId: STUDY_ID })
+  mocks.conversationsFindFirst.mockResolvedValue({ id: 'conv-ficticia', organizationId: ORG_ID, studyId: STUDY_ID })
+  mocks.documentsFindFirst.mockResolvedValue({ id: 'doc-ficticio', organizationId: ORG_ID, studyId: STUDY_ID })
   functions()
 })
 
@@ -309,5 +359,153 @@ describe('entrada a un estudio en validateStudyAccess', () => {
       status: 403,
       message: 'Insufficient role',
     })
+  })
+})
+
+/**
+ * Paso 3: ALCANCE. Tener la función no alcanza; hay que ser miembro del
+ * estudio. Cada rechazo se compara con el del objeto inexistente, porque la
+ * diferencia entre los dos mensajes sería la fuga.
+ */
+describe('membresía por estudio (alcance)', () => {
+  const base = { orgId: ORG_ID, studyId: STUDY_ID, userId: USER_ID }
+
+  it('open: no se consulta la membresía; todos entran como siempre', async () => {
+    membership(false)
+    const allowed = await canEnterStudy({ ...base, access: { mode: 'open', role: 'read_only_monitor', functions: [] } })
+    expect(allowed).toBe(true)
+    expect(mocks.membershipRows).not.toHaveBeenCalled()
+
+    organization('open')
+    signIn('org:site_coordinator')
+    await expect(validateStudyAccess(STUDY_ID)).resolves.toBeDefined()
+    await expect(validateSubjectAccess(SUBJECT_ID, STUDY_ID)).resolves.toBeDefined()
+    expect(mocks.membershipRows).not.toHaveBeenCalled()
+  })
+
+  it('enforced: las dos direcciones entran a todos los estudios sin consultar (M10)', async () => {
+    membership(false)
+    for (const fn of ['operations_director', 'research_director'] as const) {
+      const allowed = await canEnterStudy({ ...base, access: { mode: 'enforced', role: 'read_only_monitor', functions: [fn] } })
+      expect(allowed, fn).toBe(true)
+    }
+    expect(mocks.membershipRows).not.toHaveBeenCalled()
+  })
+
+  it('enforced: el resto del equipo necesita una membresía vigente', async () => {
+    for (const fn of ['investigator', 'study_coordinator', 'lab_assistant', 'regulatory_assistant', 'crf_assistant', 'monitor'] as const) {
+      const access = { mode: 'enforced' as const, role: 'study_admin' as const, functions: [fn] }
+      membership(false)
+      expect(await canEnterStudy({ ...base, access }), `${fn} sin membresía`).toBe(false)
+      membership(true)
+      expect(await canEnterStudy({ ...base, access }), `${fn} con membresía`).toBe(true)
+    }
+  })
+
+  it('la consulta filtra por organización, estudio y persona, y descarta bajas y vencidas', async () => {
+    const now = new Date('2026-11-12T12:00:00Z')
+    await canEnterStudy({
+      ...base,
+      now,
+      access: { mode: 'enforced', role: 'site_coordinator', functions: ['investigator'] },
+    })
+    expect(mocks.membershipWhere).toHaveBeenCalledTimes(1)
+    expect(mocks.membershipWhere.mock.calls[0]?.[0]).toEqual({
+      conditions: [
+        { left: 'study_memberships.organization_id', right: ORG_ID },
+        { left: 'study_memberships.study_id', right: STUDY_ID },
+        { left: 'study_memberships.user_id', right: USER_ID },
+        { isNull: 'study_memberships.revoked_at' },
+        {
+          alternatives: [
+            { isNull: 'study_memberships.expires_at' },
+            { gt: 'study_memberships.expires_at', than: now },
+          ],
+        },
+      ],
+    })
+    expect(mocks.membershipRows).toHaveBeenCalledWith(1)
+  })
+
+  it('validateStudyAccess: con función y sin membresía, la respuesta es la del estudio que no existe', async () => {
+    organization('enforced')
+    signIn('org:study_admin')
+    functions('study_coordinator')
+    membership(false)
+    await expect(validateStudyAccess(STUDY_ID)).rejects.toMatchObject({
+      status: 404,
+      message: 'Study not found or access denied',
+    })
+    // La membresía se decide antes que la capacidad: quien no es miembro no
+    // llega a saber si le faltaba además un permiso.
+    await expect(validateStudyAccess(STUDY_ID, 'study_admin', 'documents.manage')).rejects.toMatchObject({
+      status: 404,
+      message: 'Study not found or access denied',
+    })
+
+    membership(true)
+    await expect(validateStudyAccess(STUDY_ID, 'study_admin', 'documents.manage')).resolves.toBeDefined()
+  })
+
+  it('validatePhiStudyAccess: el investigador de otro estudio no ve los sujetos de este', async () => {
+    organization('enforced')
+    signIn('org:site_coordinator')
+    functions('investigator')
+    membership(false)
+    await expect(validatePhiStudyAccess(STUDY_ID)).rejects.toMatchObject({
+      status: 404,
+      message: 'Study not found or access denied',
+    })
+    membership(true)
+    await expect(validatePhiStudyAccess(STUDY_ID)).resolves.toBeDefined()
+  })
+
+  it('validateSubjectAccess: sin membresía responde igual que un sujeto que no existe', async () => {
+    organization('enforced')
+    signIn('org:site_coordinator')
+    functions('investigator')
+
+    mocks.subjectsFindFirst.mockResolvedValueOnce(undefined)
+    const missing = await validateSubjectAccess(SUBJECT_ID, STUDY_ID).catch((error: unknown) => error)
+
+    membership(false)
+    const notMember = await validateSubjectAccess(SUBJECT_ID, STUDY_ID, { require: 'clinical.author' }).catch(
+      (error: unknown) => error,
+    )
+
+    expect(missing).toMatchObject({ status: 404, message: 'Not Found' })
+    expect(notMember).toMatchObject({ status: 404, message: 'Not Found' })
+  })
+
+  it('documentos y conversaciones: sin membresía, la respuesta es la del objeto que no existe', async () => {
+    organization('enforced')
+    signIn('org:site_coordinator')
+    functions('regulatory_assistant')
+
+    mocks.documentsFindFirst.mockResolvedValueOnce(undefined)
+    const missingDocument = await validateDocumentAccess('doc-ficticio').catch((error: unknown) => error)
+    mocks.conversationsFindFirst.mockResolvedValueOnce(undefined)
+    const missingConversation = await validateConversationAccess('conv-ficticia').catch((error: unknown) => error)
+
+    membership(false)
+    const foreignDocument = await validateDocumentAccess('doc-ficticio').catch((error: unknown) => error)
+    const foreignConversation = await validateConversationAccess('conv-ficticia').catch((error: unknown) => error)
+
+    expect(missingDocument).toMatchObject({ status: 404, message: 'Document not found or access denied' })
+    expect(foreignDocument).toMatchObject({ status: 404, message: 'Document not found or access denied' })
+    expect(missingConversation).toMatchObject({ status: 404, message: 'Conversation not found or access denied' })
+    expect(foreignConversation).toMatchObject({ status: 404, message: 'Conversation not found or access denied' })
+
+    membership(true)
+    await expect(validateDocumentAccess('doc-ficticio')).resolves.toMatchObject({ studyId: STUDY_ID })
+  })
+
+  it('Dirección de Investigación lee los datos clínicos de cualquier estudio sin membresía', async () => {
+    organization('enforced')
+    signIn('org:read_only_monitor')
+    functions('research_director')
+    membership(false)
+    await expect(validateSubjectAccess(SUBJECT_ID, STUDY_ID)).resolves.toBeDefined()
+    expect(mocks.membershipRows).not.toHaveBeenCalled()
   })
 })
