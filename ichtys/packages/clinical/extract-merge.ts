@@ -183,6 +183,9 @@ export function mergeProfileWithExtraction(
       medications: { ...current.fieldConfidence?.medications, ...fieldConfidence.medications },
       conditions: { ...current.fieldConfidence?.conditions, ...fieldConfidence.conditions },
     },
+    // Lo que espera revisión humana no se pierde al sumar datos al perfil.
+    ...(current.pendingLabReview ? { pendingLabReview: current.pendingLabReview } : {}),
+    ...(current.pendingEvolutionProposals ? { pendingEvolutionProposals: current.pendingEvolutionProposals } : {}),
     lastUpdatedAt: new Date().toISOString(),
     lastEvolutionId: evolutionId,
   }

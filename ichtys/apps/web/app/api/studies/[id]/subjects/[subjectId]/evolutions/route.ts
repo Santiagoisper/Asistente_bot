@@ -9,7 +9,7 @@ import {
   PhiConfigError,
 } from '../../../../../../../lib/subjects/phi-fields'
 import { createEvolutionSchema } from '../../../../../../../lib/subjects/schemas'
-import { refreshPatientProfileFromEvolution } from '../../../../../../../lib/subjects/patient-profile-service'
+import { proposeProfileFromEvolution } from '../../../../../../../lib/subjects/patient-profile-service'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../../lib/api/body-limit'
 import { getOrCreateRequestId } from '../../../../../../../lib/observability/logger'
 
@@ -134,9 +134,11 @@ export async function POST(
       }),
     )
 
-    let profileUpdated = false
+    // Lo que se extrae de la evolución no modifica el perfil: queda como
+    // propuesta para que una persona la acepte o la descarte (R6).
+    let profileProposal: 'pending' | 'none' | 'failed' = 'none'
     try {
-      await refreshPatientProfileFromEvolution({
+      const { factCount } = await proposeProfileFromEvolution({
         orgId,
         studyId: study.id,
         subjectId: subject.id,
@@ -144,8 +146,9 @@ export async function POST(
         evolutionContent: parsed.data.content,
         userId,
       })
-      profileUpdated = true
+      if (factCount > 0) profileProposal = 'pending'
     } catch {
+      profileProposal = 'failed'
       // El error crudo puede traer mensaje, stack y campos de dependencias.
       // Solo código estable, id de la solicitud y los ids que ya tenemos.
       console.error('[evolution.create] profile_refresh_failed', {
@@ -162,7 +165,7 @@ export async function POST(
         visitLabel: evolution.visitLabel,
         content: parsed.data.content,
         piiWarnings,
-        profileUpdated,
+        profileProposal,
         createdAt: evolution.createdAt.toISOString(),
       },
       { status: 201 },

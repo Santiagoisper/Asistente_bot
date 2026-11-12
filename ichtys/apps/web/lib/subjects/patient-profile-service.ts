@@ -5,6 +5,7 @@ import {
   parsePatientProfile,
   redactPhiForLlm,
   type PatientProfile,
+  type PendingProfileProposal,
 } from '@ichtys/clinical'
 import { and, db, eq, getOrgLlmApiKeys, patientProfiles, recordUsage } from '@ichtys/db'
 import { runWithLlmFallback } from '@ichtys/llm'
@@ -204,31 +205,108 @@ export async function updatePatientProfile(
   throw new ProfileConflictError()
 }
 
-export async function refreshPatientProfileFromEvolution(params: {
-  orgId: string
-  studyId: string
-  subjectId: string
-  evolutionId: string
-  evolutionContent: string
-  /** Quien guardó la evolución que dispara la extracción. */
-  userId: string
-}): Promise<PatientProfile> {
+export type ProfileProposalErrorCode = 'no_pending_proposal'
+
+export class ProfileProposalError extends Error {
+  constructor(readonly code: ProfileProposalErrorCode) {
+    super(`profile proposal: ${code}`)
+    this.name = 'ProfileProposalError'
+  }
+}
+
+type ProposalScope = ProfileScope & { evolutionId: string; userId: string }
+
+function proposalFactCount(facts: PendingProfileProposal['facts']): number {
+  return (
+    (facts.ageYears ? 1 : 0) +
+    (facts.systolic || facts.diastolic ? 1 : 0) +
+    facts.labs.length +
+    facts.medications.length +
+    facts.conditions.length
+  )
+}
+
+function proposalAudit(params: ProposalScope, action: AuditLogParams['action'], metadata: Record<string, unknown>): AuditLogParams {
+  return {
+    action,
+    orgId: params.orgId,
+    studyId: params.studyId,
+    userId: params.userId,
+    resourceType: 'subject',
+    resourceId: params.subjectId,
+    metadata: { source: 'evolution_extraction', evolutionId: params.evolutionId, ...metadata },
+  }
+}
+
+/**
+ * Lee una evolución (reglas + modelo) y deja lo que encontró como **propuesta**.
+ * No toca los datos del perfil: eso lo hace una persona al aceptarla (R6).
+ * Devuelve cuántos datos propuso; 0 significa que no había nada que revisar.
+ */
+export async function proposeProfileFromEvolution(
+  params: ProposalScope & { evolutionContent: string },
+): Promise<{ factCount: number }> {
   // La extracción (que puede llamar a un modelo) se hace una sola vez, fuera del reintento.
   const heuristic = extractFactsFromEvolution(params.evolutionContent, params.evolutionId)
   const { text: redacted } = redactPhiForLlm(params.evolutionContent)
   const llmFacts = await extractFactsWithLlm(params.orgId, params.studyId, redacted)
   const merged = mergeExtractions(heuristic, llmFacts)
-  return updatePatientProfile(params, (current) => mergeProfileWithExtraction(current, merged, params.evolutionId),
-    // El cambio lo hace el programa con la salida de un modelo, sin que una
-    // persona lo confirme (brecha C2). El registro lo dice tal cual.
-    () => ({
-      action: 'profile.update',
-      orgId: params.orgId,
-      studyId: params.studyId,
-      userId: params.userId,
-      resourceType: 'subject',
-      resourceId: params.subjectId,
-      metadata: { source: 'evolution_extraction', evolutionId: params.evolutionId, automated: true, humanConfirmed: false },
+  const proposal: PendingProfileProposal = {
+    requiresHumanReview: true,
+    evolutionId: params.evolutionId,
+    extractedAt: new Date().toISOString(),
+    facts: merged.facts,
+    fieldConfidence: merged.fieldConfidence,
+  }
+  const factCount = proposalFactCount(proposal.facts)
+  if (factCount === 0) return { factCount }
+
+  await updatePatientProfile(
+    params,
+    (current) => ({
+      ...current,
+      pendingEvolutionProposals: [
+        ...(current.pendingEvolutionProposals ?? []).filter((entry) => entry.evolutionId !== params.evolutionId),
+        proposal,
+      ],
     }),
+    () => proposalAudit(params, 'profile.proposal.create', { automated: true, humanConfirmed: false, factCount }),
+  )
+  return { factCount }
+}
+
+function takeProposal(current: PatientProfile, evolutionId: string): { proposal: PendingProfileProposal; rest: PendingProfileProposal[] } {
+  const pending = current.pendingEvolutionProposals ?? []
+  const proposal = pending.find((entry) => entry.evolutionId === evolutionId)
+  if (!proposal) throw new ProfileProposalError('no_pending_proposal')
+  return { proposal, rest: pending.filter((entry) => entry.evolutionId !== evolutionId) }
+}
+
+function withProposals(profile: PatientProfile, rest: PendingProfileProposal[]): PatientProfile {
+  const { pendingEvolutionProposals: _removed, ...base } = profile
+  return rest.length > 0 ? { ...base, pendingEvolutionProposals: rest } : base
+}
+
+/** Una persona acepta la propuesta: recién ahí sus datos pasan al perfil. */
+export async function confirmProfileProposal(params: ProposalScope): Promise<PatientProfile> {
+  let factCount = 0
+  return updatePatientProfile(
+    params,
+    (current) => {
+      const { proposal, rest } = takeProposal(current, params.evolutionId)
+      factCount = proposalFactCount(proposal.facts)
+      const merged = mergeProfileWithExtraction(current, { facts: proposal.facts, fieldConfidence: proposal.fieldConfidence }, params.evolutionId)
+      return withProposals(merged, rest)
+    },
+    () => proposalAudit(params, 'profile.update', { automated: false, humanConfirmed: true, factCount }),
+  )
+}
+
+/** Una persona descarta la propuesta: el perfil queda como estaba. */
+export async function rejectProfileProposal(params: ProposalScope): Promise<PatientProfile> {
+  return updatePatientProfile(
+    params,
+    (current) => withProposals(current, takeProposal(current, params.evolutionId).rest),
+    () => proposalAudit(params, 'profile.proposal.reject', { humanConfirmed: false }),
   )
 }

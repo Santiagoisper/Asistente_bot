@@ -32,6 +32,20 @@ interface PatientProfileView {
     labs: Array<{ name: string; value: number; unit?: string }>
     redactedSourcePreview?: string
   }
+  /** Lo que se extrajo de una evolución y todavía nadie aceptó: no es parte del perfil. */
+  pendingEvolutionProposals?: Array<{
+    requiresHumanReview: true
+    evolutionId: string
+    extractedAt: string
+    facts: {
+      ageYears?: number
+      systolic?: number
+      diastolic?: number
+      labs: Array<{ name: string; value: number; unit?: string }>
+      medications: Array<{ name: string; dose?: string; frequency?: string }>
+      conditions: string[]
+    }
+  }>
 }
 
 interface ScreeningAssessment {
@@ -119,6 +133,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const [piiWarnings, setPiiWarnings] = useState<string[]>([])
   const [labOcrText, setLabOcrText] = useState('')
   const [labBusy, setLabBusy] = useState(false)
+  const [proposalBusy, setProposalBusy] = useState(false)
 
   const loadScreening = useCallback(async () => {
     try {
@@ -258,6 +273,22 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
     }
   }
 
+  async function handleProposal(evolutionId: string, decision: 'confirm' | 'reject') {
+    setProposalBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/profile/proposals/${evolutionId}/${decision}`, { method: 'POST' })
+      // 409: otra persona ya la resolvió. Se recarga y se muestra lo que hay.
+      if (!res.ok && res.status !== 409) throw new Error('proposal_failed')
+      await loadScreening()
+    } catch {
+      setError(decision === 'confirm' ? 'No se pudo aceptar la propuesta. El perfil no cambió.' : 'No se pudo descartar la propuesta.')
+    } finally {
+      setProposalBusy(false)
+    }
+  }
+
+  const pendingProposals = profile?.pendingEvolutionProposals ?? []
   const pendingLabs = profile?.pendingLabReview
   const hasProfileData =
     profile &&
@@ -378,6 +409,57 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
           </div>
         </div>
       )}
+
+      {pendingProposals.map((proposal) => (
+        <div key={proposal.evolutionId} className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-900">Propuesta para el perfil: falta que una persona la revise</p>
+          <p className="mt-1 text-xs text-amber-900">
+            Esto se leyó automáticamente en una evolución. Todavía no forma parte del perfil ni del screening. Comparalo con la evolución antes de aceptar.
+          </p>
+          <ul className="mt-2 space-y-1 text-sm text-amber-950">
+            {proposal.facts.ageYears ? <li>Edad: {proposal.facts.ageYears} años</li> : null}
+            {proposal.facts.systolic && proposal.facts.diastolic ? (
+              <li>
+                Presión arterial: {proposal.facts.systolic}/{proposal.facts.diastolic}
+              </li>
+            ) : null}
+            {proposal.facts.labs.map((lab) => (
+              <li key={`lab-${lab.name}`}>
+                Laboratorio · {lab.name}: {lab.value}
+                {lab.unit ? ` ${lab.unit}` : ''}
+              </li>
+            ))}
+            {proposal.facts.medications.map((med) => (
+              <li key={`med-${med.name}`}>
+                Medicación · {med.name}
+                {med.dose ? ` ${med.dose}` : ''}
+                {med.frequency ? ` ${med.frequency}` : ''}
+              </li>
+            ))}
+            {proposal.facts.conditions.map((condition) => (
+              <li key={`cond-${condition}`}>Condición · {condition}</li>
+            ))}
+          </ul>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void handleProposal(proposal.evolutionId, 'confirm')}
+              disabled={proposalBusy}
+              className="alphi-btn-primary text-sm"
+            >
+              Aceptar y sumar al perfil
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleProposal(proposal.evolutionId, 'reject')}
+              disabled={proposalBusy}
+              className="rounded-lg border border-amber-400 px-3 py-1.5 text-sm font-semibold text-amber-900 hover:bg-amber-100"
+            >
+              Descartar
+            </button>
+          </div>
+        </div>
+      ))}
 
       {piiWarnings.length > 0 && (
         <div className="rounded-lg border border-alphi-amber/30 bg-alphi-amber/10 px-4 py-3">
