@@ -21,11 +21,15 @@ import { describe, expect, it } from 'vitest'
  * - Busca el texto literal `db.insert|update|delete` y `writeAuditLog`; un
  *   alias o un cambio de nombre lo esquivan.
  * - Detecta «escribir y auditar por separado», no «escribir y no auditar
- *   nunca». Escrituras conocidas sin ningún registro, pendientes de C1:
- *   `updatePatientProfile` (perfil del sujeto), que hoy llaman la
- *   confirmación de laboratorio, el circuito anterior de laboratorio y la
- *   actualización por IA tras una evolución; y la instantánea que guarda
- *   `screening` dentro de un GET.
+ *   nunca». Escritura conocida que audita después y no cae en el escaneo
+ *   porque vive en un GET: la instantánea que guarda `screening`.
+ *
+ * El perfil del sujeto tiene su propia guarda abajo: dentro de la aplicación
+ * (`app/` y `lib/`) se escribe en un solo lugar y ese lugar exige el registro.
+ * La guarda no mira `ichtys/scripts/`: tres scripts de operación y de prueba
+ * (`backfill-lab-review-pending`, `consolidate-single-org`, `e2e-product-loop`)
+ * escriben la tabla directo y sin registro. No los dispara ninguna ruta;
+ * queda pendiente decidir si un script que toca dato clínico también registra.
  */
 const WEB_ROOT = join(__dirname, '..', '..')
 const API_ROOT = join(WEB_ROOT, 'app', 'api')
@@ -39,6 +43,9 @@ const MIGRATED = [
   'app/api/studies/[id]/subjects/[subjectId]/lab-reports/images/route.ts',
   'app/api/studies/[id]/subjects/[subjectId]/lab-reports/[reportId]/confirm/route.ts',
   'app/api/studies/[id]/subjects/[subjectId]/lab-reports/[reportId]/reject/route.ts',
+  'app/api/studies/[id]/subjects/[subjectId]/labs/extract/route.ts',
+  'app/api/studies/[id]/subjects/[subjectId]/labs/confirm/route.ts',
+  'app/api/studies/[id]/subjects/[subjectId]/labs/reject/route.ts',
 ] as const
 
 /** Ruta y verbo → por qué sigue pendiente. */
@@ -46,9 +53,6 @@ const PENDING: Record<string, string> = {
   'app/api/chat/route.ts POST': 'registra el pedido y el resultado de una respuesta; guarda mensajes aparte',
   'app/api/chat/stream/route.ts POST': 'ídem, en la variante por flujo',
   'app/api/os/org-config/route.ts PUT': 'configuración del centro: guarda y después audita',
-  'app/api/studies/[id]/subjects/[subjectId]/labs/confirm/route.ts POST': 'circuito anterior de laboratorio (perfil del sujeto)',
-  'app/api/studies/[id]/subjects/[subjectId]/labs/extract/route.ts POST': 'circuito anterior de laboratorio',
-  'app/api/studies/[id]/subjects/[subjectId]/labs/reject/route.ts POST': 'circuito anterior de laboratorio',
 }
 
 function routeFiles(dir: string): string[] {
@@ -96,6 +100,30 @@ describe('leakage — la auditoría de una escritura va en su misma transacción
       })
       .sort()
     expect(found).toEqual(Object.keys(PENDING).sort())
+  })
+
+  it('el perfil del sujeto se escribe en un solo lugar, que exige el registro de auditoría', () => {
+    // Fuera de `updatePatientProfile` nadie modifica `patientProfiles`. El alta
+    // de sujeto crea la fila vacía dentro de su propia escritura auditada.
+    const sources = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const full = join(dir, entry.name)
+        if (entry.isDirectory()) return ['__tests__', 'node_modules', '.next'].includes(entry.name) ? [] : sources(full)
+        return /\.tsx?$/.test(entry.name) ? [full] : []
+      })
+    const writers = [join(WEB_ROOT, 'app'), join(WEB_ROOT, 'lib')]
+      .flatMap(sources)
+      .filter((full) => /\.update\(\s*patientProfiles\s*\)/.test(withoutComments(readFileSync(full, 'utf8'))))
+      .map((full) => relative(WEB_ROOT, full).split(sep).join('/'))
+    expect(writers).toEqual(['lib/subjects/patient-profile-service.ts'])
+
+    const service = withoutComments(readFileSync(join(WEB_ROOT, 'lib/subjects/patient-profile-service.ts'), 'utf8'))
+    // La escritura entra por la transacción y lleva su registro; no hay escritura por la conexión suelta.
+    expect(service).toMatch(/tx\s*\.update\(patientProfiles\)/)
+    expect(service).toMatch(/insertAuditLog\(tx, audit\(next\)\)/)
+    expect(service).not.toMatch(/\bdb\s*\.\s*update\(/)
+    // El registro es un parámetro obligatorio, no opcional.
+    expect(service).toMatch(/audit: \(next: PatientProfile\) => AuditLogParams,\n\): Promise<PatientProfile>/)
   })
 
   it('el detector reconoce el patrón que busca', () => {

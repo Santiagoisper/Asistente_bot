@@ -1,3 +1,4 @@
+import type { AuditLogParams } from '../chat/persistence'
 import {
   mergeConfirmedLabs,
   parseLabOcrText,
@@ -21,6 +22,8 @@ export async function proposeLabOcrReview(params: {
   studyId: string
   subjectId: string
   text: string
+  /** Se escribe en la misma transacción que guarda la propuesta (R3). */
+  audit: (facts: { labCount: number; piiRedactedCount: number }) => AuditLogParams
 }): Promise<{ profile: PatientProfile; labCount: number; piiRedactedCount: number }> {
   const parsed = parseLabOcrText(params.text)
 
@@ -29,15 +32,19 @@ export async function proposeLabOcrReview(params: {
   }
 
   const extractedAt = new Date().toISOString()
-  const profile = await updatePatientProfile(params, (current) => ({
-    ...current,
-    pendingLabReview: {
-      requiresHumanReview: true,
-      extractedAt,
-      labs: parsed.labs,
-      redactedSourcePreview: parsed.redactedPreview,
-    },
-  }))
+  const profile = await updatePatientProfile(
+    params,
+    (current) => ({
+      ...current,
+      pendingLabReview: {
+        requiresHumanReview: true,
+        extractedAt,
+        labs: parsed.labs,
+        redactedSourcePreview: parsed.redactedPreview,
+      },
+    }),
+    () => params.audit({ labCount: parsed.labs.length, piiRedactedCount: parsed.piiRedactedCount }),
+  )
 
   return {
     profile,
@@ -51,6 +58,8 @@ export async function confirmLabOcrReview(params: {
   studyId: string
   subjectId: string
   labsOverride?: LabObservation[]
+  /** Se escribe en la misma transacción que suma los valores al perfil (R3). */
+  audit: (facts: { labCount: number }) => AuditLogParams
 }): Promise<PatientProfile> {
   return updatePatientProfile(params, (current) => {
     const pending = current.pendingLabReview
@@ -78,13 +87,15 @@ export async function confirmLabOcrReview(params: {
     }
 
     return profile
-  })
+  }, (next) => params.audit({ labCount: next.labs.length }))
 }
 
 export async function rejectLabOcrReview(params: {
   orgId: string
   studyId: string
   subjectId: string
+  /** Se escribe en la misma transacción que descarta la propuesta (R3). */
+  audit: () => AuditLogParams
 }): Promise<PatientProfile> {
   return updatePatientProfile(params, (current) => {
     if (!current.pendingLabReview?.requiresHumanReview) {
@@ -95,5 +106,5 @@ export async function rejectLabOcrReview(params: {
     const profile: PatientProfile = { ...rest, lastUpdatedAt: new Date().toISOString() }
 
     return profile
-  })
+  }, () => params.audit())
 }

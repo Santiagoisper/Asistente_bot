@@ -142,6 +142,7 @@ export async function POST(
         subjectId: subject.id,
         evolutionId: evolution.id,
         evolutionContent: parsed.data.content,
+        userId,
       })
       profileUpdated = true
     } catch {

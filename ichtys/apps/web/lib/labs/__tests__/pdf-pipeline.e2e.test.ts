@@ -183,6 +183,8 @@ describe('Carga de laboratorios — PDF digital de punta a punta', () => {
     const result = await confirmLabReport({ ...scope, reportId, userId: 'user_2', rows: toConfirmPayload(decided)!, audit })
     expect(result).toEqual({ rowCount: 4, newAnalytes: 3, profileUpdated: true })
     expect(store.audits.map((entry) => entry.action)).toEqual(['lab.extract', 'lab.confirm'])
+    // La carga del PDF también dejó su registro por la transacción que creó el informe.
+    expect(store.audits[0]).toMatchObject({ via: 'tx', action: 'lab.extract', metadata: { rowCount: 4 } })
     expect(store.audits[1]).toMatchObject({ via: 'tx', action: 'lab.confirm', metadata: { rowCount: 4, newAnalytes: 3 } })
 
     expect(store.reports[0]).toMatchObject({ status: 'confirmed', reviewedBy: 'user_2' })
