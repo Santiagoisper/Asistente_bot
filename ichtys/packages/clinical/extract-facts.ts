@@ -26,7 +26,8 @@ export function extractFactsFromEvolution(
   const ageMatch = text.match(/\b(\d{1,3})\s*a(?:ñ|n)os\b/i)
   const ageYears = ageMatch ? Number.parseInt(ageMatch[1] ?? '', 10) : undefined
 
-  const bpMatch = text.match(/\b(\d{2,3})\s*\/\s*(\d{2,3})\b/)
+  // «132/84» escrito y «132 sobre 84» dictado: una transcripción devuelve la palabra, no la barra.
+  const bpMatch = text.match(/\b(\d{2,3})\s*(?:\/|sobre)\s*(\d{2,3})\b/i)
   const systolic = bpMatch ? Number.parseInt(bpMatch[1] ?? '', 10) : undefined
   const diastolic = bpMatch ? Number.parseInt(bpMatch[2] ?? '', 10) : undefined
 
