@@ -33,8 +33,10 @@ describe('PROVIDER_OPTIONS — descripciones reflejan el mapa real de modelos', 
 })
 
 describe('isProviderSelectable — sin clave disponible, no seleccionable (E2E 2026-10-22)', () => {
-  it('auto siempre seleccionable (la cadena prueba a todos)', () => {
-    expect(isProviderSelectable('auto', [])).toBe(true)
+  it('auto se puede elegir solo con clave de Anthropic: va a ese único proveedor', () => {
+    expect(isProviderSelectable('auto', [])).toBe(false)
+    expect(isProviderSelectable('auto', [{ provider: 'openai', configured: true }])).toBe(false)
+    expect(isProviderSelectable('auto', [{ provider: 'anthropic', configured: true }])).toBe(true)
   })
 
   it('glm ya no es opción (salió del producto, E2E 2026-10-22)', () => {

@@ -51,7 +51,8 @@ export function isProviderSelectable(
   provider: LlmProvider,
   llmKeys: readonly LlmKeyStatusLike[],
 ): boolean {
-  if (provider === 'auto') return true
+  // `auto` va a un solo proveedor (Anthropic): sin su clave no hay a quién pedirle.
+  if (provider === 'auto') return llmKeys.find((k) => k.provider === PROVIDER_KEY_FIELD.anthropic)?.configured ?? false
   // 'glm' legado (guardado antes de salir del producto): no seleccionable.
   if (provider === 'glm') return false
   const field = PROVIDER_KEY_FIELD[provider as Exclude<LlmProvider, 'auto' | 'glm'>]

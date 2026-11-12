@@ -565,10 +565,9 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
             <p className="text-sm text-alphi-muted">
               Extraé y aprobá el study spec del protocolo para evaluar criterios automáticamente.
             </p>
-          ) : assessments.length === 0 ? (
-            <p className="text-sm text-alphi-muted">Sin criterios en el spec del estudio.</p>
           ) : (
             <>
+            {/* El aviso va primero y siempre: un borrador sin revisar también puede haber omitido todos los criterios. */}
             {specNotice ? (
               <p
                 role="note"
@@ -577,6 +576,9 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                 {specNotice}
               </p>
             ) : null}
+            {assessments.length === 0 ? (
+              <p className="text-sm text-alphi-muted">Sin criterios en el spec del estudio.</p>
+            ) : (
             <ul className="max-h-80 space-y-2 overflow-y-auto">
               {assessments.map((a) => (
                 <li
@@ -591,6 +593,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                 </li>
               ))}
             </ul>
+            )}
             </>
           )}
           <p className="mt-3 text-[10px] leading-relaxed text-alphi-muted">
