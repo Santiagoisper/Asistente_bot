@@ -228,6 +228,46 @@ describe('OQ-007 — audit log sin contenido PHI', () => {
     expect(metadataJson).not.toContain('HbA1c')
   })
 
+  it('POST de una evolución dictada: el origen, el modelo y su revisión van al registro, sin texto', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbInsertReturning.mockResolvedValueOnce([
+      { id: mocks.EVOLUTION_ID, visitLabel: 'V1', createdAt: new Date('2026-11-12T12:00:00Z') },
+    ])
+    const source = { kind: 'dictation', durationSec: 312, model: 'whisper-small', modelRevision: 'rev-abc', corrections: 2, missingBlocks: 3 }
+    const res = await POST(
+      new Request('http://localhost/api/evolutions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: CLINICAL_TEXT, visitLabel: 'V1', source }),
+      }),
+      makeParams(),
+    )
+    expect(res.status).toBe(201)
+    const auditCall = mocks.writeAuditLog.mock.calls[0]?.[0] as { metadata?: Record<string, unknown> }
+    expect(auditCall.metadata?.source).toEqual(source)
+    expect(JSON.stringify(auditCall.metadata)).not.toContain('Metformina')
+  })
+
+  it('POST rechaza un origen con campos de más o con texto libre', async () => {
+    mocks.validateSubjectAccess.mockResolvedValue(subjectContext())
+    for (const source of [
+      { kind: 'dictation', durationSec: 10, model: 'm', modelRevision: 'r', corrections: 0, missingBlocks: 0, transcript: 'Metformina' },
+      { kind: 'otro', durationSec: 10, model: 'm', modelRevision: 'r', corrections: 0, missingBlocks: 0 },
+      { kind: 'dictation', durationSec: -1, model: 'm', modelRevision: 'r', corrections: 0, missingBlocks: 0 },
+    ]) {
+      const res = await POST(
+        new Request('http://localhost/api/evolutions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: CLINICAL_TEXT, source }),
+        }),
+        makeParams(),
+      )
+      expect(res.status).toBe(400)
+    }
+    mocks.validateSubjectAccess.mockReset()
+  })
+
   it('GET registra evolution.view con count, sin evoluciones en metadata', async () => {
     mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
     mocks.dbFindMany.mockResolvedValueOnce([

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { bloodPressureProposalLabel } from '../../lib/subjects/proposal-display'
 import { unapprovedSpecNotice } from '../../lib/subjects/spec-notice'
+import { DictationPanel, type DictationSource } from './dictation-panel'
 
 interface EvolutionItem {
   id: string
@@ -130,6 +131,8 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const [specAvailable, setSpecAvailable] = useState(false)
   const [specNotice, setSpecNotice] = useState<string | null>(null)
   const [content, setContent] = useState('')
+  // Presente cuando el texto del cuadro salió de un dictado: viaja al registro al guardar.
+  const [dictationSource, setDictationSource] = useState<DictationSource | null>(null)
   const [visitLabel, setVisitLabel] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -203,6 +206,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         body: JSON.stringify({
           content: content.trim(),
           visitLabel: visitLabel.trim() || undefined,
+          ...(dictationSource ? { source: dictationSource } : {}),
         }),
       })
       const data = (await res.json()) as { piiWarnings?: string[]; error?: string }
@@ -213,6 +217,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       if (!res.ok) throw new Error(data.error ?? 'save_failed')
       if (data.piiWarnings?.length) setPiiWarnings(data.piiWarnings)
       setContent('')
+      setDictationSource(null)
       setVisitLabel('')
       await loadEvolutions()
     } catch {
@@ -322,6 +327,13 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
           <p className="text-sm text-alphi-muted">Evolución clínica — screening + labs OCR con revisión humana</p>
         </div>
       </div>
+
+      <DictationPanel
+        onUse={(text, source) => {
+          setContent(text)
+          setDictationSource(source)
+        }}
+      />
 
       <form onSubmit={handleSave} className="space-y-4 rounded-lg border border-alphi-border bg-alphi-slate/20 p-4">
         <div>

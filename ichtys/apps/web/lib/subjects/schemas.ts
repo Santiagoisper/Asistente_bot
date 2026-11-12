@@ -11,10 +11,28 @@ export const createSubjectSchema = z
   })
   .strict()
 
+/**
+ * De dónde salió el texto de la evolución cuando no se escribió a mano
+ * (docs/decisions/consulta-dictada.md, D7). Solo números y nombres de modelo:
+ * nada de lo dictado. Va al registro, no a la evolución.
+ */
+export const evolutionSourceSchema = z
+  .object({
+    kind: z.literal('dictation'),
+    durationSec: z.number().int().min(0).max(4 * 60 * 60),
+    model: z.string().trim().min(1).max(80),
+    modelRevision: z.string().trim().min(1).max(80),
+    corrections: z.number().int().min(0).max(500),
+    missingBlocks: z.number().int().min(0).max(50),
+  })
+  .strict()
+export type EvolutionSource = z.infer<typeof evolutionSourceSchema>
+
 export const createEvolutionSchema = z
   .object({
     content: z.string().min(1).max(50000),
     visitLabel: z.string().max(100).optional(),
+    source: evolutionSourceSchema.optional(),
   })
   .strict()
 
