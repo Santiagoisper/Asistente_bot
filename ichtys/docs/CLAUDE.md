@@ -81,6 +81,8 @@ Tests de leakage son bloqueantes para release. Si fallan, no se hace deploy.
 - No mezclar schema changes con lógica de negocio
 - Incluir descripción de qué cambió y por qué
 - Si tocás el schema: incluir migration y verificar contra Neon branch
+- **Marco normativo:** antes de escribir, leer `docs/compliance/REGULATORY-BASELINE.md` (reglas R1–R11). El PR responde la lista de la plantilla (`.github/pull_request_template.md`): uso previsto, prueba, auditoría, acceso, datos, IA, migración, proveedores
+- Cada entrega dice qué se verificó, con qué evidencia y qué quedó sin verificar
 
 ---
 
