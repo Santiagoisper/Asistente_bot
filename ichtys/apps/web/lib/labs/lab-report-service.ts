@@ -1,4 +1,4 @@
-import { insertAuditLog } from '../audit/audited-write'
+import { insertAuditLog, type DbTransaction } from '../audit/audited-write'
 import type { AuditLogParams } from '../chat/persistence'
 import {
   mergeConfirmedLabs,
@@ -200,16 +200,41 @@ export async function loadLabReport(params: SubjectScope & { reportId: string })
   return { id: row.id, status: row.status, createdAt: row.createdAt, reviewedAt: row.reviewedAt, content }
 }
 
+/** Lo que el registro de auditoría cuenta de un borrado de evidencia: cuántas imágenes, nunca su contenido. */
+export interface EvidencePurgeFacts {
+  imagesPurged: number
+}
+
 /**
- * Borra las imágenes de un informe. Solo se llama cuando la política de
- * conservación es "purge" (ver evidence-policy): por defecto la evidencia se
- * conserva, cifrada, para poder volver a consultarla después de confirmar.
+ * Borra las imágenes de un informe dentro de la transacción que recibe y
+ * devuelve cuántas borró. Solo se llama cuando la política de conservación es
+ * "purge" (ver evidence-policy): por defecto la evidencia se conserva, cifrada,
+ * para poder volver a consultarla después de confirmar.
+ *
+ * Borrar evidencia es irreversible: nunca va por la conexión suelta ni sin
+ * registro. Quien llama escribe el registro en la misma transacción (R3).
  */
-export async function purgeLabReportImages(params: { orgId: string; reportId: string }): Promise<void> {
+async function deleteLabReportImages(tx: DbTransaction, params: { orgId: string; reportId: string }): Promise<number> {
+  const deleted = await tx
+    .delete(labReportImages)
+    .where(and(eq(labReportImages.reportId, params.reportId), eq(labReportImages.organizationId, params.orgId)))
+    .returning({ page: labReportImages.page })
+  return deleted.length
+}
+
+/**
+ * Borra, con su registro, las imágenes que le hayan quedado a un informe ya
+ * revisado (pasa cuando la política cambió a "purge" después de revisarlo).
+ * Si no había nada, no escribe ningún registro. Si falla, no se borra nada:
+ * se reintenta en la próxima lectura de la imagen.
+ */
+export async function purgeLabReportImages(params: { orgId: string; reportId: string; audit: (facts: EvidencePurgeFacts) => AuditLogParams }): Promise<void> {
   try {
-    await db.delete(labReportImages).where(and(eq(labReportImages.reportId, params.reportId), eq(labReportImages.organizationId, params.orgId)))
+    await db.transaction(async (tx) => {
+      const imagesPurged = await deleteLabReportImages(tx, params)
+      if (imagesPurged > 0) await insertAuditLog(tx, params.audit({ imagesPurged }))
+    })
   } catch {
-    // El informe ya cambió de estado; el borrado se reintenta en la próxima lectura de la imagen.
     console.error('[labs] image purge failed')
   }
 }
@@ -262,7 +287,7 @@ export async function confirmLabReport(
     userId: string
     rows: LabRowInput[]
     comparedWithImage?: boolean
-    audit: (facts: { rowCount: number; newAnalytes: number }) => AuditLogParams
+    audit: (facts: { rowCount: number; newAnalytes: number; imagesPurged: number }) => AuditLogParams
   },
 ): Promise<ConfirmedLabReport> {
   const report = await loadLabReport(params)
@@ -305,7 +330,10 @@ export async function confirmLabReport(
       .returning({ id: labReports.id })
     if (claimed.length === 0) throw new LabReportError('already_reviewed')
 
-    await insertAuditLog(tx, params.audit({ rowCount: rows.length, newAnalytes: fresh.length }))
+    // Con política de borrado, la evidencia se borra acá adentro: el borrado y
+    // el registro que dice cuántas imágenes se borraron se confirman juntos.
+    const imagesPurged = keepEvidence ? 0 : await deleteLabReportImages(tx, params)
+    await insertAuditLog(tx, params.audit({ rowCount: rows.length, newAnalytes: fresh.length, imagesPurged }))
 
     if (fresh.length > 0) {
       await tx
@@ -322,7 +350,6 @@ export async function confirmLabReport(
         .onConflictDoNothing()
     }
   })
-  if (!keepEvidence) await purgeLabReportImages(params)
 
   // El perfil del sujeto es una copia de trabajo para screening. Si falla, el
   // informe ya quedó confirmado: se avisa en vez de esconderlo.
@@ -358,8 +385,8 @@ export async function confirmLabReport(
   return { rowCount: rows.length, newAnalytes: fresh.length, profileUpdated }
 }
 
-/** El rechazo y su registro de auditoría se confirman en la misma transacción (R3). */
-export async function rejectLabReport(params: SubjectScope & { reportId: string; userId: string; audit: () => AuditLogParams }): Promise<void> {
+/** El rechazo, el borrado de la evidencia (si la política lo pide) y su registro se confirman en la misma transacción (R3). */
+export async function rejectLabReport(params: SubjectScope & { reportId: string; userId: string; audit: (facts: EvidencePurgeFacts) => AuditLogParams }): Promise<void> {
   const rejected = await db.transaction(async (tx) => {
     const rows = await tx
       .update(labReports)
@@ -374,13 +401,13 @@ export async function rejectLabReport(params: SubjectScope & { reportId: string;
         ),
       )
       .returning({ id: labReports.id })
-    if (rows.length > 0) await insertAuditLog(tx, params.audit())
+    if (rows.length > 0) {
+      const imagesPurged = evidenceRetention() === 'purge' ? await deleteLabReportImages(tx, params) : 0
+      await insertAuditLog(tx, params.audit({ imagesPurged }))
+    }
     return rows
   })
-  if (rejected.length > 0) {
-    if (evidenceRetention() === 'purge') await purgeLabReportImages(params)
-    return
-  }
+  if (rejected.length > 0) return
 
   // No se actualizó nada: o no existe para este sujeto, o ya fue revisado.
   await loadLabReport(params)

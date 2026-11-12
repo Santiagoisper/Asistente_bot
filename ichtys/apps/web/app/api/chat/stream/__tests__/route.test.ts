@@ -179,6 +179,31 @@ describe('POST /api/chat/stream — cupo', () => {
   })
 })
 
+describe('POST /api/chat/stream — R3: el registro viaja dentro de la escritura', () => {
+  type AuditArg = { audit: { action: string; resourceId: string; metadata?: Record<string, unknown> } }
+
+  it('el pedido y la respuesta llevan su registro; nada se audita como paso aparte', async () => {
+    const res = await POST(streamRequest())
+    await res.text()
+
+    expect(res.status).toBe(200)
+    const requested = (mocks.persistUserMessage.mock.calls[0]![0] as AuditArg).audit
+    expect(requested).toMatchObject({ action: 'rag.answer.requested', resourceId: 'conv-ficticia', metadata: { streaming: true } })
+    const completed = (mocks.persistAssistantMessageAndCitations.mock.calls[0]![0] as AuditArg).audit
+    expect(completed).toMatchObject({ action: 'rag.answer.completed', resourceId: 'conv-ficticia', metadata: { streaming: true } })
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+  })
+
+  it('si no se puede guardar el pedido con su registro, no se abre el stream', async () => {
+    mocks.persistUserMessage.mockRejectedValueOnce(new Error('audit unavailable'))
+
+    const res = await POST(streamRequest())
+
+    expect(res.status).toBe(500)
+    expect(mocks.answerEngineStream).not.toHaveBeenCalled()
+  })
+})
+
 describe('POST /api/chat/stream — S8 mensaje crudo', () => {
   it('getOrgRagConfig no deja el error crudo en el log', async () => {
     mocks.getOrgRagConfig.mockRejectedValue(new Error(PROVIDER_SENTINEL))

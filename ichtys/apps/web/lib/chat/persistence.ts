@@ -18,6 +18,7 @@ import type { ConversationTurn, Evidence } from '@ichtys/rag'
 import type { MedicalAnnotation } from '@ichtys/rag/medical-annotator'
 import { runWithLlmFallback } from '@ichtys/llm'
 import { generateText } from 'ai'
+import { insertAuditLog } from '../audit/audited-write'
 
 /**
  * persistence.ts — helpers server-only de persistencia de chat.
@@ -32,6 +33,9 @@ import { generateText } from 'ai'
  *  - No loguea pregunta, respuesta, chunks ni PHI.
  *  - `persistAssistantMessageAndCitations` es atómica: si falla cualquier paso
  *    (incluido metadata de documento faltante o pageStart nulo), toda la TX falla.
+ *  - Cada mensaje se guarda junto con su registro de auditoría, en la misma
+ *    transacción (regla R3 del marco normativo): no queda un mensaje sin rastro
+ *    de quién lo pidió, ni un registro de algo que no se guardó.
  */
 
 // ---------------------------------------------------------------------------
@@ -126,20 +130,25 @@ export async function persistUserMessage(params: {
   orgId: string
   studyId: string
   question: string
+  /** Registro del pedido. Se escribe en la misma transacción que el mensaje. Sin texto de la pregunta. */
+  audit: AuditLogParams
 }): Promise<string> {
-  const [msg] = await db
-    .insert(messages)
-    .values({
-      conversationId: params.conversationId,
-      organizationId: params.orgId,
-      studyId: params.studyId,
-      role: 'user',
-      content: params.question,
-    })
-    .returning({ id: messages.id })
+  return db.transaction(async (tx) => {
+    const [msg] = await tx
+      .insert(messages)
+      .values({
+        conversationId: params.conversationId,
+        organizationId: params.orgId,
+        studyId: params.studyId,
+        role: 'user',
+        content: params.question,
+      })
+      .returning({ id: messages.id })
 
-  if (!msg) throw new Error('Failed to persist user message')
-  return msg.id
+    if (!msg) throw new Error('Failed to persist user message')
+    await insertAuditLog(tx, params.audit)
+    return msg.id
+  })
 }
 
 /**
@@ -149,6 +158,7 @@ export async function persistUserMessage(params: {
  * - Si el documentId de cualquier evidence no se encuentra: hard failure (TX rollback).
  * - Si pageStart o pageEnd son null: hard failure — dato de integridad clínica.
  * - Si evidences = [] (insufficient_evidence): solo se persiste el message, sin citations.
+ * - El registro de auditoría de la respuesta entra en la misma transacción.
  */
 export async function persistAssistantMessageAndCitations(params: {
   conversationId: string
@@ -158,6 +168,8 @@ export async function persistAssistantMessageAndCitations(params: {
   confidence: AnswerConfidence
   evidences: Evidence[]
   annotations?: MedicalAnnotation[]
+  /** Registro de la respuesta. Se escribe en la misma transacción que el mensaje y sus citas. */
+  audit: AuditLogParams
 }): Promise<string> {
   return db.transaction(async (tx) => {
     // 1. Insertar mensaje del assistant.
@@ -223,6 +235,7 @@ export async function persistAssistantMessageAndCitations(params: {
       }
     }
 
+    await insertAuditLog(tx, params.audit)
     return assistantMsg.id
   })
 }

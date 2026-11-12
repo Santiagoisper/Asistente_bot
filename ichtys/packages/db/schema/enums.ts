@@ -91,6 +91,7 @@ export const auditAction = [
   'agenda.update',
   'lab.confirm',
   'lab.reject',
+  'lab.evidence.purge',
   'lab.export',
   'org.integration.update',
   'org.os_settings.update',

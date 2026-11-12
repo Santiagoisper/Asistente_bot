@@ -492,11 +492,11 @@ describe('POST /api/chat — error handling', () => {
     expect(res.status).toBe(500)
   })
 
-  it('returns 500 when mandatory rag.answer.requested audit fails', async () => {
+  it('el pedido y su registro son una sola escritura: si falla, 500 y no se llama al modelo', async () => {
     mocks.validateStudyAccess.mockResolvedValueOnce(makeStudyAccessCtx())
     mocks.getOrCreateConversation.mockResolvedValueOnce(mocks.CONV_ID)
-    mocks.persistUserMessage.mockResolvedValueOnce(mocks.USER_MSG_ID)
-    mocks.writeAuditLog.mockRejectedValueOnce(new Error('audit unavailable'))
+    // La transacción de mensaje + registro falla entera (por ejemplo, porque no se pudo auditar).
+    mocks.persistUserMessage.mockRejectedValueOnce(new Error('audit unavailable'))
 
     const res = await POST(makeRequest({ studyId: mocks.STUDY_ID, question: 'test' }))
 
@@ -504,15 +504,12 @@ describe('POST /api/chat — error handling', () => {
     expect(mocks.generateAnswerForStudy).not.toHaveBeenCalled()
   })
 
-  it('returns 500 when mandatory rag.answer.completed audit fails', async () => {
+  it('la respuesta y su registro son una sola escritura: si falla, 500 sin éxito parcial', async () => {
     mocks.validateStudyAccess.mockResolvedValueOnce(makeStudyAccessCtx())
     mocks.getOrCreateConversation.mockResolvedValueOnce(mocks.CONV_ID)
     mocks.persistUserMessage.mockResolvedValueOnce(mocks.USER_MSG_ID)
     mocks.generateAnswerForStudy.mockResolvedValueOnce(makeWrapperResult())
-    mocks.persistAssistantMessageAndCitations.mockResolvedValueOnce(mocks.ASST_MSG_ID)
-    mocks.writeAuditLog
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error('audit unavailable'))
+    mocks.persistAssistantMessageAndCitations.mockRejectedValueOnce(new Error('audit unavailable'))
 
     const res = await POST(makeRequest({ studyId: mocks.STUDY_ID, question: 'test' }))
 
@@ -521,17 +518,19 @@ describe('POST /api/chat — error handling', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Audit logs
+// Audit logs — R3: el registro viaja dentro de la escritura que acompaña
 // ---------------------------------------------------------------------------
 
+type AuditArg = { audit: { action: string; resourceId: string; metadata?: Record<string, unknown> } }
+
 describe('POST /api/chat — audit logs', () => {
-  it('writes rag.answer.requested before calling generateAnswerForStudy', async () => {
+  it('el registro «requested» entra con el mensaje del usuario, antes de llamar al modelo', async () => {
     const callOrder: string[] = []
     mocks.validateStudyAccess.mockResolvedValueOnce(makeStudyAccessCtx())
     mocks.getOrCreateConversation.mockResolvedValueOnce(mocks.CONV_ID)
-    mocks.persistUserMessage.mockResolvedValueOnce(mocks.USER_MSG_ID)
-    mocks.writeAuditLog.mockImplementation(async (p: { action: string }) => {
-      callOrder.push(p.action)
+    mocks.persistUserMessage.mockImplementationOnce(async (p: AuditArg) => {
+      callOrder.push(p.audit.action)
+      return mocks.USER_MSG_ID
     })
     mocks.generateAnswerForStudy.mockImplementation(async () => {
       callOrder.push('generateAnswerForStudy')
@@ -541,46 +540,46 @@ describe('POST /api/chat — audit logs', () => {
 
     await POST(makeRequest({ studyId: mocks.STUDY_ID, question: 'test' }))
 
-    const requestedIdx = callOrder.indexOf('rag.answer.requested')
-    const generateIdx = callOrder.indexOf('generateAnswerForStudy')
-    expect(requestedIdx).toBeGreaterThanOrEqual(0)
-    expect(generateIdx).toBeGreaterThanOrEqual(0)
-    expect(requestedIdx).toBeLessThan(generateIdx)
+    expect(callOrder).toEqual(['rag.answer.requested', 'generateAnswerForStudy'])
   })
 
-  it('writes rag.answer.completed with safe metadata after successful persistence', async () => {
+  it('camino feliz: ningún registro se escribe como paso aparte', async () => {
     setupHappyPath()
 
     await POST(makeRequest({ studyId: mocks.STUDY_ID, question: 'test' }))
 
-    const completedCall = mocks.writeAuditLog.mock.calls.find(
-      (call: unknown[]) => (call[0] as { action: string }).action === 'rag.answer.completed'
-    )
-    expect(completedCall).toBeDefined()
-    const metadata = (completedCall![0] as { metadata: Record<string, unknown> }).metadata
-    expect(metadata).toMatchObject({
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+  })
+
+  it('el registro «completed» entra con la respuesta y lleva solo metadata segura', async () => {
+    setupHappyPath()
+
+    await POST(makeRequest({ studyId: mocks.STUDY_ID, question: 'test' }))
+
+    const { audit } = mocks.persistAssistantMessageAndCitations.mock.calls[0]![0] as AuditArg
+    expect(audit.action).toBe('rag.answer.completed')
+    expect(audit.resourceId).toBe(mocks.CONV_ID)
+    expect(audit.metadata).toMatchObject({
       confidence: expect.any(String),
       evidenceCount: expect.any(Number),
       retrievalCount: expect.any(Number),
     })
     // No PHI in audit metadata
-    expect(JSON.stringify(metadata)).not.toContain('question')
-    expect(JSON.stringify(metadata)).not.toContain('answer')
+    expect(JSON.stringify(audit.metadata)).not.toContain('question')
+    expect(JSON.stringify(audit.metadata)).not.toContain('answer')
   })
 
-  it('writes rag.answer.requested without question text (no PHI in audit)', async () => {
+  it('el registro «requested» no lleva el texto de la pregunta (sin PHI)', async () => {
     setupHappyPath()
 
     const question = 'Sensitive patient question about HbA1c 9.2%'
     await POST(makeRequest({ studyId: mocks.STUDY_ID, question }))
 
-    const requestedCall = mocks.writeAuditLog.mock.calls.find(
-      (call: unknown[]) => (call[0] as { action: string }).action === 'rag.answer.requested'
-    )
-    const metadata = (requestedCall![0] as { metadata?: Record<string, unknown> }).metadata ?? {}
-    expect(JSON.stringify(metadata)).not.toContain('HbA1c')
-    expect(JSON.stringify(metadata)).not.toContain('9.2%')
-    expect(JSON.stringify(metadata)).not.toContain('Sensitive')
+    const { audit } = mocks.persistUserMessage.mock.calls[0]![0] as AuditArg
+    expect(audit.action).toBe('rag.answer.requested')
+    expect(JSON.stringify(audit)).not.toContain('HbA1c')
+    expect(JSON.stringify(audit)).not.toContain('9.2%')
+    expect(JSON.stringify(audit)).not.toContain('Sensitive')
   })
 })
 
