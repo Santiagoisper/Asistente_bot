@@ -79,9 +79,16 @@ export async function getOrgRagConfig(orgId: string): Promise<ResolvedOrgRagConf
   return { similarityThreshold: threshold, topK, llmProvider }
 }
 
+/**
+ * `executor` permite correr la escritura dentro de la transacción de quien
+ * llama, junto con su registro de auditoría. Dentro de una transacción el
+ * valor devuelto se relee por la conexión suelta y puede no ver todavía el
+ * cambio: quien necesite el estado final lo relee después de confirmar.
+ */
 export async function updateOrgRagConfig(
   orgId: string,
   patch: Partial<OrgRagConfig>,
+  executor: Pick<typeof db, 'update'> = db,
 ): Promise<ResolvedOrgRagConfig> {
   const current = await getOrgRagConfig(orgId)
 
@@ -100,7 +107,7 @@ export async function updateOrgRagConfig(
         : current.llmProvider,
   }
 
-  await db
+  await executor
     .update(organizations)
     .set({ ragConfig: next, updatedAt: new Date() })
     .where(eq(organizations.id, orgId))
