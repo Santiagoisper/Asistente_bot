@@ -16,6 +16,8 @@ import {
   type Page,
   type Study,
 } from '@ichtys/db'
+import { loadAccessSubject } from './access-subject'
+import { allows, type AccessSubject } from './functions'
 import { normalizeRole, type Role } from './roles'
 import { AccessError } from './validate-study-access'
 
@@ -23,6 +25,8 @@ interface ActiveOrganizationContext {
   userId: string
   orgId: string
   role: Role
+  /** Modo de la organización y funciones de la persona, para decidir capacidades con `allows`. */
+  access: AccessSubject
 }
 
 export interface DocumentAccessContext extends ActiveOrganizationContext {
@@ -67,7 +71,18 @@ async function resolveActiveOrganization(): Promise<ActiveOrganizationContext> {
     throw new AccessError('Organization not found', 403)
   }
 
-  return { userId, orgId: org.id, role: normalizeRole(orgRole) }
+  const role = normalizeRole(orgRole)
+  const access = await loadAccessSubject({ org, userId, role })
+
+  // Documentos, conversaciones y mensajes son parte de un estudio. En modo
+  // estricto, quien no tiene una función que permita entrar a estudios recibe
+  // la misma respuesta que si el objeto no existiera. En modo `open` no había
+  // comprobación: todo miembro de la organización entraba.
+  if (!allows(access, 'study.read', () => true)) {
+    throw new AccessError('Not found', 404)
+  }
+
+  return { userId, orgId: org.id, role, access }
 }
 
 async function validateStudyBelongsToOrg(studyId: string, orgId: string): Promise<Study> {
@@ -89,7 +104,7 @@ async function validateStudyBelongsToOrg(studyId: string, orgId: string): Promis
 export async function validateConversationAccess(
   conversationId: string,
 ): Promise<ConversationAccessContext> {
-  const { userId, orgId, role } = await resolveActiveOrganization()
+  const { userId, orgId, role, access } = await resolveActiveOrganization()
 
   const conversation = await db.query.conversations.findFirst({
     where: and(
@@ -105,11 +120,11 @@ export async function validateConversationAccess(
 
   const study = await validateStudyBelongsToOrg(conversation.studyId, orgId)
 
-  return { userId, orgId, role, studyId: study.id, conversation, study }
+  return { userId, orgId, role, access, studyId: study.id, conversation, study }
 }
 
 export async function validateDocumentAccess(documentId: string): Promise<DocumentAccessContext> {
-  const { userId, orgId, role } = await resolveActiveOrganization()
+  const { userId, orgId, role, access } = await resolveActiveOrganization()
 
   const document = await db.query.documents.findFirst({
     where: and(eq(documents.id, documentId), eq(documents.organizationId, orgId)),
@@ -121,13 +136,13 @@ export async function validateDocumentAccess(documentId: string): Promise<Docume
 
   const study = await validateStudyBelongsToOrg(document.studyId, orgId)
 
-  return { userId, orgId, role, studyId: study.id, document, study }
+  return { userId, orgId, role, access, studyId: study.id, document, study }
 }
 
 export async function validateDocumentVersionAccess(
   documentVersionId: string,
 ): Promise<DocumentVersionAccessContext> {
-  const { userId, orgId, role } = await resolveActiveOrganization()
+  const { userId, orgId, role, access } = await resolveActiveOrganization()
 
   const documentVersion = await db.query.documentVersions.findFirst({
     where: and(eq(documentVersions.id, documentVersionId), eq(documentVersions.organizationId, orgId)),
@@ -151,11 +166,11 @@ export async function validateDocumentVersionAccess(
 
   const study = await validateStudyBelongsToOrg(documentVersion.studyId, orgId)
 
-  return { userId, orgId, role, studyId: study.id, document, documentVersion, study }
+  return { userId, orgId, role, access, studyId: study.id, document, documentVersion, study }
 }
 
 export async function validateMessageAccess(messageId: string): Promise<MessageAccessContext> {
-  const { userId, orgId, role } = await resolveActiveOrganization()
+  const { userId, orgId, role, access } = await resolveActiveOrganization()
 
   const message = await db.query.messages.findFirst({
     where: and(eq(messages.id, messageId), eq(messages.organizationId, orgId)),
@@ -167,7 +182,7 @@ export async function validateMessageAccess(messageId: string): Promise<MessageA
 
   const study = await validateStudyBelongsToOrg(message.studyId, orgId)
 
-  return { userId, orgId, role, studyId: study.id, message, study }
+  return { userId, orgId, role, access, studyId: study.id, message, study }
 }
 
 export async function validateDocumentPageAccess(

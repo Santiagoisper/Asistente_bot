@@ -25,7 +25,7 @@ export async function POST(req: Request, { params }: RouteParams) {
   const { id: studyId, specId } = await params
 
   try {
-    const { userId, orgId } = await validateStudyAccess(studyId, 'study_admin')
+    const { userId, orgId } = await validateStudyAccess(studyId, 'study_admin', 'documents.manage')
 
     // Cuerpo opcional: { acknowledgeGroups: ['eligibility', …] }. Sin cuerpo
     // se aprueba sólo una spec completa (ADR-3 §2.4).

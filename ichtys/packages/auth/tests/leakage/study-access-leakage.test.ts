@@ -77,6 +77,7 @@ describe('leakage — validateStudyAccess tenant boundary', () => {
     mocks.organizationsFindFirst.mockResolvedValue({
       id: INTERNAL_ORG_A,
       clerkOrgId: CLERK_ORG_A,
+      accessMode: 'open',
       name: 'Org A',
     })
   })

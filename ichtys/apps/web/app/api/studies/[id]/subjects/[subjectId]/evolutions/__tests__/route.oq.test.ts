@@ -333,6 +333,47 @@ describe('S4 — evoluciones comparan el estudio de la URL', () => {
     )
 
     expect(mocks.validateSubjectAccess).toHaveBeenNthCalledWith(1, mocks.SUBJECT_ID, otherStudyId)
-    expect(mocks.validateSubjectAccess).toHaveBeenNthCalledWith(2, mocks.SUBJECT_ID, otherStudyId)
+    expect(mocks.validateSubjectAccess).toHaveBeenNthCalledWith(2, mocks.SUBJECT_ID, otherStudyId, {
+      require: 'clinical.author',
+    })
+  })
+})
+
+describe('Autoría clínica — escribir una evolución pide más que leerla', () => {
+  it('POST exige la capacidad clinical.author; GET no', async () => {
+    mocks.validateSubjectAccess.mockResolvedValue(subjectContext())
+
+    await GET(new Request('http://localhost/api/evolutions'), makeParams())
+    expect(mocks.validateSubjectAccess).toHaveBeenLastCalledWith(mocks.SUBJECT_ID, mocks.STUDY_ID)
+
+    await POST(
+      new Request('http://localhost/api/evolutions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: 'Nota ficticia sin datos de paciente.' }),
+      }),
+      makeParams(),
+    )
+    expect(mocks.validateSubjectAccess).toHaveBeenLastCalledWith(mocks.SUBJECT_ID, mocks.STUDY_ID, {
+      require: 'clinical.author',
+    })
+  })
+
+  it('si el validador rechaza por la capacidad, no se escribe nada y la respuesta es 403', async () => {
+    mocks.validateSubjectAccess.mockRejectedValue(new mocks.AccessError('Forbidden', 403))
+    mocks.handleApiError.mockReturnValue(new Response('Forbidden', { status: 403 }))
+
+    const res = await POST(
+      new Request('http://localhost/api/evolutions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: 'Nota ficticia sin datos de paciente.' }),
+      }),
+      makeParams(),
+    )
+
+    expect(res.status).toBe(403)
+    expect(mocks.encryptClinicalContent).not.toHaveBeenCalled()
+    expect(mocks.dbInsertReturning).not.toHaveBeenCalled()
   })
 })
