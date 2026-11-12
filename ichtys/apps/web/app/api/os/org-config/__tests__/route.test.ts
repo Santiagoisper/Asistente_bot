@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   saveOrgModule: vi.fn(),
   saveOrgTimeZone: vi.fn(),
   writeAuditLog: vi.fn(),
+  tx: { __tx: true },
 }))
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: mocks.auth }))
@@ -19,7 +20,15 @@ vi.mock('@ichtys/db', () => ({
   },
   memberFunctions: { functionKey: 'mf.function_key', organizationId: 'mf.organization_id', userId: 'mf.user_id', revokedAt: 'mf.revoked_at' },
 }))
-vi.mock('../../../../../lib/chat/persistence', () => ({ writeAuditLog: mocks.writeAuditLog }))
+// La escritura auditada real abre una transacción; acá se simula: corre la
+// escritura con una transacción de mentira y registra lo que se auditaría.
+vi.mock('../../../../../lib/audit/audited-write', () => ({
+  auditedWrite: async <T,>(write: (tx: unknown) => Promise<T>, audit: (result: T) => unknown) => {
+    const result = await write(mocks.tx)
+    await mocks.writeAuditLog(audit(result))
+    return result
+  },
+}))
 vi.mock('../../../../../lib/os/org-admin-service', () => ({ saveOrgModule: mocks.saveOrgModule, saveOrgTimeZone: mocks.saveOrgTimeZone }))
 
 import { PUT } from '../route'
@@ -58,7 +67,7 @@ describe('PUT /api/os/org-config — configuración del centro', () => {
   it('guarda el módulo en la organización del token y lo audita sin la URL completa', async () => {
     const res = await PUT(put({ ...moduleBody, baseUrl: 'https://queries.centro-a.example.test/ruta/privada/' }))
     expect(res.status).toBe(200)
-    expect(mocks.saveOrgModule).toHaveBeenCalledWith({ orgId: 'org-a', userId: 'user_1', module: 'queries', baseUrl: 'https://queries.centro-a.example.test/ruta/privada', enabled: true })
+    expect(mocks.saveOrgModule).toHaveBeenCalledWith({ executor: mocks.tx, orgId: 'org-a', userId: 'user_1', module: 'queries', baseUrl: 'https://queries.centro-a.example.test/ruta/privada', enabled: true })
     expect(mocks.writeAuditLog).toHaveBeenCalledWith({
       action: 'org.integration.update',
       orgId: 'org-a',
@@ -91,13 +100,20 @@ describe('PUT /api/os/org-config — configuración del centro', () => {
 
   it('guarda la zona horaria; vacía la quita; inválida da 400', async () => {
     expect((await PUT(put({ kind: 'time_zone', timeZone: 'America/Bogota' }))).status).toBe(200)
-    expect(mocks.saveOrgTimeZone).toHaveBeenLastCalledWith({ orgId: 'org-a', timeZone: 'America/Bogota' })
+    expect(mocks.saveOrgTimeZone).toHaveBeenLastCalledWith({ executor: mocks.tx, orgId: 'org-a', timeZone: 'America/Bogota' })
     expect(mocks.writeAuditLog).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'org.os_settings.update', orgId: 'org-a', metadata: { timeZone: 'America/Bogota' } }))
     expect((await PUT(put({ kind: 'time_zone', timeZone: '' }))).status).toBe(200)
-    expect(mocks.saveOrgTimeZone).toHaveBeenLastCalledWith({ orgId: 'org-a', timeZone: null })
+    expect(mocks.saveOrgTimeZone).toHaveBeenLastCalledWith({ executor: mocks.tx, orgId: 'org-a', timeZone: null })
     const bad = await PUT(put({ kind: 'time_zone', timeZone: 'Marte/Olimpo' }))
     expect(bad.status).toBe(400)
     expect(await bad.json()).toEqual({ error: 'time_zone_invalid' })
+  })
+
+  it('R3: guardar y registrar van por la misma transacción; si guardar falla, no queda registro', async () => {
+    mocks.saveOrgModule.mockRejectedValueOnce(new Error('integration_key_taken'))
+    const res = await PUT(put(moduleBody))
+    expect(res.status).toBeGreaterThanOrEqual(400)
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
   })
 
   it('organización que no existe en la base: 403', async () => {

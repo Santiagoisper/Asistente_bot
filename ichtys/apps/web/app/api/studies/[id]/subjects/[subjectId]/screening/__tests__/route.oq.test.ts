@@ -217,7 +217,7 @@ describe('OQ-SCR04 — con spec mock', () => {
 })
 
 describe('OQ-SCR05 — audit screening.view sin PHI', () => {
-  it('metadata solo pass/fail/unknown/snapshotId', async () => {
+  it('metadata solo pass/fail/unknown/snapshotId y si se guardó una instantánea', async () => {
     mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
     mocks.loadPatientProfile.mockResolvedValueOnce(mocks.mockProfile)
     mocks.getLatestStudySpec.mockResolvedValueOnce({
@@ -230,18 +230,25 @@ describe('OQ-SCR05 — audit screening.view sin PHI', () => {
 
     await GET(new Request('http://localhost/api/screening'), makeParams())
 
-    expect(mocks.writeAuditLog).toHaveBeenCalledWith(
+    // El registro lo escribe el servicio (junto con la instantánea si guarda una);
+    // la ruta le entrega cómo armarlo. Acá se verifica qué arma.
+    const params = mocks.evaluateAndPersistScreening.mock.calls[0]?.[0] as {
+      audit: (facts: { summary: { pass: number; fail: number; unknown: number }; snapshotId: string | null; snapshotCreated: boolean }) => {
+        action: string
+        resourceId: string
+        metadata?: Record<string, unknown>
+      }
+    }
+    const auditCall = params.audit({ summary: { pass: 1, fail: 0, unknown: 0 }, snapshotId: mocks.SNAPSHOT_ID, snapshotCreated: true })
+    expect(auditCall).toEqual(
       expect.objectContaining({
         action: 'screening.view',
-        metadata: {
-          pass: 1,
-          fail: 0,
-          unknown: 0,
-          snapshotId: mocks.SNAPSHOT_ID,
-        },
+        resourceId: mocks.SUBJECT_ID,
+        metadata: { pass: 1, fail: 0, unknown: 0, snapshotId: mocks.SNAPSHOT_ID, snapshotCreated: true },
       }),
     )
-    const auditCall = mocks.writeAuditLog.mock.calls[0]?.[0] as { metadata?: Record<string, unknown> }
+    // La ruta ya no registra por su cuenta: no puede haber dos registros de la misma consulta.
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
     const metadataJson = JSON.stringify(auditCall.metadata)
     expect(metadataJson).not.toContain('HbA1c')
     expect(metadataJson).not.toContain('criterionText')

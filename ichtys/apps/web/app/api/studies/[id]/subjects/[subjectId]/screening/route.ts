@@ -1,7 +1,6 @@
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
 import { studySpecSchema } from '@ichtys/ingestion/study-spec'
 import { getLatestStudySpec } from '@ichtys/ingestion/spec-store'
-import { writeAuditLog } from '../../../../../../../lib/chat/persistence'
 import { loadPatientProfile } from '../../../../../../../lib/subjects/patient-profile-service'
 import { evaluateAndPersistScreening } from '../../../../../../../lib/subjects/screening-service'
 import { PhiConfigError } from '../../../../../../../lib/subjects/phi-fields'
@@ -58,21 +57,22 @@ export async function GET(
       spec: parsedSpec.data,
       specVersion: specRow.version,
       documentVersionId: specRow.documentVersionId,
-    })
-
-    await writeAuditLog({
-      action: 'screening.view',
-      orgId,
-      studyId: study.id,
-      userId,
-      resourceType: 'subject',
-      resourceId: subject.id,
-      metadata: {
-        pass: evaluation.summary.pass,
-        fail: evaluation.summary.fail,
-        unknown: evaluation.summary.unknown,
-        snapshotId: evaluation.persistedSnapshotId,
-      },
+      // El registro lo escribe el servicio: junto con la instantánea si guarda una, o como lectura si no.
+      audit: (facts) => ({
+        action: 'screening.view',
+        orgId,
+        studyId: study.id,
+        userId,
+        resourceType: 'subject',
+        resourceId: subject.id,
+        metadata: {
+          pass: facts.summary.pass,
+          fail: facts.summary.fail,
+          unknown: facts.summary.unknown,
+          snapshotId: facts.snapshotId,
+          snapshotCreated: facts.snapshotCreated,
+        },
+      }),
     })
 
     return Response.json({

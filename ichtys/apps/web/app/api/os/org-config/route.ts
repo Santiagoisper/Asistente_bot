@@ -4,7 +4,7 @@ import { loadAccessSubject } from '@ichtys/auth/access-subject'
 import { allows } from '@ichtys/auth/functions'
 import { db, eq, organizations } from '@ichtys/db'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../lib/api/body-limit'
-import { writeAuditLog } from '../../../../lib/chat/persistence'
+import { auditedWrite } from '../../../../lib/audit/audited-write'
 import { isOsEnabled } from '../../../../lib/flags'
 import { checkModuleInput, checkTimeZoneInput, orgConfigInputSchema, urlHost } from '../../../../lib/os/org-admin'
 import { saveOrgModule, saveOrgTimeZone } from '../../../../lib/os/org-admin-service'
@@ -43,29 +43,35 @@ export async function PUT(req: Request): Promise<Response> {
     if (parsed.data.kind === 'module') {
       const checked = checkModuleInput(parsed.data, { allowLocal: process.env.NODE_ENV === 'development' })
       if (!checked.ok) return Response.json({ error: checked.error }, { status: 400 })
-      await saveOrgModule({ orgId: org.id, userId, module: parsed.data.module, baseUrl: checked.baseUrl, enabled: parsed.data.enabled })
-      await writeAuditLog({
-        action: 'org.integration.update',
-        orgId: org.id,
-        userId,
-        resourceType: 'organization_integration',
-        resourceId: parsed.data.module,
-        metadata: { category: 'module', enabled: parsed.data.enabled, host: urlHost(checked.baseUrl) },
-      })
+      const { module, enabled } = parsed.data
+      // La conexión y su registro de auditoría se confirman en la misma transacción (R3).
+      await auditedWrite(
+        (tx) => saveOrgModule({ executor: tx, orgId: org.id, userId, module, baseUrl: checked.baseUrl, enabled }),
+        () => ({
+          action: 'org.integration.update',
+          orgId: org.id,
+          userId,
+          resourceType: 'organization_integration',
+          resourceId: module,
+          metadata: { category: 'module', enabled, host: urlHost(checked.baseUrl) },
+        }),
+      )
       return Response.json({ status: 'saved' })
     }
 
     const checked = checkTimeZoneInput(parsed.data.timeZone)
     if (!checked.ok) return Response.json({ error: checked.error }, { status: 400 })
-    await saveOrgTimeZone({ orgId: org.id, timeZone: checked.timeZone })
-    await writeAuditLog({
-      action: 'org.os_settings.update',
-      orgId: org.id,
-      userId,
-      resourceType: 'organization',
-      resourceId: org.id,
-      metadata: { timeZone: checked.timeZone },
-    })
+    await auditedWrite(
+      (tx) => saveOrgTimeZone({ executor: tx, orgId: org.id, timeZone: checked.timeZone }),
+      () => ({
+        action: 'org.os_settings.update',
+        orgId: org.id,
+        userId,
+        resourceType: 'organization',
+        resourceId: org.id,
+        metadata: { timeZone: checked.timeZone },
+      }),
+    )
     return Response.json({ status: 'saved' })
   } catch (err) {
     return handleApiError(err)

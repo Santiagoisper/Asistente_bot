@@ -113,6 +113,15 @@ describe.skipIf(!hasIntegrationEnv)('IT — PHI clinical (DB real)', () => {
       spec,
       specVersion: specRow.version,
       documentVersionId: specRow.documentVersionId,
+      audit: (facts) => ({
+        action: 'screening.view',
+        orgId: DEMO_ORG_ID,
+        studyId: DEMO_STUDY_ID,
+        userId: 'user_integration_test',
+        resourceType: 'subject',
+        resourceId: subjectId,
+        metadata: { ...facts.summary, snapshotId: facts.snapshotId, snapshotCreated: facts.snapshotCreated },
+      }),
     })
 
     expect(result.persistedSnapshotId).toBeTruthy()
