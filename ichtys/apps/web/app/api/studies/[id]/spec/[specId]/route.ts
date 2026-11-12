@@ -5,6 +5,7 @@ import { studySpecSchema } from '@ichtys/ingestion'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../lib/api/body-limit'
 import { zodIssuesForResponse } from '../../../../../../lib/api/zod-issues'
 import { MAX_SPEC_BODY_BYTES } from '../../../../../../lib/api/limits'
+import { insertAuditLog } from '../../../../../../lib/audit/audited-write'
 
 interface RouteParams {
   params: Promise<{ id: string; specId: string }>
@@ -15,6 +16,12 @@ interface RouteParams {
  *
  * Replaces the spec jsonb of a *draft* study spec.
  * Used by spec-review.tsx for inline criterion editing.
+ *
+ * El borrador es el que usa la evaluación de elegibilidad mientras no haya uno
+ * aprobado, así que editarlo cambia un resultado clínico: el cambio y su
+ * registro de auditoría se confirman en la misma transacción (R3), y la
+ * escritura exige que el protocolo siga siendo borrador (no alcanza con
+ * haberlo leído como borrador un momento antes).
  *
  * Body: { spec: StudySpec }
  * Returns: { ok: true }
@@ -28,7 +35,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   const { id: studyId, specId } = await params
 
   try {
-    const { orgId } = await validateStudyAccess(studyId, 'study_admin', 'documents.manage')
+    const { orgId, userId } = await validateStudyAccess(studyId, 'study_admin', 'documents.manage')
 
     // Verify spec belongs to this tenant + study and is still draft — ANTES de
     // leer el cuerpo (Sicario vuelta 3): no se parsea nada para un specId
@@ -74,16 +81,47 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       )
     }
 
-    await db
-      .update(studySpecs)
-      .set({ spec: parsed.data, updatedAt: new Date() })
-      .where(
-        and(
-          eq(studySpecs.id, specId),
-          eq(studySpecs.organizationId, orgId),
-          eq(studySpecs.studyId, studyId),
-        ),
+    const spec = parsed.data
+    const saved = await db.transaction(async (tx) => {
+      const rows = await tx
+        .update(studySpecs)
+        .set({ spec, updatedAt: new Date() })
+        .where(
+          and(
+            eq(studySpecs.id, specId),
+            eq(studySpecs.organizationId, orgId),
+            eq(studySpecs.studyId, studyId),
+            // Si se aprobó entre la lectura y esta escritura, no se pisa.
+            eq(studySpecs.status, 'draft'),
+          ),
+        )
+        .returning({ id: studySpecs.id })
+      if (rows.length === 0) return false
+
+      await insertAuditLog(tx, {
+        action: 'study_spec.draft.update',
+        orgId,
+        studyId,
+        userId,
+        resourceType: 'study_spec',
+        resourceId: specId,
+        // Cuentas, no el texto del protocolo.
+        metadata: {
+          version: target.version,
+          inclusionCriteria: spec.inclusionCriteria.length,
+          exclusionCriteria: spec.exclusionCriteria.length,
+          endpoints: spec.endpoints.length,
+          visits: spec.visits.length,
+        },
+      })
+      return true
+    })
+    if (!saved) {
+      return NextResponse.json(
+        { error: 'Only draft specs can be edited' },
+        { status: 400 },
       )
+    }
 
     return NextResponse.json({ ok: true })
   } catch (err) {

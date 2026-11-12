@@ -76,6 +76,7 @@ export const auditAction = [
   'auth.access_denied',
   'admin.action',
   'study_spec.approved',
+  'study_spec.draft.update',
   'study.create',
   'subject.create',
   'subject.view',

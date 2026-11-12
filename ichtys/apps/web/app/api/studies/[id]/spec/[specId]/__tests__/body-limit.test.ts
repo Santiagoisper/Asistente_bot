@@ -53,6 +53,8 @@ vi.mock('@ichtys/db', () => ({
   db: {
     query: { studySpecs: { findFirst: mocks.findFirst } },
     update: mocks.dbUpdate,
+    // La edición entra por una transacción (R3); acá solo importa si llegó a escribir.
+    transaction: async <T,>(run: (tx: unknown) => Promise<T>) => run({ update: mocks.dbUpdate, insert: () => ({ values: async () => undefined }) }),
   },
 }))
 

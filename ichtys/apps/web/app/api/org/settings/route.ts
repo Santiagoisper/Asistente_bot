@@ -4,7 +4,6 @@ import { AccessError, handleApiError, resolveOrProvisionOrganization } from '@ic
 import { loadAccessSubject } from '@ichtys/auth/access-subject'
 import { ROLES, isRole } from '@ichtys/auth/roles'
 import {
-  auditLogs,
   buildOrgLlmKeyStatuses,
   db,
   getOrgLlmApiKeys,
@@ -31,6 +30,7 @@ import { canChangeOrgSettings } from '../../../../lib/settings/permissions'
 import { isProviderChoiceSupported, mergeOrgKeys } from '../../../../lib/settings/provider-guard'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../lib/api/body-limit'
 import { patchSchema } from '../../../../lib/api/input-schemas'
+import { insertAuditLog } from '../../../../lib/audit/audited-write'
 
 export const runtime = 'nodejs'
 
@@ -143,18 +143,48 @@ export async function PATCH(req: Request): Promise<Response> {
     if (body.similarityThreshold !== undefined) ragPatch.similarityThreshold = body.similarityThreshold
     if (body.topK !== undefined) ragPatch.topK = body.topK
 
-    if (Object.keys(ragPatch).length > 0) {
-      await updateOrgRagConfig(orgId, ragPatch)
+    const ragFields = Object.keys(ragPatch)
+    let keysPatch: Partial<Record<OrgLlmKeyProvider, string | null>> | null = null
+    if (body.llmApiKeys) {
+      keysPatch = {}
+      for (const [k, v] of Object.entries(body.llmApiKeys)) {
+        if (v !== undefined) keysPatch[k as OrgLlmKeyProvider] = v
+      }
     }
 
-    if (body.llmApiKeys) {
-      const patch: Partial<Record<OrgLlmKeyProvider, string | null>> = {}
-      for (const [k, v] of Object.entries(body.llmApiKeys)) {
-        if (v !== undefined) patch[k as OrgLlmKeyProvider] = v
-      }
-      await updateOrgLlmApiKeys(orgId, patch)
-
-      await dbInsertAudit(orgId, userId, Object.keys(patch))
+    // Cada cambio y su registro se confirman en la misma transacción (R3).
+    // Cambiar de proveedor de modelo es un cambio controlado (R6): queda quién
+    // lo hizo y a cuál se pasó. De las claves queda el proveedor, nunca la clave.
+    if (ragFields.length > 0 || keysPatch) {
+      const keys = keysPatch
+      await db.transaction(async (tx) => {
+        if (ragFields.length > 0) {
+          await updateOrgRagConfig(orgId, ragPatch, tx)
+          await insertAuditLog(tx, {
+            action: 'admin.action',
+            orgId,
+            userId,
+            resourceType: 'organization',
+            resourceId: orgId,
+            metadata: {
+              type: 'org.rag_config.updated',
+              fields: ragFields,
+              ...(ragPatch.llmProvider !== undefined ? { llmProvider: ragPatch.llmProvider } : {}),
+            },
+          })
+        }
+        if (keys) {
+          await updateOrgLlmApiKeys(orgId, keys, tx)
+          await insertAuditLog(tx, {
+            action: 'admin.action',
+            orgId,
+            userId,
+            resourceType: 'organization',
+            resourceId: orgId,
+            metadata: { type: 'org.llm_keys.updated', providers: Object.keys(keys) },
+          })
+        }
+      })
     }
 
     const [config, orgKeys] = await Promise.all([
@@ -177,17 +207,6 @@ export async function PATCH(req: Request): Promise<Response> {
     }
     return handleApiError(err)
   }
-}
-
-async function dbInsertAudit(orgId: string, userId: string, providers: string[]) {
-  await db.insert(auditLogs).values({
-    organizationId: orgId,
-    userId,
-    action: 'admin.action',
-    resourceType: 'organization',
-    resourceId: orgId,
-    metadata: { type: 'org.llm_keys.updated', providers },
-  })
 }
 
 /**
