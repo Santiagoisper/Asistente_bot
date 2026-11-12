@@ -138,6 +138,20 @@ describe('proposeProfileFromEvolution — logging del error del proveedor', () =
     expect(logged).not.toContain('HbA1c')
   })
 
+  it('la lectura de evoluciones con modelo va solo a Anthropic: sin respaldo en otro proveedor', async () => {
+    // AI-GOVERNANCE.md registra un solo proveedor para esta función y R6 exige
+    // evaluar antes de cambiarlo. Con preferencia explícita la cadena es de uno:
+    // si Anthropic no responde, el texto clínico no sale hacia otro proveedor.
+    mocks.runWithLlmFallback.mockRejectedValue(new TypeError('x'))
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await proposeProfileFromEvolution({ orgId: 'org-1', studyId: 'study-1', subjectId: 'subject-1', userId: 'user-1', evolutionId: 'evo-1', evolutionContent: 'Paciente de 52 años.' })
+    } finally {
+      spy.mockRestore()
+    }
+    expect(mocks.runWithLlmFallback).toHaveBeenCalledWith(expect.objectContaining({ purpose: 'clinical-extract', providerPreference: 'anthropic' }), expect.any(Function))
+  })
+
   it('si no se encontró ningún dato, no se propone ni se escribe nada', async () => {
     mocks.runWithLlmFallback.mockRejectedValue(new TypeError('x'))
     mocks.mergeExtractions.mockReturnValue({ facts: { labs: [], medications: [], conditions: [] }, fieldConfidence: {} })
