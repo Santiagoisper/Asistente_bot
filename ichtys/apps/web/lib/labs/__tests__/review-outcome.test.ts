@@ -82,6 +82,18 @@ describe('reviewOutcome — cuánto hubo que corregir de lo que leyó la máquin
     expect(reviewOutcome(machine, after)).toMatchObject({ needingDecision: 1, decided: 1, valueCorrected: 0, unchanged: 1 })
   })
 
+  it('corregir el valor impreso a mano (la fila pierde su línea) es una corrección de valor, no «quitada + agregada»', () => {
+    // La pantalla deja `sourceLine` en null cuando el valor escrito ya no está en la línea del informe.
+    const machine = [read(0, 'Glucosa', '92'), read(2, 'Hemoglobina', '13,5')]
+    const after = [confirmed(0, 'Glucosa', '92'), confirmed(null, 'Hemoglobina', '18,5'), confirmed(null, 'Urea', '30')]
+    expect(reviewOutcome(machine, after)).toEqual({ machineRows: 2, needingDecision: 0, unchanged: 1, valueCorrected: 1, decided: 0, labelCorrected: 0, removed: 0, added: 1 })
+  })
+
+  it('una fila a mano con otro nombre no se empareja con una fila quitada', () => {
+    const machine = [read(2, 'Hemoglobina', '13,5')]
+    expect(reviewOutcome(machine, [confirmed(null, 'Hematocrito', '41')])).toMatchObject({ removed: 1, added: 1, valueCorrected: 0 })
+  })
+
   it('dos filas en la misma línea se emparejan en orden; una fila en una línea que la máquina no leyó cuenta como agregada', () => {
     const machine = [read(4, 'Sodio', '140'), read(4, 'Potasio', '4,1')]
     const after = [confirmed(4, 'Sodio', '140'), confirmed(4, 'Potasio', '4,2'), confirmed(9, 'Cloro', '101')]
