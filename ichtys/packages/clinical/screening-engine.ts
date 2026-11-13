@@ -147,14 +147,20 @@ function assessMedicationCriterion(
   const hasMetformin = profile.medications.some((m) => /metformina/i.test(m.name))
   if (kind === 'inclusion') {
     if (/permitid|estable|≥\s*1000/i.test(criterion.text)) {
+      // Verde quiere decir comprobado. Que la metformina figure en el perfil no comprueba
+      // cuánto hace que la toma, si la dosis es estable ni si llega a la dosis pedida: el
+      // perfil no guarda esos datos. Si el criterio los pide, queda a revisar y lo dice.
+      const asksMore = /estable|≥\s*\d|\b\d+\s*(?:d[ií]as?|semanas?|mes(?:es)?|a[ñn]os?)\b/i.test(criterion.text)
       return {
         criterionNumber: criterion.number,
         criterionText: criterion.text,
         kind,
-        status: hasMetformin ? 'pass' : 'unknown',
-        reason: hasMetformin
-          ? 'Metformina detectada en el perfil; verificar dosis/estabilidad manualmente.'
-          : 'Metformina no detectada en el perfil.',
+        status: hasMetformin && !asksMore ? 'pass' : 'unknown',
+        reason: !hasMetformin
+          ? 'Metformina no figura en la medicación registrada.'
+          : asksMore
+            ? 'Metformina registrada en el perfil. El criterio pide además tiempo, estabilidad o dosis del tratamiento, y eso no está registrado: confirmarlo antes de darlo por cumplido.'
+            : 'Metformina registrada en el perfil.',
         sourcePages: criterion.sourcePages,
       }
     }

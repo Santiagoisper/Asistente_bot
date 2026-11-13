@@ -44,7 +44,7 @@ export interface DictationRecording {
 
 export interface DictationPanelProps {
   /** El borrador está listo: la pantalla lo pone en el cuadro de la evolución. */
-  onDraft: (text: string, source: DictationSource, recording: DictationRecording | null) => void
+  onDraft: (draft: DictationDraft, source: DictationSource, recording: DictationRecording | null) => void
   /** La persona descartó el dictado: la pantalla saca el texto y la grabación. */
   onDiscard: () => void
   /** Cambia cuando la evolución se guardó: el panel vuelve a su estado inicial. */
@@ -81,6 +81,8 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
   const [heardVoice, setHeardVoice] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [tooLarge, setTooLarge] = useState(false)
+  /** Cuántas tomas lleva este dictado. Desde la segunda, lo dictado se suma a lo que ya está. */
+  const [takes, setTakes] = useState(0)
   const level = useMicLevel(phase === 'recording' ? stream : null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const workerRef = useRef<Worker | null>(null)
@@ -118,6 +120,7 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
     setPreview(null)
     setTooLarge(false)
     setMessage(null)
+    setTakes(0)
     setPhase('idle')
   }, [resetSignal])
 
@@ -170,8 +173,9 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
           setDraft(built)
           setTooLarge(!fits)
           setPhase('ready')
+          setTakes((value) => value + 1)
           onDraft(
-            built.text,
+            built,
             {
               kind: 'dictation',
               durationSec,
@@ -252,6 +256,7 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
     setPreview(null)
     setTooLarge(false)
     setMessage(null)
+    setTakes(0)
     setPhase('idle')
     onDiscard()
   }
@@ -268,6 +273,7 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
               seconds={seconds}
               level={level}
               silent={phase === 'recording' && !heardVoice && seconds >= SILENCE_WARNING_SEC}
+              adding={takes > 0}
               onStart={() => {
                 if (!consent) setAskingConsent(true)
                 else void startRecording()
@@ -341,7 +347,9 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
                 </div>
               ) : null}
               <p className="text-xs text-alphi-muted">
-                {tooLarge
+                {takes > 1
+                  ? 'Se sumó a lo que ya estaba. Junto a la evolución se guarda la grabación de la primera toma; lo agregado después queda como texto.'
+                  : tooLarge
                   ? 'Esta grabación es demasiado grande para guardarse junto a la evolución: va a quedar solo el texto.'
                   : `Al guardar la evolución, la grabación queda guardada ${DICTATION_AUDIO_RETENTION_DAYS} días. Todavía no se guardó nada.`}
               </p>
@@ -378,7 +386,7 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
                 </p>
               ) : null}
               <button type="button" onClick={discard} className="alphi-btn-secondary">
-                Descartar y grabar de nuevo
+                Descartar todo y empezar de nuevo
               </button>
             </div>
           ) : null}

@@ -9,6 +9,7 @@ import {
   DICTATION_GUIDE_STEPS,
   dictationGuideScript,
   joinSegmentTexts,
+  mergeDictationAddition,
   segmentSpeech,
   NOT_MENTIONED,
   splitIntoBlocks,
@@ -393,6 +394,39 @@ describe('bloques de la evolución dictada', () => {
         splitIntoBlocks('Signos vitales. Presión 120 sobre 80. Exámenes físicos. Sin hallazgo. Laboratorios. Se toma muestra. Impresiones clínicas. Paciente estable.').map((block) => [block.id, block.text]),
       )
       expect(blocks).toMatchObject({ vitales: 'Presión 120 sobre 80.', examen: 'Sin hallazgo.', laboratorio: 'Se toma muestra.', evaluacion: 'Paciente estable.' })
+    })
+  })
+
+  describe('agregar lo que faltó, dictándolo', () => {
+    const first = buildDictationDraft('Motivo de la visita. Control programado. Signos vitales. Presión arterial 132 sobre 84. Plan. Continúa igual.')
+
+    it('lo agregado va a su apartado: llena el que decía «No mencionado» y suma al que ya tenía texto', () => {
+      const addition = buildDictationDraft('Laboratorio. Hemoglobina glicosilada 7,9 %. Signos vitales. Peso 78 kilos.')
+      const merged = mergeDictationAddition(first.text, addition)
+      expect(merged).toContain('Laboratorio y estudios: Hemoglobina glicosilada 7,9 %.')
+      expect(merged).toContain('Signos vitales: Presión arterial 132 sobre 84. Peso 78 kilos.')
+      expect(merged).toContain('Motivo de la visita: Control programado.')
+      expect(merged).toContain(`Examen físico: ${NOT_MENTIONED}`)
+      expect(merged.match(/Signos vitales:/g)).toHaveLength(1)
+    })
+
+    it('respeta lo que la persona corrigió a mano y lo que escribió fuera de la plantilla', () => {
+      const edited = first.text.replace('Control programado.', 'Control programado, adelantado una semana.') + '\nNota: acompaña la hija.'
+      const merged = mergeDictationAddition(edited, buildDictationDraft('Eventos adversos. Ninguno.'))
+      expect(merged).toContain('Motivo de la visita: Control programado, adelantado una semana.')
+      expect(merged).toContain('Eventos adversos: Ninguno.')
+      expect(merged.split('\n').at(-1)).toBe('Nota: acompaña la hija.')
+    })
+
+    it('sobre un texto corrido, lo nuevo se agrega debajo', () => {
+      const merged = mergeDictationAddition('Paciente estable, sin cambios.', buildDictationDraft('Próxima visita. En cuatro semanas.'))
+      expect(merged).toBe('Paciente estable, sin cambios.\nPróxima visita: En cuatro semanas.')
+    })
+
+    it('un agregado sin voz no cambia nada, y sobre un cuadro vacío es el borrador entero', () => {
+      const empty = buildDictationDraft('')
+      expect(mergeDictationAddition(first.text, empty)).toBe(first.text)
+      expect(mergeDictationAddition('', first)).toBe(first.text)
     })
   })
 })

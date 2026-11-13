@@ -80,23 +80,23 @@ describe('recorrido: de la visita dictada a la elegibilidad', () => {
     expect(resolved(empty)).toBe(0)
   })
 
-  it('4 · la evolución aceptada resuelve edad y metformina', () => {
-    expect(byNumber(afterEvolution)).toMatchObject({ I1: 'pass', I3: 'pass', I2: 'unknown', E1: 'unknown' })
-    expect(resolved(afterEvolution)).toBe(2)
+  it('4 · la evolución aceptada resuelve la edad; la metformina queda a revisar porque el criterio pide tres meses estables', () => {
+    expect(byNumber(afterEvolution)).toMatchObject({ I1: 'pass', I3: 'unknown', I2: 'unknown', E1: 'unknown' })
+    expect(resolved(afterEvolution)).toBe(1)
   })
 
   it('5 · el primer laboratorio confirmado resuelve la HbA1c', () => {
     expect(byNumber(afterLabA).I2).toBe('pass')
-    expect(resolved(afterLabA)).toBe(3)
+    expect(resolved(afterLabA)).toBe(2)
   })
 
   it('6 · el segundo laboratorio confirmado resuelve el filtrado glomerular', () => {
     expect(byNumber(afterLabB).E1).toBe('pass')
-    expect(resolved(afterLabB)).toBe(4)
+    expect(resolved(afterLabB)).toBe(3)
   })
 
   it('7 · lo que ninguna regla puede decidir sigue a revisar, y nada quedó como incumplido', () => {
-    expect(byNumber(afterLabB)).toMatchObject({ I4: 'unknown', E2: 'unknown', E3: 'unknown', E4: 'unknown' })
+    expect(byNumber(afterLabB)).toMatchObject({ I3: 'unknown', I4: 'unknown', E2: 'unknown', E3: 'unknown', E4: 'unknown' })
     expect(screeningSummary(assessScreening(afterLabB, PROTOCOL)).fail).toBe(0)
   })
 

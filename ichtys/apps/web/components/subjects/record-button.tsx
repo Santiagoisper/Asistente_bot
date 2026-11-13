@@ -19,6 +19,8 @@ export interface RecordButtonProps {
   level: number
   /** Sin voz durante unos segundos: se avisa junto al botón. */
   silent?: boolean
+  /** Ya hay un dictado en el cuadro: grabar de nuevo le agrega, no lo reemplaza. */
+  adding?: boolean
   onStart: () => void
   onPause: () => void
   onResume: () => void
@@ -77,7 +79,7 @@ function Spinner() {
 
 const pill = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alphi-teal'
 
-export function RecordButton({ state, seconds, level, silent = false, onStart, onPause, onResume, onStop }: RecordButtonProps) {
+export function RecordButton({ state, seconds, level, silent = false, adding = false, onStart, onPause, onResume, onStop }: RecordButtonProps) {
   const lit = Math.round(Math.max(0, Math.min(1, level)) * BARS)
 
   if (state === 'idle' || state === 'busy') {
@@ -88,15 +90,19 @@ export function RecordButton({ state, seconds, level, silent = false, onStart, o
           type="button"
           onClick={onStart}
           disabled={busy}
-          aria-label={busy ? 'Transcribiendo el dictado' : 'Grabar el dictado'}
+          aria-label={busy ? 'Transcribiendo el dictado' : adding ? 'Grabar algo que faltó' : 'Grabar el dictado'}
           className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-alphi-navy text-white shadow-alphi-panel transition-colors hover:bg-alphi-navydim focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-alphi-teal disabled:cursor-wait disabled:opacity-60"
         >
           {busy ? <Spinner /> : <MicIcon />}
         </button>
         <div className="min-w-0">
-          <p className="text-base font-bold text-alphi-navy">{busy ? 'Transcribiendo…' : 'Grabar'}</p>
+          <p className="text-base font-bold text-alphi-navy">{busy ? 'Transcribiendo…' : adding ? 'Agregar algo que faltó' : 'Grabar'}</p>
           <p className="text-xs text-alphi-muted">
-            {busy ? 'El texto aparece abajo cuando termina.' : 'Tocá el micrófono y hablá como en la consulta.'}
+            {busy
+              ? 'El texto aparece abajo cuando termina.'
+              : adding
+                ? 'Nombrá el apartado y decí lo que falta: se suma a lo que ya está.'
+                : 'Tocá el micrófono y hablá como en la consulta.'}
           </p>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import { applySpokenCorrections, type SpokenCorrection } from './corrections'
 import { collapseRepetitions, type RepetitionNotice } from './repetition'
-import { NOT_MENTIONED, splitIntoBlocks, type DictationBlock, type DictationBlockId } from './template'
+import { DICTATION_BLOCKS, NOT_MENTIONED, splitIntoBlocks, type DictationBlock, type DictationBlockId } from './template'
 
 /**
  * `blocks`: la persona nombró los apartados al dictar; el borrador los ordena y deja
@@ -67,4 +67,45 @@ export function buildDictationDraft(transcript: string): DictationDraft {
     missing,
     text: composeEvolutionDraft(blocks, layout),
   }
+}
+
+/**
+ * Suma un dictado nuevo a un texto que ya estaba en el cuadro (D16): lo que la persona
+ * agrega va a su apartado, no al final como un borrador entero más.
+ *
+ * - Si el texto ya está por apartados, cada apartado dictado se suma al suyo; uno que decía
+ *   «No mencionado» pasa a tener lo dictado. Los renglones escritos a mano fuera de la
+ *   plantilla se conservan, al final.
+ * - Si el texto es corrido, lo nuevo se agrega debajo, con su título si lo nombró.
+ * Nunca quita ni reemplaza lo que ya estaba escrito.
+ */
+export function mergeDictationAddition(currentText: string, addition: DictationDraft): string {
+  const added = addition.blocks.filter((block) => block.text !== null)
+  if (added.length === 0) return currentText
+  if (currentText.trim().length === 0) return addition.text
+
+  const existing = new Map<DictationBlockId, string>()
+  const loose: string[] = []
+  for (const line of currentText.split('\n')) {
+    const block = DICTATION_BLOCKS.find((candidate) => line.startsWith(`${candidate.title}:`))
+    if (!block) {
+      if (line.trim().length > 0) loose.push(line)
+      continue
+    }
+    const text = line.slice(block.title.length + 1).trim()
+    const previous = existing.get(block.id)
+    existing.set(block.id, previous && previous !== NOT_MENTIONED ? `${previous} ${text}` : text)
+  }
+
+  if (existing.size === 0) {
+    const lines = added.map((block) => (OPTIONAL.includes(block.id) ? block.text! : `${block.title}: ${block.text}`))
+    return [currentText.trimEnd(), ...lines].join('\n')
+  }
+
+  for (const block of added) {
+    const previous = existing.get(block.id)
+    existing.set(block.id, !previous || previous === NOT_MENTIONED ? block.text! : `${previous} ${block.text}`)
+  }
+  const lines = DICTATION_BLOCKS.filter((block) => existing.has(block.id)).map((block) => `${block.title}: ${existing.get(block.id)}`)
+  return [...lines, ...loose].join('\n')
 }
