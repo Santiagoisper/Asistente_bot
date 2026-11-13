@@ -1,4 +1,6 @@
 export * from './trim-silence'
 export * from './corrections'
+export * from './repetition'
 export * from './template'
 export * from './draft'
+export * from './guide'

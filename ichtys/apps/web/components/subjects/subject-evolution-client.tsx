@@ -5,7 +5,8 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { bloodPressureProposalLabel } from '../../lib/subjects/proposal-display'
 import { unapprovedSpecNotice } from '../../lib/subjects/spec-notice'
-import { DictationPanel, type DictationSource } from './dictation-panel'
+import { DictationPanel, type DictationRecording, type DictationSource } from './dictation-panel'
+import { EvolutionAudio, type EvolutionAudioInfo } from './evolution-audio'
 
 interface EvolutionItem {
   id: string
@@ -133,6 +134,10 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const [content, setContent] = useState('')
   // Presente cuando el texto del cuadro salió de un dictado: viaja al registro al guardar.
   const [dictationSource, setDictationSource] = useState<DictationSource | null>(null)
+  // La grabación espera acá: sale del equipo recién cuando la persona guarda la evolución.
+  const [dictationRecording, setDictationRecording] = useState<DictationRecording | null>(null)
+  const [audios, setAudios] = useState<Record<string, EvolutionAudioInfo>>({})
+  const [audioNotice, setAudioNotice] = useState<string | null>(null)
   const [visitLabel, setVisitLabel] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -181,6 +186,16 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       const data = (await res.json()) as { subjectCode: string; evolutions: EvolutionItem[] }
       setSubjectCode(data.subjectCode)
       setEvolutions(data.evolutions)
+      // Qué evoluciones tienen grabación. Si esto falla, la lista se muestra igual.
+      try {
+        const audioRes = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/dictation-audios`)
+        if (audioRes.ok) {
+          const listing = (await audioRes.json()) as { audios: EvolutionAudioInfo[] }
+          setAudios(Object.fromEntries(listing.audios.map((audio) => [audio.evolutionId, audio])))
+        }
+      } catch {
+        setAudios({})
+      }
       await loadScreening()
     } catch {
       setError('No se pudieron cargar las evoluciones.')
@@ -209,15 +224,33 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
           ...(dictationSource ? { source: dictationSource } : {}),
         }),
       })
-      const data = (await res.json()) as { piiWarnings?: string[]; error?: string }
+      const data = (await res.json()) as { id?: string; piiWarnings?: string[]; error?: string }
       if (res.status === 503) {
         setError('Esta instalación no tiene configurado el cifrado de datos clínicos. No se guardó nada. Avisá a quien administra la plataforma.')
         return
       }
       if (!res.ok) throw new Error(data.error ?? 'save_failed')
       if (data.piiWarnings?.length) setPiiWarnings(data.piiWarnings)
+      // La evolución ya está guardada. La grabación va después y, si falla, se avisa: no se pierde el texto.
+      setAudioNotice(null)
+      if (dictationSource && dictationRecording && data.id) {
+        try {
+          const upload = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/evolutions/${data.id}/audio`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': dictationRecording.blob.type || 'audio/webm',
+              'X-Duration-Sec': String(dictationRecording.durationSec),
+            },
+            body: dictationRecording.blob,
+          })
+          if (!upload.ok) setAudioNotice('La evolución se guardó. La grabación no se pudo guardar; el texto quedó completo.')
+        } catch {
+          setAudioNotice('La evolución se guardó. La grabación no se pudo guardar; el texto quedó completo.')
+        }
+      }
       setContent('')
       setDictationSource(null)
+      setDictationRecording(null)
       setVisitLabel('')
       await loadEvolutions()
     } catch {
@@ -329,9 +362,10 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       </div>
 
       <DictationPanel
-        onUse={(text, source) => {
+        onUse={(text, source, recording) => {
           setContent(text)
           setDictationSource(source)
+          setDictationRecording(recording)
         }}
       />
 
@@ -487,6 +521,10 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         </div>
       )}
 
+      {audioNotice ? (
+        <p role="status" className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{audioNotice}</p>
+      ) : null}
+
       {error && (
         <p className="rounded-lg border border-alphi-rose/30 bg-alphi-rose/10 px-4 py-2 text-sm text-alphi-rose">{error}</p>
       )}
@@ -634,6 +672,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                   )}
                 </div>
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-alphi-navy">{evo.content}</p>
+                {audios[evo.id] ? <EvolutionAudio studyId={studyId} subjectId={subjectId} audio={audios[evo.id]!} /> : null}
               </li>
             ))}
           </ul>
