@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { mergeDictationAddition, NOT_MENTIONED } from '@ichtys/clinical'
+import { mergeDictationAddition, NOT_MENTIONED, studyDictationPrompts } from '@ichtys/clinical'
 import { bloodPressureProposalLabel } from '../../lib/subjects/proposal-display'
 import { unapprovedSpecNotice } from '../../lib/subjects/spec-notice'
 import { DictationPanel, type DictationRecording, type DictationSource } from './dictation-panel'
@@ -62,6 +62,8 @@ interface ScreeningAssessment {
   status: 'pass' | 'fail' | 'unknown'
   reason: string
   sourcePages?: number[]
+  /** Dato que falta para resolverlo; de acá sale la guía del estudio. */
+  missing?: string[]
 }
 
 interface SubjectEvolutionClientProps {
@@ -150,6 +152,9 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const [labOcrText, setLabOcrText] = useState('')
   const [labBusy, setLabBusy] = useState(false)
   const [proposalBusy, setProposalBusy] = useState(false)
+
+  /** Qué más decir en este estudio para este sujeto: sale de los criterios a revisar. */
+  const studyPrompts = useMemo(() => studyDictationPrompts(assessments), [assessments])
 
   const loadScreening = useCallback(async () => {
     try {
@@ -440,7 +445,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
           </button>
         </div>
         </div>
-        <DictationGuide />
+        <DictationGuide studyPrompts={studyPrompts} unapprovedProtocol={specNotice !== null} />
         </div>
       </form>
 

@@ -1,3 +1,5 @@
+import type { MissingDatum } from './profile-schema'
+
 /**
  * Antecedentes y estados que se dicen de forma expresa, y su negación.
  *
@@ -9,6 +11,8 @@
 
 export interface HistoryTerm {
   label: string
+  /** Cómo se nombra este dato cuando falta. */
+  datum: MissingDatum
   /** La palabra aparece, en un criterio o en una condición del perfil. */
   mention: RegExp
   /** Lo negado ES esto y nada más. «Embarazo previo» o «lactancia previa» no lo son. */
@@ -20,12 +24,14 @@ export interface HistoryTerm {
 export const HISTORY_TERMS: ReadonlyArray<HistoryTerm> = [
   {
     label: 'pancreatitis',
+    datum: 'pancreatitis',
     mention: /pancreatitis/i,
     denial: /^pancreatitis(?:\s+(?:agud[ao]|cr[oó]nic[ao]|previ[ao]|conocid[ao]))*$/i,
     deniedAs: 'Sin antecedentes de pancreatitis',
   },
   {
     label: 'embarazo',
+    datum: 'pregnancy',
     // «Diabetes gestacional» no es un embarazo en curso: no cuenta como mención.
     // Los criterios de un protocolo pueden venir en inglés; las condiciones del perfil, en castellano.
     mention: /embaraz|gestaci[oó]n(?!al)|gestante|pregnan/i,
@@ -34,6 +40,7 @@ export const HISTORY_TERMS: ReadonlyArray<HistoryTerm> = [
   },
   {
     label: 'lactancia',
+    datum: 'lactation',
     mention: /lactancia|amamant|lactando|breast-?feeding|lactati(?:on|ng)|nursing/i,
     denial: /^(?:lactancia(?:\s+(?:materna|actual|en\s+curso))*|amamantando|lactando)$/i,
     deniedAs: 'Sin lactancia',
