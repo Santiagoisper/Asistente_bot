@@ -15,14 +15,14 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-const said = 'rounded bg-slate-100 px-1.5 py-0.5 font-semibold text-alphi-ink'
+const said = 'rounded bg-slate-100 px-1.5 py-0.5 font-semibold text-alphi-navy'
 
 export function DictationGuide() {
   const { correction, alwaysCheck, nothingToReport } = DICTATION_GUIDE_RULES
   return (
     <aside className="rounded-lg border border-alphi-border bg-slate-50 text-sm" aria-label="Guía para dictar">
       <details open className="group">
-        <summary className="cursor-pointer select-none px-4 py-3 text-sm font-bold text-alphi-ink">
+        <summary className="cursor-pointer select-none px-4 py-3 text-sm font-bold text-alphi-navy">
           Guía para dictar
           <span className="ml-2 text-xs font-normal text-alphi-muted group-open:hidden">mostrar</span>
         </summary>
@@ -34,7 +34,7 @@ export function DictationGuide() {
                 <li key={step.title} className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-x-1">
                   <span className="text-xs font-semibold tabular-nums text-alphi-muted">{index + 1}.</span>
                   <div>
-                    {step.say ? <span className={said}>«{step.say}»</span> : <span className="font-semibold text-alphi-ink">Para empezar</span>}
+                    {step.say ? <span className={said}>«{step.say}»</span> : <span className="font-semibold text-alphi-navy">Para empezar</span>}
                     <span className="text-alphi-muted"> — {step.hint}</span>
                     <p className="mt-0.5 text-xs italic text-alphi-muted">{step.example}</p>
                   </div>
@@ -62,7 +62,7 @@ export function DictationGuide() {
             <dl className="space-y-1">
               {DICTATION_GLOSSARY.map((entry) => (
                 <div key={entry.what} className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-2">
-                  <dt className="font-semibold text-alphi-ink">{entry.what}</dt>
+                  <dt className="font-semibold text-alphi-navy">{entry.what}</dt>
                   <dd className="text-alphi-muted">{entry.say}</dd>
                 </div>
               ))}

@@ -254,4 +254,74 @@ describe('bloques de la evolución dictada', () => {
       expect(blocks.find((block) => block.id === 'examen')?.text).toBe('Sin novedades.')
     })
   })
+
+  // Santiago, 12/11 22:05, con micrófono: desde «Laboratorio» todo quedó en un solo renglón.
+  // Al leer de corrido el transcriptor separa con comas, no con puntos, y un apartado solo se
+  // reconocía al comienzo de una frase.
+  describe('apartados dictados sin pausa: el transcriptor separa con comas', () => {
+    const run =
+      'Laboratorio, se toman muestras según el protocolo, impresión clínica, paciente estable, criterios o desvíos, sin desvíos al protocolo, plan, continúa con el mismo tratamiento, próxima visita en cuatro semanas.'
+    const byId = (text: string) => Object.fromEntries(splitIntoBlocks(text).map((block) => [block.id, block.text]))
+
+    it('cada apartado abre su bloque aunque venga después de una coma', () => {
+      expect(byId(run)).toMatchObject({
+        laboratorio: 'Se toman muestras según el protocolo.',
+        evaluacion: 'Paciente estable.',
+        criterios: 'Sin desvíos al protocolo.',
+        plan: 'Continúa con el mismo tratamiento.',
+        proxima: 'En cuatro semanas.',
+      })
+    })
+
+    it('también con dos puntos: «Plan: …, próxima visita: …»', () => {
+      expect(byId('Plan: continúa igual, próxima visita: en un mes.')).toMatchObject({ plan: 'Continúa igual.', proxima: 'En un mes.' })
+    })
+
+    it('el nombre de un apartado en medio de una frase sigue siendo texto', () => {
+      const blocks = byId('Evolución. Refiere buena tolerancia, sin eventos adversos. En la próxima visita se evalúa el plan de alimentación.')
+      expect(blocks.evolucion).toBe('Refiere buena tolerancia, sin eventos adversos. En la próxima visita se evalúa el plan de alimentación.')
+      expect(blocks.eventos).toBeNull()
+      expect(blocks.proxima).toBeNull()
+      expect(blocks.plan).toBeNull()
+    })
+
+    it('después de una coma, una palabra suelta solo abre apartado si está sola', () => {
+      // «motivo por el cual», «evolución favorable» y «plan de alimentación» son texto.
+      const blocks = byId('Evaluación. Se suspende la dosis, motivo por el cual se cita antes, evolución favorable, plan de alimentación adecuado.')
+      expect(blocks.evaluacion).toBe('Se suspende la dosis, motivo por el cual se cita antes, evolución favorable, plan de alimentación adecuado.')
+      expect(blocks.motivo).toBeNull()
+      expect(blocks.evolucion).toBeNull()
+      expect(blocks.plan).toBeNull()
+    })
+
+    it('los decimales no se parten: ni con coma ni con punto', () => {
+      expect(byId('Laboratorio. Hemoglobina glicosilada 7,9 %. Creatinina 0.9 mg/dL, sin cambios.').laboratorio).toBe(
+        'Hemoglobina glicosilada 7,9 %. Creatinina 0.9 mg/dL, sin cambios.',
+      )
+      expect(applySpokenCorrections('Glucemia 1.10 gramos. Corrijo, 1.01 gramos.').text).toBe('Glucemia 1.01 gramos.')
+    })
+
+    it('«Sin eventos adversos» es una frase, no el encabezado con una palabra de más: no desaparece', () => {
+      const blocks = byId('Evolución. Buena tolerancia. Sin eventos adversos. Signos vitales. Presión 120 sobre 80.')
+      expect(blocks.evolucion).toBe('Buena tolerancia. Sin eventos adversos.')
+      expect(blocks.eventos).toBeNull()
+    })
+
+    it('una corrección dicha sin pausa cambia solo el dato corregido', () => {
+      const { text, corrections } = applySpokenCorrections('Signos vitales, presión arterial 140 sobre 90, corrijo, 132 sobre 84, frecuencia cardíaca 72.')
+      expect(text).toBe('Signos vitales, presión arterial 132 sobre 84, frecuencia cardíaca 72.')
+      expect(corrections).toEqual([{ original: 'presión arterial 140 sobre 90', corrected: 'presión arterial 132 sobre 84', marker: 'corrijo' }])
+    })
+
+    it('una corrección que nombra el dato cambia ese dato y no el que se dijo último', () => {
+      const { text } = applySpokenCorrections('Presión arterial 140 sobre 90, frecuencia cardíaca 72. Corrijo, presión arterial 132 sobre 84.')
+      expect(text).toBe('Presión arterial 132 sobre 84, frecuencia cardíaca 72.')
+    })
+
+    it('el borrador de un dictado leído de corrido queda completo', () => {
+      const draft = buildDictationDraft(dictationGuideScript().replace(/\. /g, ', '))
+      expect(draft.layout).toBe('blocks')
+      expect(draft.missing).toEqual([])
+    })
+  })
 })

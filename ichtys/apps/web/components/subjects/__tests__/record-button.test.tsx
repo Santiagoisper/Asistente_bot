@@ -22,45 +22,62 @@ afterEach(() => {
 })
 
 function show(props: Partial<RecordButtonProps> = {}) {
-  const onStart = vi.fn()
-  const onStop = vi.fn()
+  const handlers = { onStart: vi.fn(), onPause: vi.fn(), onResume: vi.fn(), onStop: vi.fn() }
   act(() => {
-    root.render(<RecordButton state="idle" seconds={0} level={0} onStart={onStart} onStop={onStop} {...props} />)
+    root.render(<RecordButton state="idle" seconds={0} level={0} {...handlers} {...props} />)
   })
-  return { onStart, onStop, button: container.querySelector('button') as HTMLButtonElement }
+  const byText = (text: string) => [...container.querySelectorAll('button')].find((button) => (button.textContent ?? '').includes(text)) as HTMLButtonElement | undefined
+  return { ...handlers, byText, buttons: [...container.querySelectorAll('button')] as HTMLButtonElement[] }
 }
 
 describe('RecordButton', () => {
-  it('en reposo invita a grabar y un toque prende la grabadora', () => {
-    const { button, onStart, onStop } = show()
+  it('en reposo: un botón con el dibujo del micrófono, su nombre escrito y un color que existe', () => {
+    const { buttons, onStart } = show()
+    expect(buttons).toHaveLength(1)
+    const button = buttons[0]!
     expect(button.getAttribute('aria-label')).toBe('Grabar el dictado')
-    expect(button.getAttribute('aria-pressed')).toBe('false')
+    expect(button.querySelector('svg')).not.toBeNull()
+    expect(container.textContent).toContain('Grabar')
+    // El fondo sale de la paleta real: con una clase inventada el ícono blanco no se ve.
+    expect(button.className).toContain('bg-alphi-navy')
+    expect(button.className).toContain('text-white')
     act(() => button.click())
     expect(onStart).toHaveBeenCalledTimes(1)
-    expect(onStop).not.toHaveBeenCalled()
   })
 
-  it('grabando muestra el tiempo y el nivel, y el mismo botón la apaga', () => {
-    const { button, onStart, onStop } = show({ state: 'recording', seconds: 75, level: 0.6 })
-    expect(button.getAttribute('aria-pressed')).toBe('true')
-    expect(button.getAttribute('aria-label')).toBe('Detener la grabación (1:15)')
+  it('grabando: tiempo, nivel, y dos botones con nombre: pausar y terminar', () => {
+    const { byText, onPause, onStop, onStart } = show({ state: 'recording', seconds: 75, level: 0.6 })
+    expect(container.textContent).toContain('Grabando')
     expect(container.querySelector('[role="timer"]')?.textContent).toBe('1:15')
     expect(container.querySelector('[role="meter"]')?.getAttribute('aria-valuenow')).toBe('3')
-    act(() => button.click())
+    act(() => byText('Pausar')!.click())
+    expect(onPause).toHaveBeenCalledTimes(1)
+    act(() => byText('Terminar y transcribir')!.click())
     expect(onStop).toHaveBeenCalledTimes(1)
     expect(onStart).not.toHaveBeenCalled()
   })
 
-  it('si no entra voz lo dice junto al botón', () => {
+  it('en pausa: lo dice, no muestra nivel y ofrece seguir o terminar', () => {
+    const { byText, onResume, onStop } = show({ state: 'paused', seconds: 30, level: 0.9 })
+    expect(container.textContent).toContain('En pausa')
+    expect(container.querySelector('[role="meter"]')).toBeNull()
+    expect(byText('Pausar')).toBeUndefined()
+    act(() => byText('Seguir grabando')!.click())
+    expect(onResume).toHaveBeenCalledTimes(1)
+    act(() => byText('Terminar y transcribir')!.click())
+    expect(onStop).toHaveBeenCalledTimes(1)
+  })
+
+  it('si no entra voz lo dice', () => {
     show({ state: 'recording', seconds: 5, level: 0, silent: true })
     expect(container.querySelector('[role="alert"]')?.textContent).toMatch(/No llega voz al micrófono/)
   })
 
   it('mientras transcribe no se puede volver a tocar', () => {
-    const { button, onStart } = show({ state: 'busy' })
-    expect(button.disabled).toBe(true)
-    expect(button.getAttribute('aria-label')).toBe('Transcribiendo el dictado')
-    act(() => button.click())
+    const { buttons, onStart } = show({ state: 'busy' })
+    expect(buttons[0]!.disabled).toBe(true)
+    expect(buttons[0]!.getAttribute('aria-label')).toBe('Transcribiendo el dictado')
+    act(() => buttons[0]!.click())
     expect(onStart).not.toHaveBeenCalled()
   })
 
