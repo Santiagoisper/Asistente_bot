@@ -58,7 +58,7 @@ export function EvolutionAudio({ studyId, subjectId, audio }: { studyId: string;
       {url ? (
         <audio controls src={url} className="h-8 max-w-full" />
       ) : (
-        <button type="button" onClick={() => void listen()} disabled={state === 'loading'} className="rounded border border-alphi-border px-2 py-1 font-semibold text-alphi-ink disabled:opacity-50">
+        <button type="button" onClick={() => void listen()} disabled={state === 'loading'} className="rounded border border-alphi-border px-2 py-1 font-semibold text-alphi-navy disabled:opacity-50">
           {state === 'loading' ? 'Cargando…' : 'Escuchar'}
         </button>
       )}

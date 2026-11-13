@@ -1,3 +1,5 @@
+import { splitClauses } from './clauses'
+
 /**
  * Bloques de la evolución dictada (docs/decisions/consulta-dictada.md, D6).
  * Provisorios: alinear con la plantilla del informe del 12/11 antes de fijarlos.
@@ -145,6 +147,12 @@ function headingWords(words: readonly string[], heading: string): { count: numbe
   // cambiarle la primera palabra entera («Ninguno desde la última visita» abría «Evolución desde…»).
   const tolerance = target.length <= 4 ? 0 : Math.min(3, Math.max(1, Math.floor(target.length * 0.25)))
   const size = heading.split(' ').length
+  // La primera palabra tiene que ser la del encabezado (se le perdona una letra si es larga):
+  // «Sin eventos adversos» no es el encabezado «Eventos adversos» con una palabra de más.
+  const first = heading.split(' ')[0]!
+  if (words.length === 0 || editDistance(words[0]!, first) > (first.length <= 4 ? 0 : 1)) {
+    return { count: 0, distance: Number.POSITIVE_INFINITY }
+  }
   let best = 0
   let bestDistance = Number.POSITIVE_INFINITY
   for (const count of [size, size + 1, size - 1]) {
@@ -159,37 +167,61 @@ function headingWords(words: readonly string[], heading: string): { count: numbe
 }
 
 /**
- * Parte el texto en bloques. Un encabezado vale solo al comienzo de una frase
- * («Signos vitales: …», «Plan. …»): la misma palabra en medio de una frase es
- * texto. Lo dictado antes del primer encabezado va a la apertura.
+ * Parte el texto en bloques. Lo dictado antes del primer encabezado va a la apertura.
+ *
+ * Un encabezado vale al comienzo de una frase («Signos vitales. …», «Plan solicitar…»).
+ * Quien dicta de corrido no hace pausas y el transcriptor separa con comas, así que
+ * también vale después de una coma o de dos puntos, con más exigencia: tiene que ser un
+ * encabezado de varias palabras («próxima visita en cuatro semanas») o una palabra que
+ * esté sola entre comas cuando el apartado en curso ya tiene contenido («…, plan, continúa igual»). «Motivo por el cual», «evolución
+ * favorable» o «sin eventos adversos» en medio de una frase son texto.
  */
 export function splitIntoBlocks(text: string): DictationBlock[] {
-  const sentences = (text.match(/[^.;\n]+[.;\n]?/g) ?? []).map((sentence) => sentence.trim()).filter((sentence) => sentence.length > 0)
   const headings = DICTATION_BLOCKS.flatMap((block) => block.headings.map((heading) => ({ id: block.id, heading })))
-    .sort((a, b) => b.heading.length - a.heading.length)
   const parts = new Map<DictationBlockId, string[]>()
   let current: DictationBlockId = 'apertura'
-  for (const sentence of sentences) {
-    const rawWords = sentence.split(/\s+/)
+  let buffer = ''
+  const flush = () => {
+    // Un tramo que quedó cortado por un encabezado termina en coma o en dos puntos: se cierra con punto.
+    const body = buffer.trim().replace(/[,:]+$/, '').trim()
+    buffer = ''
+    if (body.replace(/[.;]/g, '').trim().length === 0) return
+    const closed = /[.;!?]$/.test(body) ? body : `${body}.`
+    const list = parts.get(current) ?? []
+    list.push(closed.charAt(0).toUpperCase() + closed.slice(1))
+    parts.set(current, list)
+  }
+
+  let sentenceStart = true
+  let previousDelimiter = '.'
+  for (const clause of splitClauses(text, '.;,:\n')) {
+    const rawWords = clause.text.split(/\s+/)
     const words = rawWords.map((word) => plain(word).replace(/[^a-z0-9]/g, ''))
-    let rest = sentence
     // Gana el encabezado más parecido, no el primero que entra en la tolerancia: «Evolución»
     // está a dos letras de «evaluación» y tiene que abrir su propio bloque.
-    let best: { id: DictationBlockId; count: number; distance: number } | null = null
+    let best: { id: DictationBlockId; count: number; distance: number; multiword: boolean } | null = null
     for (const { id, heading } of headings) {
       const match = headingWords(words, heading)
       if (match.count === 0) continue
-      if (!best || match.distance < best.distance) best = { id, ...match }
+      if (!best || match.distance < best.distance) best = { id, ...match, multiword: heading.includes(' ') }
     }
-    if (best) {
+    // Una palabra suelta después de una coma abre apartado solo si el apartado en curso ya tiene
+    // contenido: en «Plan: laboratorio» o «…, plan, laboratorio» la segunda palabra es lo dictado.
+    const loneWord = best !== null && best.count === words.length && previousDelimiter === ',' && buffer.trim().length > 0
+    const opens = best !== null && (sentenceStart || best.multiword || loneWord)
+    if (best && opens) {
+      flush()
       current = best.id
-      rest = rawWords.slice(best.count).join(' ').replace(/^[\s:,.;-]+/, '')
+      const rest = rawWords.slice(best.count).join(' ').replace(/^[\s:,.;-]+/, '')
+      buffer = rest.length > 0 ? rest + clause.delimiter : ''
+    } else {
+      buffer += (buffer.length > 0 ? ' ' : '') + clause.text + clause.delimiter
     }
-    if (rest.replace(/[.;]/g, '').trim().length === 0) continue
-    const list = parts.get(current) ?? []
-    list.push(rest.charAt(0).toUpperCase() + rest.slice(1))
-    parts.set(current, list)
+    sentenceStart = clause.delimiter === '.' || clause.delimiter === ';'
+    previousDelimiter = clause.delimiter
   }
+  flush()
+
   return DICTATION_BLOCKS.map((block) => ({
     id: block.id,
     title: block.title,

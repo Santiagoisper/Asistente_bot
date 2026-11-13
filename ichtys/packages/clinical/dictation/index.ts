@@ -1,3 +1,4 @@
+export * from './clauses'
 export * from './trim-silence'
 export * from './corrections'
 export * from './repetition'
