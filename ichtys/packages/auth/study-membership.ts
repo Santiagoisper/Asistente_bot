@@ -36,10 +36,26 @@ export async function canEnterStudy(params: {
         eq(studyMemberships.studyId, params.studyId),
         eq(studyMemberships.userId, params.userId),
         isNull(studyMemberships.revokedAt),
-        or(isNull(studyMemberships.expiresAt), gt(studyMemberships.expiresAt, now)),
+        activeMembershipCondition(params.access.functions.includes('monitor'), now),
       ),
     )
     .limit(1)
 
   return rows.length > 0
+}
+
+/**
+ * La vigencia de una membresía, como condición de consulta (M18). Para el
+ * monitor, una membresía sin fecha ya venció: es el hueco de orden — sumarse
+ * al estudio antes de recibir la función dejaba la fecha en null y «sin fecha»
+ * se leía como «no vence», acceso permanente justo lo que M18 impide. El resto
+ * del equipo sin fecha sigue sin vencer.
+ *
+ * `canEnterStudy` (un estudio) y `loadStudyScope` (todos) leen la misma
+ * condición: que los dos filtros divergieran era el otro costado del hueco.
+ */
+export function activeMembershipCondition(isMonitor: boolean, now: Date) {
+  return isMonitor
+    ? gt(studyMemberships.expiresAt, now)
+    : or(isNull(studyMemberships.expiresAt), gt(studyMemberships.expiresAt, now))
 }

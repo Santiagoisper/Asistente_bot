@@ -92,6 +92,21 @@ describe('loadStudyScope', () => {
       ],
     })
   })
+
+  it('M18: el monitor solo lista estudios con membresía fechada y vigente', async () => {
+    const now = new Date('2026-11-12T12:00:00Z')
+    await loadStudyScope({ ...base, now, access: enforced('monitor') })
+    // Sin el «o sin fecha»: una membresía creada antes del rol — fecha null —
+    // ya venció para el monitor. Mismo criterio que canEnterStudy.
+    expect(mocks.where.mock.calls[0]?.[0]).toEqual({
+      conditions: [
+        { left: 'sm.organization_id', right: 'org-1' },
+        { left: 'sm.user_id', right: 'user-1' },
+        { isNull: 'sm.revoked_at' },
+        { gt: 'sm.expires_at', than: now },
+      ],
+    })
+  })
 })
 
 describe('studyScopeFilter', () => {
