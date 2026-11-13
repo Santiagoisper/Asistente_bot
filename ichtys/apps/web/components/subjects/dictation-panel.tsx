@@ -2,14 +2,22 @@
 
 /**
  * Dictado de la evolución (docs/decisions/consulta-dictada.md).
- * Graba o recibe un audio, lo transcribe en este equipo y arma un borrador
- * por bloques. No guarda nada: «Usar como evolución» llena el cuadro de
- * siempre y el médico guarda con el botón de siempre.
+ * Graba o recibe un audio, lo transcribe en este equipo y arma un borrador.
+ * Este panel no guarda nada: «Usar como evolución» llena el cuadro de siempre
+ * y le pasa la grabación a la pantalla, que la sube recién cuando el médico
+ * guarda la evolución con el botón de siempre (D14).
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { buildDictationDraft, DICTATION_BLOCKS, NOT_MENTIONED, type DictationDraft } from '@ichtys/clinical'
 import { prepareAudio } from '../../lib/dictation/audio'
-import { DICTATION_MODEL, DICTATION_MODEL_REVISION, type TranscriberEvent } from '../../lib/dictation/protocol'
+import {
+  DICTATION_AUDIO_MAX_BYTES,
+  DICTATION_AUDIO_RETENTION_DAYS,
+  DICTATION_MODEL,
+  DICTATION_MODEL_REVISION,
+  DICTATION_RECORDING_BITS_PER_SECOND,
+  type TranscriberEvent,
+} from '../../lib/dictation/protocol'
 import { useMicLevel } from '../../lib/dictation/use-mic-level'
 import { DictationGuide } from './dictation-guide'
 import { RecordButton } from './record-button'
@@ -45,7 +53,18 @@ function readConsent(): boolean {
   }
 }
 
-export function DictationPanel({ onUse }: { onUse: (text: string, source: DictationSource) => void }) {
+/** La grabación de la que salió el borrador. Se sube recién cuando la persona guarda la evolución. */
+export interface DictationRecording {
+  blob: Blob
+  durationSec: number
+}
+
+export function DictationPanel({
+  onUse,
+}: {
+  onUse: (text: string, source: DictationSource, recording: DictationRecording | null) => void
+}) {
+  const [recording, setRecording] = useState<Blob | null>(null)
   const [consent, setConsent] = useState(false)
   const [phase, setPhase] = useState<Phase>('idle')
   const [seconds, setSeconds] = useState(0)
@@ -88,6 +107,7 @@ export function DictationPanel({ onUse }: { onUse: (text: string, source: Dictat
       setPhase('preparing')
       setMessage(null)
       setDraft(null)
+      setRecording(blob)
       let prepared
       try {
         prepared = await prepareAudio(blob)
@@ -128,7 +148,7 @@ export function DictationPanel({ onUse }: { onUse: (text: string, source: Dictat
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       })
-      const recorder = new MediaRecorder(stream)
+      const recorder = new MediaRecorder(stream, { audioBitsPerSecond: DICTATION_RECORDING_BITS_PER_SECOND })
       const chunks: Blob[] = []
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunks.push(event.data)
@@ -175,7 +195,8 @@ export function DictationPanel({ onUse }: { onUse: (text: string, source: Dictat
       missingBlocks: missing,
       layout: draft.layout,
       repetitions: draft.repetitions.length,
-    })
+    }, recording && recording.size <= DICTATION_AUDIO_MAX_BYTES ? { blob: recording, durationSec } : null)
+    setRecording(null)
     setDraft(null)
     setText('')
     setPhase('idle')
@@ -223,8 +244,9 @@ export function DictationPanel({ onUse }: { onUse: (text: string, source: Dictat
       {askingConsent && !consent ? (
         <div className="space-y-2 rounded border border-alphi-border bg-slate-50 p-3 text-sm" role="group" aria-label="Antes de grabar">
           <p>
-            Se graba <strong>tu dictado</strong> para armar un borrador. El audio se transcribe en este equipo, no se envía a
-            ningún servidor y no se guarda. Grabar a un paciente exige su consentimiento.
+            Se graba <strong>tu dictado</strong> para armar un borrador. El audio se transcribe en este equipo. Si guardás la
+            evolución, la grabación se guarda cifrada junto a ella durante {DICTATION_AUDIO_RETENTION_DAYS} días y después se
+            borra; si descartás el borrador, no se guarda nada. Grabar a un paciente exige su consentimiento.
           </p>
           <div className="flex flex-wrap gap-3">
             <button
@@ -257,6 +279,9 @@ export function DictationPanel({ onUse }: { onUse: (text: string, source: Dictat
         <div className="space-y-3">
           <p role="note" className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
             Borrador armado a partir de tu dictado. Revisalo contra lo que dijiste antes de usarlo: no se guardó nada todavía.
+            {recording && recording.size > DICTATION_AUDIO_MAX_BYTES
+              ? ' Esta grabación es demasiado grande para guardarse junto a la evolución: va a quedar solo el texto.'
+              : ` Al guardar la evolución, la grabación queda guardada ${DICTATION_AUDIO_RETENTION_DAYS} días.`}
           </p>
           {draft.corrections.length > 0 ? (
             <div className="text-xs">
@@ -304,7 +329,7 @@ export function DictationPanel({ onUse }: { onUse: (text: string, source: Dictat
             <button type="button" onClick={useDraft} disabled={!text.trim()} className="rounded bg-alphi-ink px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">
               Usar como evolución
             </button>
-            <button type="button" onClick={() => { setDraft(null); setText(''); setPhase('idle') }} className="rounded border border-alphi-border px-3 py-1.5 text-sm font-semibold">
+            <button type="button" onClick={() => { setDraft(null); setText(''); setRecording(null); setPhase('idle') }} className="rounded border border-alphi-border px-3 py-1.5 text-sm font-semibold">
               Descartar el borrador
             </button>
           </div>
