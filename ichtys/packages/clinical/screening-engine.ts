@@ -1,4 +1,4 @@
-import type { CriterionAssessment, LabObservation, PatientProfile } from './profile-schema'
+import type { CriterionAssessment, LabObservation, MissingDatum, PatientProfile } from './profile-schema'
 import {
   alignLabToBounds,
   compareWithBounds,
@@ -70,6 +70,7 @@ function assessAnalyteCriterion(
         analyte === 'BMI'
           ? 'IMC no documentado en el perfil del sujeto: falta el IMC, o el peso y la talla.'
           : `${analyte} no documentado en el perfil del sujeto.`,
+      missing: [analyte === 'BMI' ? 'weight-height' : analyte === 'HbA1c' ? 'hba1c' : 'egfr'],
     }
   }
 
@@ -145,7 +146,7 @@ function assessAgeCriterion(
   }
   const age = profile.demographics?.ageYears
   if (age === undefined) {
-    return { ...base, status: 'unknown', reason: 'Edad no documentada en el perfil del sujeto.' }
+    return { ...base, status: 'unknown', reason: 'Edad no documentada en el perfil del sujeto.', missing: ['age'] }
   }
   const inside =
     (!bounds.min || (bounds.min.inclusive ? age >= bounds.min.value : age > bounds.min.value)) &&
@@ -248,10 +249,14 @@ function assessConditionCriterion(
   // negación pura la despeja; sin mención, queda a revisar.
   const affirmed: string[] = []
   const missing: string[] = []
+  const missingData: MissingDatum[] = []
   for (const term of asked) {
     const mentions = profile.conditions.filter((condition) => term.mention.test(condition))
     if (mentions.some((condition) => !deniesTerm(condition, term))) affirmed.push(term.label)
-    else if (mentions.length === 0) missing.push(term.label)
+    else if (mentions.length === 0) {
+      missing.push(term.label)
+      missingData.push(term.datum)
+    }
   }
   const asksMore = asksBeyondTerms(criterion.text, asked)
   // Si el criterio pide algo más, ni lo negado lo despeja ni lo afirmado lo activa solo: el
@@ -275,6 +280,8 @@ function assessConditionCriterion(
             : missing.length > 0
               ? `El perfil no registra ${list(missing)}: que no figure no prueba que no exista. Confirmarlo y dejarlo dicho («sin ${missing.join(' ni ')}»).${asksMore ? ` ${beyond}` : ''}`
               : `El perfil registra que no hay ${list(asked.map((term) => term.label))}. ${beyond}`,
+    // Se pide el dato solo si con él alcanza: si ya hay algo afirmado, decirlo no cambia nada.
+    ...(status === 'unknown' && affirmed.length === 0 && missingData.length > 0 ? { missing: missingData } : {}),
     sourcePages: criterion.sourcePages,
   }
 }

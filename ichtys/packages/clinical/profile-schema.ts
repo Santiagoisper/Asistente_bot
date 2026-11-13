@@ -92,6 +92,14 @@ export type Medication = z.infer<typeof medicationSchema>
 export const criterionStatusSchema = z.enum(['pass', 'fail', 'unknown'])
 export type CriterionStatus = z.infer<typeof criterionStatusSchema>
 
+/**
+ * El dato que le falta al perfil para que un criterio deje de estar «a revisar». Solo datos
+ * que el sistema sabe leer de una evolución o de un laboratorio: es lo que la guía de
+ * dictado le pide al médico (D18).
+ */
+export const missingDatumSchema = z.enum(['age', 'hba1c', 'egfr', 'weight-height', 'pancreatitis', 'pregnancy', 'lactation'])
+export type MissingDatum = z.infer<typeof missingDatumSchema>
+
 export const criterionAssessmentSchema = z.object({
   criterionNumber: z.string(),
   criterionText: z.string(),
@@ -100,6 +108,8 @@ export const criterionAssessmentSchema = z.object({
   reason: z.string(),
   /** Páginas del protocolo fuente (1-based) desde el study spec. */
   sourcePages: z.array(z.number().int().positive()).optional(),
+  /** Presente solo cuando el criterio queda a revisar porque falta un dato que se puede cargar. */
+  missing: z.array(missingDatumSchema).optional(),
 })
 
 export type CriterionAssessment = z.infer<typeof criterionAssessmentSchema>
