@@ -6,8 +6,8 @@
  * Graba (con pausa) o recibe un audio, lo transcribe en este equipo y le entrega
  * el borrador a la pantalla, que lo pone en el cuadro de la evolución: hay un solo
  * cuadro de texto y un solo botón de guardar. Este panel no guarda nada: muestra
- * los controles, la grabación para volver a escucharla, los avisos del borrador y
- * la guía. La grabación sale del equipo recién cuando la persona guarda (D14).
+ * los controles, la grabación para volver a escucharla y los avisos del borrador.
+ * La guía para dictar la ubica la pantalla, al lado de todo el formulario. La grabación sale del equipo recién cuando la persona guarda (D14).
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { buildDictationDraft, DICTATION_BLOCKS, type DictationDraft } from '@ichtys/clinical'
@@ -21,7 +21,6 @@ import {
   type TranscriberEvent,
 } from '../../lib/dictation/protocol'
 import { useMicLevel } from '../../lib/dictation/use-mic-level'
-import { DictationGuide } from './dictation-guide'
 import { RecordButton } from './record-button'
 
 export interface DictationSource {
@@ -256,8 +255,6 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
 
   return (
     <section className="space-y-3" aria-label="Dictar la evolución">
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="min-w-0 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <RecordButton
               state={phase === 'recording' ? 'recording' : phase === 'paused' ? 'paused' : busy ? 'busy' : 'idle'}
@@ -378,9 +375,6 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
               </button>
             </div>
           ) : null}
-        </div>
-        <DictationGuide />
-      </div>
     </section>
   )
 }

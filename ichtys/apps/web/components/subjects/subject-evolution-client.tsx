@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { bloodPressureProposalLabel } from '../../lib/subjects/proposal-display'
 import { unapprovedSpecNotice } from '../../lib/subjects/spec-notice'
 import { DictationPanel, type DictationRecording, type DictationSource } from './dictation-panel'
+import { DictationGuide } from './dictation-guide'
 import { EvolutionAudio, type EvolutionAudioInfo } from './evolution-audio'
 
 interface EvolutionItem {
@@ -367,6 +368,9 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       <form onSubmit={handleSave} className="space-y-4 rounded-lg border border-alphi-border bg-alphi-slate/20 p-4">
         <h3 className="text-sm font-bold uppercase tracking-wide text-alphi-muted">Nueva evolución</h3>
 
+        {/* Dos columnas: a la izquierda se graba, se revisa y se guarda; a la derecha, la guía, siempre a la vista. */}
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_21rem]">
+        <div className="min-w-0 space-y-4">
         <DictationPanel
           resetSignal={savedCount}
           onDraft={(text, source, recording) => {
@@ -419,6 +423,9 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
           <button type="submit" disabled={saving || !content.trim()} className="alphi-btn-primary px-6 py-3 text-base">
             {saving ? 'Guardando…' : 'Guardar evolución'}
           </button>
+        </div>
+        </div>
+        <DictationGuide />
         </div>
       </form>
 
