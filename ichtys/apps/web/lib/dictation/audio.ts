@@ -1,9 +1,9 @@
 /**
  * Audio del dictado (docs/decisions/consulta-dictada.md, D1 y D3).
  * Todo ocurre en el navegador: el audio se decodifica, se lleva a 16 kHz mono
- * y se le recortan los silencios. No se sube ni se guarda.
+ * y se marca dónde hay voz, cortando por las pausas (D15). Acá no se sube nada.
  */
-import { trimSilence } from '@ichtys/clinical'
+import { segmentSpeech, type SpeechSegment } from '@ichtys/clinical'
 
 export const TARGET_SAMPLE_RATE = 16_000
 
@@ -36,11 +36,12 @@ export function resampleLinear(samples: Float32Array, fromRate: number, toRate: 
 }
 
 export interface PreparedAudio {
+  /** Todo lo grabado, a 16 kHz mono. */
   samples: Float32Array
-  /** Duración de lo grabado, antes del recorte (segundos). */
+  /** Los tramos de voz, uno por cada cosa dicha entre dos pausas. Vacío: no hay voz. */
+  segments: SpeechSegment[]
+  /** Duración de lo grabado (segundos). */
   durationSec: number
-  /** Silencio quitado (segundos). */
-  removedSec: number
 }
 
 /** De un archivo o una grabación a muestras listas para transcribir. Solo en el navegador. */
@@ -50,8 +51,7 @@ export async function prepareAudio(blob: Blob): Promise<PreparedAudio> {
     const decoded = await context.decodeAudioData(await blob.arrayBuffer())
     const channels = Array.from({ length: decoded.numberOfChannels }, (_, index) => decoded.getChannelData(index))
     const mono = resampleLinear(mixToMono(channels), decoded.sampleRate, TARGET_SAMPLE_RATE)
-    const trimmed = trimSilence(mono, TARGET_SAMPLE_RATE)
-    return { samples: trimmed.samples, durationSec: Math.round(decoded.duration), removedSec: trimmed.removedSec }
+    return { samples: mono, segments: segmentSpeech(mono, TARGET_SAMPLE_RATE), durationSec: Math.round(decoded.duration) }
   } finally {
     void context.close()
   }
