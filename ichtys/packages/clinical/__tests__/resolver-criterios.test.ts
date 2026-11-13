@@ -254,10 +254,15 @@ describe('elegibilidad: historia y estado no se niegan con las mismas palabras (
   const pancreatitis = (condition: string) => exclusion(profileWith({ conditions: [condition] }), 'Antecedente de pancreatitis.').status
   const pregnancy = (condition: string) => exclusion(profileWith({ conditions: [condition, 'Sin lactancia'] }), 'Embarazo o lactancia.').status
 
-  it.each(['Sin signos de pancreatitis', 'No presenta pancreatitis', 'No cursa pancreatitis', 'No tiene pancreatitis'])(
-    'no despeja un antecedente: %s',
+  // Relectura de Reviewer: una negación que habla de otra cosa no despeja, pero tampoco afirma.
+  // Antes estas pruebas pedían «no pasa», y un rojo con el motivo «registrado en el perfil» las cumplía.
+  it.each(['Sin signos de pancreatitis', 'No presenta pancreatitis', 'No cursa pancreatitis', 'No tiene pancreatitis', 'Sin síntomas de pancreatitis'])(
+    'ni despeja ni activa un antecedente, queda a revisar: %s',
     (condition) => {
-      expect(pancreatitis(condition)).not.toBe('pass')
+      const result = exclusion(profileWith({ conditions: [condition] }), 'Antecedente de pancreatitis.')
+      expect(result.status).toBe('unknown')
+      expect(result.reason).not.toMatch(/Registrado en el perfil/)
+      expect(result.reason).toContain(`«${condition}»`)
     },
   )
 
@@ -268,8 +273,24 @@ describe('elegibilidad: historia y estado no se niegan con las mismas palabras (
     },
   )
 
-  it.each(['Sin signos de embarazo', 'Sin antecedentes de embarazo', 'Sin historia de embarazo'])('no despeja un estado: %s', (condition) => {
-    expect(pregnancy(condition)).not.toBe('pass')
+  it.each(['Sin signos de embarazo', 'Sin antecedentes de embarazo', 'Sin historia de embarazo', 'Sin embarazo previo', 'Sin embarazos previos'])(
+    'ni despeja ni activa un estado, queda a revisar: %s',
+    (condition) => {
+      const result = exclusion(profileWith({ conditions: [condition, 'Sin lactancia'] }), 'Embarazo o lactancia.')
+      expect(result.status).toBe('unknown')
+      expect(result.reason).not.toMatch(/Registrado en el perfil/)
+      expect(result.reason).toContain(`«${condition}»`)
+    },
+  )
+
+  it('con la negación que corresponde al lado, se despeja', () => {
+    expect(pregnancy('Sin antecedentes de embarazo')).toBe('unknown')
+    expect(exclusion(profileWith({ conditions: ['Sin antecedentes de embarazo', 'Sin embarazo', 'Sin lactancia'] }), 'Embarazo o lactancia.').status).toBe('pass')
+  })
+
+  it('una frase que dice algo más sigue activando: ahí la mención cuenta', () => {
+    expect(pancreatitis('Sin dolor por pancreatitis previa')).toBe('fail')
+    expect(pancreatitis('Sin signos de pancreatitis, internada en 2019')).toBe('fail')
   })
 
   it.each(['Sin embarazo', 'No está embarazada', 'No cursa embarazo', 'Niega embarazo'])('sí lo despeja: %s', (condition) => {
@@ -286,8 +307,8 @@ describe('elegibilidad: historia y estado no se niegan con las mismas palabras (
 describe('elegibilidad: negar la historia no es negar el estado', () => {
   const criterion = 'Embarazo o lactancia.'
   it.each([
-    [['Sin embarazo previo', 'Sin lactancia'], 'fail'],
-    [['Sin embarazo', 'Sin lactancia previa'], 'fail'],
+    [['Sin embarazo previo', 'Sin lactancia'], 'unknown'],
+    [['Sin embarazo', 'Sin lactancia previa'], 'unknown'],
     // Una diabetes gestacional pasada no es un embarazo.
     [['Sin embarazo', 'Sin lactancia', 'Antecedente de diabetes gestacional'], 'pass'],
   ] as const)('%j → %s', (conditions, expected) => {
