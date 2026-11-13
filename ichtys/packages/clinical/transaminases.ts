@@ -117,6 +117,8 @@ export function assessTransaminaseCriterion(
     if (!lab) return { key: enzyme.key, kind: 'no-value' }
     // Dos valores de la misma enzima bajo nombres distintos: elegir uno sería adivinar cuál vale.
     if (found.length > 1) return { key: enzyme.key, kind: 'several' }
+    // Un valor sin unidad se compara igual: el valor y su rango salen de la misma fila del mismo
+    // informe, así que comparten unidad. Lo que frena es una unidad escrita que no sea de actividad.
     const upper = upperLimitOfNormal(lab.referenceRange)
     if (upper === null || (lab.unit !== undefined && !ACTIVITY_UNIT.test(lab.unit.trim()))) return { key: enzyme.key, kind: 'no-limit', lab }
     const limit = times * upper
@@ -135,7 +137,10 @@ export function assessTransaminaseCriterion(
   const exceeded = readings.some((reading) => reading.kind === 'measured' && reading.exceeds)
   const several = readings.filter((reading) => reading.kind === 'several').map((reading) => reading.key)
   const complete = noValue.length === 0 && noLimit.length === 0 && several.length === 0
-  const asksMore = asksBeyondTheLimit(criterion.text)
+  // «ALT > 5 veces o AST > 3 veces», «… o mayor a 200»: la regla compara un solo múltiplo. Con
+  // cualquier otro número en el criterio, aplicar el primero a todo despeja o activa de más.
+  const severalNumbers = (criterion.text.match(/\d+(?:[.,]\d+)?/g) ?? []).length > 1
+  const asksMore = asksBeyondTheLimit(criterion.text) || severalNumbers
   const allExceed = complete && readings.every((reading) => reading.kind === 'measured' && reading.exceeds)
   // Con una sola enzima pedida, o con un «o» expreso, una por encima alcanza. Si no, hacen falta todas.
   const oneIsEnough = asked.length === 1 || saysEitherIsEnough(criterion.text)
@@ -160,7 +165,8 @@ export function assessTransaminaseCriterion(
             facts,
             ...gaps,
             undecidedMix ? 'El criterio no dice si alcanza con una sola enzima por encima: no se decide solo.' : '',
-            asksMore ? 'El criterio pide además algo que el sistema no comprueba: revisarlo antes de decidir.' : '',
+            severalNumbers ? 'El criterio trae más de un número y el sistema compara un solo múltiplo: revisarlo antes de decidir.' : '',
+            asksMore && !severalNumbers ? 'El criterio pide además algo que el sistema no comprueba: revisarlo antes de decidir.' : '',
           ]
             .filter((part) => part.length > 0)
             .join(' ')

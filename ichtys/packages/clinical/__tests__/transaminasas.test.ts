@@ -137,6 +137,46 @@ describe('elegibilidad: transaminasas', () => {
     })
   })
 
+  describe('más de un número en el criterio: no se aplica el primer múltiplo a todo', () => {
+    // Hallazgo de la revisión: «ALT > 5 veces o AST > 3 veces» aplicaba 5 a las dos y despejaba.
+    it('falso verde: múltiplos distintos por enzima no despejan con el primero', () => {
+      const result = exclusion(
+        profileWith([alt(200, 'hasta 41'), ast(160, 'hasta 40')]),
+        'ALT mayor a 5 veces el limite superior normal, o AST mayor a 3 veces el limite superior normal.',
+      )
+      expect(result.status).toBe('unknown')
+      expect(result.reason).toContain('más de un número')
+      expect(result.missing).toBeUndefined()
+    })
+
+    it('falso rojo: tampoco activan con el primero', () => {
+      const result = exclusion(
+        profileWith([alt(31, 'hasta 41'), ast(160, 'hasta 40')]),
+        'ALT mayor a 3 veces el limite superior normal, o AST mayor a 5 veces el limite superior normal.',
+      )
+      expect(result.status).toBe('unknown')
+      expect(result.reason).toContain('más de un número')
+    })
+
+    it.each([
+      'ALT o AST mayor a 3 veces el limite superior normal o mayor a 200.',
+      'ALT > 3 x ULN or AST > 5 x ULN.',
+      'ALT mayor a 3 veces o AST mayor a 3 veces el limite superior normal.',
+      'ALT o AST mayor a 3 veces el limite superior normal x 2.',
+    ])('con cualquier segundo número queda a revisar, con los valores a la vista: %s', (text) => {
+      const normal = exclusion(profileWith([alt(31, 'hasta 41'), ast(24, 'hasta 40')]), text)
+      expect(normal.status).toBe('unknown')
+      const high = exclusion(profileWith([alt(500, 'hasta 41'), ast(500, 'hasta 40')]), text)
+      expect(high.status).toBe('unknown')
+      expect(high.reason).toContain('más de un número')
+    })
+
+    it('un solo múltiplo con decimales sigue siendo un solo número', () => {
+      expect(exclusion(profileWith([alt(31, 'hasta 41'), ast(24, 'hasta 40')]), 'ALT o AST mayor a 2,5 veces el limite superior normal.').status).toBe('pass')
+      expect(exclusion(profileWith([alt(31, 'hasta 41'), ast(24, 'hasta 40')]), 'ALT o AST mayor a 2.5 veces el limite superior normal.').status).toBe('pass')
+    })
+  })
+
   it('lee el criterio en inglés', () => {
     const normal = profileWith([alt(31, 'hasta 41'), ast(24, 'hasta 40')])
     expect(exclusion(normal, 'ALT or AST > 3 x ULN.').status).toBe('pass')
