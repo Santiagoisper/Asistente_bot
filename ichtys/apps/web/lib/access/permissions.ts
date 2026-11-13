@@ -1,4 +1,4 @@
-import { allows, capabilitiesOf, type AccessSubject } from '@ichtys/auth/functions'
+import { allows, type AccessSubject } from '@ichtys/auth/functions'
 import { ROLES, roleSatisfies, type Role } from '@ichtys/auth/roles'
 import type { MemberFunction } from '@ichtys/db'
 
@@ -30,8 +30,14 @@ export type ExpiryProblem = 'monitor_requires_expiry' | 'expiry_in_past' | 'moni
 
 /**
  * Valida el vencimiento de una membresía según las funciones de la persona.
- * Quien es SOLO monitor necesita fecha; quien además trabaja en el centro con otra
- * función que entra a estudios, no (su acceso no depende de la visita de monitoreo).
+ *
+ * Sin fecha: solo el monitor la necesita (M4, M18 — lectura estricta: aunque
+ * tenga otras funciones encima; una función extra no puede usarse de puerta de
+ * servicio para saltear el control).
+ *
+ * Con fecha: TODA membresía se valida igual (precisión de M4, Santiago
+ * 13/11/2026) — ni en el pasado ni más allá del máximo, monitor o no. Quien no
+ * es monitor no necesita fecha, pero si la carga, esa fecha vale entera.
  */
 export function checkMembershipExpiry(params: {
   targetFunctions: readonly MemberFunction[]
@@ -39,14 +45,9 @@ export function checkMembershipExpiry(params: {
   now: Date
 }): ExpiryProblem | null {
   const { targetFunctions, expiresAt, now } = params
-  if (expiresAt && expiresAt.getTime() <= now.getTime()) return 'expiry_in_past'
+  if (!expiresAt) return targetFunctions.includes('monitor') ? 'monitor_requires_expiry' : null
 
-  const onlyMonitor =
-    targetFunctions.includes('monitor') &&
-    !targetFunctions.some((fn) => fn !== 'monitor' && capabilitiesOf([fn]).has('study.read'))
-  if (!onlyMonitor) return null
-
-  if (!expiresAt) return 'monitor_requires_expiry'
+  if (expiresAt.getTime() <= now.getTime()) return 'expiry_in_past'
   const maxMs = MONITOR_MEMBERSHIP_MAX_DAYS * 24 * 60 * 60 * 1000
   if (expiresAt.getTime() - now.getTime() > maxMs) return 'monitor_expiry_too_far'
   return null
