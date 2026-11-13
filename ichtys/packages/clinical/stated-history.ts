@@ -100,7 +100,10 @@ export function deniesTerm(phrase: string, term: HistoryTerm): boolean {
 }
 
 const LOOSE_ITEM = /^[a-záéíóúñ]+(?:\s+[a-záéíóúñ]+){0,2}$/i
-const CONNECTIVE = /(?:^|\s)(?:por|con|desde|pero|salvo|excepto|aunque|tras|luego|hace|durante|seg[uú]n|en|a|al|de|del|la|el|los|las|que)(?:\s|$)/i
+// Palabras que hacen que la frase diga algo más que una negación («sin dolor POR pancreatitis
+// previa», «sin controles DESDE la pancreatitis»). «De» no está: «sin pancreatitis de
+// repetición» o «sin antecedentes familiares de pancreatitis» siguen siendo solo una negación.
+const CONNECTIVE = /(?:^|\s)(?:por|con|desde|pero|salvo|excepto|aunque|tras|luego|hace|durante|seg[uú]n|en|a|al|que)(?:\s|$)/i
 const SIGNS_HEAD = /^(?:signos|s[ií]ntomas|evidencia|sospecha|cl[ií]nica)\s+(?:de\s+)?/i
 
 /**
@@ -116,4 +119,16 @@ export function isBareNegation(phrase: string): boolean {
   if (!match) return false
   const rest = match[3]!.replace(SIGNS_HEAD, '')
   return rest.split(/\s+(?:ni|o|y)\s+(?:de\s+)?/i).every((item) => LOOSE_ITEM.test(item) && !CONNECTIVE.test(item))
+}
+
+/**
+ * La frase que despeja lo que falta, para decírsela al médico tal cual: negar el antecedente
+ * si es historia («sin antecedentes de pancreatitis»), negar el estado si es estado, y varios
+ * estados juntos en una sola frase («sin embarazo ni lactancia»). Una prueba comprueba que
+ * cada frase sugerida, dicha así, despeja el criterio.
+ */
+export function clearingPhrases(terms: ReadonlyArray<HistoryTerm>): string[] {
+  const history = terms.filter((term) => term.nature === 'history').map((term) => term.deniedAs.toLowerCase())
+  const states = terms.filter((term) => term.nature === 'state').map((term) => term.label)
+  return states.length > 0 ? [...history, `sin ${states.join(' ni ')}`] : history
 }
