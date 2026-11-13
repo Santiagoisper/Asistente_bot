@@ -8,7 +8,7 @@ import {
   parseAnalyteBounds,
   textMentionsAnalyte,
 } from './numeric-criteria'
-import { deniesTerm, HISTORY_TERMS, type HistoryTerm } from './stated-history'
+import { deniesTerm, HISTORY_TERMS, isBareNegation, type HistoryTerm } from './stated-history'
 
 interface EligibilityCriterionInput {
   number: string
@@ -257,15 +257,23 @@ function assessConditionCriterion(
   // Una exclusión no se despeja por falta de datos: que no figure en el perfil no prueba que
   // no exista. Por cada cosa que el criterio nombra: una mención sin negar la activa; una
   // negación pura la despeja; sin mención, queda a revisar.
+  // Tres casos por mención, no dos. La niega de forma pura y hablando de lo mismo: despeja.
+  // Es una negación entera de otra cosa («no presenta pancreatitis» para un antecedente, «sin
+  // antecedentes de embarazo» para un estado, «sin signos de…»): ni despeja ni afirma, el dato
+  // sigue faltando. Cualquier otra mención cuenta como afirmada.
   const affirmed: string[] = []
   const missing: string[] = []
+  const notEnough: string[] = []
   const missingData: MissingDatum[] = []
   for (const term of asked) {
     const mentions = profile.conditions.filter((condition) => term.mention.test(condition))
-    if (mentions.some((condition) => !deniesTerm(condition, term))) affirmed.push(term.label)
-    else if (mentions.length === 0) {
+    const denied = mentions.some((condition) => deniesTerm(condition, term))
+    const others = mentions.filter((condition) => !deniesTerm(condition, term))
+    if (others.some((condition) => !isBareNegation(condition))) affirmed.push(term.label)
+    else if (!denied) {
       missing.push(term.label)
       missingData.push(term.datum)
+      notEnough.push(...others)
     }
   }
   const asksMore = asksBeyondTerms(criterion.text, asked)
@@ -288,7 +296,11 @@ function assessConditionCriterion(
           : affirmed.length > 0
             ? `Registrado en el perfil: ${affirmed.join(' y ')}. ${beyond}`
             : missing.length > 0
-              ? `El perfil no registra ${list(missing)}: que no figure no prueba que no exista. Confirmarlo y dejarlo dicho («sin ${missing.join(' ni ')}»).${asksMore ? ` ${beyond}` : ''}`
+              ? `${
+                  notEnough.length > 0
+                    ? `El perfil dice ${[...new Set(notEnough)].map((phrase) => `«${phrase}»`).join(' y ')}, y eso no alcanza para ${list(missing)}.`
+                    : `El perfil no registra ${list(missing)}: que no figure no prueba que no exista.`
+                } Confirmarlo y dejarlo dicho («sin ${missing.join(' ni ')}»).${asksMore ? ` ${beyond}` : ''}`
               : `El perfil registra que no hay ${list(asked.map((term) => term.label))}. ${beyond}`,
     // Se pide el dato solo si con él alcanza: si ya hay algo afirmado, decirlo no cambia nada.
     ...(status === 'unknown' && affirmed.length === 0 && missingData.length > 0 ? { missing: missingData } : {}),

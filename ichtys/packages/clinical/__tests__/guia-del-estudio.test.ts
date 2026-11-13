@@ -81,6 +81,13 @@ describe('la guía según el protocolo', () => {
     expect(prompt.say).toEqual(['Sin lactancia.'])
   })
 
+  it('una negación que no alcanza no esconde el renglón: la guía sigue pidiendo el dato (relectura de Reviewer)', () => {
+    const profile: PatientProfile = { version: 1, labs: [], medications: [], conditions: ['Sin antecedentes de embarazo', 'No presenta pancreatitis'] }
+    const ids = promptsFor(profile).map((prompt) => prompt.id)
+    expect(ids).toContain('pregnancy-lactation')
+    expect(ids).toContain('pancreatitis')
+  })
+
   it('dos criterios que piden el mismo dato salen en un solo renglón', () => {
     const assessments = assessScreening(emptyPatientProfile(), {
       inclusionCriteria: [
