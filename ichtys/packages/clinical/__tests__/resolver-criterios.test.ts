@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { extractFactsFromEvolution, mergeProfileWithFacts } from '../extract-facts'
+import { mergeExtractions } from '../extract-merge'
 import { emptyPatientProfile, type PatientProfile } from '../profile-schema'
 import { assessScreening } from '../screening-engine'
 
@@ -295,5 +296,22 @@ describe('de la visita de selección dictada a los criterios', () => {
       '3.4': 'pass', // embarazo y lactancia negados
     })
     expect(profile.medications.map((medication) => medication.name)).toEqual(['Metformina'])
+  })
+})
+
+describe('lo que propone el modelo no despeja una exclusión', () => {
+  const none = { labs: [], medications: [], conditions: [] as string[] }
+
+  it('una negación de antecedente que solo trae el modelo no se propone; una afirmación sí', () => {
+    const merged = mergeExtractions(none, {
+      ...none,
+      conditions: ['Sin antecedentes de pancreatitis', 'Sin embarazo ni lactancia', 'Antecedente de pancreatitis', 'DM2'],
+    })
+    expect(merged.facts.conditions).toEqual(['Antecedente de pancreatitis', 'DM2'])
+  })
+
+  it('si las reglas también la leyeron, queda', () => {
+    const merged = mergeExtractions({ ...none, conditions: ['Sin antecedentes de pancreatitis'] }, { ...none, conditions: ['Niega pancreatitis', 'Sin embarazo'] })
+    expect(merged.facts.conditions).toEqual(['Sin antecedentes de pancreatitis', 'Niega pancreatitis'])
   })
 })

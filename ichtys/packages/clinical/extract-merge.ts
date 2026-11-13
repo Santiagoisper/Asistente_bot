@@ -1,6 +1,7 @@
 import type { ExtractedFacts } from './extract-facts'
 import { upsertLab } from './lab-utils'
 import type { FieldConfidenceLevel, PatientProfile, ProfileFieldConfidence } from './profile-schema'
+import { deniesTerm, HISTORY_TERMS } from './stated-history'
 
 function numbersClose(a: number, b: number, tolerance = 0.05): boolean {
   return Math.abs(a - b) <= tolerance
@@ -101,15 +102,23 @@ export function mergeExtractions(
     )
   }
 
+  // Negar un antecedente despeja una exclusión. Qué cuenta como negación expresa lo deciden
+  // las reglas, que se pueden probar; el modelo no decide elegibilidad (AI-GOVERNANCE). Una
+  // negación que solo trae el modelo no se propone. Lo que el modelo afirma sí: obliga a mirar.
+  const deniedByRules = HISTORY_TERMS.filter((term) => heuristic.conditions.some((condition) => deniesTerm(condition, term)))
+  const llmConditions = llmFacts.conditions.filter((condition) =>
+    HISTORY_TERMS.filter((term) => deniesTerm(condition, term)).every((term) => deniedByRules.includes(term)),
+  )
+
   const conditionSet = new Set<string>()
   const conditions: string[] = []
-  for (const c of [...heuristic.conditions, ...llmFacts.conditions]) {
+  for (const c of [...heuristic.conditions, ...llmConditions]) {
     const key = c.toLowerCase()
     if (conditionSet.has(key)) continue
     conditionSet.add(key)
     conditions.push(c)
     const fromHeuristic = heuristic.conditions.some((x) => x.toLowerCase() === key)
-    const fromLlm = llmFacts.conditions.some((x) => x.toLowerCase() === key)
+    const fromLlm = llmConditions.some((x) => x.toLowerCase() === key)
     fieldConfidence.conditions = mergeRecordConfidence(
       fieldConfidence.conditions,
       key,
