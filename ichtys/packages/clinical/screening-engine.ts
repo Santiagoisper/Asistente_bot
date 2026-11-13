@@ -209,14 +209,21 @@ function assessMedicationCriterion(
 
 /** Palabras de un criterio que no piden nada: artículos, nexos y la forma de nombrar un antecedente. */
 const CRITERION_FILLER = new Set(
-  ('a al antecedente antecedentes historia de del la el los las o u y e ni en con que cualquier ' +
-    'previa previo previas previos personal personales actual actuales curso cursando diagnostico ' +
+  ('a al de del la el los las o u y e ni en con que cualquier ' +
+    'personal personales actual actuales curso cursando diagnostico ' +
     'conocida conocido documentada documentado clinica clinico aguda agudo cronica cronico ' +
     'mujer mujeres paciente pacientes sujeto sujetos participante participantes periodo este esten presencia ' +
     // Lo mismo en inglés: los criterios de un protocolo suelen venir así.
-    'history of any the an and or at time prior to enrollment enrolment screening known previous current currently ' +
+    'of any the an and or at time to enrollment enrolment screening known current currently ' +
     'acute chronic documented clinical diagnosis who are is woman women female females patient patients subject subjects participant participants').split(' '),
 )
+
+/**
+ * Palabras que hablan de la historia. No piden nada si el criterio es sobre un antecedente
+ * («antecedente de pancreatitis»). Sobre un estado sí: «embarazo previo» o «antecedente de
+ * embarazo ectópico» preguntan por la historia, y el sistema solo comprueba el estado de hoy.
+ */
+const HISTORY_FILLER = new Set('antecedente antecedentes historia previa previo previas previos history previous prior'.split(' '))
 
 /**
  * El criterio nombra algo más que los términos que el motor comprueba («… o de carcinoma
@@ -231,7 +238,10 @@ function asksBeyondTerms(criterionText: string, terms: ReadonlyArray<HistoryTerm
     .replace(/breast-feeding/g, 'breastfeeding')
     .split(/[^a-z0-9]+/)
     .filter((word) => word.length > 0)
-  return words.some((word) => !CRITERION_FILLER.has(word) && !terms.some((term) => term.mention.test(word)))
+  const aboutHistoryOnly = terms.every((term) => term.nature === 'history')
+  return words.some(
+    (word) => !CRITERION_FILLER.has(word) && !(aboutHistoryOnly && HISTORY_FILLER.has(word)) && !terms.some((term) => term.mention.test(word)),
+  )
 }
 
 function assessConditionCriterion(

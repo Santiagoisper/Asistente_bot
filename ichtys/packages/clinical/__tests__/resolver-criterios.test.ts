@@ -77,6 +77,14 @@ describe('extracción: lo dicho de forma expresa', () => {
     'Niega pancreatitis, pero tuvo una en 2019.',
     'Sin antecedentes de pancreatitis, salvo un episodio leve en 2015.',
     'Sin pancreatitis, tuvo una internación por dolor abdominal.',
+    // Hallazgo de Reviewer (#136): que hoy no haya signos no dice nada del antecedente.
+    'Sin signos de pancreatitis.',
+    'Sin signos de embarazo.',
+    // El antecedente es historia: «no presenta» o «no cursa» hablan de hoy.
+    'No presenta pancreatitis.',
+    'No cursa pancreatitis.',
+    // El embarazo es un estado: negar la historia no lo niega.
+    'Sin antecedentes de embarazo.',
     // «Sin embarazos previos» habla de la historia, no del estado actual.
     'Sin embarazos previos.',
     'Sin embarazo previo.',
@@ -240,6 +248,39 @@ describe('elegibilidad: el criterio pide algo que el sistema no comprueba', () =
       expect(exclusion(allDenied, text).status).toBe('pass')
     },
   )
+})
+
+describe('elegibilidad: historia y estado no se niegan con las mismas palabras (hallazgo de Reviewer, #136)', () => {
+  const pancreatitis = (condition: string) => exclusion(profileWith({ conditions: [condition] }), 'Antecedente de pancreatitis.').status
+  const pregnancy = (condition: string) => exclusion(profileWith({ conditions: [condition, 'Sin lactancia'] }), 'Embarazo o lactancia.').status
+
+  it.each(['Sin signos de pancreatitis', 'No presenta pancreatitis', 'No cursa pancreatitis', 'No tiene pancreatitis'])(
+    'no despeja un antecedente: %s',
+    (condition) => {
+      expect(pancreatitis(condition)).not.toBe('pass')
+    },
+  )
+
+  it.each(['Sin antecedentes de pancreatitis', 'Niega pancreatitis', 'No refiere pancreatitis', 'No presenta antecedentes de pancreatitis', 'Sin episodios de pancreatitis'])(
+    'sí lo despeja: %s',
+    (condition) => {
+      expect(pancreatitis(condition)).toBe('pass')
+    },
+  )
+
+  it.each(['Sin signos de embarazo', 'Sin antecedentes de embarazo', 'Sin historia de embarazo'])('no despeja un estado: %s', (condition) => {
+    expect(pregnancy(condition)).not.toBe('pass')
+  })
+
+  it.each(['Sin embarazo', 'No está embarazada', 'No cursa embarazo', 'Niega embarazo'])('sí lo despeja: %s', (condition) => {
+    expect(pregnancy(condition)).toBe('pass')
+  })
+
+  it('un criterio sobre la historia de un estado pide más de lo que el sistema comprueba', () => {
+    const denied = profileWith({ conditions: ['Sin embarazo', 'Sin lactancia'] })
+    expect(exclusion(denied, 'Embarazo previo.').status).toBe('unknown')
+    expect(exclusion(denied, 'Antecedente de embarazo ectópico.').status).toBe('unknown')
+  })
 })
 
 describe('elegibilidad: negar la historia no es negar el estado', () => {
