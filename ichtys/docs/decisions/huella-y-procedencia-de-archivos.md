@@ -53,7 +53,7 @@ Hay **tres caminos** que escriben `profile.labs`. Todos terminan en `upsertLab`,
 
 | # | Decisión | Por qué |
 |---|---|---|
-| D1 | Cada valor de `profile.labs` lleva un **origen** con una sola forma: `source: { kind: 'lab_report', reportId } \| { kind: 'evolution', evolutionId } \| { kind: 'pasted_text' }`. `sourceEvolutionId` se sigue leyendo en perfiles viejos y se traduce a `{ kind: 'evolution' }`; no se agregan campos paralelos | Un solo lugar para preguntar «¿de dónde salió?». Hoy hay un campo para un camino y nada para los otros dos |
+| D1 | Cada valor de `profile.labs` lleva un **origen** con una sola forma: `source: { kind: 'lab_report', reportId } \| { kind: 'evolution', evolutionId } \| { kind: 'pasted_text' }`. En los perfiles viejos, `sourceEvolutionId` **se guarda tal como está**. La traducción a `{ kind: 'evolution' }` la hace una función de lectura aparte, no el esquema (nada de `.transform`): si el esquema reescribiera el valor, el siguiente guardado lo dejaría sin `sourceEvolutionId`, y al volver a un código anterior se perdería el origen. No se agregan campos paralelos | Un solo lugar para preguntar «¿de dónde salió?». Hoy hay un campo para un camino y nada para los otros dos |
 | D2 | Cada valor lleva **`sampleDate`**: fecha `YYYY-MM-DD`, o `null` si no se sabe. **Nunca** se completa con la fecha de carga ni con la de emisión | Dato faltante no es dato. Una fecha inventada haría pasar por vigente un valor viejo cuando exista la ventana |
 | D3 | La fecha **la propone** el lector (solo un renglón de extracción, toma o muestra; nunca emisión ni validación) y **la confirma una persona** en la pantalla de revisión del informe, junto a los valores. Si el informe no la trae, la persona la puede escribir o dejarla en «desconocida» | R6 y L18: lo que propone una máquina no queda como dato sin una persona |
 | D4 | Una fecha por informe, la misma para todas sus filas. Si una persona necesita fechas distintas, sube dos informes | Simple y alcanza para el caso real. Fechas por fila serían otro PR, con otra pantalla |
@@ -99,7 +99,7 @@ Cada prueba asierta el valor exacto, nunca «no es otra cosa» (L27).
 7. Un informe cuyo único renglón es «Fecha de emisión: …» no propone fecha de muestra.
 8. Los tres caminos que escriben `profile.labs` dejan su `source` correcto, una prueba por camino (L24).
 9. **Ida y vuelta cifrada:** se extiende `lib/subjects/__tests__/patient-profile-roundtrip.test.ts` para que `source` y `sampleDate` sobrevivan cifrar → guardar → leer. Es la prueba que atrapa la trampa del `z.object`.
-10. Un perfil guardado antes del cambio se lee sin error: el valor con `sourceEvolutionId` sale como `{ kind: 'evolution' }`, y los demás como «sin origen».
+10. Un perfil guardado antes del cambio se lee sin error. La función de lectura devuelve `{ kind: 'evolution' }` para el valor con `sourceEvolutionId` y «sin origen» para los demás. Además, leer y volver a guardar ese perfil deja `sourceEvolutionId` **idéntico**.
 11. **Guarda de alcance:** el mismo perfil con `sampleDate` de hace 2 días y de hace 2 años da **exactamente el mismo estado y motivo** en todas las reglas de screening. Si alguien conecta la fecha a una regla sin la decisión de Santiago, esta prueba se pone en rojo.
 
 ## 6. Orden sugerido de PRs (Builder)
