@@ -25,12 +25,14 @@ describe('el límite superior sale del rango que imprime el laboratorio', () => 
     ['< 41', 41],
     ['≤ 35', 35],
     ['menor a 35', 35],
+    ['hasta 40 UI/L', 40],
+    ['0 - 35 IU/L', 35],
   ])('%s → %s', (range, expected) => {
     expect(upperLimitOfNormal(range)).toBe(expected)
   })
 
   // «4.000 - 10.000»: el punto puede ser separador de miles o decimal. No se adivina.
-  it.each(['', 'negativo', 'Hombres: hasta 41 · Mujeres: hasta 31', 'hasta 41 (H) / hasta 31 (M)', 'ver informe', '> 60', 'mayor a 10', '10 - 40 …', '4.000 - 10.000', 'hasta 1.000'])(
+  it.each(['', 'negativo', 'Hombres: hasta 41 · Mujeres: hasta 31', 'hasta 41 (H) / hasta 31 (M)', 'ver informe', '> 60', 'mayor a 10', '10 - 40 …', '4.000 - 10.000', 'hasta 1.000', 'hasta 41 Hombres', 'hasta 31 M', 'hasta 40 Cinetico', '10 - 40 adultos', 'hasta 40 mg/dL'])(
     'si no es un solo límite claro, no se adivina: «%s»',
     (range) => {
       expect(upperLimitOfNormal(range)).toBeNull()

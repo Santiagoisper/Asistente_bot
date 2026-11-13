@@ -13,14 +13,19 @@ import type { CriterionAssessment, LabObservation, PatientProfile } from './prof
  */
 
 const NUMBER = '(\\d+(?:[.,]\\d+)?)'
-const UNIT = '(?:\\s*[A-Za-zµ%][A-Za-zµ%/0-9.,²]*)?'
+/**
+ * Después del número solo puede venir una unidad de actividad. Cualquier otra palabra pegada
+ * («hasta 41 Hombres», «hasta 40 Cinético», «adultos») puede ser un rango por sexo o por edad
+ * cortado, o la columna del método: no alcanza para saber que el límite vale para este sujeto.
+ */
+const UNIT = '(?:\\s*(?:m?U|m?UI|IU)\\s*/\\s*(?:L|mL))?'
 const UP_TO = new RegExp(`^(?:hasta|<=|<|≤|menor\\s+(?:a|de|que)|inferior\\s+a)\\s*${NUMBER}${UNIT}$`, 'i')
 const BETWEEN = new RegExp(`^${NUMBER}\\s*(?:-|–|a)\\s*${NUMBER}${UNIT}$`, 'i')
 
 /**
  * El límite superior de un rango de referencia impreso: «hasta 40», «10 - 40», «< 41».
  * Devuelve null si el texto no es exactamente un solo límite («Hombres: hasta 41 · Mujeres:
- * hasta 31», «ver informe», «> 60»): ante la duda no se adivina.
+ * hasta 31», «hasta 40 Cinético», «ver informe», «> 60»): ante la duda no se adivina.
  */
 export function upperLimitOfNormal(range: string | null | undefined): number | null {
   const text = (range ?? '').trim()
