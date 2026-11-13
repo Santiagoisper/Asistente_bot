@@ -111,7 +111,7 @@ study_memberships
 
 La clave foránea compuesta exige un índice único en `studies (id, organization_id)`. Es redundante con la clave primaria, pero es lo que impide por construcción una membresía que apunte a un estudio de otra organización. Va en la misma migración.
 
-Las bajas se marcan, no se borran: «quién tenía acceso a este estudio el día tal» tiene que poder responderse. Por eso la clave foránea no borra en cascada. Consecuencia a atender en la implementación: un estudio con historia de membresías no se puede eliminar, y los scripts que eliminan organizaciones enteras (`orgs:consolidate`) van a fallar hasta que decidan qué hacer con esas filas.
+Las bajas se marcan, no se borran: «quién tenía acceso a este estudio el día tal» tiene que poder responderse. Por eso la clave foránea no borra en cascada. Consecuencia a atender en la implementación: un estudio con historia de membresías no se puede eliminar, y cualquier herramienta que borre organizaciones enteras va a fallar hasta que decidan qué hacer con esas filas. La que existía (`orgs:consolidate`) se retiró en el PR de la brecha C1: borraba una organización entera, evoluciones incluidas, sin dejar registro.
 
 `study_label` es el único dato por estudio de la persona. Si alguna vez empieza a decidir permisos, este documento dejó de valer y hay que reabrirlo.
 
