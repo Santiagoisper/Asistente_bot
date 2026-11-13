@@ -40,7 +40,8 @@ export function DictationGuide() {
                 <li key={step.title} className="grid grid-cols-[1.25rem_minmax(0,1fr)]" title={step.hint}>
                   <span className="text-xs tabular-nums text-alphi-muted">{index + 1}.</span>
                   <span>
-                    <span className={said}>{step.say ? `«${step.say}»` : 'Para empezar'}</span>{' '}
+                    {/* El primer paso no lleva título: cualquier palabra escrita acá se lee en voz alta (pasó). */}
+                    {step.say ? <span className={said}>«{step.say}» </span> : null}
                     <span className="italic text-alphi-muted">{step.example}</span>
                   </span>
                 </li>
