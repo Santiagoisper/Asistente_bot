@@ -103,6 +103,40 @@ describe('elegibilidad: transaminasas', () => {
     expect(exclusion(profileWith([alt(31, 'hasta 41'), ast(24, 'hasta 40')]), 'Transaminasas mayores a 3 veces el limite superior normal.').status).toBe('pass')
   })
 
+  describe('«y» no es «o»: cuándo alcanza con una sola enzima por encima', () => {
+    const oneHigh = profileWith([alt(31, 'hasta 41'), ast(130, 'hasta 40')])
+    const bothHigh = profileWith([alt(200, 'hasta 41'), ast(130, 'hasta 40')])
+    const normal = profileWith([alt(31, 'hasta 41'), ast(24, 'hasta 40')])
+
+    it.each(['ALT o AST mayor a 3 veces el limite superior normal.', 'ALT y/o AST mayor a 3 veces el limite superior normal.', 'ALT u AST mayor a 3 veces el limite superior normal.', 'ALT or AST > 3 x ULN.', 'ALT and/or AST > 3 x ULN.', 'ALT/AST > 3 x ULN.'])(
+      'con «o» una sola la activa: %s',
+      (text) => {
+        expect(exclusion(oneHigh, text).status).toBe('fail')
+        expect(exclusion(normal, text).status).toBe('pass')
+      },
+    )
+
+    it.each(['ALT y AST mayores a 3 veces el limite superior normal.', 'ALT and AST > 3 x ULN.', 'ALT, AST mayores a 3 veces el limite superior normal.', 'Transaminasas mayores a 3 veces el limite superior normal.'])(
+      'sin un «o» expreso, una sola por encima no la activa ni la despeja: %s',
+      (text) => {
+        const mixed = exclusion(oneHigh, text)
+        expect(mixed.status).toBe('unknown')
+        expect(mixed.reason).toContain('AST 130,0 U/L supera')
+        expect(mixed.reason).toContain('ALT 31,0 U/L no supera')
+        expect(mixed.reason).toContain('no dice si alcanza con una sola')
+        expect(mixed.missing).toBeUndefined()
+        expect(exclusion(bothHigh, text).status).toBe('fail')
+        expect(exclusion(normal, text).status).toBe('pass')
+      },
+    )
+
+    it('sin un «o» expreso, una por encima y la otra sin cargar queda a revisar', () => {
+      const result = exclusion(profileWith([ast(130, 'hasta 40')]), 'ALT y AST mayores a 3 veces el limite superior normal.')
+      expect(result.status).toBe('unknown')
+      expect(result.reason).toContain('Falta ALT')
+    })
+  })
+
   it('lee el criterio en inglés', () => {
     const normal = profileWith([alt(31, 'hasta 41'), ast(24, 'hasta 40')])
     expect(exclusion(normal, 'ALT or AST > 3 x ULN.').status).toBe('pass')

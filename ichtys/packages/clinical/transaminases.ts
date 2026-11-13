@@ -71,6 +71,22 @@ function asksBeyondTheLimit(criterionText: string): boolean {
   return words.some((word) => !CRITERION_WORDS.has(word))
 }
 
+/**
+ * «ALT o AST», «ALT y/o AST», «ALT/AST»: el criterio dice de forma expresa que alcanza con
+ * una sola enzima por encima. Se mira solo el tramo entre las dos enzimas, para no leer el «o»
+ * de «mayor o igual». Con «y», con una coma o con «transaminasas» a secas el criterio no lo
+ * dice: ahí una sola por encima no se decide sola.
+ */
+const EITHER = /(?:^|[^a-záéíóúñ])(?:o|u|or)(?![a-záéíóúñ])|\//i
+function saysEitherIsEnough(criterionText: string): boolean {
+  const spans = ENZYMES.flatMap((enzyme) => {
+    const found = enzyme.pattern.exec(criterionText)
+    return found ? [{ start: found.index, end: found.index + found[0].length }] : []
+  }).sort((a, b) => a.start - b.start)
+  if (spans.length < 2) return false
+  return EITHER.test(criterionText.slice(spans[0]!.end, spans[1]!.start))
+}
+
 /** «Relación AST/ALT», «índice de De Ritis»: nombra una enzima pero no es su valor. */
 const RATIO = /relaci[oó]n|ratio|cociente|[ií]ndice/i
 const isEnzymeValue = (name: string, enzyme: (typeof ENZYMES)[number]): boolean =>
@@ -120,8 +136,13 @@ export function assessTransaminaseCriterion(
   const several = readings.filter((reading) => reading.kind === 'several').map((reading) => reading.key)
   const complete = noValue.length === 0 && noLimit.length === 0 && several.length === 0
   const asksMore = asksBeyondTheLimit(criterion.text)
+  const allExceed = complete && readings.every((reading) => reading.kind === 'measured' && reading.exceeds)
+  // Con una sola enzima pedida, o con un «o» expreso, una por encima alcanza. Si no, hacen falta todas.
+  const oneIsEnough = asked.length === 1 || saysEitherIsEnough(criterion.text)
+  const activated = oneIsEnough ? exceeded : allExceed
+  const undecidedMix = exceeded && !activated
 
-  const status = asksMore ? 'unknown' : exceeded ? 'fail' : complete ? 'pass' : 'unknown'
+  const status = asksMore ? 'unknown' : activated ? 'fail' : complete && !exceeded ? 'pass' : 'unknown'
   const gaps = [
     noValue.length > 0 ? `Falta ${noValue.join(' y ')} en el perfil: se resuelve al cargar el laboratorio.` : '',
     noLimit.length > 0
@@ -135,7 +156,12 @@ export function assessTransaminaseCriterion(
       ? `${facts} Activaría este criterio de exclusión.`
       : status === 'pass'
         ? `${facts} No activa este criterio de exclusión.`
-        : [facts, ...gaps, asksMore ? 'El criterio pide además algo que el sistema no comprueba: revisarlo antes de decidir.' : '']
+        : [
+            facts,
+            ...gaps,
+            undecidedMix ? 'El criterio no dice si alcanza con una sola enzima por encima: no se decide solo.' : '',
+            asksMore ? 'El criterio pide además algo que el sistema no comprueba: revisarlo antes de decidir.' : '',
+          ]
             .filter((part) => part.length > 0)
             .join(' ')
 
