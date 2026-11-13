@@ -9,7 +9,7 @@ import {
   textMentionsAnalyte,
 } from './numeric-criteria'
 import { assessTransaminaseCriterion } from './transaminases'
-import { deniesTerm, HISTORY_TERMS, isBareNegation, type HistoryTerm } from './stated-history'
+import { clearingPhrases, deniesTerm, HISTORY_TERMS, isBareNegation, type HistoryTerm } from './stated-history'
 
 interface EligibilityCriterionInput {
   number: string
@@ -266,6 +266,7 @@ function assessConditionCriterion(
   const missing: string[] = []
   const notEnough: string[] = []
   const missingData: MissingDatum[] = []
+  const missingTerms: HistoryTerm[] = []
   for (const term of asked) {
     const mentions = profile.conditions.filter((condition) => term.mention.test(condition))
     const denied = mentions.some((condition) => deniesTerm(condition, term))
@@ -274,6 +275,7 @@ function assessConditionCriterion(
     else if (!denied) {
       missing.push(term.label)
       missingData.push(term.datum)
+      missingTerms.push(term)
       notEnough.push(...others)
     }
   }
@@ -301,7 +303,7 @@ function assessConditionCriterion(
                   notEnough.length > 0
                     ? `El perfil dice ${[...new Set(notEnough)].map((phrase) => `«${phrase}»`).join(' y ')}, y eso no alcanza para ${list(missing)}.`
                     : `El perfil no registra ${list(missing)}: que no figure no prueba que no exista.`
-                } Confirmarlo y dejarlo dicho («sin ${missing.join(' ni ')}»).${asksMore ? ` ${beyond}` : ''}`
+                } Confirmarlo y dejarlo dicho (${clearingPhrases(missingTerms).map((phrase) => `«${phrase}»`).join(' y ')}).${asksMore ? ` ${beyond}` : ''}`
               : `El perfil registra que no hay ${list(asked.map((term) => term.label))}. ${beyond}`,
     // Se pide el dato solo si con él alcanza: si ya hay algo afirmado, decirlo no cambia nada.
     ...(status === 'unknown' && affirmed.length === 0 && missingData.length > 0 ? { missing: missingData } : {}),

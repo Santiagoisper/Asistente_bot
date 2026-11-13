@@ -86,6 +86,7 @@ vi.mock('@ichtys/db', () => ({
 vi.mock('../resolve-org', () => ({ resolveOrProvisionOrganization: mocks.resolveOrg }))
 
 import { loadAccessSubject } from '../access-subject'
+import type { AccessSubject } from '../functions'
 import {
   validateConversationAccess,
   validateDocumentAccess,
@@ -434,6 +435,31 @@ describe('membresía por estudio (alcance)', () => {
       ],
     })
     expect(mocks.membershipRows).toHaveBeenCalledWith(1)
+  })
+
+  it('M18: para el monitor la membresía sin fecha ya venció; para el resto sigue sin vencer', async () => {
+    const now = new Date('2026-11-12T12:00:00Z')
+    const lastMembershipCondition = async (functions: AccessSubject['functions']): Promise<unknown> => {
+      await canEnterStudy({ ...base, now, access: { mode: 'enforced', role: 'read_only_monitor', functions } })
+      const where = mocks.membershipWhere.mock.calls.at(-1)?.[0] as { conditions: unknown[] }
+      return where.conditions.at(-1)
+    }
+
+    // El resto del equipo: sin fecha o fecha futura («sin fecha» = no vence).
+    expect(await lastMembershipCondition(['investigator'])).toEqual({
+      alternatives: [
+        { isNull: 'study_memberships.expires_at' },
+        { gt: 'study_memberships.expires_at', than: now },
+      ],
+    })
+    // El monitor: solo fecha futura. La membresía sin fecha — creada antes de
+    // recibir la función, o heredada de antes de M18 — no vale.
+    expect(await lastMembershipCondition(['monitor'])).toEqual({ gt: 'study_memberships.expires_at', than: now })
+    // Tener el monitor entre otras funciones mantiene el criterio del monitor.
+    expect(await lastMembershipCondition(['investigator', 'monitor'])).toEqual({
+      gt: 'study_memberships.expires_at',
+      than: now,
+    })
   })
 
   it('validateStudyAccess: con función y sin membresía, la respuesta es la del estudio que no existe', async () => {

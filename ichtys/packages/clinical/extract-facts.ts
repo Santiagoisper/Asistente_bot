@@ -248,9 +248,32 @@ const STATED: Record<string, { pattern: RegExp; as: string }> = {
  * y lo que dicen sobre el estado tiene que decidirlo una persona. Sin anotación el criterio
  * queda a revisar, que es el lado seguro.
  */
+/**
+ * «Nombre del apartado: contenido». El borrador del dictado arma así cada renglón, y a mano
+ * también se escribe «Antecedentes: …». El nombre no es parte de lo que se dijo: con él
+ * adelante, «Sin antecedentes de pancreatitis» dejaba de ser una negación pura.
+ *
+ * No se saca si lo de adelante nombra un antecedente o un estado («Pancreatitis crónica: sin
+ * dolor»: ahí ES el dato) ni si es una negación («Niega: pancreatitis»): en esos casos
+ * sacarlo cambiaría lo que dice la frase.
+ */
+const LINE_LABEL = /^\s*([a-záéíóúñ][a-záéíóúñ ]{1,58}):\s+/i
+const NEGATION_LABEL = /^(?:sin|niega|descarta|nunca|no)(?![a-záéíóúñ])/i
+
+function withoutLineLabel(line: string): string {
+  const match = line.match(LINE_LABEL)
+  if (!match) return line
+  const label = match[1]!
+  if (NEGATION_LABEL.test(label) || HISTORY_TERMS.some((term) => term.mention.test(label))) return line
+  return line.slice(match[0].length)
+}
+
 function statedHistory(text: string): string[] {
   const found: string[] = []
-  const sentences = text.split(/[.;\n]+/)
+  const sentences = text
+    .split('\n')
+    .map(withoutLineLabel)
+    .flatMap((line) => line.split(/[.;]+/))
   for (const sentence of sentences) {
     const segments = sentence.split(',').map((segment) => segment.trim()).filter((segment) => segment.length > 0)
     const isDenial = segments.map((segment) => negatedItems(segment) !== null || LACTATION_DENIED_VERB.test(segment))
