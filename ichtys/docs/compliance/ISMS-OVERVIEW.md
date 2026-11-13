@@ -70,7 +70,7 @@ Check  → Audits E2E, eval suite, leakage tests
 Act    → CAPA post-incidente, actualización políticas
 ```
 
-Auditoría E2E reciente: [`docs/audits/ALPHI_E2E_Audit_2026-06-28.md`](../audits/ALPHI_E2E_Audit_2026-06-28.md)
+Auditoría E2E reciente: retirada de este repo el 2026-11-13; se guarda en el repo privado.
 
 ---
 
