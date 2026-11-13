@@ -38,10 +38,13 @@ import { describe, expect, it } from 'vitest'
  *
  * El perfil del sujeto tiene su propia guarda abajo: dentro de la aplicación
  * (`app/` y `lib/`) se escribe en un solo lugar y ese lugar exige el registro.
- * La guarda no mira `ichtys/scripts/`: tres scripts de operación y de prueba
- * (`backfill-lab-review-pending`, `consolidate-single-org`, `e2e-product-loop`)
- * escriben la tabla directo y sin registro. No los dispara ninguna ruta;
- * queda pendiente decidir si un script que toca dato clínico también registra.
+ * La guarda no mira `ichtys/scripts/`. Ese tramo quedó resuelto por otra vía
+ * (brecha C1 del marco): `consolidate-single-org` se retiró del repositorio,
+ * `backfill-lab-review-pending --apply` confirma cada marca y su registro en
+ * la misma transacción (usa `insertAuditLog` y exige `--operator`), y la ida
+ * y vuelta de PHI de `e2e-product-loop` corre en una transacción que se
+ * revierte al final, sin escritura persistente. La cobertura de scripts
+ * sigue siendo de revisión: este escaneo no la automatiza.
  */
 const WEB_ROOT = join(__dirname, '..', '..')
 const API_ROOT = join(WEB_ROOT, 'app', 'api')
