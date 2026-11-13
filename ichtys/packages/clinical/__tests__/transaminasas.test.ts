@@ -130,6 +130,25 @@ describe('elegibilidad: transaminasas', () => {
       },
     )
 
+    // Borde que señaló Architect: una barra o una «u» entre las dos enzimas que no las une
+    // (un alias entre paréntesis) no es un «o».
+    it.each([
+      'ALT (TGP/GPT) y AST (TGO/GOT) mayores a 3 veces el limite superior normal.',
+      'ALT (TGP o GPT) y AST (TGO o GOT) mayores a 3 veces el limite superior normal.',
+      'ALT (alanina aminotransferasa) y AST mayores a 3 veces el limite superior normal.',
+    ])('lo que va entre paréntesis no decide si es «y» u «o»: %s', (text) => {
+      expect(exclusion(oneHigh, text).status).toBe('unknown')
+      expect(exclusion(bothHigh, text).status).toBe('fail')
+      expect(exclusion(normal, text).status).toBe('pass')
+    })
+
+    it.each(['ALT (TGP) o AST (TGO) mayor a 3 veces el limite superior normal.', 'ALT (TGP/GPT) o AST (TGO/GOT) mayor a 3 veces el limite superior normal.', 'ALT (TGP) / AST (TGO) mayor a 3 veces el limite superior normal.'])(
+      'el «o» que une las dos enzimas vale aunque haya un alias entre paréntesis: %s',
+      (text) => {
+        expect(exclusion(oneHigh, text).status).toBe('fail')
+      },
+    )
+
     it('sin un «o» expreso, una por encima y la otra sin cargar queda a revisar', () => {
       const result = exclusion(profileWith([ast(130, 'hasta 40')]), 'ALT y AST mayores a 3 veces el limite superior normal.')
       expect(result.status).toBe('unknown')

@@ -73,18 +73,24 @@ function asksBeyondTheLimit(criterionText: string): boolean {
 
 /**
  * «ALT o AST», «ALT y/o AST», «ALT/AST»: el criterio dice de forma expresa que alcanza con
- * una sola enzima por encima. Se mira solo el tramo entre las dos enzimas, para no leer el «o»
- * de «mayor o igual». Con «y», con una coma o con «transaminasas» a secas el criterio no lo
+ * una sola enzima por encima. Se mira solo lo que une a las dos enzimas, para no leer el «o»
+ * de «mayor o igual» ni la barra de un alias. Con «y», con una coma o con «transaminasas» a secas el criterio no lo
  * dice: ahí una sola por encima no se decide sola.
  */
-const EITHER = /(?:^|[^a-záéíóúñ])(?:o|u|or)(?![a-záéíóúñ])|\//i
+const EITHER = /^(?:o|u|or|y\s*\/\s*o|e\s*\/\s*o|and\s*\/\s*or|\/)$/i
 function saysEitherIsEnough(criterionText: string): boolean {
   const spans = ENZYMES.flatMap((enzyme) => {
     const found = enzyme.pattern.exec(criterionText)
     return found ? [{ start: found.index, end: found.index + found[0].length }] : []
   }).sort((a, b) => a.start - b.start)
   if (spans.length < 2) return false
-  return EITHER.test(criterionText.slice(spans[0]!.end, spans[1]!.start))
+  // Lo que une a las dos enzimas, sin los alias entre paréntesis («ALT (TGP/GPT) y AST»): tiene
+  // que ser exactamente un «o». Una barra o una «o» adentro de un paréntesis no las une.
+  const joint = criterionText
+    .slice(spans[0]!.end, spans[1]!.start)
+    .replace(/\([^)]*\)/g, ' ')
+    .trim()
+  return EITHER.test(joint)
 }
 
 /** «Relación AST/ALT», «índice de De Ritis»: nombra una enzima pero no es su valor. */
