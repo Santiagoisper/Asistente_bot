@@ -3,80 +3,81 @@
  * (docs/decisions/consulta-dictada.md, D13). Todo el contenido sale de
  * `@ichtys/clinical`, de las mismas constantes con las que se arma el borrador:
  * acá no se escribe ninguna frase que el sistema no reconozca.
+ *
+ * Compacta a propósito: tiene que entrar en la pantalla al lado del cuadro de la
+ * evolución. En pantalla ancha queda fija mientras se recorre el formulario.
  */
 import { DICTATION_GLOSSARY, DICTATION_GUIDE_RULES, DICTATION_GUIDE_STEPS } from '@ichtys/clinical'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-1.5">
-      <h4 className="text-xs font-bold uppercase tracking-wide text-alphi-muted">{title}</h4>
+    <section className="space-y-1">
+      <h4 className="text-[11px] font-bold uppercase tracking-wide text-alphi-muted">{title}</h4>
       {children}
     </section>
   )
 }
 
-const said = 'rounded bg-slate-100 px-1.5 py-0.5 font-semibold text-alphi-ink'
+const said = 'font-semibold text-alphi-navy'
 
 export function DictationGuide() {
   const { correction, alwaysCheck, nothingToReport } = DICTATION_GUIDE_RULES
   return (
-    <aside className="rounded-lg border border-alphi-border bg-slate-50 text-sm" aria-label="Guía para dictar">
+    <aside
+      className="rounded-lg border border-alphi-border bg-white text-[13px] leading-snug lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto"
+      aria-label="Guía para dictar"
+    >
       <details open className="group">
-        <summary className="cursor-pointer select-none px-4 py-3 text-sm font-bold text-alphi-ink">
+        <summary className="cursor-pointer select-none px-3 py-2 text-sm font-bold text-alphi-navy">
           Guía para dictar
           <span className="ml-2 text-xs font-normal text-alphi-muted group-open:hidden">mostrar</span>
         </summary>
 
-        <div className="space-y-4 border-t border-alphi-border px-4 py-3">
-          <Section title="1 · Decí el apartado y después lo que corresponde">
-            <ol className="space-y-2">
+        <div className="space-y-3 border-t border-alphi-border px-3 py-3">
+          <Section title="Decí el apartado y después el dato">
+            <ol className="space-y-1">
               {DICTATION_GUIDE_STEPS.map((step, index) => (
-                <li key={step.title} className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-x-1">
-                  <span className="text-xs font-semibold tabular-nums text-alphi-muted">{index + 1}.</span>
-                  <div>
-                    {step.say ? <span className={said}>«{step.say}»</span> : <span className="font-semibold text-alphi-ink">Para empezar</span>}
-                    <span className="text-alphi-muted"> — {step.hint}</span>
-                    <p className="mt-0.5 text-xs italic text-alphi-muted">{step.example}</p>
-                  </div>
+                <li key={step.title} className="grid grid-cols-[1.25rem_minmax(0,1fr)]" title={step.hint}>
+                  <span className="text-xs tabular-nums text-alphi-muted">{index + 1}.</span>
+                  <span>
+                    <span className={said}>{step.say ? `«${step.say}»` : 'Para empezar'}</span>{' '}
+                    <span className="italic text-alphi-muted">{step.example}</span>
+                  </span>
                 </li>
               ))}
             </ol>
           </Section>
 
-          <Section title="2 · Para cambiar de apartado">
+          <Section title="Para cambiar de apartado">
             <p>
-              Hacé una pausa y decí el nombre del que sigue. Si en uno no hay nada que contar, nombralo y decí{' '}
-              <span className={said}>«{nothingToReport}»</span>: así no figura como faltante.
+              Pausa corta y el nombre del que sigue. Si no hay nada que contar: <span className={said}>«{nothingToReport}»</span>.
             </p>
           </Section>
 
-          <Section title="3 · Si te equivocás">
+          <Section title="Si te equivocás">
             <p>
-              Decí <span className={said}>«{correction.words[0]}»</span> y el dato bueno. Queda el segundo y el borrador te muestra los dos.
+              <span className={said}>«{correction.words[0]}»</span> y el dato bueno. <span className="italic text-alphi-muted">{correction.example}</span>
             </p>
-            <p className="text-xs italic text-alphi-muted">{correction.example}</p>
-            <p className="text-xs text-alphi-muted">También sirven: {correction.words.slice(1).map((word) => `«${word}»`).join(', ')}.</p>
+            <p className="text-xs text-alphi-muted">También: {correction.words.slice(1).map((word) => `«${word}»`).join(', ')}.</p>
           </Section>
 
-          <Section title="4 · Cómo decir los datos">
-            <dl className="space-y-1">
+          <Section title="Cómo decir los datos">
+            <dl className="space-y-0.5">
               {DICTATION_GLOSSARY.map((entry) => (
-                <div key={entry.what} className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-2">
-                  <dt className="font-semibold text-alphi-ink">{entry.what}</dt>
-                  <dd className="text-alphi-muted">{entry.say}</dd>
+                <div key={entry.what}>
+                  <dt className={`inline ${said}`}>{entry.what}: </dt>
+                  <dd className="inline text-alphi-muted">{entry.say}</dd>
                 </div>
               ))}
             </dl>
           </Section>
 
-          <Section title="5 · Revisá siempre en el borrador">
-            <p>
-              Lo que más se transcribe mal: {alwaysCheck.join(', ')}. Los números suelen salir bien; igual compará el borrador con lo que dijiste.
-            </p>
+          <Section title="Revisá siempre">
+            <p>Lo que más se transcribe mal: {alwaysCheck.join(', ')}.</p>
           </Section>
 
-          <p className="border-t border-alphi-border pt-3 text-xs text-alphi-muted">
-            También podés dictar de corrido, sin nombrar apartados: el borrador respeta tu texto y te lista los apartados que no escuchó.
+          <p className="border-t border-alphi-border pt-2 text-xs text-alphi-muted">
+            También podés dictar de corrido, sin nombrar apartados: el texto respeta lo que dijiste.
           </p>
         </div>
       </details>

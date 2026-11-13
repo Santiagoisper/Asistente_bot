@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { bloodPressureProposalLabel } from '../../lib/subjects/proposal-display'
 import { unapprovedSpecNotice } from '../../lib/subjects/spec-notice'
 import { DictationPanel, type DictationRecording, type DictationSource } from './dictation-panel'
+import { DictationGuide } from './dictation-guide'
 import { EvolutionAudio, type EvolutionAudioInfo } from './evolution-audio'
 
 interface EvolutionItem {
@@ -138,6 +139,8 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const [dictationRecording, setDictationRecording] = useState<DictationRecording | null>(null)
   const [audios, setAudios] = useState<Record<string, EvolutionAudioInfo>>({})
   const [audioNotice, setAudioNotice] = useState<string | null>(null)
+  /** Sube con cada guardado: le avisa al panel de dictado que vuelva al inicio. */
+  const [savedCount, setSavedCount] = useState(0)
   const [visitLabel, setVisitLabel] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -251,6 +254,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       setContent('')
       setDictationSource(null)
       setDictationRecording(null)
+      setSavedCount((value) => value + 1)
       setVisitLabel('')
       await loadEvolutions()
     } catch {
@@ -361,31 +365,27 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         </div>
       </div>
 
-      <DictationPanel
-        onUse={(text, source, recording) => {
-          setContent(text)
-          setDictationSource(source)
-          setDictationRecording(recording)
-        }}
-      />
-
       <form onSubmit={handleSave} className="space-y-4 rounded-lg border border-alphi-border bg-alphi-slate/20 p-4">
-        <div>
-          <label htmlFor="visitLabel" className="alphi-label mb-1 block">
-            Etiqueta de visita (opcional)
-          </label>
-          <input
-            id="visitLabel"
-            type="text"
-            value={visitLabel}
-            onChange={(e) => setVisitLabel(e.target.value)}
-            placeholder="Screening, Visita 2, Baseline…"
-            className="w-full max-w-xs rounded-lg border border-alphi-border px-3 py-2 text-sm"
-          />
-          <p className="mt-1 text-xs text-alphi-muted">
-            Aparece como pastilla junto a la fecha en el historial. No va dentro del texto clínico.
-          </p>
-        </div>
+        <h3 className="text-sm font-bold uppercase tracking-wide text-alphi-muted">Nueva evolución</h3>
+
+        {/* Dos columnas: a la izquierda se graba, se revisa y se guarda; a la derecha, la guía, siempre a la vista. */}
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_21rem]">
+        <div className="min-w-0 space-y-4">
+        <DictationPanel
+          resetSignal={savedCount}
+          onDraft={(text, source, recording) => {
+            // Lo dictado va al mismo cuadro donde se escribe. Si ya había texto, se agrega debajo.
+            setContent((previous) => (previous.trim().length > 0 ? `${previous.trimEnd()}\n${text}` : text))
+            setDictationSource(source)
+            setDictationRecording(recording)
+          }}
+          onDiscard={() => {
+            setContent('')
+            setDictationSource(null)
+            setDictationRecording(null)
+          }}
+        />
+
         <div>
           <label htmlFor="content" className="alphi-label mb-1 block">
             Evolución clínica
@@ -394,14 +394,39 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
             id="content"
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            rows={8}
-            placeholder="Ej.: Paciente de 52 años. Antecedente DM2. Medicación: metformina 850 mg c/12h. HbA1c 8.2% (lab 15/06)…"
-            className="w-full rounded-lg border border-alphi-border px-3 py-2 text-sm leading-relaxed"
+            rows={Math.min(22, Math.max(8, content.split('\n').length + 2))}
+            placeholder="Escribila acá o dictala con el micrófono de arriba: lo dictado aparece en este cuadro para que lo revises antes de guardar."
+            className="w-full rounded-lg border border-alphi-border bg-white px-3 py-2 text-sm leading-relaxed"
           />
+          {dictationSource ? (
+            <p className="mt-1 text-xs font-medium text-alphi-amber">Texto generado a partir de un dictado. Comparalo con lo que dijiste antes de guardar.</p>
+          ) : null}
         </div>
-        <button type="submit" disabled={saving || !content.trim()} className="alphi-btn-primary">
-          {saving ? 'Guardando…' : 'Guardar evolución'}
-        </button>
+
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <label htmlFor="visitLabel" className="alphi-label mb-1 block">
+              ¿Qué visita es? (opcional)
+            </label>
+            <input
+              id="visitLabel"
+              type="text"
+              value={visitLabel}
+              onChange={(e) => setVisitLabel(e.target.value)}
+              placeholder="Selección, Visita 2, Basal…"
+              className="w-64 max-w-full rounded-lg border border-alphi-border bg-white px-3 py-2 text-sm"
+            />
+            <p className="mt-1 max-w-sm text-xs text-alphi-muted">
+              Sirve para encontrarla después: aparece junto a la fecha en el historial. No forma parte del texto clínico.
+            </p>
+          </div>
+          <button type="submit" disabled={saving || !content.trim()} className="alphi-btn-primary px-6 py-3 text-base">
+            {saving ? 'Guardando…' : 'Guardar evolución'}
+          </button>
+        </div>
+        </div>
+        <DictationGuide />
+        </div>
       </form>
 
       <form

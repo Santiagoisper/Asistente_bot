@@ -1,4 +1,6 @@
+export * from './clauses'
 export * from './trim-silence'
+export * from './segment-speech'
 export * from './corrections'
 export * from './repetition'
 export * from './template'
