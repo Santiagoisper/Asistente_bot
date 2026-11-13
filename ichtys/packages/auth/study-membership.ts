@@ -59,3 +59,13 @@ export function activeMembershipCondition(isMonitor: boolean, now: Date) {
     ? gt(studyMemberships.expiresAt, now)
     : or(isNull(studyMemberships.expiresAt), gt(studyMemberships.expiresAt, now))
 }
+
+/**
+ * M18, forma predicado (la forma consulta es activeMembershipCondition): la
+ * misma regla evaluada en memoria, para cálculos como el preview del cambio
+ * de modo. Si una cambia, la otra también: se citan.
+ */
+export function membershipStillUsable(isMonitor: boolean, expiresAt: Date | null, now: Date): boolean {
+  if (expiresAt === null) return !isMonitor
+  return expiresAt.getTime() > now.getTime()
+}

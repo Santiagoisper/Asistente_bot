@@ -127,4 +127,33 @@ describe('previewEnforcedImpact', () => {
     expect(person?.losesStudies.map((s) => s.studyName)).toEqual(['Cardíaca'])
     expect(person?.stopsAuthoring).toBe(false)
   })
+
+  it('M18: la membresía sin fecha del monitor ya venció — el preview no puede decir que la conserva', () => {
+    const members = [member('user-1', 'read_only_monitor')]
+    const monitorFunctions = [{ userId: 'user-1', functionKey: 'monitor' as const, grantedBy: 'x', grantedAt: NOW }]
+
+    // Sin fecha: en estricto esa membresía no vale (hueco de orden tapado en
+    // canEnterStudy/loadStudyScope; acá el mismo criterio para no mentir).
+    const noDate = previewEnforcedImpact({
+      members,
+      snapshot: snapshot({
+        functions: monitorFunctions,
+        memberships: [{ userId: 'user-1', studyId: 'study-1', studyLabel: null, expiresAt: null }],
+      }),
+      now: NOW,
+    })
+    expect(noDate[0]?.losesStudies.map((s) => s.studyName)).toEqual(['Metabólica', 'Cardíaca'])
+    expect(noDate[0]?.losesAllStudies).toBe(true)
+
+    // Con fecha vigente la conserva.
+    const withDate = previewEnforcedImpact({
+      members,
+      snapshot: snapshot({
+        functions: monitorFunctions,
+        memberships: [{ userId: 'user-1', studyId: 'study-1', studyLabel: null, expiresAt: inDays(30) }],
+      }),
+      now: NOW,
+    })
+    expect(withDate[0]?.losesStudies.map((s) => s.studyName)).toEqual(['Cardíaca'])
+  })
 })

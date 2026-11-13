@@ -1,5 +1,6 @@
 import { capabilitiesOf, hasFullStudyScope } from '@ichtys/auth/functions'
 import { canAccessPhiData } from '@ichtys/auth/roles'
+import { membershipStillUsable } from '@ichtys/auth/study-membership'
 import type { OrgMember } from './org-members'
 import { ACCESS_OPEN_DEFAULT_DAYS } from './permissions'
 import type { TeamSnapshot } from './team-service'
@@ -78,12 +79,13 @@ export function previewEnforcedImpact(params: {
     } else if (!capabilities.has('study.read')) {
       visibleIds = new Set()
     } else {
+      // Misma regla que loadStudyScope, incluida M18: para el monitor, una
+      // membresía sin fecha ya venció.
+      const isMonitor = functions.includes('monitor')
       visibleIds = new Set(
         snapshot.memberships
           .filter(
-            (row) =>
-              row.userId === member.userId &&
-              (row.expiresAt === null || row.expiresAt.getTime() > now.getTime()),
+            (row) => row.userId === member.userId && membershipStillUsable(isMonitor, row.expiresAt, now),
           )
           .map((row) => row.studyId),
       )
