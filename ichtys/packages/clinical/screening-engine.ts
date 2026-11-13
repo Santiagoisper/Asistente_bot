@@ -8,6 +8,7 @@ import {
   parseAnalyteBounds,
   textMentionsAnalyte,
 } from './numeric-criteria'
+import { assessTransaminaseCriterion } from './transaminases'
 import { deniesTerm, HISTORY_TERMS, isBareNegation, type HistoryTerm } from './stated-history'
 
 interface EligibilityCriterionInput {
@@ -343,7 +344,8 @@ export function assessScreening(
 
   for (const criterion of input.exclusionCriteria) {
     results.push(
-      assessLabCriterion(criterion, 'exclusion', profile) ??
+      assessTransaminaseCriterion(criterion, 'exclusion', profile) ??
+        assessLabCriterion(criterion, 'exclusion', profile) ??
         assessAgeCriterion(criterion, 'exclusion', profile) ??
         assessMedicationCriterion(criterion, 'exclusion', profile) ??
         assessConditionCriterion(criterion, 'exclusion', profile) ??
