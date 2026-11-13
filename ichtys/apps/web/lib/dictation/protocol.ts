@@ -16,3 +16,14 @@ export type TranscriberEvent =
   | { type: 'transcribing'; device: 'webgpu' | 'wasm' }
   | { type: 'result'; text: string; device: 'webgpu' | 'wasm' }
   | { type: 'error'; message: string }
+
+/**
+ * Conservación de la grabación (docs/decisions/consulta-dictada.md, D14). Vive acá, sin
+ * dependencias, porque lo usan el servidor y el aviso que lee quien dicta: los dos dicen lo mismo.
+ * PROVISORIO: Santiago dijo «después vemos por cuántos días». 30 es un valor de resguardo.
+ */
+export const DICTATION_AUDIO_RETENTION_DAYS = 30
+/** Tope por grabación. El cuerpo de un pedido a la plataforma no pasa de 4,5 MB. */
+export const DICTATION_AUDIO_MAX_BYTES = 4_000_000
+/** Voz a 24 kbps: veinte minutos entran en el tope con margen. */
+export const DICTATION_RECORDING_BITS_PER_SECOND = 24_000
