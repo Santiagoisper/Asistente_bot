@@ -8,6 +8,7 @@ import {
   parseAnalyteBounds,
   textMentionsAnalyte,
 } from './numeric-criteria'
+import { deniesTerm, HISTORY_TERMS, type HistoryTerm } from './stated-history'
 
 interface EligibilityCriterionInput {
   number: string
@@ -20,8 +21,27 @@ export interface ScreeningInput {
   exclusionCriteria: EligibilityCriterionInput[]
 }
 
-function findAnalyteLab(profile: PatientProfile, analyte: LabAnalyte): LabObservation | undefined {
-  return profile.labs.find((lab) => textMentionsAnalyte(lab.name, analyte))
+/** Cómo se nombra cada medida en los motivos que lee la persona. */
+const ANALYTE_LABEL: Record<LabAnalyte, string> = { HbA1c: 'HbA1c', eGFR: 'eGFR', BMI: 'IMC' }
+
+function findAnalyteLab(profile: PatientProfile, analyte: LabAnalyte): (LabObservation & { derived?: string }) | undefined {
+  const direct = profile.labs.find((lab) => textMentionsAnalyte(lab.name, analyte))
+  if (direct || analyte !== 'BMI') return direct
+  // Sin IMC registrado, se calcula con el peso y la talla del perfil, y el motivo lo dice.
+  const weight = profile.labs.find((lab) => /^peso\b/i.test(lab.name) && (lab.unit ?? 'kg') === 'kg')
+  const height = profile.labs.find((lab) => /^(?:talla|altura|estatura)\b/i.test(lab.name))
+  if (!weight || !height) return undefined
+  const metres = height.unit === 'm' ? height.value : height.value / 100
+  if (metres <= 0) return undefined
+  const value = weight.value / (metres * metres)
+  // Un IMC fuera de 10–80 no es un IMC: alguno de los dos datos está mal cargado.
+  if (value < 10 || value > 80) return undefined
+  return {
+    name: 'IMC',
+    value,
+    unit: 'kg/m2',
+    derived: `calculado con peso ${formatClinicalNumber(weight.value)} kg y talla ${formatClinicalNumber(metres * 100)} cm`,
+  }
 }
 
 function assessAnalyteCriterion(
@@ -46,7 +66,10 @@ function assessAnalyteCriterion(
     return {
       ...base,
       status: 'unknown',
-      reason: `${analyte} no documentado en el perfil del sujeto.`,
+      reason:
+        analyte === 'BMI'
+          ? 'IMC no documentado en el perfil del sujeto: falta el IMC, o el peso y la talla.'
+          : `${analyte} no documentado en el perfil del sujeto.`,
     }
   }
 
@@ -54,7 +77,7 @@ function assessAnalyteCriterion(
     return {
       ...base,
       status: 'unknown',
-      reason: `${analyte} ${formatClinicalNumber(lab.value)} registrado; no se pudo parsear el rango del criterio automáticamente.`,
+      reason: `${ANALYTE_LABEL[analyte]} ${formatClinicalNumber(lab.value)} registrado; no se pudo parsear el rango del criterio automáticamente.`,
     }
   }
 
@@ -64,7 +87,8 @@ function assessAnalyteCriterion(
   }
 
   const satisfies = compareWithBounds(aligned.value, bounds)
-  const citation = describeBoundComparison(analyte, aligned.value, bounds, satisfies)
+  const described = describeBoundComparison(analyte, aligned.value, bounds, satisfies).replace(/^BMI\b/, 'IMC')
+  const citation = lab.derived ? `${described} (${lab.derived})` : described
 
   if (kind === 'inclusion') {
     return {
@@ -84,8 +108,8 @@ function assessAnalyteCriterion(
 }
 
 /** Analitos de laboratorio que el motor sabe comparar contra el criterio. */
-type LabAnalyte = 'HbA1c' | 'eGFR'
-const LAB_ANALYTES: readonly LabAnalyte[] = ['HbA1c', 'eGFR']
+type LabAnalyte = 'HbA1c' | 'eGFR' | 'BMI'
+const LAB_ANALYTES: readonly LabAnalyte[] = ['HbA1c', 'eGFR', 'BMI']
 
 function assessLabCriterion(
   criterion: EligibilityCriterionInput,
@@ -183,15 +207,32 @@ function assessMedicationCriterion(
   return null
 }
 
+/** Palabras de un criterio que no piden nada: artículos, nexos y la forma de nombrar un antecedente. */
+const CRITERION_FILLER = new Set(
+  ('a al antecedente antecedentes historia de del la el los las o u y e ni en con que cualquier ' +
+    'previa previo previas previos personal personales actual actuales curso cursando diagnostico ' +
+    'conocida conocido documentada documentado clinica clinico aguda agudo cronica cronico ' +
+    'mujer mujeres paciente pacientes sujeto sujetos participante participantes periodo este esten presencia ' +
+    // Lo mismo en inglés: los criterios de un protocolo suelen venir así.
+    'history of any the an and or at time prior to enrollment enrolment screening known previous current currently ' +
+    'acute chronic documented clinical diagnosis who are is woman women female females patient patients subject subjects participant participants').split(' '),
+)
+
 /**
- * Negación pura: TODA la condición registrada es la negación. «Sin antecedentes de
- * pancreatitis», «Niega pancreatitis», «No refiere episodios de pancreatitis aguda».
- * Si la frase dice algo más («Niega pancreatitis, pero tuvo una en 2019», «sin fiebre,
- * con pancreatitis crónica», «niega pancreatitis aunque tuvo un episodio») no despeja
- * nada: cuenta como antecedente. Ante la duda gana el lado que obliga a mirar.
+ * El criterio nombra algo más que los términos que el motor comprueba («… o de carcinoma
+ * medular de tiroides», «… en los últimos 5 años»). Con eso, negar lo que sí comprueba no
+ * alcanza para despejarlo.
  */
-const NEGATED_PANCREATITIS =
-  /^\s*(?:sin|niega|descarta|no\s+(?:presenta|refiere|tiene|registra|hay))\s+(?:(?:antecedentes?|historia|episodios?|cuadros?|diagn[oó]stico)\s+)?(?:(?:previ[oa]s?|personal(?:es)?)\s+)?(?:de\s+)?pancreatitis(?:\s+(?:aguda|cr[oó]nica|previa|conocida))*\s*\.?\s*$/i
+function asksBeyondTerms(criterionText: string, terms: ReadonlyArray<HistoryTerm>): boolean {
+  const words = criterionText
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/breast-feeding/g, 'breastfeeding')
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length > 0)
+  return words.some((word) => !CRITERION_FILLER.has(word) && !terms.some((term) => term.mention.test(word)))
+}
 
 function assessConditionCriterion(
   criterion: EligibilityCriterionInput,
@@ -199,15 +240,26 @@ function assessConditionCriterion(
   profile: PatientProfile,
 ): CriterionAssessment | null {
   if (kind !== 'exclusion') return null
-  if (!/pancreatitis/i.test(criterion.text)) return null
+  const asked = HISTORY_TERMS.filter((term) => term.mention.test(criterion.text))
+  if (asked.length === 0) return null
 
-  // Una exclusión no se despeja por falta de datos: que el antecedente no figure en el
-  // perfil no prueba que no exista. Solo una negación pura registrada ("sin antecedentes de
-  // pancreatitis", y nada más en esa frase) la despeja; cualquier otra mención la activa;
-  // sin mención, queda a revisar.
-  const mentions = profile.conditions.filter((c) => /pancreatitis/i.test(c))
-  const affirmed = mentions.some((c) => !NEGATED_PANCREATITIS.test(c))
-  const status = affirmed ? 'fail' : mentions.length > 0 ? 'pass' : 'unknown'
+  // Una exclusión no se despeja por falta de datos: que no figure en el perfil no prueba que
+  // no exista. Por cada cosa que el criterio nombra: una mención sin negar la activa; una
+  // negación pura la despeja; sin mención, queda a revisar.
+  const affirmed: string[] = []
+  const missing: string[] = []
+  for (const term of asked) {
+    const mentions = profile.conditions.filter((condition) => term.mention.test(condition))
+    if (mentions.some((condition) => !deniesTerm(condition, term))) affirmed.push(term.label)
+    else if (mentions.length === 0) missing.push(term.label)
+  }
+  const asksMore = asksBeyondTerms(criterion.text, asked)
+  // Si el criterio pide algo más, ni lo negado lo despeja ni lo afirmado lo activa solo: el
+  // resto puede agregar una alternativa («… o carcinoma medular») o acotarlo («… en los
+  // últimos 5 años»), y eso el sistema no lo comprueba.
+  const status = asksMore ? 'unknown' : affirmed.length > 0 ? 'fail' : missing.length > 0 ? 'unknown' : 'pass'
+  const beyond = 'El criterio pide además algo que el sistema no comprueba: revisarlo antes de decidir.'
+  const list = (labels: string[]) => labels.join(' ni ')
   return {
     criterionNumber: criterion.number,
     criterionText: criterion.text,
@@ -215,10 +267,14 @@ function assessConditionCriterion(
     status,
     reason:
       status === 'fail'
-        ? 'Antecedente de pancreatitis documentado en el perfil.'
+        ? `Registrado en el perfil: ${affirmed.join(' y ')}.`
         : status === 'pass'
-          ? 'El perfil registra que no hay antecedente de pancreatitis.'
-          : 'El perfil no registra antecedentes de pancreatitis: que no figure no prueba que no exista. Confirmar en la historia clínica.',
+          ? `El perfil registra que no hay ${list(asked.map((term) => term.label))}.`
+          : affirmed.length > 0
+            ? `Registrado en el perfil: ${affirmed.join(' y ')}. ${beyond}`
+            : missing.length > 0
+              ? `El perfil no registra ${list(missing)}: que no figure no prueba que no exista. Confirmarlo y dejarlo dicho («sin ${missing.join(' ni ')}»).${asksMore ? ` ${beyond}` : ''}`
+              : `El perfil registra que no hay ${list(asked.map((term) => term.label))}. ${beyond}`,
     sourcePages: criterion.sourcePages,
   }
 }

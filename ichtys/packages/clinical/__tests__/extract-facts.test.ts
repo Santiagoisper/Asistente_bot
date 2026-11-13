@@ -5,11 +5,11 @@ import { emptyPatientProfile } from '../profile-schema'
 describe('extractFactsFromEvolution', () => {
   it('extrae edad, PA, glucosa alta y metformina', () => {
     const facts = extractFactsFromEvolution(
-      'paciente que tiene 52 años, tiene glucosa alta, y presion arterial 80/120. Metformina 850 mg c/12h',
+      'paciente que tiene 52 años, tiene glucosa alta, y presion arterial 120/80. Metformina 850 mg c/12h',
     )
     expect(facts.ageYears).toBe(52)
-    expect(facts.systolic).toBe(80)
-    expect(facts.diastolic).toBe(120)
+    expect(facts.systolic).toBe(120)
+    expect(facts.diastolic).toBe(80)
     expect(facts.conditions).toContain('Glucosa elevada (texto libre)')
     expect(facts.medications[0]?.name).toBe('Metformina')
   })
