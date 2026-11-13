@@ -100,6 +100,7 @@ export const auditAction = [
   'org.integration.update',
   'org.os_settings.update',
   'org.access_mode.update',
+  'org.access_mode.deadline_set',
   'access.function.grant',
   'access.function.revoke',
   'access.membership.grant',

@@ -171,6 +171,46 @@ describe('loadAccessSubject', () => {
     warn.mockRestore()
   })
 
+  it('M8: open con plazo vencido se lee como enforced', async () => {
+    functions('investigator')
+    const subject = await loadAccessSubject({
+      org: { id: ORG_ID, accessMode: 'open', accessOpenUntil: new Date(Date.now() - 1000) },
+      userId: USER_ID,
+      role: 'read_only_monitor',
+    })
+    expect(subject.mode).toBe('enforced')
+    expect(subject.functions).toEqual(['investigator'])
+    expect(mocks.functionRows).toHaveBeenCalled()
+  })
+
+  it('M8: open con plazo vigente o sin plazo sigue siendo open', async () => {
+    for (const accessOpenUntil of [undefined, null, new Date(Date.now() + 60 * 24 * 3600 * 1000)]) {
+      const subject = await loadAccessSubject({
+        org: { id: ORG_ID, accessMode: 'open', accessOpenUntil },
+        userId: USER_ID,
+        role: 'site_coordinator',
+      })
+      expect(subject.mode, String(accessOpenUntil)).toBe('open')
+    }
+    expect(mocks.functionRows).not.toHaveBeenCalled()
+  })
+
+  it('M8: vence al llegar la fecha (inclusive); una fecha que no es Date no vence', async () => {
+    const justNow = await loadAccessSubject({
+      org: { id: ORG_ID, accessMode: 'open', accessOpenUntil: new Date() },
+      userId: USER_ID,
+      role: 'site_coordinator',
+    })
+    expect(justNow.mode).toBe('enforced')
+
+    const notADate = await loadAccessSubject({
+      org: { id: ORG_ID, accessMode: 'open', accessOpenUntil: '2026-01-01' },
+      userId: USER_ID,
+      role: 'site_coordinator',
+    })
+    expect(notADate.mode).toBe('open')
+  })
+
   it('M14: el administrador de la organización conserva platform_admin, que no trae datos clínicos', async () => {
     const admin = await loadAccessSubject({
       org: { id: ORG_ID, accessMode: 'enforced' },
