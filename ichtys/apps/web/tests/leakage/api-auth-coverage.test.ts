@@ -28,6 +28,9 @@ const AUTH_TOKENS = [
   'validateSubjectAccess(',
   'validateDocumentPageAccess(',
   'resolveOrgContext(',
+  // Guard de «Equipo y accesos» (lib/access/org-context.ts): sesión + org +
+  // subject de acceso + canManageOrgAccess, con sus 401/403.
+  'resolveOrgAccessContext(',
   'resolveOrProvisionOrganization(',
   'await auth()',
   'CRON_SECRET',
