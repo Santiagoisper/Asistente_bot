@@ -91,3 +91,22 @@ export function deniesTerm(phrase: string, term: HistoryTerm): boolean {
   if (negation.about !== 'either' && negation.about !== term.nature) return false
   return negation.items.some((item) => term.denial.test(item))
 }
+
+const LOOSE_ITEM = /^[a-záéíóúñ]+(?:\s+[a-záéíóúñ]+){0,2}$/i
+const CONNECTIVE = /(?:^|\s)(?:por|con|desde|pero|salvo|excepto|aunque|tras|luego|hace|durante|seg[uú]n|en|a|al|de|del|la|el|los|las|que)(?:\s|$)/i
+const SIGNS_HEAD = /^(?:signos|s[ií]ntomas|evidencia|sospecha|cl[ií]nica)\s+(?:de\s+)?/i
+
+/**
+ * La frase entera es una negación y no dice nada más, aunque lo negado no sea exactamente
+ * el término ni hable de lo mismo: «no presenta pancreatitis» (habla de hoy), «sin
+ * antecedentes de embarazo» (habla de la historia), «sin signos de embarazo», «sin embarazos
+ * previos». Una frase así no despeja, pero tampoco afirma: negar no es registrar. Si la frase
+ * dice algo más («sin dolor por pancreatitis previa», «sin signos de pancreatitis, internada
+ * en 2019») no entra acá, y la mención cuenta como afirmada (relectura de Reviewer, #136).
+ */
+export function isBareNegation(phrase: string): boolean {
+  const match = phrase.match(NEGATION_HEAD)
+  if (!match) return false
+  const rest = match[3]!.replace(SIGNS_HEAD, '')
+  return rest.split(/\s+(?:ni|o|y)\s+(?:de\s+)?/i).every((item) => LOOSE_ITEM.test(item) && !CONNECTIVE.test(item))
+}
