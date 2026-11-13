@@ -1,6 +1,7 @@
-import { and, eq, gt, inArray, isNull, or, sql, type AnyColumn, type SQL } from 'drizzle-orm'
+import { and, eq, inArray, isNull, or, sql, type AnyColumn, type SQL } from 'drizzle-orm'
 import { db, studyMemberships } from '@ichtys/db'
 import { capabilitiesOf, hasFullStudyScope, type AccessSubject } from './functions'
+import { activeMembershipCondition } from './study-membership'
 
 /**
  * ALCANCE para listados y agregados (docs/decisions/study-membership.md, paso 4).
@@ -42,7 +43,8 @@ export async function loadStudyScope(params: {
         eq(studyMemberships.organizationId, params.orgId),
         eq(studyMemberships.userId, params.userId),
         isNull(studyMemberships.revokedAt),
-        or(isNull(studyMemberships.expiresAt), gt(studyMemberships.expiresAt, now)),
+        // M18: mismo criterio que canEnterStudy, para que listar y entrar no diverjan.
+        activeMembershipCondition(params.access.functions.includes('monitor'), now),
       ),
     )
 

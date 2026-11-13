@@ -98,3 +98,45 @@ export const uploadMetaInput = z.object({
     'other',
   ]),
 })
+
+// «Equipo y accesos» (docs/decisions/study-membership.md, paso 5). Espeja
+// `memberFunction` de packages/db/schema/enums.ts; una prueba compara las dos listas.
+export const memberFunctionEnum = z.enum([
+  'investigator',
+  'study_coordinator',
+  'lab_assistant',
+  'regulatory_assistant',
+  'crf_assistant',
+  'operations_director',
+  'research_director',
+  'monitor',
+  'platform_admin',
+])
+
+// POST y DELETE /api/org/team/functions
+export const teamFunctionInput = z
+  .object({
+    userId: z.string().min(1).max(MAX_ID_CHARS),
+    functionKey: memberFunctionEnum,
+  })
+  .strict()
+
+// POST /api/org/team/memberships
+export const teamMembershipInput = z
+  .object({
+    userId: z.string().min(1).max(MAX_ID_CHARS),
+    studyId: z.string().uuid().max(MAX_ID_CHARS),
+    /** «PI», «Sub-PI». Informativo: no autoriza nada. */
+    studyLabel: z.string().max(60).optional(),
+    /** ISO 8601. Obligatorio para quien es monitor (M4). */
+    expiresAt: z.string().datetime({ offset: true }).max(40).optional(),
+  })
+  .strict()
+
+// DELETE /api/org/team/memberships
+export const teamMembershipRevokeInput = z
+  .object({
+    userId: z.string().min(1).max(MAX_ID_CHARS),
+    studyId: z.string().uuid().max(MAX_ID_CHARS),
+  })
+  .strict()
