@@ -8,6 +8,8 @@ import {
   DICTATION_CORRECTION_EXAMPLE,
   DICTATION_GUIDE_STEPS,
   dictationGuideScript,
+  joinSegmentTexts,
+  segmentSpeech,
   NOT_MENTIONED,
   splitIntoBlocks,
   trimSilence,
@@ -322,6 +324,75 @@ describe('bloques de la evolución dictada', () => {
       const draft = buildDictationDraft(dictationGuideScript().replace(/\. /g, ', '))
       expect(draft.layout).toBe('blocks')
       expect(draft.missing).toEqual([])
+    })
+  })
+
+  // Santiago, 12/11 22:27: leyó la guía (75 s) y se perdieron unos veinte segundos del principio.
+  describe('el audio se corta por las pausas, no por ventanas fijas', () => {
+    const seconds = (segments: Array<{ start: number; end: number }>) => segments.map((s) => [+(s.start / RATE).toFixed(2), +(s.end / RATE).toFixed(2)])
+
+    it('cada cosa dicha entre dos pausas es un tramo', () => {
+      const audio = join(silence(0.5), tone(2), silence(1.2), tone(1), silence(2), tone(3), silence(0.4))
+      const segments = segmentSpeech(audio, RATE)
+      expect(segments).toHaveLength(3)
+      // Cada tramo lleva 0,16 s de aire a cada lado (ocho cuadros de 20 ms).
+      expect(seconds(segments)).toEqual([
+        [0.34, 2.66],
+        [3.54, 4.86],
+        [6.54, 9.86],
+      ])
+    })
+
+    it('una pausa corta, de tomar aire, no corta el tramo', () => {
+      const segments = segmentSpeech(join(tone(2), silence(0.4), tone(2), silence(1.5), tone(1)), RATE)
+      expect(segments).toHaveLength(2)
+      expect(seconds(segments)[0]).toEqual([0, 4.56])
+    })
+
+    it('un clic no es un tramo, y el silencio solo tampoco', () => {
+      expect(segmentSpeech(join(silence(1), tone(0.06), silence(1), tone(2)), RATE)).toHaveLength(1)
+      expect(segmentSpeech(silence(5), RATE)).toEqual([])
+      expect(segmentSpeech(new Float32Array(0), RATE)).toEqual([])
+    })
+
+    it('ningún tramo pasa de lo que el modelo escucha, y no se pierde audio al partirlo', () => {
+      const segments = segmentSpeech(tone(70), RATE)
+      expect(segments.length).toBeGreaterThanOrEqual(3)
+      for (const segment of segments) expect((segment.end - segment.start) / RATE).toBeLessThanOrEqual(28)
+      expect(segments[0]!.start).toBe(0)
+      expect(segments[segments.length - 1]!.end).toBe(70 * RATE)
+      for (let i = 1; i < segments.length; i++) expect(segments[i]!.start).toBe(segments[i - 1]!.end)
+    })
+
+    it('el piso de silencio se adapta: con voz fuerte, un fondo ruidoso sigue siendo pausa', () => {
+      const noisy = (secs: number) => tone(secs, 0.03)
+      const loud = (secs: number) => tone(secs, 0.6)
+      expect(segmentSpeech(join(loud(2), noisy(1.5), loud(2)), RATE)).toHaveLength(2)
+    })
+
+    it('los tramos no se pisan', () => {
+      const segments = segmentSpeech(join(tone(1), silence(0.72), tone(1), silence(0.72), tone(1)), RATE, { padSec: 0.5 })
+      for (let i = 1; i < segments.length; i++) expect(segments[i]!.start).toBeGreaterThanOrEqual(segments[i - 1]!.end)
+    })
+
+    it('lo transcripto de cada tramo se une como frases: la pausa es la que separa', () => {
+      expect(joinSegmentTexts([' Motivo de la visita', 'control programado.', '', ' . ', 'Presión arterial 132 sobre 84,'])).toBe(
+        'Motivo de la visita. Control programado. Presión arterial 132 sobre 84.',
+      )
+    })
+
+    it('una guía leída con pausas queda completa aunque el modelo no ponga ni un punto', () => {
+      const perSegment = DICTATION_GUIDE_STEPS.flatMap((step) => (step.say ? [step.say.toLowerCase(), step.example.replace(/\.$/, '').toLowerCase()] : [step.example]))
+      const draft = buildDictationDraft(joinSegmentTexts(perSegment))
+      expect(draft.layout).toBe('blocks')
+      expect(draft.missing).toEqual([])
+    })
+
+    it('el plural no impide reconocer el apartado: «Exámenes físicos», «Impresiones clínicas»', () => {
+      const blocks = Object.fromEntries(
+        splitIntoBlocks('Signos vitales. Presión 120 sobre 80. Exámenes físicos. Sin hallazgo. Laboratorios. Se toma muestra. Impresiones clínicas. Paciente estable.').map((block) => [block.id, block.text]),
+      )
+      expect(blocks).toMatchObject({ vitales: 'Presión 120 sobre 80.', examen: 'Sin hallazgo.', laboratorio: 'Se toma muestra.', evaluacion: 'Paciente estable.' })
     })
   })
 })

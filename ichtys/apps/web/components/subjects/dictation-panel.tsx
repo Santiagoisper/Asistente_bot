@@ -74,6 +74,7 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
   const [phase, setPhase] = useState<Phase>('idle')
   const [seconds, setSeconds] = useState(0)
   const [modelPercent, setModelPercent] = useState(0)
+  const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [message, setMessage] = useState<string | null>(null)
   const [draft, setDraft] = useState<DictationDraft | null>(null)
   const [stream, setStream] = useState<MediaStream | null>(null)
@@ -146,7 +147,7 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
         fail('No se pudo leer el audio. Probá con otro archivo o grabá de nuevo.')
         return
       }
-      if (prepared.samples.length === 0) {
+      if (prepared.segments.length === 0) {
         fail('El audio no tiene voz para transcribir.')
         return
       }
@@ -159,7 +160,10 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
       worker.onmessage = (event: MessageEvent<TranscriberEvent>) => {
         const data = event.data
         if (data.type === 'model-progress') setModelPercent(data.percent)
-        else if (data.type === 'transcribing') setPhase('transcribing')
+        else if (data.type === 'transcribing') {
+          setPhase('transcribing')
+          setProgress({ done: data.done, total: data.total })
+        }
         else if (data.type === 'result') {
           const built = buildDictationDraft(data.text)
           const fits = blob.size <= DICTATION_AUDIO_MAX_BYTES
@@ -183,7 +187,10 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
         } else fail('No se pudo transcribir en este equipo. El audio no salió de acá; podés escribir la evolución a mano.')
       }
       worker.onerror = () => fail('No se pudo transcribir en este equipo. El audio no salió de acá; podés escribir la evolución a mano.')
-      worker.postMessage({ type: 'transcribe', samples: prepared.samples }, [prepared.samples.buffer])
+      worker.postMessage(
+        { type: 'transcribe', samples: prepared.samples, segments: prepared.segments.map((segment) => [segment.start, segment.end]) },
+        [prepared.samples.buffer],
+      )
     },
     [fail, onDraft],
   )
@@ -316,7 +323,7 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
             <p className="text-xs text-alphi-muted" role="status">
               {phase === 'preparing' && 'Preparando el audio…'}
               {phase === 'model' && `Cargando el modelo en este equipo (${modelPercent} %). La primera vez tarda.`}
-              {phase === 'transcribing' && 'Transcribiendo en este equipo…'}
+              {phase === 'transcribing' && `Transcribiendo en este equipo… ${progress.total > 0 ? `(${progress.done + 1} de ${progress.total})` : ''}`}
               {active && 'Podés dictar de corrido o nombrar los apartados. Si te equivocás, decí «corrijo» y el dato bueno.'}
             </p>
           ) : null}

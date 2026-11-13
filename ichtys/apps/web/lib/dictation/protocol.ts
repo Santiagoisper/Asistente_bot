@@ -9,11 +9,12 @@ export const DICTATION_MODEL = 'onnx-community/whisper-small'
  */
 export const DICTATION_MODEL_REVISION = '36050c46d777d46dc4b5f43f6d90574fc38f8732'
 
-export type TranscriberRequest = { type: 'transcribe'; samples: Float32Array }
+/** `segments`: pares [inicio, fin) en muestras. Cada tramo se transcribe por separado (D15). */
+export type TranscriberRequest = { type: 'transcribe'; samples: Float32Array; segments: Array<[number, number]> }
 
 export type TranscriberEvent =
   | { type: 'model-progress'; percent: number }
-  | { type: 'transcribing'; device: 'webgpu' | 'wasm' }
+  | { type: 'transcribing'; device: 'webgpu' | 'wasm'; done: number; total: number }
   | { type: 'result'; text: string; device: 'webgpu' | 'wasm' }
   | { type: 'error'; message: string }
 

@@ -120,6 +120,13 @@ function plain(text: string): string {
   return text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 }
 
+/** «exámenes» → «examen», «signos» → «signo». Las palabras cortas quedan como están. */
+function singular(word: string): string {
+  if (word.length <= 4) return word
+  if (word.endsWith('es') && word.length > 6) return word.slice(0, -2)
+  return word.endsWith('s') ? word.slice(0, -1) : word
+}
+
 /** Distancia de edición entre dos textos cortos. */
 function editDistance(a: string, b: string): number {
   const row = Array.from({ length: b.length + 1 }, (_, index) => index)
@@ -149,8 +156,9 @@ function headingWords(words: readonly string[], heading: string): { count: numbe
   const size = heading.split(' ').length
   // La primera palabra tiene que ser la del encabezado (se le perdona una letra si es larga):
   // «Sin eventos adversos» no es el encabezado «Eventos adversos» con una palabra de más.
-  const first = heading.split(' ')[0]!
-  if (words.length === 0 || editDistance(words[0]!, first) > (first.length <= 4 ? 0 : 1)) {
+  // El plural no cuenta: el transcriptor escribe «exámenes físicos» o «impresiones clínicas».
+  const first = singular(heading.split(' ')[0]!)
+  if (words.length === 0 || editDistance(singular(words[0]!), first) > (first.length <= 4 ? 0 : 1)) {
     return { count: 0, distance: Number.POSITIVE_INFINITY }
   }
   let best = 0
