@@ -34,6 +34,9 @@ function fail(name: string, detail?: string): void {
   console.log(`✗ ${name}${detail ? ` — ${detail}` : ''}`)
 }
 
+/** Señal para abortar la transacción de prueba al final: revierte todo lo escrito. */
+class RollbackAtEnd extends Error {}
+
 async function main(): Promise<void> {
   console.log('\n=== E2E Product Loop — MOCK-METABOLIC-T2D-v1 ===\n')
 
@@ -160,40 +163,57 @@ async function main(): Promise<void> {
     const code = `MOCK-E2E-${Date.now().toString(36).toUpperCase()}`
     const profileEnc = encryptPhiField(JSON.stringify({ version: 1, labs: [], medications: [], conditions: [] }))
 
-    const [subject] = await db
-      .insert(subjects)
-      .values({
-        organizationId: DEMO_ORG_ID,
-        studyId: DEMO_STUDY_ID,
-        subjectCode: code,
-        status: 'screening',
-      })
-      .returning({ id: subjects.id })
+    // Ida y vuelta de PHI completa dentro de UNA transacción que se revierte
+    // al final (regla R3, brecha C1): alta de sujeto, perfil cifrado y
+    // lectura se ejercitan de verdad, pero no queda ninguna escritura ni
+    // borrado físico — el rollback deshace el alta, sin delete.
+    let roundTripOk = false
+    let detail = ''
+    try {
+      await db.transaction(async (tx) => {
+        const [subject] = await tx
+          .insert(subjects)
+          .values({
+            organizationId: DEMO_ORG_ID,
+            studyId: DEMO_STUDY_ID,
+            subjectCode: code,
+            status: 'screening',
+          })
+          .returning({ id: subjects.id })
 
-    if (!subject) {
-      fail('PHI subject round-trip', 'subject insert failed')
+        if (!subject) {
+          detail = 'subject insert failed'
+          throw new RollbackAtEnd()
+        }
+
+        await tx.insert(patientProfiles).values({
+          organizationId: DEMO_ORG_ID,
+          studyId: DEMO_STUDY_ID,
+          subjectId: subject.id,
+          profileEncrypted: profileEnc,
+        })
+
+        const [row] = await tx
+          .select({ profileEncrypted: patientProfiles.profileEncrypted })
+          .from(patientProfiles)
+          .where(eq(patientProfiles.subjectId, subject.id))
+          .limit(1)
+
+        const roundTrip = row ? decryptPhiField(row.profileEncrypted) : null
+        roundTripOk = !!(roundTrip && JSON.parse(roundTrip).version === 1)
+        detail = roundTripOk
+          ? `created + read + rolled back ${code} (sin escritura persistente)`
+          : 'decrypt mismatch'
+        throw new RollbackAtEnd()
+      })
+    } catch (err) {
+      if (!(err instanceof RollbackAtEnd)) throw err
+    }
+
+    if (roundTripOk) {
+      pass('PHI subject round-trip', detail)
     } else {
-      await db.insert(patientProfiles).values({
-        organizationId: DEMO_ORG_ID,
-        studyId: DEMO_STUDY_ID,
-        subjectId: subject.id,
-        profileEncrypted: profileEnc,
-      })
-
-      const [row] = await db
-        .select({ profileEncrypted: patientProfiles.profileEncrypted })
-        .from(patientProfiles)
-        .where(eq(patientProfiles.subjectId, subject.id))
-        .limit(1)
-
-      const roundTrip = row ? decryptPhiField(row.profileEncrypted) : null
-      await db.delete(subjects).where(eq(subjects.id, subject.id))
-
-      if (roundTrip && JSON.parse(roundTrip).version === 1) {
-        pass('PHI subject round-trip', `created + deleted ${code}`)
-      } else {
-        fail('PHI subject round-trip', 'decrypt mismatch')
-      }
+      fail('PHI subject round-trip', detail || 'transacción abortada')
     }
   } else {
     pass('PHI subject round-trip', 'skip — PHI_ENCRYPTION_KEY not set locally')
