@@ -146,7 +146,7 @@ export function ModePanel({ onChanged }: { onChanged: () => void }) {
           ) : null}
         </div>
       ) : (
-        <div className="space-y-2 rounded-md border border-alphi-border bg-alphi-tint/40 p-3">
+        <div className="space-y-2 rounded-md border border-alphi-border bg-alphi-slate p-3">
           <p className="text-xs text-alphi-teal">
             {confirming === 'toEnforced' ? MODE_CONFIRM_TEXTS.toEnforced.gains : MODE_CONFIRM_TEXTS.toOpen.gains}
           </p>
