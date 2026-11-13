@@ -144,9 +144,9 @@ export function makeDbMock(actual: Record<string, unknown>): Record<string, unkn
       case 'or':
         return cond.conds.some((child) => matches(child, row))
       case 'isNull':
-        return row[keyOf(cond.column)] == null
+        return row[keyOf(cond.column)] === null || row[keyOf(cond.column)] === undefined
       case 'isNotNull':
-        return row[keyOf(cond.column)] != null
+        return row[keyOf(cond.column)] !== null && row[keyOf(cond.column)] !== undefined
       case 'gt': {
         const left = row[keyOf(cond.column)]
         const a = left instanceof Date ? left.getTime() : (left as number)
@@ -200,7 +200,7 @@ export function makeDbMock(actual: Record<string, unknown>): Record<string, unkn
         row['organizationId'] === vals['organizationId'] &&
         row['userId'] === vals['userId'] &&
         row['functionKey'] === vals['functionKey'] &&
-        row['revokedAt'] == null,
+        (row['revokedAt'] === null || row['revokedAt'] === undefined),
     )
 
   const doInsert = (store: Row[], vals: Row, projection?: unknown): Promise<Row[]> => {
