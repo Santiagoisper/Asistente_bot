@@ -108,6 +108,25 @@ describe('assessScreening', () => {
     })
   })
 
+  describe('verde quiere decir comprobado', () => {
+    const withMetformin: PatientProfile = { version: 1, labs: [], medications: [{ name: 'Metformina', dose: '850 mg' }], conditions: [] }
+    const inclusion = (text: string) => assessScreening(withMetformin, { inclusionCriteria: [{ number: '1', text }], exclusionCriteria: [] })[0]!
+
+    it.each([
+      'Tratamiento estable con metformina durante al menos 90 dias.',
+      'Metformina durante al menos 3 meses, permitida.',
+      'Metformina ≥ 1000 mg/día, permitida.',
+    ])('tener metformina no alcanza si el criterio pide tiempo, estabilidad o dosis: %s', (text) => {
+      const result = inclusion(text)
+      expect(result.status).toBe('unknown')
+      expect(result.reason).toMatch(/no está registrado/)
+    })
+
+    it('si el criterio solo pide que esté permitida, tenerla alcanza', () => {
+      expect(inclusion('Uso de metformina permitido.').status).toBe('pass')
+    })
+  })
+
   it('marca unknown si falta HbA1c en perfil', () => {
     const results = assessScreening(
       { version: 1, labs: [], medications: [], conditions: [] },

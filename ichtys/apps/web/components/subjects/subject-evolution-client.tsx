@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 
+import { mergeDictationAddition, NOT_MENTIONED } from '@ichtys/clinical'
 import { bloodPressureProposalLabel } from '../../lib/subjects/proposal-display'
 import { unapprovedSpecNotice } from '../../lib/subjects/spec-notice'
 import { DictationPanel, type DictationRecording, type DictationSource } from './dictation-panel'
@@ -224,7 +225,10 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         body: JSON.stringify({
           content: content.trim(),
           visitLabel: visitLabel.trim() || undefined,
-          ...(dictationSource ? { source: dictationSource } : {}),
+          // Los apartados sin dictar se cuentan sobre el texto que se guarda, no sobre el borrador.
+          ...(dictationSource
+            ? { source: { ...dictationSource, missingBlocks: content.split('\n').filter((line) => line.trimEnd().endsWith(NOT_MENTIONED)).length } }
+            : {}),
         }),
       })
       const data = (await res.json()) as { id?: string; piiWarnings?: string[]; error?: string }
@@ -373,11 +377,22 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         <div className="min-w-0 space-y-4">
         <DictationPanel
           resetSignal={savedCount}
-          onDraft={(text, source, recording) => {
-            // Lo dictado va al mismo cuadro donde se escribe. Si ya había texto, se agrega debajo.
-            setContent((previous) => (previous.trim().length > 0 ? `${previous.trimEnd()}\n${text}` : text))
-            setDictationSource(source)
-            setDictationRecording(recording)
+          onDraft={(draft, source, recording) => {
+            // Lo dictado va al mismo cuadro donde se escribe. Si ya había texto, lo nuevo se suma
+            // a su apartado (D16): no se pisa nada de lo que ya estaba.
+            setContent((previous) => mergeDictationAddition(previous, draft))
+            setDictationSource((previous) =>
+              previous
+                ? {
+                    ...source,
+                    durationSec: previous.durationSec + source.durationSec,
+                    corrections: previous.corrections + source.corrections,
+                    repetitions: previous.repetitions + source.repetitions,
+                  }
+                : source,
+            )
+            // Una grabación por evolución: queda la de la primera toma.
+            setDictationRecording((previous) => previous ?? recording)
           }}
           onDiscard={() => {
             setContent('')
