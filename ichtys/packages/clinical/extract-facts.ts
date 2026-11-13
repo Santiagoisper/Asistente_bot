@@ -28,8 +28,10 @@ export function extractFactsFromEvolution(
 
   // «132/84» escrito y «132 sobre 84» dictado: una transcripción devuelve la palabra, no la barra.
   const bpMatch = text.match(/\b(\d{2,3})\s*(?:\/|sobre)\s*(\d{2,3})\b/i)
-  const systolic = bpMatch ? Number.parseInt(bpMatch[1] ?? '', 10) : undefined
-  const diastolic = bpMatch ? Number.parseInt(bpMatch[2] ?? '', 10) : undefined
+  // Dictada por separado, como se dice al tomarla: «sistólica 128, diastólica 95».
+  const namedBp = text.match(/\bsist[oó]lica\s*(?:de\s*)?(\d{2,3})\b[^\d.]{0,40}?\bdiast[oó]lica\s*(?:de\s*)?(\d{2,3})\b/i)
+  const systolic = bpMatch ? Number.parseInt(bpMatch[1] ?? '', 10) : namedBp ? Number.parseInt(namedBp[1] ?? '', 10) : undefined
+  const diastolic = bpMatch ? Number.parseInt(bpMatch[2] ?? '', 10) : namedBp ? Number.parseInt(namedBp[2] ?? '', 10) : undefined
 
   const hba1cMatch = text.match(/HbA1c\s*(?:de\s*)?(\d+[.,]\d+)\s*%?/i)
   if (hba1cMatch) {

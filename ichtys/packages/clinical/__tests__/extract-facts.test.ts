@@ -20,6 +20,16 @@ describe('extractFactsFromEvolution', () => {
     expect(facts.diastolic).toBe(84)
   })
 
+  it('lee la presión dictada por separado: sistólica y diastólica', () => {
+    const facts = extractFactsFromEvolution('Signos vitales. Sistólica 128, diastólica 95, frecuencia cardíaca 73.')
+    expect([facts.systolic, facts.diastolic]).toEqual([128, 95])
+  })
+
+  it('una sistólica sin su diastólica no arma una presión', () => {
+    const facts = extractFactsFromEvolution('Sistólica 128. Frecuencia cardíaca 73.')
+    expect(facts.systolic).toBeUndefined()
+  })
+
   it('«sobre» sin dos números no se lee como presión', () => {
     const facts = extractFactsFromEvolution('Se conversó sobre 3 opciones de tratamiento. Charla sobre adherencia.')
     expect(facts.systolic).toBeUndefined()

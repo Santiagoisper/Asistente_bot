@@ -82,6 +82,23 @@ describe('assessScreening', () => {
       },
     )
 
+    // Hallazgo de Reviewer en #128: una misma frase que niega y después afirma daba «pasa».
+    it.each([
+      'Niega pancreatitis, pero tuvo pancreatitis en 2019',
+      'Sin antecedentes de pancreatitis; tuvo pancreatitis aguda en 2019',
+      'No refiere pancreatitis actual pero sí antecedente de pancreatitis',
+      'Niega pancreatitis aunque tuvo un episodio en 2019',
+    ])('una frase que niega y además dice otra cosa no despeja: %s', (condition) => {
+      expect(assessScreening(withConditions([condition]), exclusion)[0]?.status).toBe('fail')
+    })
+
+    it.each(['Sin antecedentes de pancreatitis aguda.', 'No presenta historia previa de pancreatitis crónica'])(
+      'la negación pura admite el tipo de pancreatitis: %s',
+      (condition) => {
+        expect(assessScreening(withConditions([condition]), exclusion)[0]?.status).toBe('pass')
+      },
+    )
+
     it('medicación prohibida que no figura: queda a revisar, no pasa', () => {
       const [result] = assessScreening(withConditions([]), {
         inclusionCriteria: [],

@@ -15,6 +15,9 @@ export interface SpokenCorrection {
   marker: string
 }
 
+/** Las palabras que marcan una corrección, como se le enseñan a quien dicta. Una prueba las ata a MARKER. */
+export const CORRECTION_WORDS = ['corrijo', 'corrección', 'perdón', 'mejor dicho', 'quise decir', 'rectifico'] as const
+
 // La transcripción no siempre escribe bien la marca («corijo», «corrigo»): se aceptan las variantes cercanas.
 const MARKER = /^(corr?i[jg]o|correcci[oó]n|perd[oó]n|mejor dicho|quise decir|rectifico)\b[\s:,.-]*/i
 const SENTENCE = /[^.;\n]+[.;\n]?/g
