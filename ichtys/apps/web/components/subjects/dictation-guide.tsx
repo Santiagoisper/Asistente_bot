@@ -7,7 +7,7 @@
  * Compacta a propósito: tiene que entrar en la pantalla al lado del cuadro de la
  * evolución. En pantalla ancha queda fija mientras se recorre el formulario.
  */
-import { DICTATION_GLOSSARY, DICTATION_GUIDE_RULES, DICTATION_GUIDE_STEPS } from '@ichtys/clinical'
+import { DICTATION_GLOSSARY, DICTATION_GUIDE_RULES, DICTATION_GUIDE_STEPS, type StudyPrompt } from '@ichtys/clinical'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -20,7 +20,50 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 const said = 'font-semibold text-alphi-navy'
 
-export function DictationGuide() {
+const quoted = (phrases: readonly string[]) => phrases.map((phrase) => `«${phrase}»`).join(' ')
+
+/**
+ * Lo que este estudio pide además, para este sujeto (D18). Sale de los criterios que
+ * quedaron a revisar por un dato que falta. Para una exclusión muestra las dos frases, la
+ * que la despeja y la que la activa: la guía no empuja a decir que no.
+ */
+function StudyPrompts({ prompts, unapproved }: { prompts: readonly StudyPrompt[]; unapproved: boolean }) {
+  return (
+    <Section title="Para este estudio, decí también">
+      <ul className="space-y-1.5">
+        {prompts.map((prompt) => (
+          <li key={prompt.id}>
+            <span className={said}>{prompt.ask}</span>{' '}
+            <span className="text-xs text-alphi-muted">
+              (criterio{prompt.criteria.length > 1 ? 's' : ''} {prompt.criteria.join(', ')})
+            </span>
+            {prompt.sayIfPresent ? (
+              <span className="block">
+                <span className="text-xs text-alphi-muted">Si no: </span>
+                <span className="italic text-alphi-muted">{quoted(prompt.say)}</span>
+                <span className="text-xs text-alphi-muted"> · Si sí: </span>
+                <span className="italic text-alphi-muted">{prompt.sayIfPresent.map((phrase) => `«${phrase}»`).join(' o ')}</span>
+              </span>
+            ) : prompt.say.length > 0 ? (
+              <span className="block italic text-alphi-muted">{quoted(prompt.say)}</span>
+            ) : null}
+            {prompt.note ? <span className="block text-xs text-alphi-muted">{prompt.note}</span> : null}
+          </li>
+        ))}
+      </ul>
+      {unapproved ? <p className="text-xs text-alphi-amber">Sale de criterios del protocolo que nadie aprobó todavía.</p> : null}
+    </Section>
+  )
+}
+
+interface DictationGuideProps {
+  /** Datos que le faltan a este sujeto para los criterios del estudio. Vacío: no se muestra nada. */
+  studyPrompts?: readonly StudyPrompt[]
+  /** El protocolo extraído todavía no está aprobado: la guía lo dice. */
+  unapprovedProtocol?: boolean
+}
+
+export function DictationGuide({ studyPrompts = [], unapprovedProtocol = false }: DictationGuideProps) {
   const { correction, alwaysCheck, nothingToReport } = DICTATION_GUIDE_RULES
   return (
     <aside
@@ -34,6 +77,8 @@ export function DictationGuide() {
         </summary>
 
         <div className="space-y-3 border-t border-alphi-border px-3 py-3">
+          {studyPrompts.length > 0 ? <StudyPrompts prompts={studyPrompts} unapproved={unapprovedProtocol} /> : null}
+
           <Section title="Decí el apartado y después el dato">
             <ol className="space-y-1">
               {DICTATION_GUIDE_STEPS.map((step, index) => (
