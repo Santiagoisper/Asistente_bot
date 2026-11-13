@@ -7,7 +7,7 @@ import { decryptProfileJson, encryptProfileJson } from '../phi-fields'
 const TEST_KEY = '0f1e2d3c4b5a69788796a5b4c3d2e1f0'.repeat(2)
 
 /**
- * ADR-8 M6: `profileFieldConfidenceSchema` (z.record) cambia de firma en el
+ * ADR-8 M6: profileFieldConfidenceSchema (z.record) cambia de firma en el
  * paso 1b. El perfil del paciente se guarda CIFRADO en producción con el
  * formato histórico — un perfil viejo tiene que seguir descifrando y
  * validando campo por campo. Si este test se rompe, se perdió lectura de
@@ -55,7 +55,25 @@ describe('round-trip del perfil del paciente guardado en formato viejo (ADR-8 M6
     expect(encrypted).not.toContain('Metformina')
 
     const round = parsePatientProfile(decryptProfileJson(encrypted))
-    expect(round).toEqual(legacyProfile)
+    // C4 D1/D5: el LDL guardado con sourceEvolutionId sale con su origen
+    // traducido a la única forma nueva; el HbA1c sin origen sale sin origen.
+    // Nada se pierde: sourceEvolutionId se conserva tal cual.
+    expect(round).toEqual({
+      ...legacyProfile,
+      labs: [
+        { name: 'HbA1c', value: 8.2, unit: '%' },
+        {
+          name: 'LDL',
+          value: 141.7,
+          unit: 'mg/dL',
+          sourceEvolutionId: '11111111-1111-4111-8111-111111111111',
+          source: {
+            kind: 'evolution',
+            evolutionId: '11111111-1111-4111-8111-111111111111',
+          },
+        },
+      ],
+    })
   })
 
   it('el record de confianza acepta claves arbitrarias (formato histórico)', () => {
@@ -69,6 +87,64 @@ describe('round-trip del perfil del paciente guardado en formato viejo (ADR-8 M6
     expect(round.fieldConfidence?.labs).toEqual({
       'creatinina sérica': 'medium',
       'colesterol total': 'low',
+    })
+  })
+
+  it('C4: source y sampleDate sobreviven cifrar, guardar y leer (valores exactos)', () => {
+    const profile = {
+      ...legacyProfile,
+      labs: [
+        {
+          name: 'Hemoglobina',
+          value: 13.5,
+          unit: 'g/dL',
+          source: { kind: 'lab_report', reportId: '33333333-3333-4333-8333-333333333333' },
+          sampleDate: '2026-09-24',
+        },
+        {
+          name: 'HbA1c',
+          value: 8.2,
+          unit: '%',
+          source: { kind: 'pasted_text' },
+          sampleDate: null,
+        },
+      ],
+    }
+    const encrypted = encryptProfileJson(profile)
+    expect(encrypted).not.toContain('Hemoglobina')
+
+    const round = parsePatientProfile(decryptProfileJson(encrypted))
+    expect(round.labs).toEqual([
+      {
+        name: 'Hemoglobina',
+        value: 13.5,
+        unit: 'g/dL',
+        source: { kind: 'lab_report', reportId: '33333333-3333-4333-8333-333333333333' },
+        sampleDate: '2026-09-24',
+      },
+      {
+        name: 'HbA1c',
+        value: 8.2,
+        unit: '%',
+        source: { kind: 'pasted_text' },
+        sampleDate: null,
+      },
+    ])
+  })
+
+  it('C4: un sampleDate mal formado invalida el perfil, no entra en silencio', () => {
+    const encrypted = encryptProfileJson({
+      ...legacyProfile,
+      labs: [{ name: 'HbA1c', value: 8.2, unit: '%', sampleDate: '24/09/2026' }],
+    })
+    // parsePatientProfile ya devuelve el perfil vacío ante cualquier dato que
+    // no valida: una fecha que no es YYYY-MM-DD no puede quedar guardada ni
+    // leerse como si nada.
+    expect(parsePatientProfile(decryptProfileJson(encrypted))).toEqual({
+      version: 1,
+      labs: [],
+      medications: [],
+      conditions: [],
     })
   })
 })
