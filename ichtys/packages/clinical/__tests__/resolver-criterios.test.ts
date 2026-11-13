@@ -4,6 +4,7 @@
  * no se midió queda a revisar, y lo negado solo cuenta si la negación es pura.
  */
 import { describe, expect, it } from 'vitest'
+import { buildDictationDraft } from '../dictation/draft'
 import { extractFactsFromEvolution, mergeProfileWithFacts } from '../extract-facts'
 import { mergeExtractions } from '../extract-merge'
 import { emptyPatientProfile, type PatientProfile } from '../profile-schema'
@@ -152,6 +153,81 @@ describe('extracción: lo dicho de forma expresa', () => {
     expect(lab(extractFactsFromEvolution('Hemoglobina glicosilada 7 coma 9 por ciento.'), 'HbA1c')).toMatchObject({ value: 7.9, unit: '%' })
     expect(lab(extractFactsFromEvolution('Hemoglobina glicada de 8,1%.'), 'HbA1c')?.value).toBe(8.1)
     expect(lab(extractFactsFromEvolution('HbA1c 8%.'), 'HbA1c')?.value).toBe(8)
+  })
+})
+
+describe('extracción: el nombre del apartado no tapa lo que se dijo', () => {
+  // El borrador del dictado arma cada apartado como «Nombre: contenido». La primera frase de
+  // cada apartado llegaba a la extracción con el nombre pegado adelante y dejaba de ser una
+  // negación pura: «Evolución. Sin antecedentes de pancreatitis.» no anotaba nada.
+  it('la primera frase de un apartado se lee igual que las demás', () => {
+    const text = 'Evolución desde la última visita: Sin antecedentes de pancreatitis. Sin embarazo ni lactancia.'
+    expect(extractFactsFromEvolution(text).conditions).toEqual(['Sin antecedentes de pancreatitis', 'Sin embarazo', 'Sin lactancia'])
+  })
+
+  it.each([
+    ['Antecedentes: sin antecedentes de pancreatitis.', ['Sin antecedentes de pancreatitis']],
+    ['Motivo de la visita: control.\nEvolución: Sin embarazo ni lactancia.', ['Sin embarazo', 'Sin lactancia']],
+    ['Antecedentes: pancreatitis aguda en 2019.', ['Antecedente de pancreatitis']],
+    // Acá lo de adelante de los dos puntos ES el dato: se lee entero, como antes.
+    ['Pancreatitis crónica: sin dolor.', ['Antecedente de pancreatitis']],
+  ])('%s', (text, expected) => {
+    expect(extractFactsFromEvolution(text).conditions).toEqual(expected)
+  })
+
+  it.each([
+    // El nombre del apartado nombra el estado: sacarlo cambiaría lo que dice la frase.
+    'Embarazo: sin lactancia previa.',
+    // Lo de adelante de los dos puntos es una negación, no un nombre de apartado.
+    'Niega: pancreatitis.',
+    'Sin: pancreatitis.',
+    'No presenta: embarazo.',
+  ])('no convierte en negación ni en afirmación algo que no lo es: %s', (text) => {
+    expect(extractFactsFromEvolution(text).conditions).toEqual([])
+  })
+})
+
+describe('del dictado, con sus apartados, a los criterios', () => {
+  const PROTOCOL = {
+    inclusionCriteria: [
+      { number: '2.1', text: 'Adultos de 18 a 75 anos de edad.' },
+      { number: '2.2', text: 'HbA1c entre 7,0 % y 10,5 % en la visita de seleccion.' },
+      { number: '2.3', text: 'Indice de masa corporal entre 23 y 40 kg/m2.' },
+      { number: '2.4', text: 'Tratamiento estable con metformina durante al menos 90 dias.' },
+    ],
+    exclusionCriteria: [
+      { number: '3.1', text: 'Tasa de filtrado glomerular estimada menor de 45 mL/min/1,73 m2.' },
+      { number: '3.2', text: 'ALT o AST mayor a 3 veces el limite superior normal.' },
+      { number: '3.3', text: 'Antecedente de pancreatitis.' },
+      { number: '3.4', text: 'Embarazo o lactancia.' },
+    ],
+  }
+  // Como lo devuelve una transcripción: el nombre del apartado, punto, y lo dicho.
+  const spoken =
+    'Visita de selección. Paciente de 58 años, sexo femenino. Motivo de la visita. Selección para el estudio. ' +
+    'Evolución. Sin antecedentes de pancreatitis. Sin embarazo ni lactancia. ' +
+    'Medicación actual. Metformina 850 miligramos cada 12 horas. Sin insulina. Eventos adversos. Sin novedades. ' +
+    'Signos vitales. Presión arterial 140 sobre 90. Corrijo, 132 sobre 84. Peso 78 kilos. Talla 1 metro 63. ' +
+    'Plan. Solicitar laboratorio y citar en dos semanas.'
+
+  it('lo dicho al empezar un apartado llega al criterio', () => {
+    const draft = buildDictationDraft(spoken)
+    expect(draft.layout).toBe('blocks')
+    const facts = extractFactsFromEvolution(draft.text)
+    const profile = mergeProfileWithFacts(emptyPatientProfile(), facts, '00000000-0000-4000-8000-000000000001')
+    const byNumber = Object.fromEntries(assessScreening(profile, PROTOCOL).map((item) => [item.criterionNumber, item.status]))
+    expect(byNumber).toEqual({
+      '2.1': 'pass',
+      '2.2': 'unknown',
+      '2.3': 'pass',
+      '2.4': 'unknown',
+      '3.1': 'unknown',
+      '3.2': 'unknown',
+      '3.3': 'pass',
+      '3.4': 'pass',
+    })
+    expect(facts.systolic).toBe(132)
+    expect(facts.medications.map((medication) => medication.name)).toEqual(['Metformina'])
   })
 })
 
