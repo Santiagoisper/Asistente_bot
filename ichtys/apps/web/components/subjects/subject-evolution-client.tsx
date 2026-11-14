@@ -10,6 +10,7 @@ import { DictationPanel, type DictationRecording, type DictationSource } from '.
 import { DictationGuide } from './dictation-guide'
 import { ProfileUnreadableNotice } from './profile-unreadable-notice'
 import { profileWriteErrorMessage } from '../../lib/subjects/profile-write-messages'
+import { criterionStatusLabel } from '../../lib/subjects/screening-labels'
 import { EvolutionAudio, type EvolutionAudioInfo } from './evolution-audio'
 
 interface EvolutionItem {
@@ -720,7 +721,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                   className={`rounded border px-3 py-2 text-xs ${STATUS_STYLES[a.status]}`}
                 >
                   <p className="font-semibold">
-                    {a.kind === 'inclusion' ? 'Inclusión' : 'Exclusión'} #{a.criterionNumber} — {a.status}
+                    {a.kind === 'inclusion' ? 'Inclusión' : 'Exclusión'} #{a.criterionNumber} — {criterionStatusLabel(a.kind, a.status)}
                   </p>
                   <p className="mt-1 opacity-80">{a.reason}</p>
                   <ProtocolPageLinks documentId={protocolDocumentId} pages={a.sourcePages} />
