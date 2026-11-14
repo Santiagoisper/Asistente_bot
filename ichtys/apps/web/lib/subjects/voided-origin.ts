@@ -11,6 +11,7 @@
  * Sin dependencias en ejecución (solo un tipo): lo importan componentes de cliente.
  */
 import type { LabObservation } from '@ichtys/clinical'
+import { profileWriteErrorMessage } from './profile-write-messages'
 
 /** Del valor de laboratorio solo se mira el nombre y de dónde salió. */
 type LabWithOrigin = Pick<LabObservation, 'name' | 'value' | 'source' | 'sourceEvolutionId'>
@@ -127,4 +128,27 @@ export function voidedOriginLines(notice: VoidedOriginNotice): string[] {
     'Alphi no saca estos datos solo. Mientras sigan en el perfil, la elegibilidad se calcula con ellos.',
     'Avisá a quien coordina el estudio.',
   ]
+}
+
+/** Los laboratorios del perfil que vinieron de una evolución: los que salen siempre al retirar. */
+export function labNamesFromEvolution(labs: readonly LabWithOrigin[], evolutionId: string): string[] {
+  const names: string[] = []
+  for (const lab of labs) {
+    if (originOf(lab) === evolutionId && !names.includes(lab.name)) names.push(lab.name)
+  }
+  return names
+}
+
+/**
+ * Lo que la pantalla dice cuando retirar del perfil no salió. Ningún rechazo se traga: un 409
+ * acá no es «otra persona ya lo resolvió».
+ */
+export function retireErrorMessage(status: number, code: string): string {
+  if (code === 'not_in_profile' || code === 'not_empty') return 'El perfil cambió mientras elegías. No se retiró nada: revisá la lista de nuevo.'
+  if (code === 'selection_required') return 'Elegí qué sale, o marcá que revisaste el perfil y no hay nada de esa evolución.'
+  if (code === 'subject_mismatch') return 'El sujeto de esta pantalla no coincide con el del pedido. No se retiró nada: recargá la página.'
+  if (code === 'evolution_not_voided' || status === 404) return 'Esa evolución no figura como registrada por error en este sujeto. No se retiró nada: recargá la página.'
+  if (status === 403) return 'Retirar datos del perfil lo hace quien puede escribir evoluciones de este sujeto. No se retiró nada: avisá a quien coordina el estudio.'
+  if (status === 429) return 'Demasiados pedidos seguidos. No se retiró nada. Esperá un momento y volvé a intentar.'
+  return profileWriteErrorMessage(code) ?? 'No se pudo retirar. El perfil no cambió.'
 }
