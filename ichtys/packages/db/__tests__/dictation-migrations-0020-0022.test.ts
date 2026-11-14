@@ -51,8 +51,15 @@ describe('migraciones 0020 a 0022 — todas aditivas', () => {
 
 describe('0020 — cuántas tomas tuvo una evolución dictada (D22)', () => {
   it('una sola columna nueva, opcional: las evoluciones que ya existen quedan sin valor', () => {
-    expect(statementsOf(read(FILES[0]!))).toEqual(['ALTER TABLE "clinical_evolutions" ADD COLUMN IF NOT EXISTS "dictation_takes" integer;'])
+    const statements = statementsOf(read(FILES[0]!))
+    expect(statements).toHaveLength(2)
+    expect(statements[0]).toBe('ALTER TABLE "clinical_evolutions" ADD COLUMN IF NOT EXISTS "dictation_takes" integer;')
     expect(column(clinicalEvolutions, 'dictation_takes')).toMatchObject({ notNull: false, hasDefault: false })
+  })
+
+  it('si tiene valor es de al menos una toma: un cero haría decir cosas raras a la pantalla', () => {
+    expect(statementsOf(read(FILES[0]!))[1]).toMatch(/ADD CONSTRAINT "clinical_evolutions_dictation_takes_check" CHECK \("dictation_takes" IS NULL OR "dictation_takes" >= 1\);/)
+    expect(getTableConfig(clinicalEvolutions).checks.map((c) => c.name)).toEqual(['clinical_evolutions_dictation_takes_check'])
   })
 })
 
@@ -61,7 +68,12 @@ describe('0021 — anular una evolución y retirar su grabación (D24)', () => {
 
   it('la anulación es una fila aparte: la tabla de evoluciones no se toca', () => {
     expect(sql).not.toMatch(/ALTER TABLE "clinical_evolutions"/)
-    expect(sql).not.toMatch(/ALTER TABLE "dictation_audios"/)
+  })
+
+  it('la grabación original solo gana la fecha en que se retiró: así no se confunde con una vencida', () => {
+    const touching = statementsOf(sql).filter((statement) => statement.startsWith('ALTER TABLE "dictation_audios"'))
+    expect(touching).toEqual(['ALTER TABLE "dictation_audios" ADD COLUMN IF NOT EXISTS "withdrawn_at" timestamp with time zone;'])
+    expect(column(dictationAudios, 'withdrawn_at')).toMatchObject({ notNull: false, hasDefault: false })
   })
 
   it('una evolución se anula una sola vez', () => {
@@ -79,7 +91,9 @@ describe('0021 — anular una evolución y retirar su grabación (D24)', () => {
 
   it('el depósito de grabaciones no tiene columna de sujeto', () => {
     expect(columnsOf(unassignedDictationAudios).map((c) => c.name)).not.toContain('subject_id')
-    expect(sql).not.toMatch(/unassigned_dictation_audios[\s\S]*"subject_id"/)
+    const deposit = statementsOf(sql).filter((statement) => statement.includes('"unassigned_dictation_audios"'))
+    expect(deposit.length).toBeGreaterThan(0)
+    for (const statement of deposit) expect(statement).not.toContain('"subject_id"')
   })
 
   it('el vencimiento no tiene valor por defecto: se copia de la grabación original, no se vuelve a calcular', () => {

@@ -1,5 +1,5 @@
 -- 0021 — Evolución registrada en el sujeto equivocado (docs/decisions/grabacion-en-sujeto-equivocado.md, D24).
--- Aditiva: dos tablas nuevas. Ninguna tabla existente cambia.
+-- Aditiva: dos tablas nuevas y una columna opcional en la de grabaciones.
 --
 -- Primera tabla: las anulaciones. La evolución no se modifica ni se borra: que está anulada se
 -- sabe porque existe una fila acá, con quién lo declaró, cuándo y por qué. Una por evolución.
@@ -29,8 +29,9 @@ EXCEPTION WHEN duplicate_object THEN null; END $$;--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "evolution_voids_evolution_uniq" ON "evolution_voids" USING btree ("evolution_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "evolution_voids_org_subject_idx" ON "evolution_voids" USING btree ("organization_id","subject_id");--> statement-breakpoint
 -- Segunda tabla: el depósito de grabaciones retiradas. No tiene columna de persona en estudio:
--- una grabación acá no pertenece a la historia de nadie. Sigue siendo dato clínico (una voz
--- identifica): mismo cifrado, mismo vencimiento y mismo registro de escuchas.
+-- una grabación acá no se lista en la historia de nadie. De dónde salió se sigue sabiendo, por
+-- la grabación y la evolución de origen: es la trazabilidad que la decisión pide. Sigue siendo
+-- dato clínico (una voz identifica): mismo cifrado, mismo vencimiento y mismo registro de escuchas.
 -- El vencimiento y la fecha de grabación no tienen valor por defecto: se copian de la
 -- grabación original. Pasar al depósito no puede ser una forma de guardar un audio más tiempo.
 CREATE TABLE IF NOT EXISTS "unassigned_dictation_audios" (
@@ -68,4 +69,8 @@ EXCEPTION WHEN duplicate_object THEN null; END $$;--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "unassigned_dictation_audios_source_uniq" ON "unassigned_dictation_audios" USING btree ("source_audio_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "unassigned_dictation_audios_org_study_idx" ON "unassigned_dictation_audios" USING btree ("organization_id","study_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "unassigned_dictation_audios_org_author_idx" ON "unassigned_dictation_audios" USING btree ("organization_id","created_by");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "unassigned_dictation_audios_expires_idx" ON "unassigned_dictation_audios" USING btree ("expires_at");
+CREATE INDEX IF NOT EXISTS "unassigned_dictation_audios_expires_idx" ON "unassigned_dictation_audios" USING btree ("expires_at");--> statement-breakpoint
+-- La grabación original queda, vacía, con la fecha en que se retiró. Así no se confunde con
+-- una vencida (que lleva su fecha de borrado) y el listado puede decir qué pasó con ella.
+-- La fila original no se borra nunca: el depósito cuelga de ella.
+ALTER TABLE "dictation_audios" ADD COLUMN IF NOT EXISTS "withdrawn_at" timestamp with time zone;

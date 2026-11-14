@@ -8,8 +8,11 @@ import { studies } from './studies'
  * unassigned_dictation_audios — grabaciones retiradas de un sujeto porque se dictaron en el
  * equivocado (docs/decisions/grabacion-en-sujeto-equivocado.md, D24).
  *
- * - **No tiene columna de sujeto**, a propósito: una grabación acá no es parte de la historia
- *   de nadie. Guarda de qué grabación y de qué evolución vino.
+ * - **No tiene columna de sujeto**, a propósito: una grabación acá no se lista en la historia
+ *   de nadie. De dónde salió se sigue sabiendo, por la grabación y la evolución de origen: es
+ *   la trazabilidad que la decisión pide, no un dato «sin identificar».
+ * - La fila original de la grabación no se borra nunca: esta cuelga de ella, y borrarla se
+ *   llevaría la del depósito.
  * - Sigue siendo dato clínico (una voz identifica a una persona): mismo cifrado, mismo
  *   vencimiento y mismo registro de escuchas que cualquier otra grabación.
  * - `created_at` y `expires_at` **se copian** de la grabación original y no tienen valor por

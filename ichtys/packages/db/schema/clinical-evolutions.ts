@@ -1,5 +1,5 @@
-import { pgTable, uuid, text, timestamp, index, integer } from 'drizzle-orm/pg-core'
-import { relations } from 'drizzle-orm'
+import { pgTable, uuid, text, timestamp, index, integer, check } from 'drizzle-orm/pg-core'
+import { relations, sql } from 'drizzle-orm'
 import { organizations } from './organizations'
 import { studies } from './studies'
 import { subjects } from './subjects'
@@ -37,6 +37,7 @@ export const clinicalEvolutions = pgTable(
       table.subjectId,
       table.createdAt,
     ),
+    dictationTakesCheck: check('clinical_evolutions_dictation_takes_check', sql`${table.dictationTakes} IS NULL OR ${table.dictationTakes} >= 1`),
   }),
 )
 
