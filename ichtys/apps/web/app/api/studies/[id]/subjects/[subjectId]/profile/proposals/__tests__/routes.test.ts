@@ -96,6 +96,27 @@ describe('propuestas para el perfil — aceptar y descartar', () => {
   })
 })
 
+/** D24: lo retirado del perfil por venir de una evolución anulada son datos de otra persona. */
+describe('propuestas para el perfil — la respuesta no lleva lo retirado', () => {
+  const withRetired = {
+    version: 1,
+    labs: [],
+    medications: [],
+    conditions: [],
+    retiredFacts: [{ evolutionId: EVO, retiredAt: '2026-11-14T20:00:00.000Z', retiredBy: 'user_x', labs: [{ name: 'Ferritina', value: 480 }], medications: [], conditions: ['Hipotiroidismo'] }],
+  }
+
+  it.each([
+    ['aceptar', confirm, mocks.confirmProfileProposal],
+    ['descartar', reject, mocks.rejectProfileProposal],
+  ] as const)('%s: viaja por qué evolución se revisó, no qué se sacó ni quién', async (_name, handler, service) => {
+    service.mockResolvedValue(withRetired)
+    const text = await (await handler(req(), ctx())).text()
+    for (const leaked of ['retiredFacts', 'Ferritina', 'Hipotiroidismo', 'user_x']) expect(text).not.toContain(leaked)
+    expect(JSON.parse(text).profile.retiredFrom).toEqual([{ evolutionId: EVO, retiredAt: '2026-11-14T20:00:00.000Z' }])
+  })
+})
+
 /**
  * D24: la propuesta se escribe unos segundos después de guardar la evolución (espera al modelo).
  * Si en ese rato alguien la anuló, la propuesta aparece tarde, sobre una evolución anulada.
