@@ -37,7 +37,7 @@ describe('VoidedOriginNoticeCard', () => {
   })
 
   it('con aviso: título, los laboratorios por nombre y la advertencia sobre medicaciones y condiciones', () => {
-    const el = show({ notice: { labNames: ['HbA1c', 'Glucosa'], evolutionIds: [EVO] }, checkFailed: false })
+    const el = show({ notice: { labNames: ['HbA1c', 'Glucosa'], evolutionIds: [EVO], acceptedProposal: true, beforeLogging: false }, checkFailed: false })
     expect(el.querySelector('[role="status"]')).not.toBeNull()
     expect(el.textContent).toContain(VOIDED_ORIGIN_TITLE)
     expect(el.textContent).toContain('HbA1c, Glucosa')
@@ -53,7 +53,7 @@ describe('VoidedOriginNoticeCard', () => {
   })
 
   it('con aviso y la comprobación fallida, muestra el aviso: lo que se sabe alcanza', () => {
-    const el = show({ notice: { labNames: ['HbA1c'], evolutionIds: [EVO] }, checkFailed: true })
+    const el = show({ notice: { labNames: ['HbA1c'], evolutionIds: [EVO], acceptedProposal: true, beforeLogging: false }, checkFailed: true })
     expect(el.textContent).toContain(VOIDED_ORIGIN_TITLE)
     expect(el.textContent).not.toContain(VOIDED_ORIGIN_UNKNOWN)
   })
