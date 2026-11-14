@@ -61,4 +61,9 @@ describe('DictationThread', () => {
     show()
     expect(container.textContent).toContain('Decí el apartado y después el dato')
   })
+
+  it('en pantalla ancha no se muestra: ahí la guía completa ya está al costado del cuadro', () => {
+    show()
+    expect(container.querySelector('details')!.className).toContain('lg:hidden')
+  })
 })
