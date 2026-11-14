@@ -26,7 +26,7 @@ export function voidErrorMessage(status: number, code: string): string {
   }
   if (status === 404) return 'No se encontró esa evolución en este sujeto. No se declaró nada: recargá la página.'
   if (status === 403) {
-    return 'Declarar este error lo hace quien escribió la evolución o quien coordina el estudio. No se declaró nada: avisá a quien coordina el estudio.'
+    return 'No podés declarar este error en esta evolución. No se declaró nada: pedíselo a quien la escribió.'
   }
   if (status === 429) return 'Demasiados pedidos seguidos. No se declaró nada. Esperá un momento y volvé a intentar.'
   if (status >= 400 && status < 500) return 'El pedido no se pudo procesar. No se declaró nada.'
