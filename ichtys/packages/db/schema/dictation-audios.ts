@@ -6,7 +6,8 @@ import { subjects } from './subjects'
 
 /**
  * dictation_audios — la grabación de la que salió una evolución dictada
- * (docs/decisions/consulta-dictada.md, D14). Una por evolución.
+ * (docs/decisions/consulta-dictada.md, D14). Una fila por toma: quien dicta en varias
+ * tomas deja una grabación por cada una (D22).
  *
  * - Va cifrada con @ichtys/crypto, como todo dato clínico.
  * - Se conserva hasta `expires_at`. Al vencer se borra el contenido y la fila
@@ -30,6 +31,8 @@ export const dictationAudios = pgTable(
     evolutionId: uuid('evolution_id')
       .notNull()
       .references(() => clinicalEvolutions.id, { onDelete: 'cascade' }),
+    /** Número de toma dentro de la evolución, desde 1. El valor por defecto cubre al código que no la manda. */
+    take: integer('take').notNull().default(1),
     mime: text('mime').notNull(),
     sizeBytes: integer('size_bytes').notNull(),
     durationSec: integer('duration_sec').notNull(),
@@ -42,7 +45,7 @@ export const dictationAudios = pgTable(
     purgedAt: timestamp('purged_at', { withTimezone: true }),
   },
   (table) => ({
-    evolutionIdx: uniqueIndex('dictation_audios_evolution_uniq').on(table.evolutionId),
+    evolutionTakeIdx: uniqueIndex('dictation_audios_evolution_take_uniq').on(table.evolutionId, table.take),
     orgSubjectIdx: index('dictation_audios_org_subject_idx').on(table.organizationId, table.subjectId),
     expiryIdx: index('dictation_audios_expires_idx').on(table.expiresAt),
   }),

@@ -10,12 +10,14 @@ import { recordingClock } from './record-button'
 
 export interface EvolutionAudioInfo {
   evolutionId: string
+  /** Número de toma dentro de la evolución, desde 1 (D22). */
+  take: number
   durationSec: number
   expiresAt: string
   available: boolean
 }
 
-export function EvolutionAudio({ studyId, subjectId, audio }: { studyId: string; subjectId: string; audio: EvolutionAudioInfo }) {
+export function EvolutionAudio({ studyId, subjectId, audio, takeCount = 1 }: { studyId: string; subjectId: string; audio: EvolutionAudioInfo; takeCount?: number }) {
   const [url, setUrl] = useState<string | null>(null)
   const [state, setState] = useState<'idle' | 'loading' | 'error' | 'expired'>('idle')
   const urlRef = useRef<string | null>(null)
@@ -30,7 +32,7 @@ export function EvolutionAudio({ studyId, subjectId, audio }: { studyId: string;
   async function listen() {
     setState('loading')
     try {
-      const res = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/evolutions/${audio.evolutionId}/audio`)
+      const res = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/evolutions/${audio.evolutionId}/audio?take=${audio.take}`)
       if (res.status === 410) {
         setState('expired')
         return
@@ -46,14 +48,16 @@ export function EvolutionAudio({ studyId, subjectId, audio }: { studyId: string;
   }
 
   const expires = new Date(audio.expiresAt).toLocaleDateString('es-AR')
+  // Con una sola grabación no se numera; con varias, cada una dice qué toma es.
+  const label = takeCount > 1 ? `Dictada · toma ${audio.take} de ${takeCount}` : 'Dictada'
   if (!audio.available || state === 'expired') {
-    return <p className="mt-3 border-t border-alphi-border pt-2 text-xs text-alphi-muted">Dictada. La grabación ({recordingClock(audio.durationSec)}) se borró al vencer el plazo de conservación ({expires}).</p>
+    return <p className="mt-3 border-t border-alphi-border pt-2 text-xs text-alphi-muted">{label}. La grabación ({recordingClock(audio.durationSec)}) se borró al vencer el plazo de conservación ({expires}).</p>
   }
 
   return (
     <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-alphi-border pt-2 text-xs text-alphi-muted">
       <span>
-        Dictada · grabación de {recordingClock(audio.durationSec)} · se borra el {expires}
+        {label} · grabación de {recordingClock(audio.durationSec)} · se borra el {expires}
       </span>
       {url ? (
         <audio controls src={url} className="h-8 max-w-full" />

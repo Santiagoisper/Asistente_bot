@@ -2,9 +2,9 @@ import { createHash } from 'node:crypto'
 import { and, clinicalEvolutions, db, dictationAudios, eq, isNotNull, lt } from '@ichtys/db'
 import type { DbTransaction } from '../audit/audited-write'
 import { decryptClinicalContent, encryptClinicalContent } from '../subjects/phi-fields'
-import { DICTATION_AUDIO_MAX_BYTES, DICTATION_AUDIO_RETENTION_DAYS } from './protocol'
+import { DICTATION_AUDIO_MAX_BYTES, DICTATION_AUDIO_MAX_TAKES, DICTATION_AUDIO_RETENTION_DAYS } from './protocol'
 
-export { DICTATION_AUDIO_MAX_BYTES, DICTATION_AUDIO_RETENTION_DAYS }
+export { DICTATION_AUDIO_MAX_BYTES, DICTATION_AUDIO_MAX_TAKES, DICTATION_AUDIO_RETENTION_DAYS }
 
 /**
  * La grabación de una evolución dictada (docs/decisions/consulta-dictada.md, D14).
@@ -52,7 +52,7 @@ export interface StoredAudioMeta {
   expiresAt: Date
 }
 
-/** Guarda la grabación cifrada. Una por evolución: si ya hay una, no la pisa y devuelve null. */
+/** Guarda la grabación cifrada de una toma. Una por toma (D22): si esa toma ya tiene una, no la pisa y devuelve null. */
 export async function storeDictationAudio(
   tx: DbTransaction,
   params: {
@@ -60,6 +60,8 @@ export async function storeDictationAudio(
     studyId: string
     subjectId: string
     evolutionId: string
+    /** Número de toma dentro de la evolución, desde 1. */
+    take: number
     actorId: string
     mime: string
     durationSec: number
@@ -76,6 +78,7 @@ export async function storeDictationAudio(
       studyId: params.studyId,
       subjectId: params.subjectId,
       evolutionId: params.evolutionId,
+      take: params.take,
       mime: params.mime,
       sizeBytes: params.bytes.byteLength,
       durationSec: params.durationSec,
@@ -92,17 +95,19 @@ export async function storeDictationAudio(
 
 export interface AudioListing {
   evolutionId: string
+  take: number
   durationSec: number
   expiresAt: Date
   /** `false`: venció y se borró; queda la constancia. */
   available: boolean
 }
 
-/** Qué evoluciones de un sujeto tienen grabación. Sin contenido. */
+/** Las grabaciones de las evoluciones de un sujeto, una por toma. Sin contenido. */
 export async function listSubjectAudios(params: { orgId: string; studyId: string; subjectId: string; now: Date }): Promise<AudioListing[]> {
   const rows = await db
     .select({
       evolutionId: dictationAudios.evolutionId,
+      take: dictationAudios.take,
       durationSec: dictationAudios.durationSec,
       expiresAt: dictationAudios.expiresAt,
       purgedAt: dictationAudios.purgedAt,
@@ -117,6 +122,7 @@ export async function listSubjectAudios(params: { orgId: string; studyId: string
     )
   return rows.map((row) => ({
     evolutionId: row.evolutionId,
+    take: row.take,
     durationSec: row.durationSec,
     expiresAt: row.expiresAt,
     available: row.purgedAt === null && row.expiresAt.getTime() > params.now.getTime(),
@@ -125,8 +131,8 @@ export async function listSubjectAudios(params: { orgId: string; studyId: string
 
 export type LoadedAudio = { state: 'ok'; id: string; mime: string; bytes: Uint8Array } | { state: 'missing' } | { state: 'expired' }
 
-/** La grabación descifrada. Una vencida no se entrega aunque la limpieza todavía no haya pasado. */
-export async function loadDictationAudio(params: { orgId: string; studyId: string; subjectId: string; evolutionId: string; now: Date }): Promise<LoadedAudio> {
+/** La grabación descifrada de una toma. Una vencida no se entrega aunque la limpieza todavía no haya pasado. */
+export async function loadDictationAudio(params: { orgId: string; studyId: string; subjectId: string; evolutionId: string; take: number; now: Date }): Promise<LoadedAudio> {
   const [row] = await db
     .select({
       id: dictationAudios.id,
@@ -138,6 +144,7 @@ export async function loadDictationAudio(params: { orgId: string; studyId: strin
     .where(
       and(
         eq(dictationAudios.evolutionId, params.evolutionId),
+        eq(dictationAudios.take, params.take),
         eq(dictationAudios.organizationId, params.orgId),
         eq(dictationAudios.studyId, params.studyId),
         eq(dictationAudios.subjectId, params.subjectId),

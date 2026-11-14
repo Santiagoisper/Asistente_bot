@@ -9,6 +9,8 @@ import {
   purgeExpiredDictationAudios,
   storeDictationAudio,
 } from '../../../../../../../../../lib/dictation/audio-store'
+import { DICTATION_AUDIO_MAX_TAKES } from '../../../../../../../../../lib/dictation/protocol'
+import { parseTake } from '../../../../../../../../../lib/dictation/takes'
 import { PhiConfigError } from '../../../../../../../../../lib/subjects/phi-fields'
 
 export const runtime = 'nodejs'
@@ -21,8 +23,9 @@ const notFound = () => new Response('Not Found', { status: 404 })
 
 /**
  * POST — guarda la grabación de una evolución dictada (docs/decisions/consulta-dictada.md, D14).
- * Solo quien escribió la evolución, y una sola vez. El cuerpo es el audio; el tipo va en
- * Content-Type y la duración en X-Duration-Sec.
+ * Solo quien escribió la evolución, y una sola vez por toma (D22). El cuerpo es el audio; el
+ * tipo va en Content-Type, la duración en X-Duration-Sec y el número de toma en X-Take (sin
+ * ese encabezado es la primera).
  */
 export async function POST(req: Request, { params }: Params): Promise<Response> {
   const { id: routeStudyId, subjectId, evolutionId } = await params
@@ -36,6 +39,8 @@ export async function POST(req: Request, { params }: Params): Promise<Response> 
     if (!Number.isInteger(durationSec) || durationSec < 0 || durationSec > 4 * 60 * 60) {
       return Response.json({ error: 'invalid_duration' }, { status: 400 })
     }
+    const take = parseTake(req.headers.get('x-take'))
+    if (take === null) return Response.json({ error: 'invalid_take', maxTakes: DICTATION_AUDIO_MAX_TAKES }, { status: 400 })
     const declared = Number(req.headers.get('content-length') ?? '')
     if (Number.isFinite(declared) && declared > DICTATION_AUDIO_MAX_BYTES) {
       return Response.json({ error: 'audio_too_large', maxBytes: DICTATION_AUDIO_MAX_BYTES }, { status: 413 })
@@ -78,6 +83,7 @@ export async function POST(req: Request, { params }: Params): Promise<Response> 
           studyId: access.study.id,
           subjectId: access.subject.id,
           evolutionId: evolution.id,
+          take,
           actorId: access.userId,
           mime,
           durationSec,
@@ -96,6 +102,7 @@ export async function POST(req: Request, { params }: Params): Promise<Response> 
         metadata: {
           subjectId: access.subject.id,
           evolutionId: evolution.id,
+          take,
           stored: result !== null,
           mime,
           durationSec,
@@ -115,17 +122,21 @@ export async function POST(req: Request, { params }: Params): Promise<Response> 
 }
 
 /** GET — entrega la grabación a quien puede ver los datos clínicos del sujeto. Queda registrado quién la escuchó. */
-export async function GET(_req: Request, { params }: Params): Promise<Response> {
+export async function GET(req: Request, { params }: Params): Promise<Response> {
   const { id: routeStudyId, subjectId, evolutionId } = await params
   try {
     const access = await validateSubjectAccess(subjectId, routeStudyId)
     if (!UUID.test(evolutionId)) return notFound()
+    // Una toma que no puede existir se responde igual que una que no existe.
+    const take = parseTake(new URL(req.url).searchParams.get('take'))
+    if (take === null) return notFound()
 
     const audio = await loadDictationAudio({
       orgId: access.orgId,
       studyId: access.study.id,
       subjectId: access.subject.id,
       evolutionId,
+      take,
       now: new Date(),
     })
     if (audio.state === 'missing') return notFound()
@@ -139,7 +150,7 @@ export async function GET(_req: Request, { params }: Params): Promise<Response> 
       userId: access.userId,
       resourceType: 'dictation_audio',
       resourceId: audio.id,
-      metadata: { subjectId: access.subject.id, evolutionId },
+      metadata: { subjectId: access.subject.id, evolutionId, take },
     })
 
     return new Response(audio.bytes as BodyInit, {
