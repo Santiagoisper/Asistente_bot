@@ -14,11 +14,15 @@ import { rateLimitedSaveMessage } from '../../lib/security/rate-limit-message'
 import { addRecordingTake, clampTakesCount, groupAudiosByEvolution, uploadNotice, uploadRecordingTakes, uploadsSettled, type AudioListingItem } from '../../lib/dictation/takes'
 import { criterionStatusLabel } from '../../lib/subjects/screening-labels'
 import { EvolutionAudios, type EvolutionAudioInfo } from './evolution-audio'
+import { EvolutionBody, type EvolutionVoidInfo } from './evolution-body'
 
 interface EvolutionItem {
   id: string
   visitLabel: string | null
-  content: string
+  /** `null`: evolución anulada cuyo texto no le corresponde a quien mira (D24). */
+  content: string | null
+  /** Registrada por error en este sujeto. Falta en la respuesta de una versión anterior. */
+  voided?: EvolutionVoidInfo | null
   /** Cuántas tomas tuvo el dictado (D22). Falta en la respuesta de una versión anterior. */
   dictationTakes?: number | null
   createdAt: string
@@ -792,7 +796,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                     <span className="alphi-pill text-[10px]">{evo.visitLabel}</span>
                   )}
                 </div>
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-alphi-navy">{evo.content}</p>
+                <EvolutionBody content={evo.content} voided={evo.voided ?? null} />
                 <EvolutionAudios
                   studyId={studyId}
                   subjectId={subjectId}

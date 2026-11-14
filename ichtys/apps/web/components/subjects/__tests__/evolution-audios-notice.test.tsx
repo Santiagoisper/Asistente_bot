@@ -65,6 +65,13 @@ describe('EvolutionAudios — de qué tomas no quedó grabación', () => {
     expect(text).not.toContain('no quedó')
   })
 
+  it('una grabación retirada dice que pasó a las grabaciones sin sujeto, no que venció, y no ofrece escucharla (D24)', () => {
+    const text = show({ audios: [{ ...audio(1), available: false, withdrawn: true }], dictationTakes: 1 })
+    expect(text).toContain('se retiró de este sujeto y pasó a las grabaciones sin sujeto')
+    expect(text).not.toContain('se borró al vencer')
+    expect(text).not.toContain('Escuchar')
+  })
+
   it('recién guardada por otra persona: no afirma que falte una grabación que puede estar subiendo', () => {
     expect(show({ audios: [], dictationTakes: 2, settled: false })).toBe('')
     expect(show({ audios: [audio(1)], dictationTakes: 2, settled: false })).not.toContain('no hay grabación')
