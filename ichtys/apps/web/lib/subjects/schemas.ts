@@ -94,5 +94,7 @@ export const retireVoidedOriginInput = z
     removeBloodPressure: z.boolean().optional(),
     medications: z.array(z.string().trim().min(1).max(200)).max(100).optional(),
     conditions: z.array(z.string().trim().min(1).max(300)).max(100).optional(),
+    /** «Revisé el perfil y no hay nada de esa evolución». Solo vale como `true`. */
+    nothingToRetire: z.literal(true).optional(),
   })
   .strict()

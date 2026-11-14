@@ -388,6 +388,26 @@ describe('D24 — retirar del perfil lo que entró desde una evolución anulada'
     expect(store.audits).toHaveLength(1)
   })
 
+  it('una revisión declarada vacía queda registrada como tal, para poder contarlas', async () => {
+    writeDirectly({ ...stored(), labs: [lab('Glucosa', 110)] })
+    await retireVoidedOriginFacts({ ...who, nothingToRetire: true })
+    expect(stored().retiredFacts).toHaveLength(1)
+    expect(store.audits[0]).toMatchObject({ metadata: { source: 'voided_origin_retire', labs: 0, medications: 0, conditions: 0, nothingToRetire: true } })
+  })
+
+  it('un retiro con algo que sacar no lleva esa marca', async () => {
+    seed()
+    await retireVoidedOriginFacts(who)
+    expect((store.audits[0] as { metadata: Record<string, unknown> }).metadata).not.toHaveProperty('nothingToRetire')
+  })
+
+  it('sin nada que sacar y sin declararlo, no escribe nada', async () => {
+    writeDirectly({ ...stored(), labs: [lab('Glucosa', 110)] })
+    await expect(retireVoidedOriginFacts(who)).rejects.toMatchObject({ code: 'selection_required' })
+    expect(store.writes).toBe(0)
+    expect(store.audits).toHaveLength(0)
+  })
+
   it('una elección que ya no está en el perfil no escribe nada', async () => {
     seed()
     await expect(retireVoidedOriginFacts({ ...who, medications: ['Enalapril'] })).rejects.toMatchObject({ code: 'not_in_profile' })

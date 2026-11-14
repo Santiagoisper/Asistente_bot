@@ -11,7 +11,9 @@ const mocks = vi.hoisted(() => {
     }
   }
   class MockSelectionError extends Error {
-    readonly code = 'not_in_profile'
+    constructor(readonly code: 'not_in_profile' | 'selection_required' | 'not_empty' = 'not_in_profile') {
+      super(code)
+    }
   }
   class MockUnreadableError extends Error {}
   class MockInvalidError extends Error {}
@@ -83,6 +85,7 @@ describe('POST — retirar del perfil lo que entró desde una evolución anulada
       removeBloodPressure: false,
       medications: ['Atorvastatina'],
       conditions: [],
+      nothingToRetire: false,
     })
   })
 
@@ -139,6 +142,31 @@ describe('POST — retirar del perfil lo que entró desde una evolución anulada
     const res = await POST(request(), params)
     expect(res.status).toBe(409)
     expect(await res.json()).toEqual({ error: 'not_in_profile' })
+  })
+
+  it('la declaración de «no hay nada que sacar» llega al servicio tal como la mandó la persona', async () => {
+    await POST(request({ evolutionId: EVOLUTION, confirmedSubjectCode: 'GZBO-001', nothingToRetire: true }), params)
+    expect(mocks.retire).toHaveBeenCalledWith(expect.objectContaining({ nothingToRetire: true, medications: [], conditions: [], removeAge: false }))
+  })
+
+  it('solo vale declararlo con `true`: un `false` o un texto no es una declaración', async () => {
+    expect((await POST(request({ ...valid, nothingToRetire: false }), params)).status).toBe(400)
+    expect((await POST(request({ ...valid, nothingToRetire: 'sí' }), params)).status).toBe(400)
+    expect(mocks.retire).not.toHaveBeenCalled()
+  })
+
+  it('sin elegir nada y sin declararlo: 400 con código propio, y el aviso no se apaga', async () => {
+    mocks.retire.mockRejectedValue(new mocks.RetireSelectionError('selection_required'))
+    const res = await POST(request({ evolutionId: EVOLUTION, confirmedSubjectCode: 'GZBO-001' }), params)
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ error: 'selection_required' })
+  })
+
+  it('declaró que no había nada y sí había: 409, para que la pantalla recargue', async () => {
+    mocks.retire.mockRejectedValue(new mocks.RetireSelectionError('not_empty'))
+    const res = await POST(request({ evolutionId: EVOLUTION, confirmedSubjectCode: 'GZBO-001', nothingToRetire: true }), params)
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({ error: 'not_empty' })
   })
 
   it('un perfil que no se puede leer: 422, no se retira a ciegas', async () => {

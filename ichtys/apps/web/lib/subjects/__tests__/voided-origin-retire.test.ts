@@ -49,7 +49,7 @@ describe('retireFromVoidedEvolution', () => {
 
   it('un laboratorio que una evolución vigente volvió a traer ya no es de ese origen: se queda', () => {
     const profile = parsePatientProfile({ version: 1, labs: [fromEvolution('Ferritina', 120, CURRENT)] })
-    const result = retire(profile)
+    const result = retire(profile, { nothingToRetire: true })
     expect(result.profile.labs).toHaveLength(1)
     expect(result.removed.labs).toBe(0)
   })
@@ -85,9 +85,34 @@ describe('retireFromVoidedEvolution', () => {
     expect(profile.fieldConfidence).toEqual({ labs: { glucosa: 'high' }, medications: { metformina: 'high' }, conditions: { 'diabetes tipo 2': 'high' } })
   })
 
-  it('una revisión sin nada que sacar deja igual su entrada: «revisé y no había nada»', () => {
+  /**
+   * Observación de Architect (#178): que una revisión vacía apague el aviso está bien; que sea lo
+   * que pasa por defecto, no. Tiene que ser una declaración explícita de la persona.
+   */
+  it('sin nada que sacar y sin declararlo, no se registra ninguna revisión', () => {
     const profile = parsePatientProfile({ version: 1, labs: [fromEvolution('Glucosa', 110, CURRENT)] })
-    const result = retire(profile)
+    expect(() => retire(profile)).toThrow(RetireSelectionError)
+    try {
+      retire(profile)
+    } catch (err) {
+      expect((err as RetireSelectionError).code).toBe('selection_required')
+    }
+  })
+
+  it('declarar «no hay nada» cuando sí sale algo no vale: la declaración tiene que ser cierta', () => {
+    expect(() => retire(base(), { nothingToRetire: true })).toThrow(RetireSelectionError)
+    const noLabs = parsePatientProfile({ version: 1, medications: [{ name: 'Atorvastatina' }] })
+    expect(() => retire(noLabs, { nothingToRetire: true, medications: ['Atorvastatina'] })).toThrow(RetireSelectionError)
+    try {
+      retire(base(), { nothingToRetire: true })
+    } catch (err) {
+      expect((err as RetireSelectionError).code).toBe('not_empty')
+    }
+  })
+
+  it('una revisión declarada sin nada que sacar deja su entrada: «revisé y no había nada»', () => {
+    const profile = parsePatientProfile({ version: 1, labs: [fromEvolution('Glucosa', 110, CURRENT)] })
+    const result = retire(profile, { nothingToRetire: true })
     expect(result.profile.retiredFacts).toEqual([{ evolutionId: VOIDED, retiredAt: AT.toISOString(), retiredBy: 'user_md', labs: [], medications: [], conditions: [] }])
     expect(result.profile.labs).toHaveLength(1)
   })
@@ -100,6 +125,11 @@ describe('retireFromVoidedEvolution', () => {
 
   it('pedir que salga una medicación o una condición que no está en el perfil no cambia nada: alguien lo modificó mientras tanto', () => {
     expect(() => retire(base(), { medications: ['Enalapril'] })).toThrow(RetireSelectionError)
+    try {
+      retire(base(), { medications: ['Enalapril'] })
+    } catch (err) {
+      expect((err as RetireSelectionError).code).toBe('not_in_profile')
+    }
     expect(() => retire(base(), { conditions: ['Asma'] })).toThrow(RetireSelectionError)
   })
 

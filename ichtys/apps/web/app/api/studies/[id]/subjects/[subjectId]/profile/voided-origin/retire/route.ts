@@ -21,6 +21,8 @@ const ENDPOINT = '/api/studies/[id]/subjects/[subjectId]/profile/voided-origin/r
  *   estudio alcanza para anular una evolución, no para decidir qué dato clínico sale.
  * - **Sobre qué:** una evolución anulada de este sujeto. No es un editor general del perfil.
  * - Los laboratorios de ese origen salen todos; el resto, lo que la persona eligió.
+ * - Una revisión que no saca nada vale solo si la persona lo declara (`nothingToRetire`): apagar
+ *   el aviso no puede ser lo que pasa por defecto.
  * - Lo retirado se conserva dentro del perfil cifrado y no viaja en la respuesta.
  * - Alphi no lo hace solo: lo decide una persona, que confirma el sujeto.
  */
@@ -60,11 +62,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       removeBloodPressure: parsed.data.removeBloodPressure ?? false,
       medications: parsed.data.medications ?? [],
       conditions: parsed.data.conditions ?? [],
+      nothingToRetire: parsed.data.nothingToRetire ?? false,
     })
 
     return Response.json({ subjectCode: access.subject.subjectCode, profile: profileForResponse(result.profile), retired: result.removed })
   } catch (err) {
-    if (err instanceof RetireSelectionError) return Response.json({ error: 'not_in_profile' }, { status: 409 })
+    // Sin elegir nada y sin declararlo es un pedido incompleto; lo demás es un perfil que cambió.
+    if (err instanceof RetireSelectionError) return Response.json({ error: err.code }, { status: err.code === 'selection_required' ? 400 : 409 })
     const profileError = profileWriteErrorResponse(err)
     if (profileError) return profileError
     if (err instanceof PhiConfigError) return Response.json({ error: 'phi_encryption_not_configured' }, { status: 503 })
