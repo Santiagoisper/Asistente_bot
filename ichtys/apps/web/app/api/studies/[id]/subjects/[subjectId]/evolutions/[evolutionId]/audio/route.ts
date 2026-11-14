@@ -1,4 +1,5 @@
 import { handleApiError, validateSubjectAccess } from '@ichtys/auth'
+import { clinicalRateLimit } from '../../../../../../../../../lib/security/clinical-rate-limit'
 import { auditedWrite, insertAuditLog } from '../../../../../../../../../lib/audit/audited-write'
 import { writeAuditLog } from '../../../../../../../../../lib/chat/persistence'
 import {
@@ -27,11 +28,16 @@ const notFound = () => new Response('Not Found', { status: 404 })
  * tipo va en Content-Type, la duración en X-Duration-Sec y el número de toma en X-Take (sin
  * ese encabezado es la primera).
  */
+const AUDIO_ENDPOINT = '/api/studies/[id]/subjects/[subjectId]/evolutions/[evolutionId]/audio'
+
 export async function POST(req: Request, { params }: Params): Promise<Response> {
   const { id: routeStudyId, subjectId, evolutionId } = await params
   try {
     const access = await validateSubjectAccess(subjectId, routeStudyId, { require: 'clinical.author' })
     if (!UUID.test(evolutionId)) return notFound()
+    // Límite de pedidos, antes de leer el cuerpo: una grabación son hasta 4 MB.
+    const limited = await clinicalRateLimit('audio_write', { orgId: access.orgId, userId: access.userId, studyId: access.study.id, req, endpoint: AUDIO_ENDPOINT })
+    if (limited) return limited
 
     const mime = baseMime(req.headers.get('content-type'))
     if (!mime) return Response.json({ error: 'unsupported_audio_type' }, { status: 415 })
@@ -127,6 +133,9 @@ export async function GET(req: Request, { params }: Params): Promise<Response> {
   try {
     const access = await validateSubjectAccess(subjectId, routeStudyId)
     if (!UUID.test(evolutionId)) return notFound()
+    // Límite de pedidos, antes de descifrar y de registrar la escucha.
+    const limited = await clinicalRateLimit('audio_listen', { orgId: access.orgId, userId: access.userId, studyId: access.study.id, req, endpoint: AUDIO_ENDPOINT })
+    if (limited) return limited
     // Una toma que no puede existir se responde igual que una que no existe.
     const take = parseTake(new URL(req.url).searchParams.get('take'))
     if (take === null) return notFound()

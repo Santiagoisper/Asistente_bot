@@ -4,6 +4,7 @@ import { profileWriteErrorResponse } from '../../../../../../../../lib/subjects/
 import { PhiConfigError } from '../../../../../../../../lib/subjects/phi-fields'
 import { labOcrExtractSchema } from '../../../../../../../../lib/subjects/schemas'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../../../lib/api/body-limit'
+import { clinicalRateLimit } from '../../../../../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -22,6 +23,10 @@ export async function POST(
   } catch (err) {
     return handleApiError(err)
   }
+
+  // Límite de pedidos, antes de leer el cuerpo.
+  const limited = await clinicalRateLimit('lab_extract', { orgId: access.orgId, userId: access.userId, studyId: access.study.id, req, endpoint: '/api/studies/[id]/subjects/[subjectId]/labs/extract' })
+  if (limited) return limited
 
   let body: unknown
   try {

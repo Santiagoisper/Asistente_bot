@@ -10,6 +10,7 @@ import { DictationPanel, type DictationRecording, type DictationSource } from '.
 import { DictationGuide } from './dictation-guide'
 import { ProfileUnreadableNotice } from './profile-unreadable-notice'
 import { profileWriteErrorMessage } from '../../lib/subjects/profile-write-messages'
+import { rateLimitedSaveMessage } from '../../lib/security/rate-limit-message'
 import { addRecordingTake, groupAudiosByEvolution, uploadNotice, uploadRecordingTakes, type AudioListingItem } from '../../lib/dictation/takes'
 import { criterionStatusLabel } from '../../lib/subjects/screening-labels'
 import { EvolutionAudios, type EvolutionAudioInfo } from './evolution-audio'
@@ -262,7 +263,12 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
             : {}),
         }),
       })
-      const data = (await res.json()) as { id?: string; piiWarnings?: string[]; error?: string }
+      const data = (await res.json()) as { id?: string; piiWarnings?: string[]; error?: string; retryAfterSeconds?: number }
+      if (res.status === 429) {
+        // Límite de pedidos: no se guardó nada y el texto queda en pantalla.
+        setError(rateLimitedSaveMessage(data.retryAfterSeconds))
+        return
+      }
       if (res.status === 503) {
         setError('Esta instalación no tiene configurado el cifrado de datos clínicos. No se guardó nada. Avisá a quien administra la plataforma.')
         return
