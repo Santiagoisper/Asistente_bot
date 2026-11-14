@@ -26,6 +26,7 @@ export {
   mergeConfirmedLabs,
   type LabOcrParseResult,
 } from './lab-ocr-parser'
+export { labFromEvolution, labsFromLabReport, labsFromPastedText } from './lab-source'
 export { redactPhiForLlm, type PhiRedactionResult } from './phi-redact'
 export {
   mergeExtractions,
