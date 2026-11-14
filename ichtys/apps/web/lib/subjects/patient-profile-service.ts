@@ -3,6 +3,7 @@ import {
   mergeExtractions,
   mergeProfileWithExtraction,
   parsePatientProfile,
+  patientProfileSchema,
   redactPhiForLlm,
   type PatientProfile,
   type PendingProfileProposal,
@@ -14,7 +15,7 @@ import { insertAuditLog } from '../audit/audited-write'
 import type { AuditLogParams } from '../chat/persistence'
 import { labReviewMarker } from './lab-review-marker'
 import { llmFactsSchema, normalizeLlmFacts } from './llm-facts'
-import { decryptProfileJson, encryptProfileJson } from './phi-fields'
+import { decryptProfileJson, decryptStoredProfile, encryptProfileJson } from './phi-fields'
 import { nextVersion, whereProfileUnchanged, type ProfileScope } from './profile-version'
 
 // El esquema vive en `llm-facts.ts`; se reexporta porque hay pruebas que miden su tamaño (A7).
@@ -127,6 +128,27 @@ export class ProfileMissingError extends Error {
   }
 }
 
+/**
+ * Lo que hay guardado no se pudo leer como perfil (un dato mal formado, una versión
+ * que este código no conoce). No se aplica ningún cambio encima: tratarlo como un
+ * perfil vacío y guardar pisaría los laboratorios, la medicación y las condiciones
+ * que la fila todavía tiene. El mensaje no lleva ningún dato del perfil.
+ */
+export class ProfileUnreadableError extends Error {
+  constructor() {
+    super('patient profile: stored profile is not readable')
+    this.name = 'ProfileUnreadableError'
+  }
+}
+
+/** El cambio dejaría guardado algo que no es un perfil válido: no se escribe. */
+export class ProfileInvalidError extends Error {
+  constructor() {
+    super('patient profile: refusing to store an invalid profile')
+    this.name = 'ProfileInvalidError'
+  }
+}
+
 const MAX_PROFILE_WRITE_ATTEMPTS = 5
 
 /**
@@ -157,7 +179,12 @@ export async function updatePatientProfile(
     })
     if (!row) throw new ProfileMissingError()
 
-    const next = await mutate(parsePatientProfile(decryptProfileJson(row.profileEncrypted)))
+    // Un perfil guardado que no valida no es un perfil vacío: se avisa y no se toca la fila.
+    const stored = patientProfileSchema.safeParse(decryptStoredProfile(row.profileEncrypted))
+    if (!stored.success) throw new ProfileUnreadableError()
+    const next = await mutate(stored.data)
+    // Y lo que se guarda tiene que poder leerse después: si no, el próximo en abrirlo lo vería vacío.
+    if (!patientProfileSchema.safeParse(next).success) throw new ProfileInvalidError()
     const written = await db.transaction(async (tx) => {
       const rows = await tx
         .update(patientProfiles)
