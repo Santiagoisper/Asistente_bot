@@ -145,6 +145,47 @@ describe('uploadRecordingTakes — subir cada toma después de guardar la evoluc
     ])
   })
 
+  it('después de cada grabación guardada van sus tramos, a la misma toma; una toma sin tramos no pide nada más', async () => {
+    const segments = [{ startMs: 0, endMs: 900, text: 'Visita tres' }]
+    const calls: Array<{ url: string; method: string; body: unknown }> = []
+    const result = await uploadRecordingTakes({
+      url: '/api/x/audio',
+      takes: [{ ...take(10, 'audio/webm', 1), segments }, { ...take(20, 'audio/webm', 3), segments: [] }],
+      fetchImpl: async (url, init) => {
+        calls.push({ url: String(url), method: init?.method ?? 'GET', body: typeof init?.body === 'string' ? JSON.parse(init.body) : null })
+        return ok()
+      },
+    })
+    expect(result).toEqual({ total: 2, failed: 0 })
+    expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual(['POST /api/x/audio', 'PUT /api/x/audio/segments?take=1', 'POST /api/x/audio'])
+    expect(calls[1]!.body).toEqual({ segments })
+  })
+
+  it('si la grabación no se guardó, sus tramos no se mandan', async () => {
+    const calls: string[] = []
+    await uploadRecordingTakes({
+      url: '/api/x/audio',
+      takes: [{ ...take(10, 'audio/webm', 1), segments: [{ startMs: 0, endMs: 900, text: 'a' }] }],
+      fetchImpl: async (url, init) => {
+        calls.push(`${init?.method} ${url}`)
+        return new Response('no', { status: 500 })
+      },
+    })
+    expect(calls).toEqual(['POST /api/x/audio'])
+  })
+
+  it('que los tramos no se guarden no cuenta como grabación fallida: la grabación está', async () => {
+    const result = await uploadRecordingTakes({
+      url: '/api/x/audio',
+      takes: [{ ...take(10, 'audio/webm', 1), segments: [{ startMs: 0, endMs: 900, text: 'a' }] }],
+      fetchImpl: async (_url, init) => {
+        if (init?.method === 'PUT') throw new Error('network')
+        return ok()
+      },
+    })
+    expect(result).toEqual({ total: 1, failed: 0 })
+  })
+
   it('una toma que falla no frena a las siguientes, y se cuenta', async () => {
     let call = 0
     const result = await uploadRecordingTakes({

@@ -57,7 +57,7 @@ scope.onmessage = async (message: MessageEvent<TranscriberRequest>) => {
       const output = await transcriber(samples.slice(start, end), { language: 'spanish', task: 'transcribe' })
       texts.push(Array.isArray(output) ? output.map((part) => part.text).join(' ') : output.text)
     }
-    post({ type: 'result', text: joinSegmentTexts(texts), device })
+    post({ type: 'result', text: joinSegmentTexts(texts), device, segmentTexts: texts })
   } catch (error) {
     // Solo el nombre del error: nunca el contenido de lo dictado.
     post({ type: 'error', message: error instanceof Error ? error.name : 'transcription_failed' })

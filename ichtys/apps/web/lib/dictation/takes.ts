@@ -121,6 +121,8 @@ export interface AudioListingItem {
   available: boolean
   /** Retirada al depósito (D24). Falta en la respuesta de una versión anterior. */
   withdrawn?: boolean
+  /** Tiene guardados los tramos de lo dictado. Falta en la respuesta de una versión anterior. */
+  hasSegments?: boolean
 }
 
 /** El listado del sujeto, por evolución y en orden de toma. */
@@ -149,7 +151,7 @@ export interface UploadResult {
  */
 export async function uploadRecordingTakes(params: {
   url: string
-  takes: ReadonlyArray<{ blob: Blob; durationSec: number; take: number }>
+  takes: ReadonlyArray<{ blob: Blob; durationSec: number; take: number; segments?: ReadonlyArray<{ startMs: number; endMs: number; text: string }> }>
   fetchImpl?: (input: string, init?: RequestInit) => Promise<Response>
   sleep?: (ms: number) => Promise<void>
 }): Promise<UploadResult> {
@@ -174,11 +176,24 @@ export async function uploadRecordingTakes(params: {
         res = await post()
       }
       if (!res.ok && res.status !== 409) failed += 1
+      else if (take.segments && take.segments.length > 0) await sendSegments(send, params.url, take.take, take.segments)
     } catch {
       failed += 1
     }
   }
   return { total: params.takes.length, failed }
+}
+
+/**
+ * Los tramos de una toma, después de su grabación (docs/decisions/enlace-frase-audio.md). Si no
+ * se guardan, la grabación queda igual y la pantalla no ofrece la lista: no cuenta como falla.
+ */
+async function sendSegments(send: (input: string, init?: RequestInit) => Promise<Response>, url: string, take: number, segments: ReadonlyArray<{ startMs: number; endMs: number; text: string }>): Promise<void> {
+  try {
+    await send(`${url}/segments?take=${take}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ segments }) })
+  } catch {
+    // La grabación ya está guardada.
+  }
 }
 
 /** Sin un tiempo usable del servidor. */

@@ -88,6 +88,9 @@ export const auditAction = [
   // D24: evolución registrada en el sujeto equivocado. Texto libre en la base: sin migración.
   'evolution.void',
   'evolution.audio.withdraw',
+  // Los tramos de lo dictado (docs/decisions/enlace-frase-audio.md). Texto libre en la base: sin migración.
+  'evolution.audio.segments.store',
+  'evolution.audio.segments.read',
   'profile.view',
   'profile.update',
   'profile.proposal.create',

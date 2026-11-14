@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
-import { and, db, desc, dictationAudios, eq, isNotNull, isNull, lt, unassignedDictationAudios } from '@ichtys/db'
+import { validateDictatedSegments, type DictatedSegment } from '@ichtys/clinical'
+import { and, db, desc, dictationAudios, eq, isNotNull, isNull, lt, sql, unassignedDictationAudios } from '@ichtys/db'
 import type { DbTransaction } from '../audit/audited-write'
 import { decryptClinicalContent, encryptClinicalContent } from '../subjects/phi-fields'
 import { audioState } from './audio-state'
@@ -81,6 +82,8 @@ export interface AudioListing {
   available: boolean
   /** Se retiró de este sujeto porque la evolución se registró en el equivocado (D24). No es una vencida. */
   withdrawn: boolean
+  /** Tiene guardados los tramos de lo dictado y todavía se pueden leer (docs/decisions/enlace-frase-audio.md). */
+  hasSegments: boolean
 }
 
 /** Las grabaciones de las evoluciones de un sujeto, una por toma. Sin contenido. */
@@ -94,6 +97,8 @@ export async function listSubjectAudios(params: { orgId: string; studyId: string
       purgedAt: dictationAudios.purgedAt,
       withdrawnAt: dictationAudios.withdrawnAt,
       contentEncrypted: dictationAudios.contentEncrypted,
+      // Solo si hay o no: el texto de los tramos no se trae para listar.
+      hasSegments: sql<boolean>`${dictationAudios.segmentsEncrypted} is not null`,
     })
     .from(dictationAudios)
     .where(
@@ -112,6 +117,7 @@ export async function listSubjectAudios(params: { orgId: string; studyId: string
       expiresAt: row.expiresAt,
       available: state === 'available',
       withdrawn: state === 'withdrawn',
+      hasSegments: state === 'available' && row.hasSegments === true,
     }
   })
 }
@@ -146,6 +152,101 @@ export async function loadDictationAudio(params: { orgId: string; studyId: strin
   if (state === 'expired' || row.contentEncrypted === null) return { state: 'expired' }
   const bytes = new Uint8Array(Buffer.from(decryptClinicalContent(row.contentEncrypted), 'base64'))
   return { state: 'ok', id: row.id, mime: row.mime, bytes }
+}
+
+type AudioScope = { orgId: string; studyId: string; subjectId: string; evolutionId: string; take: number; now: Date }
+
+async function readSegmentsRow(params: AudioScope) {
+  const [row] = await db
+    .select({
+      id: dictationAudios.id,
+      durationSec: dictationAudios.durationSec,
+      createdBy: dictationAudios.createdBy,
+      hasContent: sql<boolean>`${dictationAudios.contentEncrypted} is not null`,
+      segmentsEncrypted: dictationAudios.segmentsEncrypted,
+      expiresAt: dictationAudios.expiresAt,
+      purgedAt: dictationAudios.purgedAt,
+      withdrawnAt: dictationAudios.withdrawnAt,
+    })
+    .from(dictationAudios)
+    .where(
+      and(
+        eq(dictationAudios.evolutionId, params.evolutionId),
+        eq(dictationAudios.take, params.take),
+        eq(dictationAudios.organizationId, params.orgId),
+        eq(dictationAudios.studyId, params.studyId),
+        eq(dictationAudios.subjectId, params.subjectId),
+      ),
+    )
+    .limit(1)
+  if (!row) return null
+  const state = audioState({ hasContent: row.hasContent === true, expiresAt: row.expiresAt, purgedAt: row.purgedAt, withdrawnAt: row.withdrawnAt }, params.now)
+  return { ...row, state }
+}
+
+export type SegmentsTarget =
+  | { state: 'ok'; id: string; durationSec: number; createdBy: string; hasSegments: boolean }
+  | { state: 'missing' }
+  | { state: 'expired' }
+  | { state: 'withdrawn' }
+
+/** La grabación a la que se le van a guardar los tramos. Sin contenido ni texto. */
+export async function findAudioForSegments(params: AudioScope): Promise<SegmentsTarget> {
+  const row = await readSegmentsRow(params)
+  if (!row) return { state: 'missing' }
+  if (row.state === 'withdrawn') return { state: 'withdrawn' }
+  if (row.state !== 'available') return { state: 'expired' }
+  return { state: 'ok', id: row.id, durationSec: row.durationSec, createdBy: row.createdBy, hasSegments: row.segmentsEncrypted !== null }
+}
+
+/**
+ * Guarda, cifrados, los tramos de una grabación (docs/decisions/enlace-frase-audio.md). Una sola
+ * vez: si ya los tiene, o la grabación se borró o se retiró mientras tanto, no escribe y
+ * devuelve `false`. Vencen con la grabación: el borrado vacía esta columna.
+ */
+export async function storeAudioSegments(tx: DbTransaction, params: { orgId: string; audioId: string; segments: readonly DictatedSegment[] }): Promise<boolean> {
+  const updated = await tx
+    .update(dictationAudios)
+    .set({ segmentsEncrypted: encryptClinicalContent(JSON.stringify(params.segments)) })
+    .where(
+      and(
+        eq(dictationAudios.id, params.audioId),
+        eq(dictationAudios.organizationId, params.orgId),
+        isNull(dictationAudios.segmentsEncrypted),
+        isNotNull(dictationAudios.contentEncrypted),
+        isNull(dictationAudios.withdrawnAt),
+      ),
+    )
+    .returning({ id: dictationAudios.id })
+  return updated.length > 0
+}
+
+export type LoadedSegments =
+  | { state: 'ok'; id: string; segments: DictatedSegment[] }
+  /** La grabación está, pero no tiene tramos (es anterior, o no se pudieron guardar). */
+  | { state: 'none' }
+  | { state: 'missing' }
+  | { state: 'expired' }
+  | { state: 'withdrawn' }
+
+/** Los tramos descifrados de una toma. Los de una grabación vencida o retirada no se entregan. */
+export async function loadAudioSegments(params: AudioScope): Promise<LoadedSegments> {
+  const row = await readSegmentsRow(params)
+  if (!row) return { state: 'missing' }
+  if (row.state === 'withdrawn') return { state: 'withdrawn' }
+  if (row.state !== 'available') return { state: 'expired' }
+  if (row.segmentsEncrypted === null) return { state: 'none' }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(decryptClinicalContent(row.segmentsEncrypted))
+  } catch (error) {
+    // Sin clave configurada es un problema del servidor, no «no hay tramos».
+    if (error instanceof SyntaxError) return { state: 'none' }
+    throw error
+  }
+  // Lo guardado se vuelve a comprobar: un tiempo que no cierra no llega al botón de escuchar.
+  const segments = validateDictatedSegments(parsed, row.durationSec)
+  return segments ? { state: 'ok', id: row.id, segments } : { state: 'none' }
 }
 
 /**

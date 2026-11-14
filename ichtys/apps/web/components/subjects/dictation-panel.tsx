@@ -10,8 +10,8 @@
  * La guía para dictar la ubica la pantalla, al lado de todo el formulario. La grabación sale del equipo recién cuando la persona guarda (D14).
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { buildDictationDraft, DICTATION_BLOCKS, type DictationDraft } from '@ichtys/clinical'
-import { prepareAudio } from '../../lib/dictation/audio'
+import { buildDictationDraft, DICTATION_BLOCKS, dictatedSegments, type DictatedSegment, type DictationDraft } from '@ichtys/clinical'
+import { prepareAudio, TARGET_SAMPLE_RATE } from '../../lib/dictation/audio'
 import {
   DICTATION_AUDIO_MAX_BYTES,
   DICTATION_AUDIO_RETENTION_DAYS,
@@ -50,6 +50,8 @@ export interface DictationSource {
 export interface DictationRecording {
   blob: Blob
   durationSec: number
+  /** Lo que el transcriptor escribió para cada tramo, con su tiempo en la grabación. Vacío: no hay lista. */
+  segments: DictatedSegment[]
 }
 
 export interface DictationPanelProps {
@@ -174,6 +176,8 @@ export function DictationPanel({ subjectCode, onDraft, onDiscard, resetSignal }:
         return
       }
       const durationSec = prepared.durationSec
+      // Las posiciones de los tramos se guardan antes de entregar las muestras al transcriptor.
+      const speech = prepared.segments.map((segment) => ({ start: segment.start, end: segment.end }))
       setPhase('model')
       if (!workerRef.current) {
         workerRef.current = new Worker(new URL('../../lib/dictation/transcriber.worker.ts', import.meta.url), { type: 'module' })
@@ -206,7 +210,7 @@ export function DictationPanel({ subjectCode, onDraft, onDiscard, resetSignal }:
               layout: built.layout,
               repetitions: built.repetitions.length,
             },
-            fits ? { blob, durationSec } : null,
+            fits ? { blob, durationSec, segments: dictatedSegments(speech, data.segmentTexts ?? [], TARGET_SAMPLE_RATE) } : null,
           )
         } else fail('No se pudo transcribir en este equipo. El audio no salió de acá; podés escribir la evolución a mano.')
       }
