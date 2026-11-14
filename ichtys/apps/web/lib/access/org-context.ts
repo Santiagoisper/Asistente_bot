@@ -11,7 +11,7 @@ export interface OrgAccessContext {
   role: Role
   access: AccessSubject
   accessOpenUntil: Date | null
-  /** Lo que dice la columna `access_mode`. El efectivo (M8) va en `access.mode`. */
+  /** Lo que dice la columna `access_mode`. Desde M20 coincide con `access.mode`. */
   accessColumnMode: 'open' | 'enforced'
 }
 

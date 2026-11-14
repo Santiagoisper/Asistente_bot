@@ -20,17 +20,20 @@ import { ROLES, type Role } from './roles'
  * `org.accessMode` se acepta como `unknown` a propósito: si falta o trae un
  * valor raro, `parseAccessMode` restringe.
  *
- * M8: `open` con plazo vencido (`accessOpenUntil` en el pasado) se lee como
- * `enforced`. La organización pasa sola a modo estricto al vencer, sin
- * esperar un trabajo que la cambie: la columna queda como está y el
- * comportamiento es el estricto desde ese instante.
+ * M20 (revisa M8): el plazo del modo abierto (`accessOpenUntil`) NO cambia el
+ * modo. Vencido el plazo la organización sigue en `open` hasta que una persona
+ * con administración de accesos la pase a `enforced`; la pantalla lo avisa.
+ * El modo lo decide la columna y nada más. Motivo: lo que M8 y M15 prometían
+ * para el vencimiento (avisos previos y función provisoria para quien venía
+ * evolucionando) no está construido, y sin eso el paso automático dejaba a
+ * médicos sin poder evolucionar de un día para el otro.
  */
 export async function loadAccessSubject(params: {
   org: { id: string; accessMode?: unknown; accessOpenUntil?: unknown }
   userId: string
   role: Role
 }): Promise<AccessSubject> {
-  const mode = openExpired(params.org) ? 'enforced' : parseAccessMode(params.org.accessMode)
+  const mode = parseAccessMode(params.org.accessMode)
   if (mode === 'open') return { mode, role: params.role, functions: [] }
 
   const rows = await db
@@ -52,11 +55,4 @@ export async function loadAccessSubject(params: {
   if (params.role === ROLES.ORG_ADMIN && !known.includes('platform_admin')) known.push('platform_admin')
 
   return { mode, role: params.role, functions: known }
-}
-
-/** M8: vencido el plazo, el modo abierto ya no rige. Solo una fecha real vence. */
-function openExpired(org: { accessMode?: unknown; accessOpenUntil?: unknown }): boolean {
-  if (parseAccessMode(org.accessMode) !== 'open') return false
-  const until = org.accessOpenUntil
-  return until instanceof Date && until.getTime() <= Date.now()
 }
