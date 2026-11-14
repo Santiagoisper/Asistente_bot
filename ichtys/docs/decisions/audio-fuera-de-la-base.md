@@ -5,7 +5,8 @@
 ## Qué hay hoy
 
 - Cada grabación se guarda dentro de la base, en la tabla de grabaciones, cifrada con la clave de los datos clínicos (D14).
-- Se guarda como texto: los bytes pasan a base64 antes de cifrar (`apps/web/lib/dictation/audio-store.ts`). Ocupa más que el audio original. Cuánto más no lo medí.
+- Se guarda como texto, y pasa **dos veces** a base64: una antes de cifrar (`apps/web/lib/dictation/audio-store.ts`) y otra al salir del cifrado (`packages/crypto/phi-crypto.ts`). Son 4/3 × 4/3: **unas 1,78 veces el audio** (cuenta de Architect, comprobada en el código; no es una medición sobre la base). Una toma de 4 MB ocupa unos 7,1 MB.
+- **Con el tope de 1 GB, la base entera se llena con unas 140 tomas llenas.** Un centro chico que dicte todos los días llega en semanas.
 - Una grabación entra entera en el cuerpo de un pedido. La plataforma no acepta cuerpos de más de 4,5 MB, y de ahí sale el tope de 4 MB por toma.
 - Los documentos del estudio ya viven en un almacenamiento de archivos (`@vercel/blob`); el audio no.
 - La base de producción está en un plan con tope de 1 GB para todo.
@@ -29,16 +30,19 @@ Lo que sí se pierde: hoy una grabación y su fila se guardan o no se guardan ju
 
 ### Paso 1: mover el bulto, sin cambiar nada más
 
-- El servidor cifra como hoy y sube el resultado al almacenamiento de archivos. En la fila queda la referencia al archivo, y todo lo que ya tiene: huella, tamaño, duración, quién, vencimiento.
+- El servidor cifra y sube el resultado al almacenamiento de archivos. **Se suben bytes cifrados, no texto:** hace falta una variante del cifrado que reciba y devuelva bytes, con la misma clave y la misma marca de versión. Así el archivo pesa lo que pesa el audio. Si se reusara la función de hoy, se subiría el mismo texto de 1,78 veces a otro lugar.
+- El cifrado de cada archivo se ata al identificador de su grabación: un archivo cambiado por el de otra fila falla al abrirse.
+- El nombre del archivo lleva el identificador de la grabación y nada más. Ni código de sujeto ni nombre de estudio. En la fila queda la referencia al archivo, y todo lo que ya tiene: huella, tamaño, duración, quién, vencimiento.
 - **El orden importa:** primero se sube el archivo, después se escribe la fila. Si falla lo segundo, queda un archivo suelto, cifrado, que una limpieza borra. Al revés quedaría una fila que promete una grabación que no existe.
 - **Borrado por vencimiento:** se borra el archivo y se marca la fila, como hoy se vacía la columna. Si el borrado del archivo falla, la fila no se marca y se reintenta al día siguiente.
+- **Los borrados en cascada no borran archivos.** Si se borra un centro, un estudio o un sujeto, la base se lleva las filas y los archivos quedan. Por eso la limpieza no es solo para subidas fallidas: recorre los archivos y borra los que no tienen fila.
 - **Lo viejo sigue andando:** las grabaciones que ya están en la base se leen de la base hasta que venzan. A los 30 días no queda ninguna. No hace falta migrar datos.
 - El tope de 4 MB por toma no cambia en este paso.
 - El depósito de grabaciones sin sujeto (D24) va por el mismo camino.
 
 ### Paso 2: una cuota por centro
 
-Con el tamaño de cada grabación ya guardado en su fila, sumar lo que ocupa un centro es una consulta. Un tope por centro, que se pueda cambiar, y un aviso antes de llegar. Hoy no hay ninguno: el límite de pedidos frena el ritmo, no el total.
+Con el tamaño de cada grabación ya guardado en su fila, sumar lo que ocupa un centro es una consulta. Un tope por centro, que se pueda cambiar, y un aviso antes de llegar. **La cuenta incluye el depósito de grabaciones sin sujeto:** una grabación retirada sigue ocupando lugar, y si no contara, el depósito sería la forma de no llegar al tope. Hoy no hay ninguno: el límite de pedidos frena el ritmo, no el total.
 
 ### Paso 3, solo si hace falta: tomas más largas
 
@@ -61,14 +65,15 @@ Una columna nueva, opcional, en la tabla de grabaciones y en la del depósito: l
 
 ## Lo que tiene que decidir Santiago
 
-1. **Si se hace ahora o después de la auditoría del 27/11.** Mi opinión: el paso 1 antes de que entre un centro grande; no hace falta para la demo.
+1. **Si se hace ahora o después de la auditoría del 27/11.** Con 140 tomas para llenar la base, no esperaría a un centro grande: el paso 1 va antes de que cualquier centro dicte todos los días. No hace falta para la demo.
 2. **Qué almacenamiento.** El que ya usan los documentos es lo más simple. Tiene su costo, que no busqué.
 3. **El tope por centro** del paso 2: cuánto y qué pasa al llegar.
 4. **La migración.**
 
 ## Sin verificar
 
-- Cuánto ocupa de verdad una grabación en la base hoy, con el base64 y el cifrado encima.
+- Las 1,78 veces salen de leer el código, no de medir la base.
+- Si al vencer las grabaciones viejas la base libera el lugar enseguida, o recién cuando pasa la ventana del historial para volver atrás. Es el mismo dato que quedó pendiente en C3.
 - Si el almacenamiento que usan los documentos permite archivos privados o solo direcciones difíciles de adivinar. Con el contenido cifrado no es grave, pero hay que saberlo.
 - En qué región guarda ese almacenamiento. Si un cliente exige que los datos queden en el país, pesa. Es una pregunta contractual, no técnica.
 - El costo.
