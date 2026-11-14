@@ -32,6 +32,7 @@ import {
   labOcrConfirmSchema,
   labOcrExtractSchema,
   voidEvolutionInput,
+  retireVoidedOriginInput,
 } from '../../subjects/schemas'
 import { studySpecSchema } from '@ichtys/ingestion'
 
@@ -51,6 +52,7 @@ const EXTERNAL_SCHEMAS = {
   labOcrExtractSchema,
   labOcrConfirmSchema,
   voidEvolutionInput,
+  retireVoidedOriginInput,
   studySpecSchema,
 } as const
 
