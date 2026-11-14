@@ -12,18 +12,23 @@ const PREFERRED_MIME_TYPES = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus']
 
 /**
  * El formato que se le pide al grabador, o `undefined` para dejarle el suyo. Solo se elige uno
- * que el equipo sepa grabar **y** leer: la transcripción corre en el mismo equipo, y un audio
- * que no se puede leer no se puede transcribir.
+ * que el equipo sepa grabar **y** decodificar: la transcripción corre en el mismo equipo, y un
+ * audio que no se decodifica no se transcribe. `canDecode` lo prueba de verdad
+ * (`recording-probe.ts`): que el reproductor diga que «quizás» lo lee no alcanza, porque la
+ * transcripción no usa el reproductor.
  */
-export function pickRecordingMimeType(
+export async function pickRecordingMimeType(
   canRecord: (type: string) => boolean,
-  canRead: (type: string) => boolean,
-): string | undefined {
+  canDecode: (type: string) => Promise<boolean>,
+): Promise<string | undefined> {
   try {
-    return PREFERRED_MIME_TYPES.find((type) => canRecord(type) && canRead(type))
+    for (const type of PREFERRED_MIME_TYPES) {
+      if (canRecord(type) && (await canDecode(type))) return type
+    }
   } catch {
-    return undefined
+    // Sin respuesta clara, el grabador usa su formato: es lo que hacía antes.
   }
+  return undefined
 }
 
 export interface RecordingBudget {
