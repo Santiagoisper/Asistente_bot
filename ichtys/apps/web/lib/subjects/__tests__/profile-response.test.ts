@@ -76,7 +76,14 @@ function responseBodies(source: string): string[] {
   }
   return bodies
 }
-const leaksProfile = (source: string) => responseBodies(withoutComments(source)).some((body) => BARE_PROFILE.test(body))
+/** `profile: algo` que no sea la función de salida: el atajo de quien renombra una variable. */
+const UNFILTERED_PROFILE = /\bprofile\s*:(?!\s*profileForResponse\()/
+/** El perfil esparcido dentro de la respuesta: lleva todas sus claves. */
+const SPREAD_PROFILE = /\.\.\.\s*profile\b/
+/** El perfil como cuerpo entero de la respuesta. */
+const WHOLE_PROFILE = /^\s*profile\b/
+const leaksProfile = (source: string) =>
+  responseBodies(withoutComments(source)).some((body) => [BARE_PROFILE, UNFILTERED_PROFILE, SPREAD_PROFILE, WHOLE_PROFILE].some((pattern) => pattern.test(body)))
 
 describe('guardián — ninguna ruta responde con el perfil sin pasar por profileForResponse', () => {
   const files = routeFiles(API)
@@ -101,6 +108,17 @@ describe('guardián — ninguna ruta responde con el perfil sin pasar por profil
     expect(leaksProfile('return Response.json({\n  profile,\n  assessments: [] })')).toBe(true)
     expect(leaksProfile('return Response.json({ items: list.map((x) => ({ id: x.id, profile })) }, { status: 200 })')).toBe(true)
     expect(leaksProfile('return Response.json({ profile: profileForResponse(profile) })')).toBe(false)
+    // Los tres atajos que señaló Architect en el #177.
+    expect(leaksProfile('return Response.json({ subjectCode, profile: current })')).toBe(true)
+    expect(leaksProfile('return Response.json({ subjectCode, profile: profile })')).toBe(true)
+    expect(leaksProfile('return Response.json({ ...profile, subjectCode })')).toBe(true)
+    expect(leaksProfile('return Response.json(profile)')).toBe(true)
+    expect(leaksProfile('return Response.json(profile, { status: 200 })')).toBe(true)
+    // `NextResponse.json(` también: no tiene que depender de que contenga `Response.json(`.
+    expect(leaksProfile('return NextResponse.json({ profile })')).toBe(true)
+    expect(leaksProfile('return NextResponse.json({ profile: profileForResponse(profile) })')).toBe(false)
+    // Otra clave que empieza igual no es el perfil.
+    expect(leaksProfile('return Response.json({ profileUnreadable: true, profileProposal })')).toBe(false)
     // Leer el perfil o pasárselo a un servicio no es responder con él.
     expect(leaksProfile('const { profile, unreadable } = await loadPatientProfileState(scope)')).toBe(false)
     expect(leaksProfile('await evaluateAndPersistScreening({ orgId, profile, spec })')).toBe(false)
