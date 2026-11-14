@@ -27,10 +27,11 @@ export const evolutionSourceSchema = z
     /** Opcionales: un cliente anterior a este cambio no los manda. */
     layout: z.enum(['blocks', 'narrative']).optional(),
     /**
-     * La persona aceptó, antes de grabar o de subir el audio, el aviso que nombra al sujeto (D23).
-     * Lo informa el navegador: el servidor lo registra, no lo comprueba.
+     * El código del sujeto que la persona confirmó en el aviso de antes de grabar (D23). La ruta
+     * lo compara con el sujeto donde se guarda la evolución: si no coincide, no guarda. No va
+     * al registro: ahí queda `subjectConfirmed`, que es el resultado de esa comparación.
      */
-    subjectConfirmed: z.boolean().optional(),
+    confirmedSubjectCode: z.string().trim().min(1).max(64).optional(),
     repetitions: z.number().int().min(0).max(50).optional(),
   })
   .strict()

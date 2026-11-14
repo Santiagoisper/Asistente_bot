@@ -98,6 +98,17 @@ export async function POST(
   try {
     const { orgId, userId, study, subject } = access
 
+    // D23: el dictado se confirmó para un sujeto. Si no es este, no se guarda nada: es la
+    // grabación (y la evolución) en el sujeto equivocado, frenada antes de escribir.
+    const { confirmedSubjectCode, ...sourceWithoutCode } = parsed.data.source ?? {}
+    if (confirmedSubjectCode !== undefined && confirmedSubjectCode !== subject.subjectCode) {
+      return Response.json({ error: 'subject_mismatch' }, { status: 409 })
+    }
+    // Al registro va el resultado de la comparación, no el código del sujeto.
+    const auditSource = parsed.data.source
+      ? { ...sourceWithoutCode, ...(confirmedSubjectCode !== undefined ? { subjectConfirmed: true } : {}) }
+      : null
+
     const piiWarnings = detectPossiblePii(parsed.data.content)
     const contentEncrypted = encryptClinicalContent(parsed.data.content)
 
@@ -131,7 +142,7 @@ export async function POST(
           contentLength: parsed.data.content.length,
           piiWarningCount: piiWarnings.length,
           // Evolución dictada: origen, modelo y revisión quedan en el registro (R6). Sin contenido.
-          ...(parsed.data.source ? { source: parsed.data.source } : {}),
+          ...(auditSource ? { source: auditSource } : {}),
         },
       }),
     )

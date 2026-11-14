@@ -26,15 +26,19 @@ beforeEach(() => {
   document.body.appendChild(container)
   document.addEventListener('click', onDocumentClick)
   root = createRoot(container)
-  act(() => {
-    root.render(<DictationPanel subjectCode="ENSAYO-008" onDraft={vi.fn()} onDiscard={vi.fn()} resetSignal={0} />)
-  })
+  showSubject('ENSAYO-008')
 })
 afterEach(() => {
   document.removeEventListener('click', onDocumentClick)
   act(() => root.unmount())
   container.remove()
 })
+
+function showSubject(subjectCode: string) {
+  act(() => {
+    root.render(<DictationPanel subjectCode={subjectCode} onDraft={vi.fn()} onDiscard={vi.fn()} resetSignal={0} />)
+  })
+}
 
 const fileInput = () => container.querySelector('input[type=file]') as HTMLInputElement
 const notice = () => container.querySelector('[aria-label="Antes de grabar"]')
@@ -69,5 +73,15 @@ describe('DictationPanel — el aviso antes de subir un audio', () => {
     act(() => fileInput().click())
     expect(prevented).toEqual([true, false, false])
     expect(notice()).toBeNull()
+  })
+
+  it('si cambia el sujeto con el panel abierto, lo confirmado para el anterior no vale: vuelve a preguntar y nombra al nuevo (Architect, #162)', () => {
+    act(() => fileInput().click())
+    act(() => button('Es ENSAYO-008, elegir el audio')!.click())
+    showSubject('ENSAYO-009')
+    act(() => fileInput().click())
+    expect(prevented).toEqual([true, false, true])
+    expect(notice()?.textContent).toContain('El audio que subas va a quedar en el sujeto ENSAYO-009')
+    expect(button('Es ENSAYO-008, elegir el audio')).toBeUndefined()
   })
 })
