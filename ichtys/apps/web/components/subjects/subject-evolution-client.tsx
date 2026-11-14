@@ -16,6 +16,7 @@ import { criterionStatusLabel } from '../../lib/subjects/screening-labels'
 import { EvolutionAudios, type EvolutionAudioInfo } from './evolution-audio'
 import { EvolutionBody, type EvolutionVoidInfo } from './evolution-body'
 import { EvolutionVoidControl, type VoidConfirmation, type VoidFeedback } from './evolution-void-control'
+import { ProfileSummary } from './profile-summary'
 import { VoidedOriginNoticeCard } from './voided-origin-notice'
 import { VoidedOriginReviewForm, type RetireChoice } from './voided-origin-review'
 import { labNamesFromEvolution, retireErrorMessage, storedBloodPressureText, voidedOriginNotice } from '../../lib/subjects/voided-origin'
@@ -514,13 +515,12 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const hasProfileData =
     profile &&
     (profile.demographics?.ageYears ||
-      profile.vitals?.bloodPressureLabel ||
+      storedBloodPressureText(profile.vitals) ||
       profile.labs.length > 0 ||
       profile.medications.length > 0 ||
       profile.conditions.length > 0 ||
       pendingLabs?.requiresHumanReview)
 
-  const fc = profile?.fieldConfidence
 
   return (
     <div className="space-y-6">
@@ -815,68 +815,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
               Guardá una evolución con datos estructurados (edad, HbA1c, PA, medicación) para ver el perfil.
             </p>
           ) : (
-            <dl className="space-y-2 text-sm text-alphi-navy">
-              {profile?.demographics?.ageYears && (
-                <div>
-                  <dt className="text-xs text-alphi-muted">
-                    Edad
-                    <ConfidenceBadge level={fc?.ageYears} />
-                  </dt>
-                  <dd>{profile.demographics.ageYears} años</dd>
-                </div>
-              )}
-              {profile?.vitals?.bloodPressureLabel && (
-                <div>
-                  <dt className="text-xs text-alphi-muted">
-                    Presión arterial
-                    <ConfidenceBadge level={fc?.bloodPressure} />
-                  </dt>
-                  <dd>{profile.vitals.bloodPressureLabel} mmHg</dd>
-                </div>
-              )}
-              {profile && profile.labs.length > 0 && (
-                <div>
-                  <dt className="text-xs text-alphi-muted">Laboratorio</dt>
-                  <dd className="space-y-1">
-                    {profile.labs.map((lab) => (
-                      <div key={lab.name}>
-                        {lab.name}: {lab.value}
-                        {lab.unit ? ` ${lab.unit}` : ''}
-                        <ConfidenceBadge level={fc?.labs?.[lab.name.toLowerCase()]} />
-                      </div>
-                    ))}
-                  </dd>
-                </div>
-              )}
-              {profile && profile.medications.length > 0 && (
-                <div>
-                  <dt className="text-xs text-alphi-muted">Medicación</dt>
-                  <dd className="space-y-1">
-                    {profile.medications.map((m) => (
-                      <div key={m.name}>
-                        {m.name}
-                        {m.dose ? ` ${m.dose}` : ''}
-                        {m.frequency ? ` — ${m.frequency}` : ''}
-                        <ConfidenceBadge level={fc?.medications?.[m.name.toLowerCase()]} />
-                      </div>
-                    ))}
-                  </dd>
-                </div>
-              )}
-              {profile && profile.conditions.length > 0 && (
-                <div>
-                  <dt className="text-xs text-alphi-muted">Condiciones / notas</dt>
-                  <dd>
-                    {profile.conditions.map((c) => (
-                      <span key={c} className="mr-2 inline-block">
-                        {c}
-                        <ConfidenceBadge level={fc?.conditions?.[c.toLowerCase()]} />
-                      </span>
-                    ))}
-                  </dd>
-                </div>
-              )}
-            </dl>
+            profile && <ProfileSummary profile={profile} badge={(level) => <ConfidenceBadge level={level} />} />
           )}
           <p className="mt-3 text-[10px] text-alphi-muted">
             Alta = heurística + LLM coinciden · Media = solo LLM · Baja = solo heurística
