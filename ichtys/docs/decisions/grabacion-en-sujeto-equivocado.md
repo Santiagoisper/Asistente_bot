@@ -70,6 +70,7 @@ El punto 2 dice «la persona corrige el perfil». Hasta hoy eso no tiene camino:
 - **Lo retirado no se destruye.** Pasa a `retiredFacts`, dentro del perfil cifrado, con de qué evolución era, quién lo retiró y cuándo. Una corrección no puede tapar lo que había. La elegibilidad no lee ese campo.
 - **Registro** en la misma transacción que la escritura (R3): cuántos laboratorios, medicaciones y condiciones salieron y si salieron edad y presión; nunca los valores ni los nombres.
 - **El aviso se va** cuando esa evolución tiene una entrada en `retiredFacts` y no quedan laboratorios de ese origen. Una entrada sin nada retirado vale: dice «revisé y no había nada que sacar».
+- **Una revisión que no saca nada es una declaración explícita** (observación de Architect, #178): la persona tiene que decir «revisé y no hay nada de esa evolución». Sin esa declaración no se registra ninguna revisión y el aviso sigue. Si declara que no hay nada y sí hay, tampoco se registra. El registro marca las revisiones vacías para poder contarlas.
 - **La elegibilidad** se recalcula sola la próxima vez que se lee: lee el perfil.
 - **No hay «deshacer» en pantalla.** Lo retirado queda guardado; devolverlo es volver a cargarlo por el camino normal.
 

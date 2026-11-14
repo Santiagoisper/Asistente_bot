@@ -22,6 +22,12 @@ export interface RetireSelection {
   /** Nombres tal como están en el perfil; no distingue mayúsculas. */
   medications?: readonly string[]
   conditions?: readonly string[]
+  /**
+   * La persona declara que revisó el perfil y no hay nada de esa evolución. Sin esta
+   * declaración, una revisión que no saca nada no se registra: apagar el aviso no puede ser
+   * lo que pasa por defecto.
+   */
+  nothingToRetire?: boolean
 }
 
 /** Cuánto salió. Es lo que va al registro: cantidades, nunca nombres ni valores. */
@@ -34,13 +40,17 @@ export interface RetiredCounts {
 }
 
 /**
- * Se pidió retirar una medicación o una condición que ya no está en el perfil: alguien lo cambió
- * después de que la pantalla lo mostró. No se retira nada; la pantalla recarga y vuelve a elegir.
+ * Lo que la persona eligió no se puede aplicar sobre el perfil como está. No se retira nada.
+ * - `not_in_profile`: pidió sacar una medicación o una condición que ya no está; alguien cambió
+ *   el perfil después de que la pantalla lo mostró. La pantalla recarga y vuelve a elegir.
+ * - `selection_required`: no hay nada que sacar y no declaró que no había nada.
+ * - `not_empty`: declaró que no había nada, y hay.
  */
+export type RetireSelectionErrorCode = 'not_in_profile' | 'selection_required' | 'not_empty'
+
 export class RetireSelectionError extends Error {
-  readonly code = 'not_in_profile'
-  constructor() {
-    super('retire selection: not_in_profile')
+  constructor(readonly code: RetireSelectionErrorCode = 'not_in_profile') {
+    super(`retire selection: ${code}`)
     this.name = 'RetireSelectionError'
   }
 }
@@ -82,6 +92,10 @@ export function retireFromVoidedEvolution(profile: PatientProfile, selection: Re
   const age = selection.removeAge === true && profile.demographics?.ageYears !== undefined
   const pressure = profile.vitals && compact({ ...profile.vitals })
   const bloodPressure = selection.removeBloodPressure === true && pressure !== undefined
+
+  const empty = retiredLabs.length === 0 && medications.taken.length === 0 && conditions.taken.length === 0 && !age && !bloodPressure
+  if (empty && selection.nothingToRetire !== true) throw new RetireSelectionError('selection_required')
+  if (!empty && selection.nothingToRetire === true) throw new RetireSelectionError('not_empty')
 
   const entry: RetiredProfileFacts = {
     evolutionId: selection.evolutionId,

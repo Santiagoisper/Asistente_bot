@@ -19,6 +19,7 @@ export async function retireVoidedOriginFacts(params: {
   removeBloodPressure?: boolean
   medications?: readonly string[]
   conditions?: readonly string[]
+  nothingToRetire?: boolean
 }): Promise<{ profile: PatientProfile; removed: RetiredCounts }> {
   // Una sola fecha aunque la escritura se reintente porque otra persona escribió en el medio.
   const at = new Date()
@@ -34,6 +35,7 @@ export async function retireVoidedOriginFacts(params: {
         removeBloodPressure: params.removeBloodPressure,
         medications: params.medications,
         conditions: params.conditions,
+        nothingToRetire: params.nothingToRetire,
       })
       removed = result.removed
       return result.profile
@@ -45,7 +47,14 @@ export async function retireVoidedOriginFacts(params: {
       userId: params.userId,
       resourceType: 'subject',
       resourceId: params.subjectId,
-      metadata: { source: 'voided_origin_retire', evolutionId: params.evolutionId, humanConfirmed: true, ...removed },
+      metadata: {
+        source: 'voided_origin_retire',
+        evolutionId: params.evolutionId,
+        humanConfirmed: true,
+        ...removed,
+        // Una revisión declarada vacía se puede contar aparte: quién, cuándo y de qué evolución.
+        ...(params.nothingToRetire === true ? { nothingToRetire: true } : {}),
+      },
     }),
   )
   return { profile, removed }
