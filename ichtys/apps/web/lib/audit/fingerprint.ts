@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto'
 
 /** Texto canónico de un valor JSON: las mismas claves en cualquier orden dan el mismo texto (JSONB no conserva el orden). */
-function canonical(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
+export function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
   if (value !== null && typeof value === 'object') {
     const entries = Object.entries(value as Record<string, unknown>).filter(([, v]) => v !== undefined)
     entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(',')}}`
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(',')}}`
   }
   return JSON.stringify(value) ?? 'null'
 }
@@ -18,5 +18,5 @@ function canonical(value: unknown): string {
  * la misma aunque la base lo devuelva con las claves en otro orden.
  */
 export function contentFingerprint(value: unknown): string {
-  return createHash('sha256').update(canonical(value)).digest('hex')
+  return createHash('sha256').update(canonicalJson(value)).digest('hex')
 }
