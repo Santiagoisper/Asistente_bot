@@ -43,12 +43,23 @@ export interface FixtureAuth {
   orgRole: string | null
 }
 
+/** Fila de `organizations`: el plazo del modo abierto muta en los tests de la ruta de modo. */
+export interface FixtureOrg extends Row {
+  id: string
+  clerkOrgId: string
+  name: string
+  accessMode: 'open' | 'enforced'
+  accessOpenUntil: Date | null
+}
+
 /** Estado visible por los tests. `resetFixture()` lo vuelve al default. */
 export const fx = {
   /** Lo que devuelve `auth()` de Clerk. */
   auth: { userId: 'user-1', orgId: 'org_clerk_1', orgRole: 'org:admin' } as FixtureAuth,
   /** Fila de `organizations`. `accessMode` decide open/enforced. */
-  org: { id: 'org-1', clerkOrgId: 'org_clerk_1', name: 'Centro Uno', accessMode: 'open', accessOpenUntil: null },
+  org: { id: 'org-1', clerkOrgId: 'org_clerk_1', name: 'Centro Uno', accessMode: 'open', accessOpenUntil: null } as FixtureOrg,
+  /** `org` como tabla: los UPDATE de la ruta de modo mutan esta fila. */
+  orgRows: [] as FixtureOrg[],
   studyRows: [] as Row[],
   memberFunctionRows: [] as Row[],
   membershipRows: [] as Row[],
@@ -65,7 +76,8 @@ export const fx = {
 
 export function resetFixture(): void {
   fx.auth = { userId: 'user-1', orgId: 'org_clerk_1', orgRole: 'org:admin' } as FixtureAuth
-  fx.org = { id: 'org-1', clerkOrgId: 'org_clerk_1', name: 'Centro Uno', accessMode: 'open', accessOpenUntil: null }
+  fx.org = { id: 'org-1', clerkOrgId: 'org_clerk_1', name: 'Centro Uno', accessMode: 'open', accessOpenUntil: null } as FixtureOrg
+  fx.orgRows = [fx.org]
   fx.studyRows = [{ id: 'study-1', organizationId: 'org-1', name: 'Metabólica' }]
   fx.memberFunctionRows = []
   fx.membershipRows = []
@@ -107,6 +119,7 @@ export function clerkServerMock() {
 
 /** Tabla del schema → array del fixture donde viven sus filas (resuelto en cada uso). */
 const TABLE_STORE: Record<string, string> = {
+  organizations: 'orgRows',
   memberFunctions: 'memberFunctionRows',
   studyMemberships: 'membershipRows',
   studies: 'studyRows',
@@ -260,14 +273,17 @@ export function makeDbMock(actual: Record<string, unknown>): Record<string, unkn
     select: (projection?: unknown) => ({ from: (table: unknown) => makeQuery(table, projection) }),
     selectDistinct: (projection?: unknown) => ({ from: (table: unknown) => makeQuery(table, projection) }),
     query: {
-      // Una sola organización en el fixture: la condición de findFirst (por
-      // clerk_org_id, arma resolve-org) no hace falta evaluarla.
-      organizations: { findFirst: () => Promise.resolve({ ...fx.org }) },
+      // findFirst evalúa la condición: resolve-org busca por clerk_org_id y la
+      // ruta de modo relee por id tras perder la carrera del plazo.
+      organizations: {
+        findFirst: ({ where }: { where?: Cond }) => execute(storeOf(actual['organizations']), where, 1).then((rows) => rows[0]),
+      },
       studies: { findFirst: ({ where }: { where?: Cond }) => execute(fx.studyRows, where, 1).then((rows) => rows[0]) },
     },
     transaction: async <T>(run: (tx: unknown) => Promise<T>): Promise<T> => {
       fx.transactions += 1
       const snapshot = structuredClone({
+        orgRows: fx.orgRows,
         studyRows: fx.studyRows,
         memberFunctionRows: fx.memberFunctionRows,
         membershipRows: fx.membershipRows,
@@ -278,6 +294,9 @@ export function makeDbMock(actual: Record<string, unknown>): Record<string, unkn
         return await run(makeTx())
       } catch (err) {
         Object.assign(fx, snapshot)
+        // El clon restauró orgRows con otra referencia: `org` vuelve a apuntar
+        // a la fila de la tabla, no a la mutada y descartada.
+        fx.org = fx.orgRows[0] ?? fx.org
         throw err
       }
     },
