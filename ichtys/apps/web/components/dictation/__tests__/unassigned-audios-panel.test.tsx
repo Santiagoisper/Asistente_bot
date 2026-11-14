@@ -108,6 +108,16 @@ describe('UnassignedAudiosPanel', () => {
     expect(text()).toContain('cada escucha queda registrada')
   })
 
+  it('en Inicio va corto y lleva a la página; la explicación completa está en la página', async () => {
+    await show('inicio', json({ audios: [item()] }))
+    expect(text()).toContain('se registró ahí por error')
+    expect(text()).not.toContain('Alphi no las pasa a otro sujeto')
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('/grabaciones-sin-sujeto')
+    await show('page', json({ audios: [item()] }))
+    expect(text()).toContain('Alphi no las pasa a otro sujeto')
+    expect(container.querySelector('a')).toBeNull()
+  })
+
   it('una vencida queda como constancia y no se ofrece escucharla', async () => {
     await show('page', json({ audios: [item({ available: false })] }))
     expect(text()).toContain('se borró al vencer')
