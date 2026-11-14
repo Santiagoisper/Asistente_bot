@@ -4,7 +4,7 @@ import { DICTATION_AUDIO_RETENTION_DAYS, listSubjectAudios } from '../../../../.
 export const runtime = 'nodejs'
 
 /**
- * GET — qué evoluciones de este sujeto tienen grabación y hasta cuándo. Sin contenido:
+ * GET — las grabaciones de las evoluciones de este sujeto (una por toma) y hasta cuándo. Sin contenido:
  * la pantalla lo usa para ofrecer «escuchar» y para decir cuándo se borra.
  */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string; subjectId: string }> }): Promise<Response> {

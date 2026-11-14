@@ -26,5 +26,10 @@ export type TranscriberEvent =
 export const DICTATION_AUDIO_RETENTION_DAYS = 30
 /** Tope por grabación. El cuerpo de un pedido a la plataforma no pasa de 4,5 MB. */
 export const DICTATION_AUDIO_MAX_BYTES = 4_000_000
+/**
+ * Tope de grabaciones por evolución (D22): una por toma. PROVISORIO, sin medir con uso real:
+ * pasado el tope, lo dictado queda como texto y la pantalla lo dice.
+ */
+export const DICTATION_AUDIO_MAX_TAKES = 5
 /** Voz a 24 kbps: veinte minutos entran en el tope con margen. */
 export const DICTATION_RECORDING_BITS_PER_SECOND = 24_000

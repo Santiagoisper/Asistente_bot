@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { matchProtocolVisit, mergeDictationAddition, NOT_MENTIONED, studyDictationPrompts, type ProtocolVisit } from '@ichtys/clinical'
 import { bloodPressureProposalLabel } from '../../lib/subjects/proposal-display'
@@ -10,8 +10,9 @@ import { DictationPanel, type DictationRecording, type DictationSource } from '.
 import { DictationGuide } from './dictation-guide'
 import { ProfileUnreadableNotice } from './profile-unreadable-notice'
 import { profileWriteErrorMessage } from '../../lib/subjects/profile-write-messages'
+import { addRecordingTake, groupAudiosByEvolution, uploadNotice, uploadRecordingTakes, type AudioListingItem } from '../../lib/dictation/takes'
 import { criterionStatusLabel } from '../../lib/subjects/screening-labels'
-import { EvolutionAudio, type EvolutionAudioInfo } from './evolution-audio'
+import { EvolutionAudios, type EvolutionAudioInfo } from './evolution-audio'
 
 interface EvolutionItem {
   id: string
@@ -155,8 +156,11 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   // Presente cuando el texto del cuadro salió de un dictado: viaja al registro al guardar.
   const [dictationSource, setDictationSource] = useState<DictationSource | null>(null)
   // La grabación espera acá: sale del equipo recién cuando la persona guarda la evolución.
-  const [dictationRecording, setDictationRecording] = useState<DictationRecording | null>(null)
-  const [audios, setAudios] = useState<Record<string, EvolutionAudioInfo>>({})
+  // Una grabación por toma (D22); se suben recién cuando la persona guarda la evolución.
+  const [dictationRecordings, setDictationRecordings] = useState<Array<DictationRecording & { take: number }>>([])
+  // Cuántas tomas se dictaron en este borrador: la grabación de cada una lleva ese número.
+  const dictationTakeRef = useRef(0)
+  const [audios, setAudios] = useState<Record<string, EvolutionAudioInfo[]>>({})
   const [audioNotice, setAudioNotice] = useState<string | null>(null)
   /** Sube con cada guardado: le avisa al panel de dictado que vuelva al inicio. */
   const [savedCount, setSavedCount] = useState(0)
@@ -221,8 +225,8 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       try {
         const audioRes = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/dictation-audios`)
         if (audioRes.ok) {
-          const listing = (await audioRes.json()) as { audios: EvolutionAudioInfo[] }
-          setAudios(Object.fromEntries(listing.audios.map((audio) => [audio.evolutionId, audio])))
+          const listing = (await audioRes.json()) as { audios: AudioListingItem[] }
+          setAudios(groupAudiosByEvolution(listing.audios))
         }
       } catch {
         setAudios({})
@@ -267,24 +271,17 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       if (data.piiWarnings?.length) setPiiWarnings(data.piiWarnings)
       // La evolución ya está guardada. La grabación va después y, si falla, se avisa: no se pierde el texto.
       setAudioNotice(null)
-      if (dictationSource && dictationRecording && data.id) {
-        try {
-          const upload = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/evolutions/${data.id}/audio`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': dictationRecording.blob.type || 'audio/webm',
-              'X-Duration-Sec': String(dictationRecording.durationSec),
-            },
-            body: dictationRecording.blob,
-          })
-          if (!upload.ok) setAudioNotice('La evolución se guardó. La grabación no se pudo guardar; el texto quedó completo.')
-        } catch {
-          setAudioNotice('La evolución se guardó. La grabación no se pudo guardar; el texto quedó completo.')
-        }
+      if (dictationSource && dictationRecordings.length > 0 && data.id) {
+        const uploaded = await uploadRecordingTakes({
+          url: `/api/studies/${studyId}/subjects/${subjectId}/evolutions/${data.id}/audio`,
+          takes: dictationRecordings,
+        })
+        setAudioNotice(uploadNotice(uploaded))
       }
       setContent('')
       setDictationSource(null)
-      setDictationRecording(null)
+      setDictationRecordings([])
+      dictationTakeRef.current = 0
       setSavedCount((value) => value + 1)
       setVisitLabel('')
       await loadEvolutions()
@@ -421,13 +418,16 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                   }
                 : source,
             )
-            // Una grabación por evolución: queda la de la primera toma.
-            setDictationRecording((previous) => previous ?? recording)
+            // Una grabación por toma, hasta el tope, con el número de la toma dictada (D22).
+            dictationTakeRef.current += 1
+            const takeNumber = dictationTakeRef.current
+            setDictationRecordings((previous) => addRecordingTake(previous, recording, takeNumber))
           }}
           onDiscard={() => {
             setContent('')
             setDictationSource(null)
-            setDictationRecording(null)
+            setDictationRecordings([])
+            dictationTakeRef.current = 0
           }}
         />
 
@@ -757,7 +757,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                   )}
                 </div>
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-alphi-navy">{evo.content}</p>
-                {audios[evo.id] ? <EvolutionAudio studyId={studyId} subjectId={subjectId} audio={audios[evo.id]!} /> : null}
+                <EvolutionAudios studyId={studyId} subjectId={subjectId} audios={audios[evo.id] ?? []} />
               </li>
             ))}
           </ul>
