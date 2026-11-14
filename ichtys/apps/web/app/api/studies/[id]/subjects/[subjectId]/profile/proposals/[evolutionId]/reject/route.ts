@@ -22,7 +22,10 @@ export async function POST(
     const { orgId, userId, study, subject } = await validateSubjectAccess(subjectId, routeStudyId, { require: 'clinical.author' })
     if (!UUID.test(evolutionId)) return Response.json({ error: 'no_pending_proposal' }, { status: 409 })
 
-    const profile = await rejectProfileProposal({ orgId, studyId: study.id, subjectId: subject.id, evolutionId, userId })
+    // La propuesta se busca en el perfil comparando texto, y ahí el identificador está como lo
+    // devuelve la base: en minúsculas. Esta ruta no lee la evolución (descartar se puede siempre),
+    // así que lo pasa a minúsculas en vez de tomarlo de la base.
+    const profile = await rejectProfileProposal({ orgId, studyId: study.id, subjectId: subject.id, evolutionId: evolutionId.toLowerCase(), userId })
 
     return Response.json({ subjectCode: subject.subjectCode, profile: profileForResponse(profile) })
   } catch (err) {

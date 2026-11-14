@@ -251,3 +251,28 @@ describe('POST en modo abierto — provisorio: solo quien la escribió (D24, pun
   })
 })
 
+/**
+ * El identificador de la ruta se compara como texto con la propuesta pendiente que guarda el
+ * perfil; la base lo compara como `uuid`, sin distinguir mayúsculas. Con el identificador en
+ * mayúsculas la evolución se anulaba (definitivo) y la propuesta que salió de ella quedaba
+ * pendiente en el perfil del sujeto equivocado. Anular y retirar la propuesta usan el
+ * identificador que devolvió la base (la clase del hallazgo de revisión del #178).
+ */
+describe('POST — el identificador de la evolución, como lo devuelve la base', () => {
+  const CANONICAL = 'a3b4c5d6-e7f8-4a1b-9c2d-e3f4a5b6c7d8'
+  const asSent = { params: Promise.resolve({ id: STUDY, subjectId: SUBJECT, evolutionId: CANONICAL.toUpperCase() }) }
+
+  it('llega en mayúsculas: se anula y se retira la propuesta de esa misma evolución', async () => {
+    mocks.findEvolution.mockResolvedValue({ id: CANONICAL, authorUserId: 'user_author', voided: null })
+
+    const res = await POST(request(), asSent)
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ status: 'voided', withdrawnAudios: 1, proposalRetired: true })
+    expect(mocks.txVoidStore).toHaveBeenCalledWith({ marca: 'transaccion' }, { orgId: 'org-1', studyId: STUDY, subjectId: SUBJECT, evolutionId: CANONICAL })
+    const [, voidParams] = mocks.voidEvolution.mock.calls[0] as [unknown, Record<string, unknown>]
+    expect(voidParams.evolutionId).toBe(CANONICAL)
+    const [, proposal] = mocks.retireProposal.mock.calls[0] as [unknown, Record<string, unknown>]
+    expect(proposal).toEqual({ orgId: 'org-1', studyId: STUDY, subjectId: SUBJECT, evolutionId: CANONICAL, userId: 'user_author' })
+  })
+})

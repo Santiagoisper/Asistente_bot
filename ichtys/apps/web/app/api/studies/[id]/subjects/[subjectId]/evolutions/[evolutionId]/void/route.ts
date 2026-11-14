@@ -42,9 +42,14 @@ export async function POST(req: Request, { params }: Params): Promise<Response> 
 
     // Primero quién es y qué puede; recién después, lo que mandó. Así ninguna respuesta que
     // dependa del cuerpo le llega a quien no puede anular (observación de Architect, #173).
-    const scope = { orgId: access.orgId, studyId: access.study.id, subjectId: access.subject.id, evolutionId }
-    const evolution = await findSubjectEvolution(scope, 'with-voided')
+    const subjectScope = { orgId: access.orgId, studyId: access.study.id, subjectId: access.subject.id }
+    const evolution = await findSubjectEvolution({ ...subjectScope, evolutionId }, 'with-voided')
     if (!evolution) return notFound()
+    // De acá en más, el identificador que devolvió la base y no el de la ruta: la base lo compara
+    // como `uuid` y no distingue mayúsculas; la propuesta pendiente que guarda el perfil es texto
+    // y sí las distingue. Con el de la ruta en mayúsculas la evolución se anulaba y su propuesta
+    // quedaba pendiente.
+    const scope = { ...subjectScope, evolutionId: evolution.id }
 
     // Quien no la escribió necesita coordinar el estudio. El validador responde 403 si no.
     // Quien la escribió puede siempre, aunque hoy ya no tenga la función de escribir evoluciones:
@@ -88,7 +93,7 @@ export async function POST(req: Request, { params }: Params): Promise<Response> 
         orgId: scope.orgId,
         studyId: scope.studyId,
         subjectId: scope.subjectId,
-        evolutionId,
+        evolutionId: scope.evolutionId,
         userId: access.userId,
       })
       return { result, proposalRetired }

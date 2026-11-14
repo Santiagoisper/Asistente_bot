@@ -34,7 +34,9 @@ export async function POST(
     if (!evolution) return Response.json({ error: 'no_pending_proposal' }, { status: 409 })
     if (evolution.voided) return Response.json({ error: 'evolution_voided' }, { status: 409 })
 
-    const profile = await confirmProfileProposal({ orgId, studyId: study.id, subjectId: subject.id, evolutionId, userId })
+    // La propuesta se busca en el perfil comparando texto: va el identificador que devolvió la
+    // base (en minúsculas), no el de la ruta, que la base acepta también en mayúsculas.
+    const profile = await confirmProfileProposal({ orgId, studyId: study.id, subjectId: subject.id, evolutionId: evolution.id, userId })
 
     return Response.json({ subjectCode: subject.subjectCode, profile: profileForResponse(profile) })
   } catch (err) {
