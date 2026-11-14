@@ -39,13 +39,13 @@ vi.mock('../../../../../../../../../../lib/audit/audited-write', () => ({
 }))
 vi.mock('../../../../../../../../../../lib/chat/persistence', () => ({ writeAuditLog: mocks.writeAuditLog }))
 vi.mock('../../../../../../../../../../lib/subjects/phi-fields', () => ({ PhiConfigError: class extends Error {} }))
+vi.mock('../../../../../../../../../../lib/subjects/evolution-reader', () => ({ findSubjectEvolution: mocks.findEvolution }))
 vi.mock('../../../../../../../../../../lib/dictation/audio-store', () => ({
   DICTATION_AUDIO_MAX_BYTES: 4_000_000,
   baseMime: (value: string | null) => {
     const base = (value ?? '').split(';')[0]!.trim().toLowerCase()
     return ['audio/webm', 'audio/mp4', 'video/mp4'].includes(base) ? base : null
   },
-  findEvolution: mocks.findEvolution,
   storeDictationAudio: mocks.storeDictationAudio,
   loadDictationAudio: mocks.loadDictationAudio,
   purgeExpiredDictationAudios: mocks.purgeExpiredDictationAudios,
@@ -117,6 +117,14 @@ describe('POST — guardar la grabación', () => {
   it('una evolución que no es de este sujeto responde como si no existiera', async () => {
     mocks.findEvolution.mockResolvedValue(null)
     expect((await POST(upload(), params)).status).toBe(404)
+  })
+
+  it('busca la evolución entre las vigentes: una anulada no recibe una grabación (D24)', async () => {
+    await POST(upload(), params)
+    const [scope, policy] = mocks.findEvolution.mock.calls[0] as [Record<string, string>, string]
+    expect(policy).toBe('current')
+    expect(scope.evolutionId).toBe(EVOLUTION)
+    expect(Object.keys(scope).sort()).toEqual(['evolutionId', 'orgId', 'studyId', 'subjectId'])
   })
 
   it.each([

@@ -70,7 +70,9 @@ El borrado diario de grabaciones vencidas tiene que recorrer también el depósi
 
 ### Una sola forma de leer evoluciones
 
-Hoy leen evoluciones tres lugares: la ruta de evoluciones, el servicio del equipo (para contar autores) y el depósito de grabaciones. Con una tabla de anulaciones, cada lector tiene que saltear las anuladas, y el próximo que se agregue se lo va a olvidar. Por eso: **una única función de lectura de evoluciones vigentes**, y una prueba que falle si alguien consulta la tabla de evoluciones por fuera de ella (propuesta de Architect).
+**Construido (PR #171):** `apps/web/lib/subjects/evolution-reader.ts` es el único lector, sin valor por defecto para las anuladas, con su test guardián. Lo que sigue es el motivo.
+
+Antes leían evoluciones tres lugares: la ruta de evoluciones, el servicio del equipo (para contar autores) y el depósito de grabaciones. Con una tabla de anulaciones, cada lector tiene que saltear las anuladas, y el próximo que se agregue se lo va a olvidar. Por eso: **una única función de lectura de evoluciones vigentes**, y una prueba que falle si alguien consulta la tabla de evoluciones por fuera de ella (propuesta de Architect).
 
 ## Registro
 
@@ -91,6 +93,7 @@ En la misma transacción que el cambio: una entrada por la anulación y una por 
 
 1. **Quién declara y quién escucha.** Propuesta: autor y coordinación del estudio.
 2. **Si el texto de la evolución anulada se puede abrir** desde la historia del sujeto equivocado, o solo lo ve quien la escribió y coordinación. Es una pregunta para Calidad: una corrección no debe tapar el original, pero ese original habla de otra persona.
+   - **Pendiente, para que no quede resuelto de hecho (observación de Architect en el #171):** la lectura de la historia ya trae las anuladas con su marca, y hoy devolvería también su texto descifrado a cualquiera que pueda ver la historia de ese sujeto. No expone nada mientras no exista la forma de anular. Santiago respondió «todo sí» el 14/11, leído como «el texto se puede abrir, plegado»; la consulta a Calidad sigue abierta. **El PR que agregue la anulación tiene que aplicar lo que se decida en la ruta**, no en la pantalla: si el texto de una anulada no le corresponde a quien lo pide, no viaja.
 3. **El aviso:** lista en Inicio, correo, o las dos.
 4. **Si el depósito se llama «Grabaciones sin sujeto»** en pantalla.
 5. **Medicaciones y condiciones:** si alcanza con que el aviso diga que su lista puede estar incompleta, o si se les agrega origen ahora.
