@@ -103,6 +103,28 @@ Stack traces are never included in client responses (existing behavior unchanged
 
 ---
 
+## Rutas clínicas (14/11/2026)
+
+Evoluciones, grabaciones y laboratorio no tenían límite: lo tenían 10 de las 55 rutas (chat, cargas de documentos, ingesta). Viene del requisito de que un centro con más de cien personas a la vez no pueda quedar degradado por un equipo que repite pedidos por error. Código: `apps/web/lib/security/clinical-rate-limit.ts`.
+
+**La diferencia con el chat, a propósito:** si el servicio que cuenta los pedidos no responde, el chat se bloquea (cada pedido gasta plata). Estas rutas no: **un límite no puede dejar a alguien sin poder guardar una evolución porque se cayó el contador.** En ese caso se cuenta dentro del proceso y el pedido sigue. Estas rutas nunca responden 503 por el límite. El costo: sin el servicio, el tope del centro no se aplica y el de cada persona vale por proceso, no en total.
+
+| Pedido | Por persona, por minuto | Por centro, por minuto | Variables |
+|---|---|---|---|
+| Guardar una evolución | 20 | 300 | `RATE_LIMIT_EVOLUTION_PER_MINUTE`, `RATE_LIMIT_EVOLUTION_ORG_PER_MINUTE` |
+| Guardar una grabación | 20 | 600 | `RATE_LIMIT_DICTATION_AUDIO_…` |
+| Escuchar una grabación | 60 | sin tope | `RATE_LIMIT_DICTATION_LISTEN_PER_MINUTE` |
+| Subir un informe de laboratorio (PDF o fotos) | 10 | 120 | `RATE_LIMIT_LAB_UPLOAD_…` |
+| Extraer laboratorio de un texto | 10 | 120 | `RATE_LIMIT_LAB_EXTRACT_…` |
+
+- Los topes son una estimación, no una medición: 120 personas guardando una evolución en el mismo minuto no llegan al tope del centro; una evolución lleva hasta cinco tomas. Se ajustan con la prueba de carga, que todavía no se hizo.
+- El límite se comprueba después del acceso (hace falta saber quién es) y antes de leer el cuerpo.
+- La respuesta 429 dice en castellano qué pasó y cuánto esperar. Al guardar una evolución, la pantalla avisa que no se guardó y que lo escrito sigue ahí.
+- **No es una cuota de almacenamiento.** Limita el ritmo, no cuánto ocupa un centro. Con el audio dentro de la base, eso sigue pendiente.
+- **Quedan sin límite** las lecturas y las confirmaciones (sujetos, perfil, elegibilidad, confirmar o rechazar un informe o una propuesta, agenda, especificación).
+
+---
+
 ## Future considerations
 
 - Redis `remaining` counter: the current Lua script returns `{1, 0}` for allowed requests. To expose `X-RateLimit-Remaining`, the script would need to return the current ZCARD. Deferred — headers are optional per this spec.
