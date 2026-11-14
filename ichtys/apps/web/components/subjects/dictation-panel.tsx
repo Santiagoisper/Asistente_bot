@@ -23,6 +23,7 @@ import {
 import { takesNotice } from '../../lib/dictation/takes'
 import { useMicLevel } from '../../lib/dictation/use-mic-level'
 import { pickRecordingMimeType, recordingBudget, takeLimitNotice } from '../../lib/dictation/recording'
+import { canDecodeRecordedFormat } from '../../lib/dictation/recording-probe'
 import { RecordingNotice } from './recording-notice'
 import { RecordButton } from './record-button'
 
@@ -68,7 +69,7 @@ const MAX_RECORDING_SEC = 20 * 60
 /** Segundos sin voz al empezar para avisar que el micrófono no está tomando nada. */
 const SILENCE_WARNING_SEC = 4
 const SILENCE_LEVEL = 0.06
-/** Cada cuánto entrega un tramo el grabador. Con un segundo, la cuenta de tramos es el tiempo grabado. */
+/** Cada cuánto se le pide un tramo al grabador. Es un pedido: la cuenta de tramos es el tiempo grabado, aproximado. */
 const RECORDING_TIMESLICE_MS = 1000
 
 export function DictationPanel({ subjectCode, onDraft, onDiscard, resetSignal }: DictationPanelProps) {
@@ -220,14 +221,14 @@ export function DictationPanel({ subjectCode, onDraft, onDiscard, resetSignal }:
   async function startRecording() {
     setMessage(null)
     try {
+      // Se pide un formato que respete la calidad pedida, solo si este equipo lo graba y lo
+      // decodifica (D25). La prueba arranca en este mismo toque, a la par del permiso del
+      // micrófono: no usa el micrófono y se hace una vez.
+      const format = pickRecordingMimeType((type) => MediaRecorder.isTypeSupported(type), canDecodeRecordedFormat)
       const media = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       })
-      // Se pide un formato que respete la calidad pedida, si este equipo lo graba y lo lee (D25).
-      const mimeType = pickRecordingMimeType(
-        (type) => MediaRecorder.isTypeSupported(type),
-        (type) => document.createElement('audio').canPlayType(type) !== '',
-      )
+      const mimeType = await format
       const recorder = new MediaRecorder(media, {
         audioBitsPerSecond: DICTATION_RECORDING_BITS_PER_SECOND,
         ...(mimeType ? { mimeType } : {}),
@@ -238,7 +239,8 @@ export function DictationPanel({ subjectCode, onDraft, onDiscard, resetSignal }:
         if (event.data.size === 0) return
         chunks.push(event.data)
         bytes += event.data.size
-        // Un tramo por segundo: la cantidad de tramos es el tiempo grabado, sin contar las pausas.
+        // Un tramo por segundo, aproximado: el navegador puede entregarlos irregulares. Alcanza
+        // para el aviso de cuánto queda; el corte va por lo que pesa, no por esta cuenta.
         const budget = recordingBudget({
           bytes,
           seconds: chunks.length,

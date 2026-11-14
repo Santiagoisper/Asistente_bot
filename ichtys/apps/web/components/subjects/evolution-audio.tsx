@@ -20,7 +20,7 @@ export interface EvolutionAudioInfo {
 
 export function EvolutionAudio({ studyId, subjectId, audio, several = false }: { studyId: string; subjectId: string; audio: EvolutionAudioInfo; several?: boolean }) {
   const [url, setUrl] = useState<string | null>(null)
-  const [state, setState] = useState<'idle' | 'loading' | 'error' | 'expired'>('idle')
+  const [state, setState] = useState<'idle' | 'loading' | 'error' | 'expired' | 'unplayable'>('idle')
   const urlRef = useRef<string | null>(null)
 
   useEffect(
@@ -61,13 +61,17 @@ export function EvolutionAudio({ studyId, subjectId, audio, several = false }: {
         {label} · grabación de {recordingClock(audio.durationSec)} · se borra el {expires}
       </span>
       {url ? (
-        <audio controls src={url} className="h-8 max-w-full" />
+        // La grabación puede venir de otro equipo, en un formato que este no reproduce (D25).
+        <audio controls src={url} onError={() => setState('unplayable')} className="h-8 max-w-full" />
       ) : (
         <button type="button" onClick={() => void listen()} disabled={state === 'loading'} className="rounded border border-alphi-border px-2 py-1 font-semibold text-alphi-navy disabled:opacity-50">
           {state === 'loading' ? 'Cargando…' : 'Escuchar'}
         </button>
       )}
       {state === 'error' ? <span role="alert" className="text-red-700">No se pudo cargar la grabación.</span> : null}
+      {state === 'unplayable' ? (
+        <span role="alert" className="text-red-700">Este equipo no puede reproducir esta grabación. Probá en otro navegador o en otro equipo: la grabación está guardada.</span>
+      ) : null}
     </div>
   )
 }

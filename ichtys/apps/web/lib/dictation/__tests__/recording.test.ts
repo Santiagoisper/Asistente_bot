@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { pickRecordingMimeType, recordingBudget, takeLimitNotice } from '../recording'
 
 /**
@@ -8,29 +8,44 @@ import { pickRecordingMimeType, recordingBudget, takeLimitNotice } from '../reco
  */
 describe('pickRecordingMimeType — qué formato se le pide al navegador', () => {
   const supports = (...types: string[]) => (type: string) => types.includes(type)
+  const decodes = (...types: string[]) => vi.fn(async (type: string) => types.includes(type))
 
-  it('prefiere webm con opus, que sí respeta la calidad pedida, si el equipo lo graba y lo lee', () => {
-    const type = pickRecordingMimeType(supports('audio/webm;codecs=opus', 'audio/mp4'), supports('audio/webm;codecs=opus', 'audio/mp4'))
+  it('prefiere webm con opus, que sí respeta la calidad pedida, si el equipo lo graba y lo decodifica', async () => {
+    const type = await pickRecordingMimeType(supports('audio/webm;codecs=opus', 'audio/mp4'), decodes('audio/webm;codecs=opus'))
     expect(type).toBe('audio/webm;codecs=opus')
   })
 
-  it('si no hay webm, prueba ogg con opus', () => {
-    expect(pickRecordingMimeType(supports('audio/ogg;codecs=opus'), supports('audio/ogg;codecs=opus'))).toBe('audio/ogg;codecs=opus')
+  it('si no hay webm, prueba ogg con opus', async () => {
+    expect(await pickRecordingMimeType(supports('audio/ogg;codecs=opus'), decodes('audio/ogg;codecs=opus'))).toBe('audio/ogg;codecs=opus')
   })
 
-  it('un formato que el equipo graba pero no sabe leer no se elige: después no se podría transcribir', () => {
-    expect(pickRecordingMimeType(supports('audio/webm;codecs=opus'), supports())).toBeUndefined()
+  it('un formato que el equipo graba pero no decodifica no se elige: después no se podría transcribir', async () => {
+    expect(await pickRecordingMimeType(supports('audio/webm;codecs=opus'), decodes())).toBeUndefined()
   })
 
-  it('sin ninguno de los preferidos no pide formato: el navegador usa el suyo', () => {
-    expect(pickRecordingMimeType(supports('audio/mp4'), supports('audio/mp4'))).toBeUndefined()
+  it('si webm se graba pero no se decodifica, sigue con ogg', async () => {
+    const both = supports('audio/webm;codecs=opus', 'audio/ogg;codecs=opus')
+    expect(await pickRecordingMimeType(both, decodes('audio/ogg;codecs=opus'))).toBe('audio/ogg;codecs=opus')
   })
 
-  it('si la consulta al navegador falla, no pide formato', () => {
+  it('no gasta la prueba de decodificación en un formato que el equipo no graba', async () => {
+    const canDecode = decodes('audio/webm;codecs=opus', 'audio/ogg;codecs=opus')
+    expect(await pickRecordingMimeType(supports('audio/mp4'), canDecode)).toBeUndefined()
+    expect(canDecode).not.toHaveBeenCalled()
+  })
+
+  it('si la consulta al navegador falla, no pide formato', async () => {
     const broken = () => {
       throw new Error('no disponible')
     }
-    expect(pickRecordingMimeType(broken, broken)).toBeUndefined()
+    expect(await pickRecordingMimeType(broken, decodes('audio/webm;codecs=opus'))).toBeUndefined()
+  })
+
+  it('si la prueba de decodificación falla, no pide formato', async () => {
+    const rejects = async () => {
+      throw new Error('no se pudo probar')
+    }
+    expect(await pickRecordingMimeType(supports('audio/webm;codecs=opus'), rejects)).toBeUndefined()
   })
 })
 
