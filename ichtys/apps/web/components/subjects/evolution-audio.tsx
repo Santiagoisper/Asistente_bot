@@ -56,7 +56,12 @@ export function EvolutionAudio({ studyId, subjectId, audio, several = false }: {
   if (audio.withdrawn) {
     return (
       <p className="mt-3 border-t border-alphi-border pt-2 text-xs text-alphi-muted">
-        {label}. La grabación ({recordingClock(audio.durationSec)}) se retiró de este sujeto y pasó a las grabaciones sin sujeto.
+        {label}. La grabación ({recordingClock(audio.durationSec)}) se retiró de este sujeto y pasó a las grabaciones sin sujeto. Quien la grabó y
+        quien coordina el estudio la encuentran en{' '}
+        <a href="/grabaciones-sin-sujeto" className="font-semibold text-alphi-navy underline underline-offset-2">
+          Grabaciones sin sujeto
+        </a>
+        .
       </p>
     )
   }

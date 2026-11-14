@@ -111,8 +111,11 @@ function makeParams(subjectId = mocks.SUBJECT_ID) {
   return { params: Promise.resolve({ id: mocks.STUDY_ID, subjectId }) }
 }
 
-function subjectContext() {
+// Por defecto: modo estricto, con la función de investigar y sin la de coordinar.
+type TestAccess = { mode: string; role: string; functions: string[] }
+function subjectContext(access: Partial<TestAccess> = {}) {
   return {
+    access: { mode: 'enforced', role: 'principal_investigator', functions: ['investigator'], ...access },
     orgId: mocks.ORG_ID,
     userId: mocks.USER_ID,
     study: { id: mocks.STUDY_ID },
@@ -697,18 +700,18 @@ describe('D24 — quién lee el texto de una evolución anulada', () => {
     expect(mocks.validateSubjectAccess).toHaveBeenCalledTimes(1)
   })
 
-  it('quien coordina el estudio lo lee', async () => {
-    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext()).mockResolvedValueOnce(subjectContext())
+  it('quien coordina el estudio lo lee, sin volver a pedir el acceso', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext({ functions: ['study_coordinator'] }))
     mocks.dbFindMany.mockResolvedValueOnce([voided('user_otro'), current])
 
     const { evolutions } = await history()
 
     expect(evolutions[0]!.content).toBe('texto de otra persona')
-    expect(mocks.validateSubjectAccess.mock.calls[1]![2]).toEqual({ require: 'access.manage_study' })
+    expect(mocks.validateSubjectAccess).toHaveBeenCalledTimes(1)
   })
 
   it('cualquier otra persona con acceso a la historia ve la marca, y el texto no viaja', async () => {
-    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext()).mockRejectedValueOnce(new mocks.AccessError('Forbidden', 403))
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
     mocks.dbFindMany.mockResolvedValueOnce([voided('user_otro'), current])
 
     const { text, evolutions } = await history()
@@ -719,21 +722,20 @@ describe('D24 — quién lee el texto de una evolución anulada', () => {
     expect(evolutions[1]).toMatchObject({ content: 'texto vigente' })
   })
 
-  it('sin anuladas no se pide la capacidad de coordinación', async () => {
-    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
-    mocks.dbFindMany.mockResolvedValueOnce([current])
-    await history()
-    expect(mocks.validateSubjectAccess).toHaveBeenCalledTimes(1)
+  it('modo abierto: a un investigador que no la escribió el texto no le viaja (antes le llegaba a cualquiera con acceso clínico)', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext({ mode: 'open', functions: [] }))
+    mocks.dbFindMany.mockResolvedValueOnce([voided('user_otro'), current])
+
+    const { text, evolutions } = await history()
+
+    expect(evolutions[0]).toMatchObject({ content: null, contentWithheld: true })
+    expect(text).not.toContain('texto de otra persona')
   })
 
-  it('si la comprobación falla por otra cosa que un permiso, no se entrega nada', async () => {
-    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext()).mockRejectedValueOnce(new Error('sin conexión'))
-    mocks.dbFindMany.mockResolvedValueOnce([voided('user_otro')])
-    const res = await GET(new Request('http://localhost/api/evolutions'), makeParams())
-    // No es un permiso negado: el error sube al manejador común y no sale la historia.
-    expect(res.status).toBe(500)
-    expect(await res.text()).not.toContain('texto de otra persona')
-    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+  it('modo abierto: la coordinación del centro lo lee', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext({ mode: 'open', role: 'site_coordinator', functions: [] }))
+    mocks.dbFindMany.mockResolvedValueOnce([voided('user_otro'), current])
+    expect((await history()).evolutions[0]!.content).toBe('texto de otra persona')
   })
 })
 
@@ -752,6 +754,21 @@ describe('D24 — la historia dice en qué evoluciones la persona puede declarar
     const res = await GET(new Request('http://localhost/api/evolutions'), makeParams())
     return (JSON.parse(await res.text()) as { evolutions: Array<{ id: string; canVoid?: boolean }> }).evolutions
   }
+
+  it('quien coordina el estudio puede también en la de otra persona, en los dos modos; un investigador en modo abierto, no', async () => {
+    const canVoidOther = async (access: Partial<TestAccess>) => {
+      mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext(access))
+      mocks.dbFindMany.mockResolvedValueOnce([row('ajena', 'user_otro'), row('ajena-anulada', 'user_otro', true)])
+      const evolutions = await history()
+      // Una anulada no se vuelve a ofrecer a nadie.
+      expect(evolutions.find((evo) => evo.id === 'ajena-anulada')!.canVoid).toBe(false)
+      return evolutions.find((evo) => evo.id === 'ajena')!.canVoid
+    }
+    expect(await canVoidOther({ functions: ['study_coordinator'] })).toBe(true)
+    expect(await canVoidOther({ mode: 'open', role: 'site_coordinator', functions: [] })).toBe(true)
+    expect(await canVoidOther({ mode: 'open', role: 'principal_investigator', functions: [] })).toBe(false)
+    expect(await canVoidOther({ mode: 'open', role: 'principal_investigator', functions: ['study_coordinator'] })).toBe(false)
+  })
 
   it('en la propia y vigente, sí; en la de otra persona, no', async () => {
     mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())

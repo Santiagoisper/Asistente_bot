@@ -23,8 +23,7 @@ describe('voidErrorMessage — ningún rechazo se traga, y ninguno afirma lo que
   it('sin permiso: dice a quién pedírselo, con lo que vale en los dos modos', () => {
     const text = voidErrorMessage(403, 'request_failed')
     expect(text).toContain('quien la escribió')
-    // En modo abierto la coordinación todavía no puede: el texto no la promete.
-    expect(text).not.toContain('coordina')
+    expect(text).toContain('quien coordina el estudio')
     expect(text).toContain('No se declaró nada')
   })
 

@@ -1,5 +1,6 @@
 import { handleApiError, validateSubjectAccess } from '@ichtys/auth'
 import { db } from '@ichtys/db'
+import { coordinatesStudy } from '../../../../../../../../../lib/access/permissions'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../../../../lib/api/body-limit'
 import { clinicalRateLimit } from '../../../../../../../../../lib/security/clinical-rate-limit'
 import { findSubjectEvolution } from '../../../../../../../../../lib/subjects/evolution-reader'
@@ -24,7 +25,7 @@ const notFound = () => new Response('Not Found', { status: 404 })
  *
  * - **Quién puede:** quien escribió la evolución, o quien coordina el estudio (la capacidad
  *   `access.manage_study`: Study Coordinator y Dirección de Operaciones). Nadie más.
- *   Fuera del modo estricto, por ahora, solo quien la escribió (ver abajo).
+ *   En modo `open`, «coordina» la coordinación del centro o más (decisión del 14/11/2026).
  * - **Es definitivo.** No hay forma de desanular (Santiago, 14/11/2026).
  * - Anular, retirar las grabaciones al depósito y retirar la propuesta pendiente del perfil que
  *   salió de esa evolución van en una transacción: o pasa todo, o no pasa nada.
@@ -51,17 +52,13 @@ export async function POST(req: Request, { params }: Params): Promise<Response> 
     // quedaba pendiente.
     const scope = { ...subjectScope, evolutionId: evolution.id }
 
-    // Quien no la escribió necesita coordinar el estudio. El validador responde 403 si no.
-    // Quien la escribió puede siempre, aunque hoy ya no tenga la función de escribir evoluciones:
-    // la responsabilidad por lo que escribió no se le va con el cambio de función (D24, punto 1).
-    if (evolution.authorUserId !== access.userId) {
-      // Provisorio (14/11/2026): fuera del modo estricto, solo quien la escribió. En modo `open`
-      // pedir una capacidad no restringe, así que «quien coordina» sería cualquiera con acceso
-      // clínico, y anular es definitivo. Qué rol coordina en ese modo lo decide Santiago; hasta
-      // entonces la ruta no lo supone. Un modo que no es exactamente el estricto cuenta como
-      // abierto: ante la duda, se restringe.
-      if (access.access.mode !== 'enforced') return new Response('Forbidden', { status: 403 })
-      await validateSubjectAccess(subjectId, routeStudyId, { require: 'access.manage_study' })
+    // Quien no la escribió necesita coordinar el estudio (`coordinatesStudy`, que también
+    // distingue en modo `open`: ahí es la coordinación del centro o más, no cualquiera con
+    // acceso clínico). Quien la escribió puede siempre, aunque hoy ya no tenga la función de
+    // escribir evoluciones: la responsabilidad por lo que escribió no se le va con el cambio
+    // de función (D24, punto 1).
+    if (evolution.authorUserId !== access.userId && !coordinatesStudy(access.access)) {
+      return new Response('Forbidden', { status: 403 })
     }
 
     let body: unknown

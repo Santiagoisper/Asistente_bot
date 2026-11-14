@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { and, db, dictationAudios, eq, isNotNull, isNull, lt, unassignedDictationAudios } from '@ichtys/db'
+import { and, db, desc, dictationAudios, eq, isNotNull, isNull, lt, unassignedDictationAudios } from '@ichtys/db'
 import type { DbTransaction } from '../audit/audited-write'
 import { decryptClinicalContent, encryptClinicalContent } from '../subjects/phi-fields'
 import { audioState } from './audio-state'
@@ -168,4 +168,82 @@ export async function purgeExpiredUnassignedAudios(tx: DbTransaction, now: Date)
     .set({ contentEncrypted: null, segmentsEncrypted: null, purgedAt: now })
     .where(and(lt(unassignedDictationAudios.expiresAt, now), isNotNull(unassignedDictationAudios.contentEncrypted)))
     .returning({ id: unassignedDictationAudios.id, organizationId: unassignedDictationAudios.organizationId, studyId: unassignedDictationAudios.studyId })
+}
+
+/** Una grabación sin sujeto, sin contenido (D24, punto 3). */
+export interface UnassignedAudioMeta {
+  id: string
+  studyId: string
+  evolutionId: string
+  take: number
+  mime: string
+  durationSec: number
+  /** Quién la grabó. */
+  createdBy: string
+  createdAt: Date
+  expiresAt: Date
+  purgedAt: Date | null
+  /** Cuándo se retiró del sujeto. */
+  declaredAt: Date
+}
+
+const UNASSIGNED_META = {
+  id: unassignedDictationAudios.id,
+  studyId: unassignedDictationAudios.studyId,
+  evolutionId: unassignedDictationAudios.evolutionId,
+  take: unassignedDictationAudios.take,
+  mime: unassignedDictationAudios.mime,
+  durationSec: unassignedDictationAudios.durationSec,
+  createdBy: unassignedDictationAudios.createdBy,
+  createdAt: unassignedDictationAudios.createdAt,
+  expiresAt: unassignedDictationAudios.expiresAt,
+  purgedAt: unassignedDictationAudios.purgedAt,
+  declaredAt: unassignedDictationAudios.declaredAt,
+}
+
+/** Tope de la lista: una persona no acumula tantas, y la respuesta no crece sin límite. */
+export const UNASSIGNED_AUDIO_LIST_MAX = 200
+
+/** Las grabaciones sin sujeto que grabó esta persona en esta organización, las más recientes primero. Sin contenido. */
+export async function listUnassignedAudiosByAuthor(params: { orgId: string; userId: string }): Promise<UnassignedAudioMeta[]> {
+  return db
+    .select(UNASSIGNED_META)
+    .from(unassignedDictationAudios)
+    .where(and(eq(unassignedDictationAudios.organizationId, params.orgId), eq(unassignedDictationAudios.createdBy, params.userId)))
+    .orderBy(desc(unassignedDictationAudios.declaredAt))
+    .limit(UNASSIGNED_AUDIO_LIST_MAX)
+}
+
+/**
+ * Las grabaciones sin sujeto de la organización, las más recientes primero. Sin contenido. Para
+ * quien coordina; a qué estudios entra lo filtra la ruta.
+ */
+export async function listUnassignedAudiosOfOrg(params: { orgId: string }): Promise<UnassignedAudioMeta[]> {
+  return db
+    .select(UNASSIGNED_META)
+    .from(unassignedDictationAudios)
+    .where(eq(unassignedDictationAudios.organizationId, params.orgId))
+    .orderBy(desc(unassignedDictationAudios.declaredAt))
+    .limit(UNASSIGNED_AUDIO_LIST_MAX)
+}
+
+/** Una grabación sin sujeto de esta organización, sin contenido. Quién puede escucharla lo decide la ruta. */
+export async function findUnassignedAudio(params: { orgId: string; id: string }): Promise<UnassignedAudioMeta | null> {
+  const [row] = await db
+    .select(UNASSIGNED_META)
+    .from(unassignedDictationAudios)
+    .where(and(eq(unassignedDictationAudios.id, params.id), eq(unassignedDictationAudios.organizationId, params.orgId)))
+    .limit(1)
+  return row ?? null
+}
+
+/** El contenido descifrado, o `null` si ya se borró. Se llama después de decidir que se entrega. */
+export async function loadUnassignedAudioBytes(params: { orgId: string; id: string }): Promise<Uint8Array | null> {
+  const [row] = await db
+    .select({ contentEncrypted: unassignedDictationAudios.contentEncrypted })
+    .from(unassignedDictationAudios)
+    .where(and(eq(unassignedDictationAudios.id, params.id), eq(unassignedDictationAudios.organizationId, params.orgId)))
+    .limit(1)
+  if (!row || row.contentEncrypted === null) return null
+  return new Uint8Array(Buffer.from(decryptClinicalContent(row.contentEncrypted), 'base64'))
 }

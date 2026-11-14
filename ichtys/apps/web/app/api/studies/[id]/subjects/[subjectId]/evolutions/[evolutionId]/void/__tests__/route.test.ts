@@ -53,15 +53,16 @@ const STUDY = '11111111-1111-4111-8111-111111111111'
 const SUBJECT = '22222222-2222-4222-8222-222222222222'
 const EVOLUTION = '33333333-3333-4333-8333-333333333333'
 const params = { params: Promise.resolve({ id: STUDY, subjectId: SUBJECT, evolutionId: EVOLUTION }) }
-// Modo estricto salvo que la prueba diga otra cosa: ahí es donde «quien coordina» distingue a alguien.
+// Por defecto: modo estricto, con la función de investigar y sin la de coordinar.
 const context = {
   orgId: 'org-1',
   userId: 'user_author',
   study: { id: STUDY },
   subject: { id: SUBJECT, subjectCode: 'GZBO-001' },
-  access: { mode: 'enforced', role: 'principal_investigator', functions: [] },
+  access: { mode: 'enforced', role: 'principal_investigator', functions: ['investigator'] as string[] },
 }
-const openContext = { ...context, access: { ...context.access, mode: 'open' } }
+const withAccess = (access: Partial<typeof context.access>) => ({ ...context, access: { ...context.access, ...access } })
+const openContext = withAccess({ mode: 'open', functions: [] })
 
 function request(body: unknown = { reason: 'wrong_subject', confirmedSubjectCode: 'GZBO-001' }): Request {
   return new Request('http://test/void', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -125,36 +126,35 @@ describe('POST — declarar que la evolución se registró en el sujeto equivoca
 
   it('otra persona sin coordinación del estudio no puede: 403, sin transacción', async () => {
     mocks.findEvolution.mockResolvedValue({ id: EVOLUTION, authorUserId: 'user_other', voided: null })
-    mocks.validateSubjectAccess.mockResolvedValueOnce(context).mockRejectedValueOnce(new mocks.AccessError('Forbidden', 403))
 
     const res = await POST(request(), params)
 
     expect(res.status).toBe(403)
     expect(mocks.transactions).toBe(0)
-    // Lo que se le pidió al validador la segunda vez: la capacidad de coordinación sobre este estudio.
-    expect(mocks.validateSubjectAccess.mock.calls[1]).toEqual([SUBJECT, STUDY, { require: 'access.manage_study' }])
+    expect(mocks.voidEvolution).not.toHaveBeenCalled()
   })
 
   it('quien no puede anular recibe 403 antes de cualquier respuesta que dependa de lo que mandó (primero quién es y qué puede)', async () => {
     mocks.findEvolution.mockResolvedValue({ id: EVOLUTION, authorUserId: 'user_other', voided: null })
-    const denied = () =>
-      mocks.validateSubjectAccess.mockReset().mockResolvedValueOnce(context).mockRejectedValueOnce(new mocks.AccessError('Forbidden', 403))
-
-    denied()
     expect((await POST(request({ reason: 'wrong_subject', confirmedSubjectCode: 'OTRO-999' }), params)).status).toBe(403)
-    denied()
     expect((await POST(request({ reason: 'otro motivo' }), params)).status).toBe(403)
-    denied()
     mocks.findEvolution.mockResolvedValue({ id: EVOLUTION, authorUserId: 'user_other', voided: { reason: 'wrong_subject' } })
     expect((await POST(request(), params)).status).toBe(403)
     expect(mocks.transactions).toBe(0)
   })
 
   it('quien coordina el estudio puede anular la de otra persona', async () => {
+    mocks.validateSubjectAccess.mockResolvedValue(withAccess({ functions: ['study_coordinator'] }))
     mocks.findEvolution.mockResolvedValue({ id: EVOLUTION, authorUserId: 'user_other', voided: null })
     expect((await POST(request(), params)).status).toBe(200)
-    expect(mocks.validateSubjectAccess).toHaveBeenCalledTimes(2)
     expect(mocks.transactions).toBe(1)
+  })
+
+  it('la coordinación se decide con lo que ya se sabe de la persona: no se vuelve a pedir el acceso', async () => {
+    mocks.findEvolution.mockResolvedValue({ id: EVOLUTION, authorUserId: 'user_other', voided: null })
+    await POST(request(), params)
+    expect(mocks.validateSubjectAccess).toHaveBeenCalledTimes(1)
+    expect(mocks.validateSubjectAccess).toHaveBeenCalledWith(SUBJECT, STUDY)
   })
 
   it('quien la escribió no necesita la capacidad de coordinación', async () => {
@@ -213,22 +213,23 @@ describe('POST — declarar que la evolución se registró en el sujeto equivoca
   })
 })
 
-describe('POST en modo abierto — provisorio: solo quien la escribió (D24, punto 1)', () => {
-  it('otra persona no puede, aunque en ese modo el validador le daría la coordinación: 403, sin preguntarle y sin transacción', async () => {
-    mocks.validateSubjectAccess.mockReset().mockResolvedValue(openContext)
-    mocks.findEvolution.mockResolvedValue({ id: EVOLUTION, authorUserId: 'user_other', voided: null })
+describe('POST en modo abierto — coordina la coordinación del centro o más, no cualquiera con acceso clínico (D24, punto 1)', () => {
+  const other = () => mocks.findEvolution.mockResolvedValue({ id: EVOLUTION, authorUserId: 'user_other', voided: null })
+
+  it('un investigador que no la escribió no puede: 403, sin transacción', async () => {
+    mocks.validateSubjectAccess.mockResolvedValue(openContext)
+    other()
 
     const res = await POST(request(), params)
 
     expect(res.status).toBe(403)
-    expect(mocks.validateSubjectAccess).toHaveBeenCalledTimes(1)
     expect(mocks.transactions).toBe(0)
     expect(mocks.voidEvolution).not.toHaveBeenCalled()
   })
 
   it('el 403 llega antes de cualquier respuesta que dependa de lo que mandó', async () => {
-    mocks.validateSubjectAccess.mockReset().mockResolvedValue(openContext)
-    mocks.findEvolution.mockResolvedValue({ id: EVOLUTION, authorUserId: 'user_other', voided: null })
+    mocks.validateSubjectAccess.mockResolvedValue(openContext)
+    other()
     expect((await POST(request({ reason: 'wrong_subject', confirmedSubjectCode: 'OTRO-999' }), params)).status).toBe(403)
     expect((await POST(request({ reason: 'otro motivo' }), params)).status).toBe(403)
     mocks.findEvolution.mockResolvedValue({ id: EVOLUTION, authorUserId: 'user_other', voided: { reason: 'wrong_subject' } })
@@ -236,16 +237,32 @@ describe('POST en modo abierto — provisorio: solo quien la escribió (D24, pun
     expect(mocks.transactions).toBe(0)
   })
 
-  it('quien la escribió sí puede', async () => {
-    mocks.validateSubjectAccess.mockReset().mockResolvedValue(openContext)
+  it('la coordinación del centro, quien administra el estudio y quien administra la organización sí pueden', async () => {
+    for (const role of ['site_coordinator', 'study_admin', 'org_admin']) {
+      mocks.transactions = 0
+      mocks.validateSubjectAccess.mockResolvedValue(withAccess({ mode: 'open', role, functions: [] }))
+      other()
+      expect((await POST(request(), params)).status, role).toBe(200)
+      expect(mocks.transactions, role).toBe(1)
+    }
+  })
+
+  it('las funciones cargadas no cuentan en modo abierto: un investigador con la función de coordinar sigue sin poder', async () => {
+    mocks.validateSubjectAccess.mockResolvedValue(withAccess({ mode: 'open', functions: ['study_coordinator'] }))
+    other()
+    expect((await POST(request(), params)).status).toBe(403)
+  })
+
+  it('quien la escribió puede, sea cual sea su rol', async () => {
+    mocks.validateSubjectAccess.mockResolvedValue(openContext)
     const res = await POST(request(), params)
     expect(res.status).toBe(200)
     expect(mocks.transactions).toBe(1)
   })
 
-  it('un modo que no es exactamente el estricto se trata como abierto: ante la duda, se restringe', async () => {
-    mocks.validateSubjectAccess.mockReset().mockResolvedValue({ ...context, access: { ...context.access, mode: 'otro' } })
-    mocks.findEvolution.mockResolvedValue({ id: EVOLUTION, authorUserId: 'user_other', voided: null })
+  it('un modo que no es exactamente el abierto se trata como estricto: ante la duda, se restringe', async () => {
+    mocks.validateSubjectAccess.mockResolvedValue(withAccess({ mode: 'otro', role: 'org_admin', functions: [] }))
+    other()
     expect((await POST(request(), params)).status).toBe(403)
     expect(mocks.transactions).toBe(0)
   })
