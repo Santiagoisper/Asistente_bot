@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DICTATION_AUDIO_MAX_TAKES } from '../protocol'
-import { addRecordingTake, groupAudiosByEvolution, parseTake, takesNotice, uploadNotice, uploadRecordingTakes } from '../takes'
+import { addRecordingTake, audioLabel, groupAudiosByEvolution, missingTakes, missingTakesNotice, parseTake, takesNotice, uploadNotice, uploadRecordingTakes } from '../takes'
 
 /** Varias grabaciones por evolución (docs/decisions/consulta-dictada.md, D22). */
 describe('parseTake — el número de toma que llega en un pedido', () => {
@@ -20,22 +20,60 @@ describe('parseTake — el número de toma que llega en un pedido', () => {
 describe('addRecordingTake — lo que se va a subir al guardar', () => {
   const rec = (durationSec: number) => ({ blob: new Blob(['x']), durationSec })
 
-  it('cada toma con grabación se suma, en el orden en que se dictó', () => {
-    const one = addRecordingTake([], rec(10))
-    const two = addRecordingTake(one, rec(20))
-    expect(two.map((take) => take.durationSec)).toEqual([10, 20])
+  it('cada grabación lleva el número de la toma en que se dictó', () => {
+    const one = addRecordingTake([], rec(10), 1)
+    const two = addRecordingTake(one, rec(20), 2)
+    expect(two.map((take) => [take.take, take.durationSec])).toEqual([
+      [1, 10],
+      [2, 20],
+    ])
     expect(one).toHaveLength(1) // no se modifica la lista anterior
   })
 
-  it('una toma sin grabación (demasiado grande) no ocupa lugar', () => {
-    expect(addRecordingTake([rec(10)], null)).toHaveLength(1)
+  it('tres tomas y la segunda demasiado grande: quedan la 1 y la 3, con sus números (no «1 y 2»)', () => {
+    let takes = addRecordingTake([], rec(10), 1)
+    takes = addRecordingTake(takes, null, 2)
+    takes = addRecordingTake(takes, rec(30), 3)
+    expect(takes.map((take) => take.take)).toEqual([1, 3])
+    expect(takes.map((take) => take.durationSec)).toEqual([10, 30])
   })
 
-  it('pasado el tope no se suma: lo dictado después queda como texto', () => {
-    const full = Array.from({ length: DICTATION_AUDIO_MAX_TAKES }, (_, index) => rec(index + 1))
-    const after = addRecordingTake(full, rec(99))
-    expect(after).toHaveLength(DICTATION_AUDIO_MAX_TAKES)
-    expect(after.map((take) => take.durationSec)).not.toContain(99)
+  it('pasado el tope de tomas no se suma, aunque haya menos grabaciones guardadas', () => {
+    const takes = addRecordingTake([{ ...rec(10), take: 1 }], rec(99), DICTATION_AUDIO_MAX_TAKES + 1)
+    expect(takes.map((take) => take.take)).toEqual([1])
+  })
+
+  it('la última toma dentro del tope sí se suma', () => {
+    expect(addRecordingTake([], rec(5), DICTATION_AUDIO_MAX_TAKES).map((take) => take.take)).toEqual([DICTATION_AUDIO_MAX_TAKES])
+  })
+})
+
+describe('missingTakes — las tomas de las que no hay grabación', () => {
+  it('los huecos entre la primera y la última guardada', () => {
+    expect(missingTakes([1, 3])).toEqual([2])
+    expect(missingTakes([2, 5])).toEqual([1, 3, 4])
+    expect(missingTakes([1, 2, 3])).toEqual([])
+    expect(missingTakes([1])).toEqual([])
+    expect(missingTakes([])).toEqual([])
+  })
+
+  it('el aviso las nombra; sin huecos no hay aviso', () => {
+    expect(missingTakesNotice([])).toBeNull()
+    expect(missingTakesNotice([2])).toBe('De la toma 2 no hay grabación guardada: quedó solo el texto.')
+    expect(missingTakesNotice([2, 4])).toBe('De las tomas 2 y 4 no hay grabación guardada: quedó solo el texto.')
+    expect(missingTakesNotice([1, 3, 4])).toBe('De las tomas 1, 3 y 4 no hay grabación guardada: quedó solo el texto.')
+  })
+})
+
+describe('audioLabel — cómo se nombra cada grabación junto a la evolución', () => {
+  it('una sola grabación, la de la primera toma: sin número', () => {
+    expect(audioLabel({ take: 1, several: false })).toBe('Dictada')
+  })
+
+  it('con varias, o si la única no es la primera, dice qué toma es', () => {
+    expect(audioLabel({ take: 1, several: true })).toBe('Dictada · toma 1')
+    expect(audioLabel({ take: 3, several: true })).toBe('Dictada · toma 3')
+    expect(audioLabel({ take: 3, several: false })).toBe('Dictada · toma 3')
   })
 })
 
@@ -87,14 +125,14 @@ describe('groupAudiosByEvolution — el listado, por evolución y en orden de to
 })
 
 describe('uploadRecordingTakes — subir cada toma después de guardar la evolución', () => {
-  const take = (durationSec: number, type = 'audio/webm') => ({ blob: new Blob(['x'], { type }), durationSec })
+  const take = (durationSec: number, type = 'audio/webm', number = durationSec) => ({ blob: new Blob(['x'], { type }), durationSec, take: number })
   const ok = () => new Response('{}', { status: 201 })
 
-  it('una subida por toma, en orden, cada una con su número, su tipo y su duración', async () => {
+  it('una subida por grabación, en orden, cada una con el número de su toma (con hueco si una no se grabó), su tipo y su duración', async () => {
     const calls: Array<{ url: string; headers: Record<string, string> }> = []
     const result = await uploadRecordingTakes({
       url: '/api/x/audio',
-      takes: [take(10), take(20, '')],
+      takes: [take(10, 'audio/webm', 1), take(20, '', 3)],
       fetchImpl: async (url, init) => {
         calls.push({ url: String(url), headers: init?.headers as Record<string, string> })
         return ok()
@@ -103,7 +141,7 @@ describe('uploadRecordingTakes — subir cada toma después de guardar la evoluc
     expect(result).toEqual({ total: 2, failed: 0 })
     expect(calls).toEqual([
       { url: '/api/x/audio', headers: { 'Content-Type': 'audio/webm', 'X-Duration-Sec': '10', 'X-Take': '1' } },
-      { url: '/api/x/audio', headers: { 'Content-Type': 'audio/webm', 'X-Duration-Sec': '20', 'X-Take': '2' } },
+      { url: '/api/x/audio', headers: { 'Content-Type': 'audio/webm', 'X-Duration-Sec': '20', 'X-Take': '3' } },
     ])
   })
 

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { matchProtocolVisit, mergeDictationAddition, NOT_MENTIONED, studyDictationPrompts, type ProtocolVisit } from '@ichtys/clinical'
 import { bloodPressureProposalLabel } from '../../lib/subjects/proposal-display'
@@ -11,7 +11,7 @@ import { DictationGuide } from './dictation-guide'
 import { ProfileUnreadableNotice } from './profile-unreadable-notice'
 import { profileWriteErrorMessage } from '../../lib/subjects/profile-write-messages'
 import { addRecordingTake, groupAudiosByEvolution, uploadNotice, uploadRecordingTakes, type AudioListingItem } from '../../lib/dictation/takes'
-import { EvolutionAudio, type EvolutionAudioInfo } from './evolution-audio'
+import { EvolutionAudios, type EvolutionAudioInfo } from './evolution-audio'
 
 interface EvolutionItem {
   id: string
@@ -156,7 +156,9 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const [dictationSource, setDictationSource] = useState<DictationSource | null>(null)
   // La grabación espera acá: sale del equipo recién cuando la persona guarda la evolución.
   // Una grabación por toma (D22); se suben recién cuando la persona guarda la evolución.
-  const [dictationRecordings, setDictationRecordings] = useState<DictationRecording[]>([])
+  const [dictationRecordings, setDictationRecordings] = useState<Array<DictationRecording & { take: number }>>([])
+  // Cuántas tomas se dictaron en este borrador: la grabación de cada una lleva ese número.
+  const dictationTakeRef = useRef(0)
   const [audios, setAudios] = useState<Record<string, EvolutionAudioInfo[]>>({})
   const [audioNotice, setAudioNotice] = useState<string | null>(null)
   /** Sube con cada guardado: le avisa al panel de dictado que vuelva al inicio. */
@@ -278,6 +280,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       setContent('')
       setDictationSource(null)
       setDictationRecordings([])
+      dictationTakeRef.current = 0
       setSavedCount((value) => value + 1)
       setVisitLabel('')
       await loadEvolutions()
@@ -414,13 +417,16 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                   }
                 : source,
             )
-            // Una grabación por toma, hasta el tope (D22).
-            setDictationRecordings((previous) => addRecordingTake(previous, recording))
+            // Una grabación por toma, hasta el tope, con el número de la toma dictada (D22).
+            dictationTakeRef.current += 1
+            const takeNumber = dictationTakeRef.current
+            setDictationRecordings((previous) => addRecordingTake(previous, recording, takeNumber))
           }}
           onDiscard={() => {
             setContent('')
             setDictationSource(null)
             setDictationRecordings([])
+            dictationTakeRef.current = 0
           }}
         />
 
@@ -750,9 +756,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                   )}
                 </div>
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-alphi-navy">{evo.content}</p>
-                {(audios[evo.id] ?? []).map((audio, _index, all) => (
-                  <EvolutionAudio key={audio.take} studyId={studyId} subjectId={subjectId} audio={audio} takeCount={all.length} />
-                ))}
+                <EvolutionAudios studyId={studyId} subjectId={subjectId} audios={audios[evo.id] ?? []} />
               </li>
             ))}
           </ul>

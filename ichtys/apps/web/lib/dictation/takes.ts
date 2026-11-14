@@ -14,12 +14,36 @@ export function parseTake(value: string | null | undefined): number | null {
 }
 
 /**
- * Las grabaciones que se van a subir al guardar la evolución, en el orden en que se dictaron.
- * Una toma sin grabación (demasiado grande) no ocupa lugar; pasado el tope no se suma.
+ * Las grabaciones que se van a subir al guardar la evolución. Cada una lleva el número de la
+ * toma en que se dictó: si una toma no deja grabación (demasiado grande), su número queda sin
+ * usar y la siguiente conserva el suyo. Así «toma 3» es la tercera parte de lo dictado, y quien
+ * la escucha encuentra en el texto lo que busca. Pasado el tope de tomas no se suma.
  */
-export function addRecordingTake<T>(takes: readonly T[], recording: T | null): T[] {
-  if (recording === null || takes.length >= DICTATION_AUDIO_MAX_TAKES) return [...takes]
-  return [...takes, recording]
+export function addRecordingTake<T extends object>(takes: ReadonlyArray<T & { take: number }>, recording: T | null, takeNumber: number): Array<T & { take: number }> {
+  if (recording === null || takeNumber > DICTATION_AUDIO_MAX_TAKES) return [...takes]
+  return [...takes, { ...recording, take: takeNumber }]
+}
+
+/** Las tomas, entre la primera y la última guardada, de las que no hay grabación. */
+export function missingTakes(stored: readonly number[]): number[] {
+  if (stored.length === 0) return []
+  const present = new Set(stored)
+  const missing: number[] = []
+  for (let take = 1; take < Math.max(...stored); take += 1) if (!present.has(take)) missing.push(take)
+  return missing
+}
+
+/** Lo que se dice junto a la evolución cuando falta la grabación de alguna toma. `null`: no falta ninguna. */
+export function missingTakesNotice(missing: readonly number[]): string | null {
+  if (missing.length === 0) return null
+  if (missing.length === 1) return `De la toma ${missing[0]} no hay grabación guardada: quedó solo el texto.`
+  const list = `${missing.slice(0, -1).join(', ')} y ${missing[missing.length - 1]}`
+  return `De las tomas ${list} no hay grabación guardada: quedó solo el texto.`
+}
+
+/** Cómo se nombra una grabación junto a la evolución. Una sola, de la primera toma, no se numera. */
+export function audioLabel(params: { take: number; several: boolean }): string {
+  return params.several || params.take > 1 ? `Dictada · toma ${params.take}` : 'Dictada'
 }
 
 /** Lo que lee quien dicta debajo del borrador: qué va a pasar con la grabación de esta toma. */
@@ -64,25 +88,25 @@ export interface UploadResult {
 }
 
 /**
- * Sube la grabación de cada toma, en orden, después de guardar la evolución. Una que falla no
+ * Sube la grabación de cada toma, en orden y con su número, después de guardar la evolución. Una que falla no
  * frena a las siguientes: el texto ya está guardado y cada grabación vale por sí sola. Un 409
  * es «esa toma ya estaba» (un reintento), no una falla.
  */
 export async function uploadRecordingTakes(params: {
   url: string
-  takes: ReadonlyArray<{ blob: Blob; durationSec: number }>
+  takes: ReadonlyArray<{ blob: Blob; durationSec: number; take: number }>
   fetchImpl?: (input: string, init?: RequestInit) => Promise<Response>
 }): Promise<UploadResult> {
   const send = params.fetchImpl ?? ((input: string, init?: RequestInit) => fetch(input, init))
   let failed = 0
-  for (const [index, take] of params.takes.entries()) {
+  for (const take of params.takes) {
     try {
       const res = await send(params.url, {
         method: 'POST',
         headers: {
           'Content-Type': take.blob.type || 'audio/webm',
           'X-Duration-Sec': String(take.durationSec),
-          'X-Take': String(index + 1),
+          'X-Take': String(take.take),
         },
         body: take.blob,
       })

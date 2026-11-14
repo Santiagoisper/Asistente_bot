@@ -6,6 +6,7 @@
  * cuando alguien toca «Escuchar», y cada pedido queda registrado.
  */
 import { useEffect, useRef, useState } from 'react'
+import { audioLabel, missingTakes, missingTakesNotice } from '../../lib/dictation/takes'
 import { recordingClock } from './record-button'
 
 export interface EvolutionAudioInfo {
@@ -17,7 +18,7 @@ export interface EvolutionAudioInfo {
   available: boolean
 }
 
-export function EvolutionAudio({ studyId, subjectId, audio, takeCount = 1 }: { studyId: string; subjectId: string; audio: EvolutionAudioInfo; takeCount?: number }) {
+export function EvolutionAudio({ studyId, subjectId, audio, several = false }: { studyId: string; subjectId: string; audio: EvolutionAudioInfo; several?: boolean }) {
   const [url, setUrl] = useState<string | null>(null)
   const [state, setState] = useState<'idle' | 'loading' | 'error' | 'expired'>('idle')
   const urlRef = useRef<string | null>(null)
@@ -48,8 +49,8 @@ export function EvolutionAudio({ studyId, subjectId, audio, takeCount = 1 }: { s
   }
 
   const expires = new Date(audio.expiresAt).toLocaleDateString('es-AR')
-  // Con una sola grabación no se numera; con varias, cada una dice qué toma es.
-  const label = takeCount > 1 ? `Dictada · toma ${audio.take} de ${takeCount}` : 'Dictada'
+  // El número es el de la toma dictada (D22): «toma 3» es la tercera parte del texto.
+  const label = audioLabel({ take: audio.take, several })
   if (!audio.available || state === 'expired') {
     return <p className="mt-3 border-t border-alphi-border pt-2 text-xs text-alphi-muted">{label}. La grabación ({recordingClock(audio.durationSec)}) se borró al vencer el plazo de conservación ({expires}).</p>
   }
@@ -68,5 +69,19 @@ export function EvolutionAudio({ studyId, subjectId, audio, takeCount = 1 }: { s
       )}
       {state === 'error' ? <span role="alert" className="text-red-700">No se pudo cargar la grabación.</span> : null}
     </div>
+  )
+}
+
+/** Las grabaciones de una evolución, una por toma, y el aviso si de alguna toma no quedó grabación (D22). */
+export function EvolutionAudios({ studyId, subjectId, audios }: { studyId: string; subjectId: string; audios: EvolutionAudioInfo[] }) {
+  if (audios.length === 0) return null
+  const gaps = missingTakesNotice(missingTakes(audios.map((audio) => audio.take)))
+  return (
+    <>
+      {audios.map((audio) => (
+        <EvolutionAudio key={audio.take} studyId={studyId} subjectId={subjectId} audio={audio} several={audios.length > 1} />
+      ))}
+      {gaps ? <p className="mt-2 text-xs text-alphi-muted">{gaps}</p> : null}
+    </>
   )
 }
