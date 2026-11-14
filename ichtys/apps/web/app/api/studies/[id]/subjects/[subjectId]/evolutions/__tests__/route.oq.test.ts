@@ -736,3 +736,44 @@ describe('D24 — quién lee el texto de una evolución anulada', () => {
     expect(mocks.writeAuditLog).not.toHaveBeenCalled()
   })
 })
+
+describe('D24 — la historia dice en qué evoluciones la persona puede declarar el error desde la pantalla', () => {
+  const row = (id: string, authorUserId: string, voided = false) => ({
+    id,
+    visitLabel: null,
+    contentEncrypted: 'enc:texto',
+    authorUserId,
+    dictationTakes: null,
+    createdAt: new Date('2026-11-14T12:00:00Z'),
+    voided: voided ? { reason: 'wrong_subject', declaredBy: 'user_x', declaredAt: new Date('2026-11-14T15:00:00Z') } : null,
+  })
+
+  async function history() {
+    const res = await GET(new Request('http://localhost/api/evolutions'), makeParams())
+    return (JSON.parse(await res.text()) as { evolutions: Array<{ id: string; canVoid?: boolean }> }).evolutions
+  }
+
+  it('en la propia y vigente, sí; en la de otra persona, no', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbFindMany.mockResolvedValueOnce([row('mia', mocks.USER_ID), row('ajena', 'user_otro')])
+
+    const evolutions = await history()
+
+    expect(evolutions.find((evo) => evo.id === 'mia')!.canVoid).toBe(true)
+    expect(evolutions.find((evo) => evo.id === 'ajena')!.canVoid).toBe(false)
+  })
+
+  it('en una ya anulada, no, aunque sea propia', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbFindMany.mockResolvedValueOnce([row('mia-anulada', mocks.USER_ID, true)])
+
+    expect((await history())[0]!.canVoid).toBe(false)
+  })
+
+  it('decirlo no pide otra comprobación de acceso', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbFindMany.mockResolvedValueOnce([row('mia', mocks.USER_ID), row('ajena', 'user_otro')])
+    await history()
+    expect(mocks.validateSubjectAccess).toHaveBeenCalledTimes(1)
+  })
+})
