@@ -43,6 +43,8 @@ export async function GET(
       visitLabel: row.visitLabel,
       content: decryptClinicalContent(row.contentEncrypted),
       authorUserId: row.authorUserId,
+      // Cuántas tomas tuvo el dictado (D22). Vacío si no se dictó o es anterior a la columna.
+      dictationTakes: row.dictationTakes ?? null,
       createdAt: row.createdAt.toISOString(),
     }))
 
@@ -130,6 +132,8 @@ export async function POST(
             authorUserId: userId,
             visitLabel: parsed.data.visitLabel?.trim() || null,
             contentEncrypted,
+            // Se escribe una sola vez, acá (D22). No es contenido clínico: es un número.
+            dictationTakes: parsed.data.source?.takes ?? null,
           })
           .returning()
         if (!created) throw new Error('Evolution insert did not return a row')

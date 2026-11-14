@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DICTATION_AUDIO_MAX_TAKES } from '../protocol'
-import { addRecordingTake, audioLabel, groupAudiosByEvolution, missingTakes, missingTakesNotice, parseTake, takesNotice, uploadNotice, uploadRecordingTakes } from '../takes'
+import { addRecordingTake, audioLabel, clampTakesCount, evolutionTakesNotice, groupAudiosByEvolution, missingTakes, missingTakesNotice, parseTake, takesNotice, TAKES_UPLOAD_SETTLE_MS, uploadNotice, uploadRecordingTakes, uploadsSettled } from '../takes'
 
 /** Varias grabaciones por evolución (docs/decisions/consulta-dictada.md, D22). */
 describe('parseTake — el número de toma que llega en un pedido', () => {
@@ -242,5 +242,112 @@ describe('uploadRecordingTakes — una toma frenada por el límite de pedidos', 
     const result = await uploadRecordingTakes({ url: '/api/x/audio', takes: [take(1)], fetchImpl: async () => { calls += 1; return new Response('{}', { status: 500 }) }, sleep: async () => undefined })
     expect(result).toEqual({ total: 1, failed: 1 })
     expect(calls).toBe(1)
+  })
+})
+
+describe('missingTakes — sabiendo cuántas tomas tuvo el dictado', () => {
+  it('cuenta también la última toma y las que siguen a la última guardada', () => {
+    expect(missingTakes([1, 2], 3)).toEqual([3])
+    expect(missingTakes([1, 3], 4)).toEqual([2, 4])
+    expect(missingTakes([2], 2)).toEqual([1])
+    expect(missingTakes([1, 2, 3], 3)).toEqual([])
+  })
+
+  it('sin ninguna guardada, faltan todas', () => {
+    expect(missingTakes([], 1)).toEqual([1])
+    expect(missingTakes([], 3)).toEqual([1, 2, 3])
+  })
+
+  it('pasado el tope de grabaciones, las tomas que quedaron como texto también figuran', () => {
+    expect(missingTakes([1, 2, 3, 4, 5], 7)).toEqual([6, 7])
+  })
+
+  it('si hay guardada una toma con número mayor que la cantidad declarada, vale la guardada', () => {
+    expect(missingTakes([1, 4], 2)).toEqual([2, 3])
+  })
+
+  it('sin la cantidad (evolución anterior a la columna) se comporta como antes', () => {
+    expect(missingTakes([1, 3], null)).toEqual([2])
+    expect(missingTakes([1, 3], undefined)).toEqual([2])
+    expect(missingTakes([], null)).toEqual([])
+  })
+})
+
+describe('evolutionTakesNotice — lo que se lee junto a la evolución', () => {
+  it('no falta ninguna: no dice nada', () => {
+    expect(evolutionTakesNotice({ stored: [1], total: 1, settled: true })).toBeNull()
+    expect(evolutionTakesNotice({ stored: [1, 2, 3], total: 3, settled: true })).toBeNull()
+  })
+
+  it('una evolución que no se dictó no dice nada', () => {
+    expect(evolutionTakesNotice({ stored: [], total: null, settled: true })).toBeNull()
+  })
+
+  it('falta la última toma: lo dice', () => {
+    expect(evolutionTakesNotice({ stored: [1, 2], total: 3, settled: true })).toBe('De la toma 3 no hay grabación guardada: quedó solo el texto.')
+  })
+
+  it('faltan una del medio y la última', () => {
+    expect(evolutionTakesNotice({ stored: [1, 3], total: 4, settled: true })).toBe('De las tomas 2 y 4 no hay grabación guardada: quedó solo el texto.')
+  })
+
+  it('se dictó en una toma y no quedó la grabación', () => {
+    expect(evolutionTakesNotice({ stored: [], total: 1, settled: true })).toBe('Esta evolución se dictó y no quedó grabación guardada: quedó solo el texto.')
+  })
+
+  it('se dictó en varias tomas y no quedó ninguna grabación', () => {
+    expect(evolutionTakesNotice({ stored: [], total: 3, settled: true })).toBe('Esta evolución se dictó en 3 tomas y de ninguna quedó grabación guardada: quedó solo el texto.')
+  })
+
+  it('recién guardada, las grabaciones pueden estar subiendo: no afirma que falten las que todavía pueden llegar', () => {
+    expect(evolutionTakesNotice({ stored: [], total: 3, settled: false })).toBeNull()
+    expect(evolutionTakesNotice({ stored: [1, 2], total: 3, settled: false })).toBeNull()
+  })
+
+  it('recién guardada, un hueco entre dos tomas ya guardadas sí se dice: se suben en orden', () => {
+    expect(evolutionTakesNotice({ stored: [1, 3], total: 4, settled: false })).toBe('De la toma 2 no hay grabación guardada: quedó solo el texto.')
+  })
+
+  it('si el listado de grabaciones no se pudo leer, no afirma nada', () => {
+    expect(evolutionTakesNotice({ stored: [], total: 3, settled: true, listingKnown: false })).toBeNull()
+    expect(evolutionTakesNotice({ stored: [1, 3], total: 4, settled: true, listingKnown: false })).toBeNull()
+  })
+
+  it('sin la cantidad de tomas dice lo mismo que antes', () => {
+    expect(evolutionTakesNotice({ stored: [1, 3], total: null, settled: true })).toBe('De la toma 2 no hay grabación guardada: quedó solo el texto.')
+    expect(evolutionTakesNotice({ stored: [1, 3], total: undefined, settled: false })).toBe('De la toma 2 no hay grabación guardada: quedó solo el texto.')
+  })
+})
+
+describe('uploadsSettled — cuándo ya no puede estar subiendo una grabación', () => {
+  const created = '2026-11-14T12:00:00.000Z'
+  const at = (ms: number) => new Date(created).getTime() + ms
+
+  it('dentro del margen todavía puede estar subiendo', () => {
+    expect(uploadsSettled(created, at(0))).toBe(false)
+    expect(uploadsSettled(created, at(TAKES_UPLOAD_SETTLE_MS - 1))).toBe(false)
+  })
+
+  it('pasado el margen ya no', () => {
+    expect(uploadsSettled(created, at(TAKES_UPLOAD_SETTLE_MS))).toBe(true)
+  })
+
+  it('una fecha ilegible no frena el aviso', () => {
+    expect(uploadsSettled('no es una fecha', at(0))).toBe(true)
+  })
+})
+
+describe('clampTakesCount — la cantidad de tomas que viaja al guardar', () => {
+  it('manda la cantidad tal cual dentro del rango', () => {
+    expect(clampTakesCount(1)).toBe(1)
+    expect(clampTakesCount(7)).toBe(7)
+  })
+
+  it('una cantidad enorme no hace rechazar el guardado: se manda el tope', () => {
+    expect(clampTakesCount(500)).toBe(99)
+  })
+
+  it('sin tomas contadas no manda nada', () => {
+    expect(clampTakesCount(0)).toBeUndefined()
   })
 })
