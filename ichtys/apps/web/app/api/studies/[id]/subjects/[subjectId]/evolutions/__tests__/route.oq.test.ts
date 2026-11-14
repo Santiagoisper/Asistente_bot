@@ -489,8 +489,10 @@ describe('Autoría clínica — escribir una evolución pide más que leerla', (
   })
 
   it('si el validador rechaza por la capacidad, no se escribe nada y la respuesta es 403', async () => {
-    mocks.validateSubjectAccess.mockRejectedValue(new mocks.AccessError('Forbidden', 403))
-    mocks.handleApiError.mockReturnValue(new Response('Forbidden', { status: 403 }))
+    // «Una vez»: una respuesta fija sobrevive a `clearAllMocks` y dejaba a todas las pruebas
+    // siguientes del archivo respondiendo 403 ante cualquier error. El manejador simulado ya
+    // traduce el 403 del validador; no hace falta pisarlo.
+    mocks.validateSubjectAccess.mockRejectedValueOnce(new mocks.AccessError('Forbidden', 403))
 
     const res = await POST(
       new Request('http://localhost/api/evolutions', {
@@ -728,8 +730,8 @@ describe('D24 — quién lee el texto de una evolución anulada', () => {
     mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext()).mockRejectedValueOnce(new Error('sin conexión'))
     mocks.dbFindMany.mockResolvedValueOnce([voided('user_otro')])
     const res = await GET(new Request('http://localhost/api/evolutions'), makeParams())
-    // El error sube al manejador común: lo que importa acá es que no sale la historia.
-    expect(res.status).not.toBe(200)
+    // No es un permiso negado: el error sube al manejador común y no sale la historia.
+    expect(res.status).toBe(500)
     expect(await res.text()).not.toContain('texto de otra persona')
     expect(mocks.writeAuditLog).not.toHaveBeenCalled()
   })

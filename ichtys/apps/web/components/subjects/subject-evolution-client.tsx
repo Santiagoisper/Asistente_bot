@@ -9,7 +9,7 @@ import { unapprovedSpecNotice } from '../../lib/subjects/spec-notice'
 import { DictationPanel, type DictationRecording, type DictationSource } from './dictation-panel'
 import { DictationGuide } from './dictation-guide'
 import { ProfileUnreadableNotice } from './profile-unreadable-notice'
-import { profileWriteErrorMessage } from '../../lib/subjects/profile-write-messages'
+import { profileWriteErrorMessage, PROPOSAL_OF_VOIDED_EVOLUTION_CODE, PROPOSAL_OF_VOIDED_EVOLUTION_MESSAGE } from '../../lib/subjects/profile-write-messages'
 import { rateLimitedSaveMessage } from '../../lib/security/rate-limit-message'
 import { addRecordingTake, clampTakesCount, groupAudiosByEvolution, uploadNotice, uploadRecordingTakes, uploadsSettled, type AudioListingItem } from '../../lib/dictation/takes'
 import { criterionStatusLabel } from '../../lib/subjects/screening-labels'
@@ -391,12 +391,15 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
     setError(null)
     try {
       const res = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/profile/proposals/${evolutionId}/${decision}`, { method: 'POST' })
-      // 409: otra persona ya la resolvió. Se recarga y se muestra lo que hay.
-      if (!res.ok && res.status !== 409) throw new Error(await errorCode(res))
+      const code = res.ok ? null : await errorCode(res)
+      // 409: otra persona ya la resolvió. Se recarga y se muestra lo que hay. Salvo que la
+      // evolución se haya anulado (D24): la propuesta sigue ahí, y hay que decir por qué no entra.
+      if (!res.ok && (res.status !== 409 || code === PROPOSAL_OF_VOIDED_EVOLUTION_CODE)) throw new Error(code ?? 'request_failed')
       await loadScreening()
     } catch (err) {
       setError(
-        profileWriteErrorMessage(codeOf(err)) ??
+        (codeOf(err) === PROPOSAL_OF_VOIDED_EVOLUTION_CODE ? PROPOSAL_OF_VOIDED_EVOLUTION_MESSAGE : null) ??
+          profileWriteErrorMessage(codeOf(err)) ??
           (decision === 'confirm' ? 'No se pudo aceptar la propuesta. El perfil no cambió.' : 'No se pudo descartar la propuesta.'),
       )
     } finally {

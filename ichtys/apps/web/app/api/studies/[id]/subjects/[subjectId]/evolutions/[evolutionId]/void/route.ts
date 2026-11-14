@@ -39,6 +39,19 @@ export async function POST(req: Request, { params }: Params): Promise<Response> 
     const limited = await clinicalRateLimit('evolution_write', { orgId: access.orgId, userId: access.userId, studyId: access.study.id, req, endpoint: ENDPOINT })
     if (limited) return limited
 
+    // Primero quién es y qué puede; recién después, lo que mandó. Así ninguna respuesta que
+    // dependa del cuerpo le llega a quien no puede anular (observación de Architect, #173).
+    const scope = { orgId: access.orgId, studyId: access.study.id, subjectId: access.subject.id, evolutionId }
+    const evolution = await findSubjectEvolution(scope, 'with-voided')
+    if (!evolution) return notFound()
+
+    // Quien no la escribió necesita coordinar el estudio. El validador responde 403 si no.
+    // Quien la escribió puede siempre, aunque hoy ya no tenga la función de escribir evoluciones:
+    // la responsabilidad por lo que escribió no se le va con el cambio de función (D24, punto 1).
+    if (evolution.authorUserId !== access.userId) {
+      await validateSubjectAccess(subjectId, routeStudyId, { require: 'access.manage_study' })
+    }
+
     let body: unknown
     try {
       body = await readJsonBody(req)
@@ -52,16 +65,7 @@ export async function POST(req: Request, { params }: Params): Promise<Response> 
     if (parsed.data.confirmedSubjectCode !== access.subject.subjectCode) {
       return Response.json({ error: 'subject_mismatch' }, { status: 409 })
     }
-
-    const scope = { orgId: access.orgId, studyId: access.study.id, subjectId: access.subject.id, evolutionId }
-    const evolution = await findSubjectEvolution(scope, 'with-voided')
-    if (!evolution) return notFound()
     if (evolution.voided) return Response.json({ error: 'already_voided' }, { status: 409 })
-
-    // Quien no la escribió necesita coordinar el estudio. El validador responde 403 si no.
-    if (evolution.authorUserId !== access.userId) {
-      await validateSubjectAccess(subjectId, routeStudyId, { require: 'access.manage_study' })
-    }
 
     const outcome = await db.transaction(async (tx) => {
       const result = await voidEvolution(txVoidStore(tx, scope), {
