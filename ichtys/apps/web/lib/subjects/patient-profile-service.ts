@@ -9,13 +9,14 @@ import {
   type PendingProfileProposal,
 } from '@ichtys/clinical'
 import { and, db, eq, getOrgLlmApiKeys, patientProfiles, recordUsage } from '@ichtys/db'
+import { PhiCryptoError } from '@ichtys/crypto'
 import { runWithLlmFallback } from '@ichtys/llm'
 import { generateObject } from 'ai'
 import { insertAuditLog } from '../audit/audited-write'
 import type { AuditLogParams } from '../chat/persistence'
 import { labReviewMarker } from './lab-review-marker'
 import { llmFactsSchema, normalizeLlmFacts } from './llm-facts'
-import { decryptStoredProfile, encryptProfileJson } from './phi-fields'
+import { decryptStoredProfile, encryptProfileJson, PhiConfigError } from './phi-fields'
 import { safeIssuePath } from './profile-issue-path'
 import { nextVersion, whereProfileUnchanged, type ProfileScope } from './profile-version'
 
@@ -122,10 +123,62 @@ function reportUnreadableProfile(
 }
 
 /**
+ * Por qué lo guardado ni siquiera llegó a ser algo que validar: el texto no tiene el formato
+ * del cifrado, o descifra y no es JSON.
+ */
+type UndecodableReason = 'invalid_payload' | 'not_json'
+
+type StoredRead = { ok: true; value: unknown } | { ok: false; reason: UndecodableReason }
+
+/**
+ * Lee lo guardado en la fila. Lo que falla por la fila (formato, JSON) vuelve como motivo y
+ * se trata igual que un perfil que no valida. Lo que falla por el entorno sigue saliendo
+ * como error: marcarlo como perfil ilegible escondería un problema de configuración detrás
+ * de un aviso clínico. Eso incluye un texto que no descifra: el formato no lleva
+ * identificador de clave y con la clave correcta AES-GCM solo falla si los bytes se
+ * alteraron, así que en la práctica quiere decir «clave equivocada», y pasa en todas las
+ * filas a la vez. Sale como `PhiConfigError` (503) con su registro, para que se note.
+ * Del error solo se usa el tipo: el mensaje de `JSON.parse` repite el comienzo del texto.
+ */
+function readStoredProfile(operation: 'read' | 'write', scope: ProfileScope, payload: string): StoredRead {
+  try {
+    return { ok: true, value: decryptStoredProfile(payload) }
+  } catch (err) {
+    if (err instanceof PhiCryptoError && err.code === 'invalid_payload') return { ok: false, reason: 'invalid_payload' }
+    if (err instanceof SyntaxError) return { ok: false, reason: 'not_json' }
+    if (err instanceof PhiCryptoError && err.code === 'decryption_failed') {
+      console.error('[patient-profile] stored_profile_undecryptable', {
+        code: 'phi_decryption_failed',
+        operation,
+        orgId: scope.orgId,
+        studyId: scope.studyId,
+        subjectId: scope.subjectId,
+      })
+      throw new PhiConfigError('El perfil guardado no descifra con la clave de este entorno')
+    }
+    throw err
+  }
+}
+
+/** Mismo registro que `reportUnreadableProfile`, para lo que no llegó a validarse: no hay ruta ni datos que contar. */
+function reportUndecodableProfile(operation: 'read' | 'write', scope: ProfileScope, reason: UndecodableReason): void {
+  console.error('[patient-profile] stored_profile_unreadable', {
+    code: 'profile_unreadable',
+    operation,
+    orgId: scope.orgId,
+    studyId: scope.studyId,
+    subjectId: scope.subjectId,
+    path: '(sin leer)',
+    issueCode: reason,
+    issueCount: 0,
+  })
+}
+
+/**
  * El perfil del sujeto y si lo guardado se pudo leer. `unreadable` usa la misma prueba que
  * la guarda de escritura: si lo guardado no valida (un dato mal formado, una versión que
- * este código no conoce, algo que no es un objeto), el perfil devuelto es uno vacío y la
- * marca lo dice. Sin la marca, la pantalla mostraba ese vacío como si no hubiera datos.
+ * este código no conoce, algo que no es un objeto) o ni siquiera se puede leer (no tiene el
+ * formato del cifrado, no es JSON), el perfil devuelto es uno vacío y la marca lo dice. Sin la marca, la pantalla mostraba ese vacío como si no hubiera datos.
  */
 export async function loadPatientProfileState(params: {
   orgId: string
@@ -141,7 +194,12 @@ export async function loadPatientProfileState(params: {
   })
 
   if (!row) return { profile: parsePatientProfile({}), unreadable: false }
-  const stored = patientProfileSchema.safeParse(decryptStoredProfile(row.profileEncrypted))
+  const read = readStoredProfile('read', params, row.profileEncrypted)
+  if (!read.ok) {
+    reportUndecodableProfile('read', params, read.reason)
+    return { profile: parsePatientProfile({}), unreadable: true }
+  }
+  const stored = patientProfileSchema.safeParse(read.value)
   if (stored.success) return { profile: stored.data, unreadable: false }
   reportUnreadableProfile('read', params, stored.error.issues)
   return { profile: parsePatientProfile({}), unreadable: true }
@@ -169,7 +227,7 @@ export class ProfileMissingError extends Error {
 
 /**
  * Lo que hay guardado no se pudo leer como perfil (un dato mal formado, una versión
- * que este código no conoce). No se aplica ningún cambio encima: tratarlo como un
+ * que este código no conoce, un texto sin el formato del cifrado o que no es JSON). No se aplica ningún cambio encima: tratarlo como un
  * perfil vacío y guardar pisaría los laboratorios, la medicación y las condiciones
  * que la fila todavía tiene. El mensaje no lleva ningún dato del perfil.
  */
@@ -219,7 +277,12 @@ export async function updatePatientProfile(
     if (!row) throw new ProfileMissingError()
 
     // Un perfil guardado que no valida no es un perfil vacío: se avisa y no se toca la fila.
-    const stored = patientProfileSchema.safeParse(decryptStoredProfile(row.profileEncrypted))
+    const read = readStoredProfile('write', params, row.profileEncrypted)
+    if (!read.ok) {
+      reportUndecodableProfile('write', params, read.reason)
+      throw new ProfileUnreadableError()
+    }
+    const stored = patientProfileSchema.safeParse(read.value)
     if (!stored.success) {
       reportUnreadableProfile('write', params, stored.error.issues)
       throw new ProfileUnreadableError()
