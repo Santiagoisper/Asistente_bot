@@ -116,6 +116,14 @@ export interface DictationBlock {
 
 export const NOT_MENTIONED = 'No mencionado'
 
+/**
+ * Encabezados que solo abren apartado cuando vienen solos, seguidos de una pausa («Evaluación.»,
+ * «Evaluación: …», «…, evaluación, …»). «Evaluación» también es el nombre de una visita o de un
+ * control («Evaluación de ingreso al estudio», «Evaluación basal»): con algo detrás en la misma frase
+ * es texto. La guía manda decir «Impresión clínica», que sigue valiendo de corrido.
+ */
+const HEADINGS_ONLY_ALONE: ReadonlySet<string> = new Set(['evaluacion'])
+
 function plain(text: string): string {
   return text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 }
@@ -211,6 +219,7 @@ export function splitIntoBlocks(text: string): DictationBlock[] {
     for (const { id, heading } of headings) {
       const match = headingWords(words, heading)
       if (match.count === 0) continue
+      if (HEADINGS_ONLY_ALONE.has(heading) && match.count !== words.length) continue
       if (!best || match.distance < best.distance) best = { id, ...match, multiword: heading.includes(' ') }
     }
     // Una palabra suelta después de una coma abre apartado solo si el apartado en curso ya tiene

@@ -4,6 +4,7 @@ import { getLatestStudySpec } from '@ichtys/ingestion/spec-store'
 import { loadPatientProfile } from '../../../../../../../lib/subjects/patient-profile-service'
 import { evaluateAndPersistScreening } from '../../../../../../../lib/subjects/screening-service'
 import { PhiConfigError } from '../../../../../../../lib/subjects/phi-fields'
+import { guideVisits } from '../../../../../../../lib/subjects/guide-visits'
 
 export const runtime = 'nodejs'
 
@@ -84,6 +85,8 @@ export async function GET(
       specVersion: evaluation.specVersion,
       specStatus: specRow.status,
       protocolDocumentId: evaluation.protocolDocumentId,
+      // El cronograma del protocolo, para que la guía muestre los procedimientos de la visita (D21).
+      visits: guideVisits(parsedSpec.data),
     })
   } catch (err) {
     if (err instanceof PhiConfigError) {
