@@ -36,10 +36,11 @@ const blocks = () => Array.from(container.querySelectorAll('[data-block]'))
 const titles = () => blocks().map((b) => b.querySelector('dt')?.textContent?.trim())
 
 describe('ProfileSummary', () => {
-  it('un bloque por dato, con su rótulo, en orden: edad, presión, laboratorios, medicamentos, condiciones', () => {
+  it('un bloque por dato, con su rótulo, en el orden de las pestañas de la historia clínica del centro', () => {
     show(full)
-    expect(blocks().map((b) => b.getAttribute('data-block'))).toEqual(['edad', 'presion', 'laboratorios', 'medicamentos', 'condiciones'])
-    expect(titles()).toEqual(['Edad', 'Presión arterial (TA)', 'Laboratorios', 'Medicamentos', 'Condiciones'])
+    // Alpha CR: patologías, medicamentos, laboratorios, signos vitales (relevado el 14/11/2026).
+    expect(blocks().map((b) => b.getAttribute('data-block'))).toEqual(['edad', 'condiciones', 'medicamentos', 'laboratorios', 'presion'])
+    expect(titles()).toEqual(['Edad', 'Condiciones', 'Medicamentos', 'Laboratorios', 'Presión arterial (TA)'])
   })
 
   it('el rótulo va en negrita y cada bloque se separa del anterior', () => {

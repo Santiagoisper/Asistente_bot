@@ -35,8 +35,9 @@ function Block({ id, title, badge, children }: { id: string; title: string; badg
 
 /**
  * El perfil extraído del sujeto, por bloques con su rótulo y un separador entre uno y otro.
- * El orden sigue el de la historia clínica del centro: edad, signos vitales, laboratorios,
- * medicamentos, condiciones. Un bloque sin datos no aparece.
+ * El orden sigue el de las pestañas de la historia clínica del centro (Alpha CR, relevado el
+ * 14/11/2026): edad, condiciones, medicamentos, laboratorios, signos vitales. Un bloque sin
+ * datos no aparece.
  *
  * La presión que se muestra es la guardada en números, que es la que usa la elegibilidad; la
  * etiqueta puede haber quedado vieja si una propuesta trajo un solo valor.
@@ -51,18 +52,12 @@ export function ProfileSummary({ profile, badge = () => null }: { profile: Profi
           <p>{profile.demographics.ageYears} años</p>
         </Block>
       ) : null}
-      {pressure ? (
-        <Block id="presion" title="Presión arterial (TA)" badge={badge(fc?.bloodPressure)}>
-          <p>{pressure} mmHg</p>
-        </Block>
-      ) : null}
-      {profile.labs.length > 0 ? (
-        <Block id="laboratorios" title="Laboratorios">
-          {profile.labs.map((lab) => (
-            <p key={lab.name}>
-              {lab.name}: {lab.value}
-              {lab.unit ? ` ${lab.unit}` : ''}
-              {badge(fc?.labs?.[lab.name.toLowerCase()])}
+      {profile.conditions.length > 0 ? (
+        <Block id="condiciones" title="Condiciones">
+          {profile.conditions.map((condition) => (
+            <p key={condition}>
+              {condition}
+              {badge(fc?.conditions?.[condition.toLowerCase()])}
             </p>
           ))}
         </Block>
@@ -79,14 +74,20 @@ export function ProfileSummary({ profile, badge = () => null }: { profile: Profi
           ))}
         </Block>
       ) : null}
-      {profile.conditions.length > 0 ? (
-        <Block id="condiciones" title="Condiciones">
-          {profile.conditions.map((condition) => (
-            <p key={condition}>
-              {condition}
-              {badge(fc?.conditions?.[condition.toLowerCase()])}
+      {profile.labs.length > 0 ? (
+        <Block id="laboratorios" title="Laboratorios">
+          {profile.labs.map((lab) => (
+            <p key={lab.name}>
+              {lab.name}: {lab.value}
+              {lab.unit ? ` ${lab.unit}` : ''}
+              {badge(fc?.labs?.[lab.name.toLowerCase()])}
             </p>
           ))}
+        </Block>
+      ) : null}
+      {pressure ? (
+        <Block id="presion" title="Presión arterial (TA)" badge={badge(fc?.bloodPressure)}>
+          <p>{pressure} mmHg</p>
         </Block>
       ) : null}
     </dl>
