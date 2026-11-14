@@ -1,17 +1,54 @@
 import { z } from 'zod'
 
-export const labObservationSchema = z.object({
-  name: z.string().min(1),
-  value: z.number(),
-  unit: z.string().optional(),
-  sourceEvolutionId: z.string().uuid().optional(),
-  /**
-   * El rango de referencia tal como lo imprime el laboratorio al lado del valor («hasta 40»,
-   * «10 - 40»). Llega solo de un informe que una persona confirmó. Hace falta para los
-   * criterios que se miden contra el límite normal de cada laboratorio (transaminasas).
-   */
-  referenceRange: z.string().max(120).optional(),
-})
+/**
+ * De dónde salió un valor de laboratorio (nota C4, decisión D1): un solo lugar
+ * para preguntar por el origen de cada valor. Tres formas posibles. Los
+ * perfiles guardados antes de este cambio traen sourceEvolutionId: al leerlos
+ * se traduce a la forma evolution (D5: no se rellena hacia atrás ni se inventa
+ * procedencia; el dato viejo se conserva, no se agregan campos paralelos).
+ */
+export const labSourceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('lab_report'), reportId: z.string().uuid() }),
+  z.object({ kind: z.literal('evolution'), evolutionId: z.string().uuid() }),
+  z.object({ kind: z.literal('pasted_text') }),
+])
+export type LabSource = z.infer<typeof labSourceSchema>
+
+export const labObservationSchema = z
+  .object({
+    name: z.string().min(1),
+    value: z.number(),
+    unit: z.string().optional(),
+    sourceEvolutionId: z.string().uuid().optional(),
+    /**
+     * El rango de referencia tal como lo imprime el laboratorio al lado del valor («hasta 40»,
+     * «10 - 40»). Llega solo de un informe que una persona confirmó. Hace falta para los
+     * criterios que se miden contra el límite normal de cada laboratorio (transaminasas).
+     */
+    referenceRange: z.string().max(120).optional(),
+    /** Procedencia del valor (D1). Ausente en perfiles anteriores. */
+    source: labSourceSchema.optional(),
+    /**
+     * Fecha de la muestra, YYYY-MM-DD, o null si no se sabe (D2). Nunca se
+     * completa con la fecha de carga ni con la de emisión del informe.
+     */
+    sampleDate: z.string().date().nullable().optional(),
+  })
+  .transform((observation) => {
+    if (
+      observation.source !== undefined ||
+      observation.sourceEvolutionId === undefined
+    ) {
+      return observation
+    }
+    return {
+      ...observation,
+      source: {
+        kind: 'evolution',
+        evolutionId: observation.sourceEvolutionId,
+      } as const,
+    }
+  })
 
 export const pendingLabReviewSchema = z.object({
   requiresHumanReview: z.literal(true),
