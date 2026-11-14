@@ -54,6 +54,10 @@ export function VoidedOriginReviewForm(props: Props) {
   const hasLabs = props.labNames.length > 0
   // «No hay nada» solo se puede declarar cuando de verdad no sale nada.
   const canDeclareNothing = !hasLabs && !somethingPicked
+  // La declaración vale solo mientras la casilla está a la vista. Si deja de ofrecerse (la persona
+  // eligió algo, o apareció un laboratorio de ese origen), se borra: cuando la casilla vuelva,
+  // vuelve sin marcar. Nada se manda con una marca que la persona no puso en ese momento.
+  if (nothing && !canDeclareNothing) setNothing(false)
   const nothingToRetire = canDeclareNothing && nothing
   const canSubmit = !props.busy && (hasLabs || somethingPicked || nothingToRetire)
 

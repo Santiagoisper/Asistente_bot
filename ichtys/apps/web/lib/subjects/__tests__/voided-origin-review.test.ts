@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { labNamesFromEvolution, retireErrorMessage } from '../voided-origin'
+import { labNamesFromEvolution, retireErrorMessage, storedBloodPressureText } from '../voided-origin'
 
 /** D24, 4 bis — lo que la pantalla de la corrección necesita saber y decir. */
 const VOIDED = '11111111-1111-4111-8111-111111111111'
@@ -56,5 +56,22 @@ describe('retireErrorMessage — ningún rechazo se traga en silencio', () => {
 
   it('cualquier otra cosa: no se retiró nada', () => {
     expect(retireErrorMessage(500, 'request_failed')).toBe('No se pudo retirar. El perfil no cambió.')
+  })
+})
+
+describe('storedBloodPressureText — la presión que se muestra es la que se retira', () => {
+  it('con números guardados muestra los números, aunque la etiqueta diga otra cosa', () => {
+    expect(storedBloodPressureText({ bloodPressureLabel: '130/85', systolic: 150, diastolic: 85 })).toBe('150/85')
+  })
+
+  it('con un solo número lo muestra y marca el que falta', () => {
+    expect(storedBloodPressureText({ systolic: 150 })).toBe('150/—')
+    expect(storedBloodPressureText({ diastolic: 85 })).toBe('—/85')
+  })
+
+  it('sin números usa la etiqueta; sin nada, no hay presión que ofrecer', () => {
+    expect(storedBloodPressureText({ bloodPressureLabel: '130/85' })).toBe('130/85')
+    expect(storedBloodPressureText({})).toBeUndefined()
+    expect(storedBloodPressureText(undefined)).toBeUndefined()
   })
 })

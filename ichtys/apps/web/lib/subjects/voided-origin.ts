@@ -152,3 +152,17 @@ export function retireErrorMessage(status: number, code: string): string {
   if (status === 429) return 'Demasiados pedidos seguidos. No se retiró nada. Esperá un momento y volvé a intentar.'
   return profileWriteErrorMessage(code) ?? 'No se pudo retirar. El perfil no cambió.'
 }
+
+/**
+ * La presión arterial tal como está guardada, para ofrecer retirarla. Con números guardados se
+ * muestran los números, que son los que usa la elegibilidad y los que salen; la etiqueta puede
+ * haber quedado vieja si una propuesta trajo un solo valor. La etiqueta se usa solo si no hay
+ * números.
+ */
+export function storedBloodPressureText(
+  vitals: { bloodPressureLabel?: string; systolic?: number; diastolic?: number } | undefined,
+): string | undefined {
+  if (!vitals) return undefined
+  if (vitals.systolic !== undefined || vitals.diastolic !== undefined) return `${vitals.systolic ?? '—'}/${vitals.diastolic ?? '—'}`
+  return vitals.bloodPressureLabel || undefined
+}
