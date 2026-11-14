@@ -17,3 +17,23 @@ export function isCabinaEnabled(): boolean {
 export function isOsEnabled(): boolean {
   return process.env.VERCEL_ENV !== 'production' || process.env.ALPHI_OS === 'on'
 }
+
+/**
+ * Fecha de baja de la ruta de sellado (C3, docs/compliance/REGULATORY-BASELINE.md). Es un
+ * trabajo que se hace una vez: pasada esta fecha la ruta no responde en ningún entorno y se
+ * borra del código.
+ */
+export const SCREENING_SEAL_CLOSES_AT = '2027-01-01T00:00:00.000Z'
+
+/**
+ * Quiénes pueden sellar las evaluaciones de elegibilidad anteriores al cifrado: los
+ * identificadores de usuario de ALPHI_SEAL_OPERATORS, separados por coma. Es una lista de
+ * quienes responden por el sistema, no un rol de un centro. Sin la variable no hay nadie, y la
+ * ruta no existe: cargarla en un entorno es la decisión expresa de habilitarla ahí. Pasada la
+ * fecha de baja no hay nadie, aunque la variable siga cargada.
+ */
+export function screeningSealOperators(now: Date = new Date()): readonly string[] {
+  if (now.getTime() >= Date.parse(SCREENING_SEAL_CLOSES_AT)) return []
+  const ids = (process.env.ALPHI_SEAL_OPERATORS ?? '').split(',').map((id) => id.trim()).filter(Boolean)
+  return [...new Set(ids)]
+}
