@@ -1,4 +1,4 @@
-import { DICTATION_AUDIO_MAX_TAKES } from './protocol'
+import { DICTATION_AUDIO_MAX_TAKES, DICTATION_TAKES_COUNT_MAX } from './protocol'
 
 /**
  * Varias grabaciones por evolución (docs/decisions/consulta-dictada.md, D22). Sin dependencias:
@@ -24,12 +24,18 @@ export function addRecordingTake<T extends object>(takes: ReadonlyArray<T & { ta
   return [...takes, { ...recording, take: takeNumber }]
 }
 
-/** Las tomas, entre la primera y la última guardada, de las que no hay grabación. */
-export function missingTakes(stored: readonly number[]): number[] {
-  if (stored.length === 0) return []
+/**
+ * Las tomas de las que no hay grabación. Con `total` (cuántas tomas tuvo el dictado, guardado
+ * con la evolución desde la migración 0020) cuenta también la última y las que quedaron como
+ * texto pasado el tope. Sin `total` —evolución anterior a la columna— solo puede ver los huecos
+ * entre la primera y la última guardada, como antes. Si hay guardada una toma con número mayor
+ * que `total`, vale la guardada: lo que está en la base pesa más que un contador.
+ */
+export function missingTakes(stored: readonly number[], total?: number | null): number[] {
+  const last = Math.max(0, total ?? 0, ...stored)
   const present = new Set(stored)
   const missing: number[] = []
-  for (let take = 1; take < Math.max(...stored); take += 1) if (!present.has(take)) missing.push(take)
+  for (let take = 1; take <= last; take += 1) if (!present.has(take)) missing.push(take)
   return missing
 }
 
@@ -39,6 +45,50 @@ export function missingTakesNotice(missing: readonly number[]): string | null {
   if (missing.length === 1) return `De la toma ${missing[0]} no hay grabación guardada: quedó solo el texto.`
   const list = `${missing.slice(0, -1).join(', ')} y ${missing[missing.length - 1]}`
   return `De las tomas ${list} no hay grabación guardada: quedó solo el texto.`
+}
+
+/**
+ * Cuánto se espera, desde que se guardó la evolución, antes de afirmar que de una toma no quedó
+ * grabación. Las grabaciones se suben después de guardar el texto, en orden: hasta cinco, y cada
+ * una puede esperar 65 segundos por el límite de pedidos antes de reintentar. Diez minutos cubre
+ * ese peor caso con margen. Dentro de ese plazo, otra persona que abra la historia podría leer
+ * «no quedó grabación» de una toma que todavía está subiendo: eso sería afirmar algo falso.
+ */
+export const TAKES_UPLOAD_SETTLE_MS = 10 * 60_000
+
+/** `true` cuando ya pasó el plazo en que una grabación de esa evolución podía estar subiendo. */
+export function uploadsSettled(createdAt: string, nowMs: number): boolean {
+  const created = Date.parse(createdAt)
+  // Una fecha ilegible no puede dejar el aviso callado para siempre.
+  if (Number.isNaN(created)) return true
+  return nowMs - created >= TAKES_UPLOAD_SETTLE_MS
+}
+
+/**
+ * Lo que se lee junto a una evolución sobre las grabaciones que no quedaron (D22).
+ * - `total`: cuántas tomas tuvo el dictado; vacío si no se dictó o es anterior a la columna.
+ * - `settled`: ya no puede haber una grabación subiendo (pasó el plazo, o esta misma pantalla
+ *   terminó de subirlas). Si no, solo se dice lo que no puede cambiar: un hueco entre dos tomas
+ *   ya guardadas (se suben en orden).
+ * - `listingKnown`: el listado de grabaciones se pudo leer. Si no, no se afirma nada: «no hay
+ *   grabación» diría que falta algo que quizá está.
+ */
+export function evolutionTakesNotice(params: { stored: readonly number[]; total: number | null | undefined; settled: boolean; listingKnown?: boolean }): string | null {
+  const { stored, total, settled, listingKnown = true } = params
+  if (!listingKnown) return null
+  if (!total || total < 1 || !settled) return missingTakesNotice(missingTakes(stored))
+  if (stored.length === 0) {
+    return total === 1
+      ? 'Esta evolución se dictó y no quedó grabación guardada: quedó solo el texto.'
+      : `Esta evolución se dictó en ${total} tomas y de ninguna quedó grabación guardada: quedó solo el texto.`
+  }
+  return missingTakesNotice(missingTakes(stored, total))
+}
+
+/** La cantidad de tomas que viaja al guardar la evolución. Sin tomas contadas, nada. */
+export function clampTakesCount(count: number): number | undefined {
+  if (!Number.isInteger(count) || count < 1) return undefined
+  return Math.min(count, DICTATION_TAKES_COUNT_MAX)
 }
 
 /** Cómo se nombra una grabación junto a la evolución. Una sola, de la primera toma, no se numera. */

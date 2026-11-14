@@ -32,6 +32,12 @@ export const DICTATION_AUDIO_MAX_BYTES = 4_000_000
  */
 export const DICTATION_AUDIO_MAX_TAKES = 5
 /**
+ * Hasta cuánto se cuenta la cantidad de tomas de un dictado (D22). No es un tope de dictado:
+ * se puede seguir dictando. Es el mayor número que viaja y se guarda con la evolución; la
+ * pantalla manda este valor si se pasa, para que un contador nunca haga rechazar el guardado.
+ */
+export const DICTATION_TAKES_COUNT_MAX = 99
+/**
  * Voz a 24 kbps: veinte minutos entran en el tope con margen. Es un pedido al navegador, no una
  * garantía: donde graba en mp4 (medido el 14/11/2026) sale a unos 187 kbps y el tope se alcanza
  * a los 2 minutos 50. Sin resolver (docs/decisions/consulta-dictada.md, D14).

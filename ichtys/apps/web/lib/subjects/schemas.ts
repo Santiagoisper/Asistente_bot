@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { MAX_LAB_ITEMS, MAX_LAB_NAME_CHARS, MAX_LAB_UNIT_CHARS } from '../api/limits'
+import { DICTATION_TAKES_COUNT_MAX } from '../dictation/protocol'
 
 export const createSubjectSchema = z
   .object({
@@ -33,6 +34,11 @@ export const evolutionSourceSchema = z
      */
     confirmedSubjectCode: z.string().trim().min(1).max(64).optional(),
     repetitions: z.number().int().min(0).max(50).optional(),
+    /**
+     * Cuántas tomas tuvo el dictado (D22). Se guarda con la evolución para poder decir de qué
+     * tomas no quedó grabación, incluida la última. Un cliente anterior no lo manda.
+     */
+    takes: z.number().int().min(1).max(DICTATION_TAKES_COUNT_MAX).optional(),
   })
   .strict()
 export type EvolutionSource = z.infer<typeof evolutionSourceSchema>
