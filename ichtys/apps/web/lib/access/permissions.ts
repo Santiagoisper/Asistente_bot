@@ -26,6 +26,9 @@ export const couldManageStudyAccess = (role: Role): boolean => roleSatisfies(rol
  */
 export const MONITOR_MEMBERSHIP_MAX_DAYS = 365
 
+/** M8: ventana del modo abierto, en días, desde que la pantalla está disponible. */
+export const ACCESS_OPEN_DEFAULT_DAYS = 60
+
 export type ExpiryProblem = 'monitor_requires_expiry' | 'expiry_in_past' | 'monitor_expiry_too_far'
 
 /**

@@ -1,5 +1,6 @@
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
 import { confirmProfileProposal, ProfileProposalError } from '../../../../../../../../../../lib/subjects/patient-profile-service'
+import { profileWriteErrorResponse } from '../../../../../../../../../../lib/subjects/profile-write-errors'
 import { PhiConfigError } from '../../../../../../../../../../lib/subjects/phi-fields'
 
 export const runtime = 'nodejs'
@@ -24,6 +25,8 @@ export async function POST(
 
     return Response.json({ subjectCode: subject.subjectCode, profile })
   } catch (err) {
+    const profileError = profileWriteErrorResponse(err)
+    if (profileError) return profileError
     if (err instanceof ProfileProposalError) {
       return Response.json({ error: err.code }, { status: 409 })
     }

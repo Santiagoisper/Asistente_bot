@@ -1,9 +1,10 @@
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
 import { studySpecSchema } from '@ichtys/ingestion/study-spec'
 import { getLatestStudySpec } from '@ichtys/ingestion/spec-store'
-import { loadPatientProfile } from '../../../../../../../lib/subjects/patient-profile-service'
+import { loadPatientProfileState } from '../../../../../../../lib/subjects/patient-profile-service'
 import { evaluateAndPersistScreening } from '../../../../../../../lib/subjects/screening-service'
 import { PhiConfigError } from '../../../../../../../lib/subjects/phi-fields'
+import { guideVisits } from '../../../../../../../lib/subjects/guide-visits'
 
 export const runtime = 'nodejs'
 
@@ -17,7 +18,7 @@ export async function GET(
   try {
     const { orgId, userId, study, subject } = await validateSubjectAccess(subjectId, routeStudyId)
 
-    const profile = await loadPatientProfile({
+    const { profile, unreadable: profileUnreadable } = await loadPatientProfileState({
       orgId,
       studyId: study.id,
       subjectId: subject.id,
@@ -31,6 +32,7 @@ export async function GET(
         assessments: [],
         summary: { pass: 0, fail: 0, unknown: 0 },
         specAvailable: false,
+        profileUnreadable,
         protocolDocumentId: null,
         message: 'No hay study spec extraído para este estudio.',
       })
@@ -44,8 +46,26 @@ export async function GET(
         assessments: [],
         summary: { pass: 0, fail: 0, unknown: 0 },
         specAvailable: false,
+        profileUnreadable,
         protocolDocumentId: null,
         message: 'El study spec no es válido.',
+      })
+    }
+
+    // Un perfil que no se pudo leer llega acá vacío. Evaluarlo daría todo «a revisar» y
+    // dejaría guardada esa evaluación como si fuera la del sujeto: no se evalúa ni se guarda.
+    if (profileUnreadable) {
+      return Response.json({
+        subjectCode: subject.subjectCode,
+        profile,
+        assessments: [],
+        summary: { pass: 0, fail: 0, unknown: 0 },
+        specAvailable: true,
+        profileUnreadable: true,
+        specVersion: specRow.version,
+        specStatus: specRow.status,
+        protocolDocumentId: null,
+        visits: guideVisits(parsedSpec.data),
       })
     }
 
@@ -81,9 +101,12 @@ export async function GET(
       assessments: evaluation.assessments,
       summary: evaluation.summary,
       specAvailable: true,
+      profileUnreadable: false,
       specVersion: evaluation.specVersion,
       specStatus: specRow.status,
       protocolDocumentId: evaluation.protocolDocumentId,
+      // El cronograma del protocolo, para que la guía muestre los procedimientos de la visita (D21).
+      visits: guideVisits(parsedSpec.data),
     })
   } catch (err) {
     if (err instanceof PhiConfigError) {

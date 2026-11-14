@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import type { MemberFunction } from '@ichtys/db'
+import { ModePanel } from './mode-panel'
 import { MONITOR_MEMBERSHIP_MAX_DAYS } from '../../lib/access/permissions'
 import {
   ACCESS_EXPIRY_GUIDE,
@@ -170,6 +171,8 @@ export function TeamAccessScreen() {
         <p className="text-sm font-semibold text-alphi-navy">{mode.title}</p>
         <p className="mt-1 text-sm text-alphi-muted">{mode.detail}</p>
       </div>
+
+      <ModePanel onChanged={load} />
 
       {data.truncated ? (
         <p className="rounded-md border border-alphi-amber/30 bg-alphi-amber/10 px-4 py-3 text-sm text-alphi-amber">

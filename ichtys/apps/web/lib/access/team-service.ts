@@ -5,6 +5,7 @@ import {
   eq,
   isNull,
   memberFunctions,
+  organizations,
   studies,
   studyMemberships,
   type MemberFunction,
@@ -172,4 +173,39 @@ export async function revokeMembership(
     )
     .returning({ id: studyMemberships.id })
   return { changed: revoked.length > 0 }
+}
+
+/**
+ * Cambia el modo de acceso de la organización (M5/M8 y «Cambio de modo»).
+ * La columna tiene dos valores, así que pedir el contrario del actual decide
+ * el cambio: pedir el modo que ya rige no toca nada y devuelve changed:false.
+ */
+export async function setOrgAccessMode(
+  tx: DbTransaction,
+  params: { orgId: string; mode: 'open' | 'enforced' },
+): Promise<{ changed: boolean }> {
+  const updated = await tx
+    .update(organizations)
+    .set({ accessMode: params.mode })
+    .where(
+      and(
+        eq(organizations.id, params.orgId),
+        eq(organizations.accessMode, params.mode === 'open' ? 'enforced' : 'open'),
+      ),
+    )
+    .returning({ id: organizations.id })
+  return { changed: updated.length > 0 }
+}
+
+/** Fija el plazo del modo abierto la primera vez que se administra el equipo (M5). Nunca pisa una fecha existente. */
+export async function assignOpenDeadline(
+  tx: DbTransaction,
+  params: { orgId: string; until: Date },
+): Promise<{ assigned: boolean }> {
+  const updated = await tx
+    .update(organizations)
+    .set({ accessOpenUntil: params.until })
+    .where(and(eq(organizations.id, params.orgId), isNull(organizations.accessOpenUntil)))
+    .returning({ id: organizations.id })
+  return { assigned: updated.length > 0 }
 }

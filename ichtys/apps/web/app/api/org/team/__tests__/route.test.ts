@@ -54,14 +54,14 @@ describe('GET /api/org/team — autorización', () => {
   })
 
   it('modo enforced: un rol alto sin la función de administración tampoco', async () => {
-    fx.org = { ...fx.org, accessMode: 'enforced' }
+    fx.org.accessMode = 'enforced'
     fx.memberFunctionRows.push({ id: 'mf-3', organizationId: 'org-1', userId: 'user-2', functionKey: 'investigator', grantedBy: 'user-1', grantedAt: new Date('2026-11-01'), revokedAt: null, revokedBy: null })
     fx.auth = { userId: 'user-2', orgId: 'org_clerk_1', orgRole: 'org:principal_investigator' }
     expect((await GET()).status).toBe(403)
   })
 
   it('M14: en modo enforced el administrador de la organización entra sin funciones cargadas', async () => {
-    fx.org = { ...fx.org, accessMode: 'enforced' }
+    fx.org.accessMode = 'enforced'
     fx.memberFunctionRows = fx.memberFunctionRows.filter((row) => row.userId !== 'user-1')
     // user-1 es org:admin y no tiene ninguna fila de función: loadAccessSubject
     // le inyecta platform_admin, que administra el equipo.

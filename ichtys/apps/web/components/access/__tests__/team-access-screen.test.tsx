@@ -55,6 +55,10 @@ function payload(): TeamPayload {
 const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input)
   if (url === '/api/org/team') return Response.json(payload())
+  if (url === '/api/org/team/mode') {
+    // El panel de modo vive adentro de la pantalla: mismo modo que el banner.
+    return Response.json({ mode: 'enforced', columnMode: 'enforced', openUntil: null, daysLeft: null, impact: null })
+  }
   const method = init?.method ?? 'GET'
   if (url === '/api/org/team/functions') {
     return method === 'POST' ? Response.json({ changed: true, selfAssigned: false }, { status: 201 }) : Response.json({ changed: true })
@@ -146,6 +150,13 @@ describe('TeamAccessScreen — lo que se ve', () => {
     expect(text).toContain(ACCESS_EXPIRY_GUIDE)
     expect(text).toContain(FUNCTION_LABELS.operations_director)
     expect(text).toContain(FUNCTION_LABELS.monitor)
+  })
+
+  it('el panel de modo vive en la pantalla, con su propio pedido', async () => {
+    await settled()
+
+    expect(container.textContent).toContain('Modo de acceso')
+    expect(calls('/api/org/team/mode').length).toBeGreaterThan(0)
   })
 
   it('el selector ofrece las funciones que faltan, no las vigentes', async () => {

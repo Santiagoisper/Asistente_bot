@@ -11,6 +11,8 @@ export interface OrgAccessContext {
   role: Role
   access: AccessSubject
   accessOpenUntil: Date | null
+  /** Lo que dice la columna `access_mode`. Desde M20 coincide con `access.mode`. */
+  accessColumnMode: 'open' | 'enforced'
 }
 
 /** Sesión, organización y capacidades de quien llama. Sin sesión u organización: 401. */
@@ -23,5 +25,13 @@ export async function resolveOrgAccessContext(): Promise<OrgAccessContext> {
 
   const role = normalizeRole(orgRole)
   const access = await loadAccessSubject({ org, userId, role })
-  return { userId, clerkOrgId, orgId: org.id, role, access, accessOpenUntil: org.accessOpenUntil ?? null }
+  return {
+    userId,
+    clerkOrgId,
+    orgId: org.id,
+    role,
+    access,
+    accessOpenUntil: org.accessOpenUntil ?? null,
+    accessColumnMode: org.accessMode === 'open' ? 'open' : 'enforced',
+  }
 }

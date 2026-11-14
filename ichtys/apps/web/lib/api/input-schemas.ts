@@ -140,3 +140,10 @@ export const teamMembershipRevokeInput = z
     studyId: z.string().uuid().max(MAX_ID_CHARS),
   })
   .strict()
+
+// PUT /api/org/team/mode — cambio de modo de acceso de la organización.
+export const teamModeInput = z
+  .object({
+    mode: z.enum(['open', 'enforced']),
+  })
+  .strict()

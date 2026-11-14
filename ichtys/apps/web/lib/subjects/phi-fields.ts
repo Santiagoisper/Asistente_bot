@@ -33,6 +33,15 @@ export function encryptProfileJson(profile: Record<string, unknown>): string {
   return encryptClinicalContent(JSON.stringify(profile))
 }
 
+/**
+ * Lo guardado, tal cual salió de la base: sin convertir en perfil vacío lo que no sea
+ * un objeto. Es para la escritura (`updatePatientProfile`), que tiene que distinguir
+ * un perfil vacío de uno que no se pudo leer.
+ */
+export function decryptStoredProfile(payload: string): unknown {
+  return JSON.parse(decryptClinicalContent(payload))
+}
+
 export function decryptProfileJson(payload: string): Record<string, unknown> {
   const plain = decryptClinicalContent(payload)
   const parsed: unknown = JSON.parse(plain)

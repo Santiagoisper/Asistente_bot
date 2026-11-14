@@ -13,7 +13,8 @@
     "./object-access": "./object-access.ts",
     "./functions": "./functions.ts",
     "./access-subject": "./access-subject.ts",
-    "./study-scope": "./study-scope.ts"
+    "./study-scope": "./study-scope.ts",
+    "./study-membership": "./study-membership.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

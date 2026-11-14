@@ -19,9 +19,17 @@ import { ROLES, type Role } from './roles'
  *
  * `org.accessMode` se acepta como `unknown` a propósito: si falta o trae un
  * valor raro, `parseAccessMode` restringe.
+ *
+ * M20 (revisa M8): el plazo del modo abierto (`accessOpenUntil`) NO cambia el
+ * modo. Vencido el plazo la organización sigue en `open` hasta que una persona
+ * con administración de accesos la pase a `enforced`; la pantalla lo avisa.
+ * El modo lo decide la columna y nada más. Motivo: lo que M8 y M15 prometían
+ * para el vencimiento (avisos previos y función provisoria para quien venía
+ * evolucionando) no está construido, y sin eso el paso automático dejaba a
+ * médicos sin poder evolucionar de un día para el otro.
  */
 export async function loadAccessSubject(params: {
-  org: { id: string; accessMode?: unknown }
+  org: { id: string; accessMode?: unknown; accessOpenUntil?: unknown }
   userId: string
   role: Role
 }): Promise<AccessSubject> {

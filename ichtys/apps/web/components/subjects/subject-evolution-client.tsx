@@ -3,11 +3,13 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { mergeDictationAddition, NOT_MENTIONED, studyDictationPrompts } from '@ichtys/clinical'
+import { matchProtocolVisit, mergeDictationAddition, NOT_MENTIONED, studyDictationPrompts, type ProtocolVisit } from '@ichtys/clinical'
 import { bloodPressureProposalLabel } from '../../lib/subjects/proposal-display'
 import { unapprovedSpecNotice } from '../../lib/subjects/spec-notice'
 import { DictationPanel, type DictationRecording, type DictationSource } from './dictation-panel'
 import { DictationGuide } from './dictation-guide'
+import { ProfileUnreadableNotice } from './profile-unreadable-notice'
+import { profileWriteErrorMessage } from '../../lib/subjects/profile-write-messages'
 import { EvolutionAudio, type EvolutionAudioInfo } from './evolution-audio'
 
 interface EvolutionItem {
@@ -127,6 +129,15 @@ function ProtocolPageLinks({
   )
 }
 
+/** El código de error que devolvió la ruta, o uno genérico si la respuesta no trae cuerpo legible. */
+async function errorCode(res: Response): Promise<string> {
+  const body: unknown = await res.json().catch(() => null)
+  const code = typeof body === 'object' && body !== null ? (body as { error?: unknown }).error : null
+  return typeof code === 'string' ? code : 'request_failed'
+}
+
+const codeOf = (err: unknown): string | null => (err instanceof Error ? err.message : null)
+
 export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEvolutionClientProps) {
   const [subjectCode, setSubjectCode] = useState<string>('…')
   const [evolutions, setEvolutions] = useState<EvolutionItem[]>([])
@@ -135,6 +146,10 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const [protocolDocumentId, setProtocolDocumentId] = useState<string | null>(null)
   const [specAvailable, setSpecAvailable] = useState(false)
   const [specNotice, setSpecNotice] = useState<string | null>(null)
+  /** Las visitas del cronograma del protocolo, con sus procedimientos. */
+  const [protocolVisits, setProtocolVisits] = useState<ProtocolVisit[]>([])
+  /** Lo guardado de este sujeto no se pudo leer: la ficha lo dice en vez de mostrar un perfil vacío. */
+  const [profileUnreadable, setProfileUnreadable] = useState(false)
   const [content, setContent] = useState('')
   // Presente cuando el texto del cuadro salió de un dictado: viaja al registro al guardar.
   const [dictationSource, setDictationSource] = useState<DictationSource | null>(null)
@@ -155,6 +170,8 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
 
   /** Qué más decir en este estudio para este sujeto: sale de los criterios a revisar. */
   const studyPrompts = useMemo(() => studyDictationPrompts(assessments), [assessments])
+  /** La visita del cronograma que coincide con lo escrito en «¿Qué visita es?». Si no señala una sola, ninguna. */
+  const protocolVisit = useMemo(() => matchProtocolVisit(visitLabel, protocolVisits), [visitLabel, protocolVisits])
 
   const loadScreening = useCallback(async () => {
     try {
@@ -167,12 +184,16 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         specStatus?: string | null
         specVersion?: number | null
         protocolDocumentId?: string | null
+        visits?: ProtocolVisit[]
+        profileUnreadable?: boolean
       }
       setProfile(data.profile)
       setAssessments(data.assessments)
       setSpecAvailable(data.specAvailable)
       setSpecNotice(data.specAvailable ? unapprovedSpecNotice(data.specStatus, data.specVersion) : null)
       setProtocolDocumentId(data.protocolDocumentId ?? null)
+      setProtocolVisits(data.visits ?? [])
+      setProfileUnreadable(data.profileUnreadable === true)
     } catch {
       // screening es complementario — no bloquea la página
     }
@@ -284,14 +305,11 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: labOcrText.trim() }),
       })
-      if (!res.ok) {
-        const data = (await res.json()) as { error?: string }
-        throw new Error(data.error ?? 'extract_failed')
-      }
+      if (!res.ok) throw new Error(await errorCode(res))
       setLabOcrText('')
       await loadScreening()
-    } catch {
-      setError('No se pudieron extraer labs del texto. Verificá el formato.')
+    } catch (err) {
+      setError(profileWriteErrorMessage(codeOf(err)) ?? 'No se pudieron extraer labs del texto. Verificá el formato.')
     } finally {
       setLabBusy(false)
     }
@@ -306,10 +324,10 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       })
-      if (!res.ok) throw new Error('confirm_failed')
+      if (!res.ok) throw new Error(await errorCode(res))
       await loadScreening()
-    } catch {
-      setError('No se pudo confirmar la revisión de labs.')
+    } catch (err) {
+      setError(profileWriteErrorMessage(codeOf(err)) ?? 'No se pudo confirmar la revisión de labs.')
     } finally {
       setLabBusy(false)
     }
@@ -322,10 +340,10 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       const res = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/labs/reject`, {
         method: 'POST',
       })
-      if (!res.ok) throw new Error('reject_failed')
+      if (!res.ok) throw new Error(await errorCode(res))
       await loadScreening()
-    } catch {
-      setError('No se pudo descartar la revisión de labs.')
+    } catch (err) {
+      setError(profileWriteErrorMessage(codeOf(err)) ?? 'No se pudo descartar la revisión de labs.')
     } finally {
       setLabBusy(false)
     }
@@ -337,10 +355,13 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
     try {
       const res = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/profile/proposals/${evolutionId}/${decision}`, { method: 'POST' })
       // 409: otra persona ya la resolvió. Se recarga y se muestra lo que hay.
-      if (!res.ok && res.status !== 409) throw new Error('proposal_failed')
+      if (!res.ok && res.status !== 409) throw new Error(await errorCode(res))
       await loadScreening()
-    } catch {
-      setError(decision === 'confirm' ? 'No se pudo aceptar la propuesta. El perfil no cambió.' : 'No se pudo descartar la propuesta.')
+    } catch (err) {
+      setError(
+        profileWriteErrorMessage(codeOf(err)) ??
+          (decision === 'confirm' ? 'No se pudo aceptar la propuesta. El perfil no cambió.' : 'No se pudo descartar la propuesta.'),
+      )
     } finally {
       setProposalBusy(false)
     }
@@ -373,6 +394,9 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
           <p className="text-sm text-alphi-muted">Evolución clínica — screening + labs OCR con revisión humana</p>
         </div>
       </div>
+
+      {/* Arriba de todo: lo que se ve vacío más abajo está vacío porque no se pudo leer. */}
+      {profileUnreadable ? <ProfileUnreadableNotice /> : null}
 
       <form onSubmit={handleSave} className="space-y-4 rounded-lg border border-alphi-border bg-alphi-slate/20 p-4">
         <h3 className="text-sm font-bold uppercase tracking-wide text-alphi-muted">Nueva evolución</h3>
@@ -434,8 +458,18 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
               value={visitLabel}
               onChange={(e) => setVisitLabel(e.target.value)}
               placeholder="Selección, Visita 2, Basal…"
+              list={protocolVisits.length > 0 ? 'protocol-visits' : undefined}
               className="w-64 max-w-full rounded-lg border border-alphi-border bg-white px-3 py-2 text-sm"
             />
+            {protocolVisits.length > 0 ? (
+              <datalist id="protocol-visits">
+                {protocolVisits.map((visit, index) => (
+                  <option key={`${index}-${visit.name}`} value={visit.name}>
+                    {visit.label ?? ''}
+                  </option>
+                ))}
+              </datalist>
+            ) : null}
             <p className="mt-1 max-w-sm text-xs text-alphi-muted">
               Sirve para encontrarla después: aparece junto a la fecha en el historial. No forma parte del texto clínico.
             </p>
@@ -445,7 +479,12 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
           </button>
         </div>
         </div>
-        <DictationGuide studyPrompts={studyPrompts} unapprovedProtocol={specNotice !== null} />
+        <DictationGuide
+          studyPrompts={studyPrompts}
+          unapprovedProtocol={specNotice !== null}
+          visit={protocolVisit}
+          visitsAvailable={protocolVisits.length > 0}
+        />
         </div>
       </form>
 

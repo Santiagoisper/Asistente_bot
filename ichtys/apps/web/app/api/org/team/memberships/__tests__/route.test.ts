@@ -159,7 +159,7 @@ describe('POST /api/org/team/memberships — autorización', () => {
   })
 
   it('modo enforced: el Study Coordinator entra con membresía y administra', async () => {
-    fx.org = { ...fx.org, accessMode: 'enforced' }
+    fx.org.accessMode = 'enforced'
     fx.memberFunctionRows = [activeFunction('user-2', 'study_coordinator')]
     fx.membershipRows = [activeMembership('user-2')]
     fx.auth = { userId: 'user-2', orgId: 'org_clerk_1', orgRole: 'org:principal_investigator' }
@@ -168,7 +168,7 @@ describe('POST /api/org/team/memberships — autorización', () => {
 
   it('modo enforced: sin membresía en el estudio, el mismo coordinador recibe el 404 de siempre', async () => {
     // Ni el rol ni la función alcanzan: el alcance es la membresía (paso 3).
-    fx.org = { ...fx.org, accessMode: 'enforced' }
+    fx.org.accessMode = 'enforced'
     fx.memberFunctionRows = [activeFunction('user-2', 'study_coordinator')]
     fx.auth = { userId: 'user-2', orgId: 'org_clerk_1', orgRole: 'org:principal_investigator' }
     const res = await add({ userId: 'user-3', studyId: STUDY })
@@ -178,7 +178,7 @@ describe('POST /api/org/team/memberships — autorización', () => {
   })
 
   it('modo enforced: monitor con membresía entra a ver pero no administra; el investigador tampoco', async () => {
-    fx.org = { ...fx.org, accessMode: 'enforced' }
+    fx.org.accessMode = 'enforced'
     fx.membershipRows = [activeMembership('user-2', STUDY, new Date(Date.now() + 30 * DAY))]
 
     fx.memberFunctionRows = [activeFunction('user-2', 'monitor')]
@@ -191,7 +191,7 @@ describe('POST /api/org/team/memberships — autorización', () => {
   })
 
   it('M11: Operaciones administra todos los estudios sin membresía; plataforma no entra a ninguno (M12)', async () => {
-    fx.org = { ...fx.org, accessMode: 'enforced' }
+    fx.org.accessMode = 'enforced'
     fx.memberFunctionRows = [activeFunction('user-2', 'operations_director')]
     fx.auth = { userId: 'user-2', orgId: 'org_clerk_1', orgRole: 'org:read_only_monitor' }
     expect((await add({ userId: 'user-3', studyId: STUDY })).status).toBe(201)

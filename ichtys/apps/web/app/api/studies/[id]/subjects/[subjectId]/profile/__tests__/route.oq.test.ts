@@ -60,7 +60,7 @@ vi.mock('../../../../../../../../lib/chat/persistence', () => ({
 }))
 
 vi.mock('../../../../../../../../lib/subjects/patient-profile-service', () => ({
-  loadPatientProfile: mocks.loadPatientProfile,
+  loadPatientProfileState: mocks.loadPatientProfile,
 }))
 
 vi.mock('../../../../../../../../lib/subjects/phi-fields', () => ({
@@ -120,7 +120,7 @@ describe('OQ-P02 — profile cross-org', () => {
 describe('OQ-P03 — profile happy path', () => {
   it('GET devuelve subjectCode y profile', async () => {
     mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
-    mocks.loadPatientProfile.mockResolvedValueOnce(mocks.mockProfile)
+    mocks.loadPatientProfile.mockResolvedValueOnce({ profile: mocks.mockProfile, unreadable: false })
 
     const res = await GET(new Request('http://localhost/api/profile'), makeParams())
     const body = (await res.json()) as { subjectCode: string; profile: typeof mocks.mockProfile }
@@ -134,7 +134,7 @@ describe('OQ-P03 — profile happy path', () => {
 describe('OQ-P04 — audit profile.view sin PHI en metadata', () => {
   it('writeAuditLog no incluye profile ni metadata clínica', async () => {
     mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
-    mocks.loadPatientProfile.mockResolvedValueOnce(mocks.mockProfile)
+    mocks.loadPatientProfile.mockResolvedValueOnce({ profile: mocks.mockProfile, unreadable: false })
 
     await GET(new Request('http://localhost/api/profile'), makeParams())
 
@@ -167,3 +167,18 @@ describe('S4 — profile compara el estudio de la URL', () => {
     expect(mocks.validateSubjectAccess).toHaveBeenCalledWith(mocks.SUBJECT_ID, otherStudyId)
   })
 })
+
+describe('perfil guardado que no se pudo leer', () => {
+  it('GET lo dice con profileUnreadable', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.loadPatientProfile.mockResolvedValueOnce({ profile: { version: 1, labs: [], medications: [], conditions: [] }, unreadable: true })
+
+    const res = await GET(new Request('http://localhost/api/profile'), makeParams())
+    const body = (await res.json()) as { profileUnreadable: boolean; profile: { labs: unknown[] } }
+
+    expect(res.status).toBe(200)
+    expect(body.profileUnreadable).toBe(true)
+    expect(body.profile.labs).toEqual([])
+  })
+})
+

@@ -14,3 +14,12 @@ tmp/
 # "nul" aparece por redirects `> nul` equivocados en Git Bash (Windows)
 nul
 _tmp_*
+
+# Material reservado: no va en este repo, que es público (2026-11-13).
+# Informes para accionistas e inversores, y reportes de auditoría.
+/ALPHI-SHAREHOLDER-REPORT-*
+/ALPHI_E2E_Audit_Report_*
+ichtys/docs/pitch/
+ichtys/docs/audits/
+ichtys/docs/GTM-*.md
+ichtys/docs/compliance/REGULATORY-POSITION-SHAREHOLDERS.md

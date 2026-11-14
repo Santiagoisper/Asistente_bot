@@ -25,6 +25,9 @@ vi.mock('@ichtys/clinical', () => ({
   mergeExtractions: mocks.mergeExtractions,
   mergeProfileWithExtraction: mocks.mergeProfileWithExtraction,
   parsePatientProfile: vi.fn((value: unknown) => value),
+  // Estas pruebas miran el registro de errores y el consumo, no la validación del perfil
+  // (eso está en patient-profile-guard.test.ts): el esquema deja pasar lo que recibe.
+  patientProfileSchema: { safeParse: (value: unknown) => ({ success: true as const, data: value }) },
 }))
 
 vi.mock('@ichtys/db', () => ({
@@ -63,6 +66,7 @@ vi.mock('../profile-version', () => ({ whereProfileUnchanged: () => ({}), nextVe
 vi.mock('../phi-fields', () => ({
   encryptProfileJson: mocks.encryptProfileJson,
   decryptProfileJson: mocks.decryptProfileJson,
+  decryptStoredProfile: mocks.decryptProfileJson,
 }))
 
 import { llmFactsSchema, proposeProfileFromEvolution } from '../patient-profile-service'
