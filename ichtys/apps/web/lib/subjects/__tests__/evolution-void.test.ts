@@ -92,6 +92,19 @@ describe('depositRowFrom — lo que pasa al depósito', () => {
     })
   })
 
+  it('una grabación que ya venció y todavía no se borró pasa sin contenido: el depósito no la guarda de más', () => {
+    const overdue = depositRowFrom(audio(1, { expiresAt: new Date('2026-11-14T17:00:00Z') }), { by: 'user_declara', at: NOW })
+    expect(overdue.contentEncrypted).toBeNull()
+    expect(overdue.segmentsEncrypted).toBeNull()
+    expect(overdue.purgedAt).toEqual(NOW)
+    // El vencimiento sigue siendo el original.
+    expect(overdue.expiresAt).toEqual(new Date('2026-11-14T17:00:00Z'))
+  })
+
+  it('una que vence justo ahora ya está vencida', () => {
+    expect(depositRowFrom(audio(1, { expiresAt: NOW }), { by: 'user_declara', at: NOW }).contentEncrypted).toBeNull()
+  })
+
   it('no lleva sujeto: una grabación del depósito no es de la historia de nadie', () => {
     expect(Object.keys(row)).not.toContain('subjectId')
   })
@@ -166,6 +179,13 @@ describe('voidEvolution', () => {
     ])
     expect(audits[2]!.metadata).toEqual({ subjectId: 'subject-1', reason: 'wrong_subject', audiosWithdrawn: 2, hasNote: true })
     expect(audits[0]!.metadata).toEqual({ subjectId: 'subject-1', evolutionId: 'evo-1', take: 1, depositId: 'deposito-1', reason: 'wrong_subject' })
+  })
+
+  it('si la grabación ya había vencido, el registro del retiro lo dice', async () => {
+    const { store, audits } = fakeStore({ audios: [audio(1, { expiresAt: new Date('2026-11-14T17:00:00Z') }), audio(2)] })
+    await voidEvolution(store, PARAMS)
+    expect(audits[0]!.metadata).toMatchObject({ take: 1, contentExpired: true })
+    expect(audits[1]!.metadata).not.toHaveProperty('contentExpired')
   })
 
   it('el registro no lleva el texto de la nota ni contenido', async () => {
