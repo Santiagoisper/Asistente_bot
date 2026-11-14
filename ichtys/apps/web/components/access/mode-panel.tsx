@@ -29,6 +29,8 @@ interface ModePayload {
   columnMode: 'open' | 'enforced'
   openUntil: string | null
   daysLeft: number | null
+  /** M20: abierto con el plazo vencido. */
+  deadlinePassed?: boolean
   impact: ImpactPerson[] | null
 }
 
@@ -113,7 +115,11 @@ export function ModePanel({ onChanged }: { onChanged: () => void }) {
     <section className="alphi-card space-y-3 p-4">
       <p className="text-sm font-semibold text-alphi-navy">{MODE_PANEL_LABELS.title}</p>
 
-      {data.mode === 'open' && data.daysLeft !== null ? (
+      {data.mode === 'open' && data.deadlinePassed ? (
+        <p role="alert" className="text-xs font-semibold text-alphi-rose">
+          {MODE_DEADLINE_TEXTS.overdue}
+        </p>
+      ) : data.mode === 'open' && data.daysLeft !== null ? (
         <p className="text-xs text-alphi-muted">{MODE_DEADLINE_TEXTS.daysLeft(data.daysLeft)}</p>
       ) : null}
       {expiredOpen ? <p className="text-xs text-alphi-rose">{MODE_DEADLINE_TEXTS.expired}</p> : null}
@@ -153,6 +159,9 @@ export function ModePanel({ onChanged }: { onChanged: () => void }) {
           <p className="text-xs text-alphi-amber">
             {confirming === 'toEnforced' ? MODE_CONFIRM_TEXTS.toEnforced.risk : MODE_CONFIRM_TEXTS.toOpen.risk}
           </p>
+          {confirming === 'toEnforced' && data.deadlinePassed ? (
+            <p className="text-xs font-semibold text-alphi-rose">{MODE_CONFIRM_TEXTS.toEnforced.riskAfterDeadline}</p>
+          ) : null}
 
           {confirming === 'toEnforced' ? (
             <div className="space-y-1">

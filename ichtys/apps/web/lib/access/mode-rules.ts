@@ -9,9 +9,10 @@ import type { TeamSnapshot } from './team-service'
  * Reglas del modo de acceso de la organización
  * (docs/decisions/study-membership.md, M5/M8 y la sección «Cambio de modo»).
  *
- * El modo EFECTIVO puede diferir de la columna: `open` con plazo vencido se
- * comporta como `enforced` (M8, ver packages/auth/access-subject.ts). Estas
- * reglas miran el efectivo: es el que la persona ve y el desde el que se cambia.
+ * Desde M20 el modo efectivo es el de la columna: el plazo vencido ya no
+ * convierte `open` en `enforced` (ver packages/auth/access-subject.ts). Lo
+ * único que el plazo sigue decidiendo es la vuelta: desde `enforced`, pasado
+ * el plazo, no se vuelve a `open` (M5).
  *
  * `ACCESS_OPEN_DEFAULT_DAYS` (M8) vive en permissions.ts: la pantalla lo cita
  * en sus textos (L6) y este archivo no puede importarse del lado cliente.

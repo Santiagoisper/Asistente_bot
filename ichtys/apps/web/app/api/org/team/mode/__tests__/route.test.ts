@@ -195,19 +195,41 @@ describe('PUT /api/org/team/mode — el cambio', () => {
     expect(fx.audits).toHaveLength(0)
   })
 
-  it('columna open con plazo vencido: rige como enforced — volver se niega, oficializar cambia la columna', async () => {
+  it('M20: columna open con el plazo vencido sigue abierta — GET lo avisa, pedir open no cambia nada, pasar a estricto es un cambio de una persona', async () => {
     fx.org.accessOpenUntil = inDays(-1)
 
-    const denied = await put({ mode: 'open' })
-    expect(denied.status).toBe(422)
-    expect((await denied.json()).error).toBe('deadline_passed')
-    expect(fx.org.accessMode).toBe('open') // la columna no se toca
+    const seen = (await (await GET()).json()) as { mode: string; columnMode: string; daysLeft: number; deadlinePassed: boolean }
+    expect(seen.mode).toBe('open')
+    expect(seen.columnMode).toBe('open')
+    expect(seen.deadlinePassed).toBe(true)
+    expect(seen.daysLeft).toBeLessThanOrEqual(0)
+    expect(fx.org.accessMode).toBe('open') // mirar la pantalla no enciende nada
 
+    const same = await put({ mode: 'open' })
+    expect(same.status).toBe(200)
+    expect((await same.json()).changed).toBe(false)
+    expect(fx.org.accessMode).toBe('open')
+
+    fx.audits.length = 0
     const official = await put({ mode: 'enforced' })
     expect(official.status).toBe(200)
     expect((await official.json()).changed).toBe(true)
     expect(fx.org.accessMode).toBe('enforced')
-    expect(fx.audits[0]?.values.metadata).toMatchObject({ from: 'enforced', columnModeBefore: 'open' })
+    expect(fx.audits[0]?.values.metadata).toMatchObject({ from: 'open', to: 'enforced', columnModeBefore: 'open' })
+
+    // Una vez en estricto con el plazo vencido, no se vuelve (M5, sin cambios).
+    const back = await put({ mode: 'open' })
+    expect(back.status).toBe(422)
+    expect((await back.json()).error).toBe('deadline_passed')
+    expect(fx.org.accessMode).toBe('enforced')
+  })
+
+  it('M20: con plazo vigente o sin plazo, GET dice deadlinePassed en falso', async () => {
+    fx.org.accessOpenUntil = inDays(30)
+    expect(((await (await GET()).json()) as { deadlinePassed: boolean }).deadlinePassed).toBe(false)
+    fx.org.accessMode = 'enforced'
+    fx.org.accessOpenUntil = inDays(-1)
+    expect(((await (await GET()).json()) as { deadlinePassed: boolean }).deadlinePassed).toBe(false)
   })
 
   it('R3: si el registro de auditoría falla, el modo no cambia', async () => {
