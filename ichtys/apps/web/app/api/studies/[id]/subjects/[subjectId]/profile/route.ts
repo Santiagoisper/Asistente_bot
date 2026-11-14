@@ -1,6 +1,6 @@
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
 import { writeAuditLog } from '../../../../../../../lib/chat/persistence'
-import { loadPatientProfile } from '../../../../../../../lib/subjects/patient-profile-service'
+import { loadPatientProfileState } from '../../../../../../../lib/subjects/patient-profile-service'
 import { PhiConfigError } from '../../../../../../../lib/subjects/phi-fields'
 
 export const runtime = 'nodejs'
@@ -15,7 +15,7 @@ export async function GET(
   try {
     const { orgId, userId, study, subject } = await validateSubjectAccess(subjectId, routeStudyId)
 
-    const profile = await loadPatientProfile({
+    const { profile, unreadable } = await loadPatientProfileState({
       orgId,
       studyId: study.id,
       subjectId: subject.id,
@@ -30,7 +30,7 @@ export async function GET(
       resourceId: subject.id,
     })
 
-    return Response.json({ subjectCode: subject.subjectCode, profile })
+    return Response.json({ subjectCode: subject.subjectCode, profile, profileUnreadable: unreadable })
   } catch (err) {
     if (err instanceof PhiConfigError) {
       return Response.json({ error: 'phi_encryption_not_configured' }, { status: 503 })
