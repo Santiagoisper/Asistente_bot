@@ -1,5 +1,6 @@
 import type { AuditLogParams } from '../chat/persistence'
 import {
+  labsFromPastedText,
   mergeConfirmedLabs,
   parseLabOcrText,
   type LabObservation,
@@ -68,7 +69,9 @@ export async function confirmLabOcrReview(params: {
       throw new LabReviewError('No hay revisión de labs pendiente', 'no_pending_review')
     }
 
-    const confirmed = params.labsOverride ?? pending.labs
+    // Cada valor guarda que salió de un texto pegado (C4, D1). El origen lo pone este camino,
+    // no quien manda los valores corregidos.
+    const confirmed = labsFromPastedText(params.labsOverride ?? pending.labs)
     const labs = mergeConfirmedLabs(current.labs, confirmed)
     const labConfidence: Record<string, 'high'> = {}
     for (const lab of confirmed) {
