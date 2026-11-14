@@ -241,6 +241,36 @@ describe('OQ-L04/L05 — audit sin PHI', () => {
     )
   })
 
+  it('lab.confirm — del cuerpo solo pasan nombre, valor y unidad: ni origen, ni fecha de muestra, ni rango de referencia (C4)', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.confirmLabOcrReview.mockResolvedValueOnce(mocks.profileConfirmed)
+
+    const res = await confirmPost(
+      new Request('http://localhost/api/labs/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          labs: [
+            {
+              name: 'ALT',
+              value: 31,
+              unit: 'U/L',
+              source: { kind: 'lab_report', reportId: '11111111-1111-4111-8111-111111111111' },
+              sourceEvolutionId: '22222222-2222-4222-8222-222222222222',
+              sampleDate: '2026-09-24',
+              referenceRange: 'hasta 400',
+            },
+          ],
+        }),
+      }),
+      makeParams(),
+    )
+
+    expect(res.status).toBe(200)
+    const handed = mocks.confirmLabOcrReview.mock.calls[0]![0] as { labsOverride: unknown }
+    expect(handed.labsOverride).toEqual([{ name: 'ALT', value: 31, unit: 'U/L' }])
+  })
+
   it('lab.reject — sin metadata PHI', async () => {
     mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
     mocks.rejectLabOcrReview.mockResolvedValueOnce(mocks.profileConfirmed)

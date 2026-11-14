@@ -1,3 +1,4 @@
+import { labFromEvolution } from './lab-source'
 import { parseDecimal, upsertLab } from './lab-utils'
 import { deniesTerm, HISTORY_TERMS, negatedItems } from './stated-history'
 import type { LabObservation, Medication, PatientProfile } from './profile-schema'
@@ -114,7 +115,7 @@ export function mergeProfileWithFacts(
 ): PatientProfile {
   let labs = [...current.labs]
   for (const lab of facts.labs) {
-    labs = upsertLab(labs, { ...lab, sourceEvolutionId: evolutionId })
+    labs = upsertLab(labs, labFromEvolution(lab, evolutionId))
   }
 
   const medNames = new Set(current.medications.map((m) => m.name.toLowerCase()))

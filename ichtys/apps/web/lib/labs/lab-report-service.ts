@@ -23,6 +23,7 @@ import {
   type LabReportRow,
   type LabRowInput,
 } from './lab-report-content'
+import { reportRowsToProfileLabs } from './report-profile-labs'
 
 export type LabReportErrorCode =
   | 'not_found'
@@ -362,16 +363,8 @@ export async function confirmLabReport(
   // informe ya quedó confirmado: se avisa en vez de esconderlo.
   let profileUpdated = true
   try {
-    const numeric: LabObservation[] = rows
-      .filter((row): row is LabReportRow & { value: number } => row.value !== null)
-      // El rango de referencia viaja con el valor: es el que imprime ese laboratorio, y hay
-      // criterios que se miden contra él («3 veces el límite superior normal»).
-      .map((row) => ({
-        name: row.analyte,
-        value: row.value,
-        ...(row.unit ? { unit: row.unit } : {}),
-        ...(row.referenceRange && row.referenceRange.trim().length > 0 ? { referenceRange: row.referenceRange.trim().slice(0, 120) } : {}),
-      }))
+    // Cada valor guarda de qué informe salió (C4, D1). El origen lo pone este camino.
+    const numeric: LabObservation[] = reportRowsToProfileLabs(rows, params.reportId)
     if (numeric.length > 0) {
       await updatePatientProfile(
         params,
