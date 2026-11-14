@@ -16,6 +16,7 @@ import type { AuditLogParams } from '../chat/persistence'
 import { labReviewMarker } from './lab-review-marker'
 import { llmFactsSchema, normalizeLlmFacts } from './llm-facts'
 import { decryptStoredProfile, encryptProfileJson } from './phi-fields'
+import { safeIssuePath } from './profile-issue-path'
 import { nextVersion, whereProfileUnchanged, type ProfileScope } from './profile-version'
 
 // El esquema vive en `llm-facts.ts`; se reexporta porque hay pruebas que miden su tamaño (A7).
@@ -96,6 +97,31 @@ Medicaciones: nombre genérico, dosis y frecuencia si aparecen.`,
 }
 
 /**
+ * Registro operativo de un perfil guardado que no valida. La pantalla le pide a la persona
+ * que avise a soporte; esto es lo que soporte busca: de qué organización, estudio y sujeto
+ * es, y qué campo está roto. Lleva la ruta del primer dato que falló, el motivo que da el
+ * validador y cuántos fallaron. Nunca el valor, ni una clave que sea dato (`safeIssuePath`),
+ * ni el mensaje del validador.
+ */
+function reportUnreadableProfile(
+  operation: 'read' | 'write',
+  scope: ProfileScope,
+  issues: ReadonlyArray<{ code?: string; path: ReadonlyArray<PropertyKey> }>,
+): void {
+  const first = issues[0]
+  console.error('[patient-profile] stored_profile_unreadable', {
+    code: 'profile_unreadable',
+    operation,
+    orgId: scope.orgId,
+    studyId: scope.studyId,
+    subjectId: scope.subjectId,
+    path: safeIssuePath(patientProfileSchema, first?.path ?? []),
+    issueCode: first?.code ?? 'unknown',
+    issueCount: issues.length,
+  })
+}
+
+/**
  * El perfil del sujeto y si lo guardado se pudo leer. `unreadable` usa la misma prueba que
  * la guarda de escritura: si lo guardado no valida (un dato mal formado, una versión que
  * este código no conoce, algo que no es un objeto), el perfil devuelto es uno vacío y la
@@ -116,7 +142,9 @@ export async function loadPatientProfileState(params: {
 
   if (!row) return { profile: parsePatientProfile({}), unreadable: false }
   const stored = patientProfileSchema.safeParse(decryptStoredProfile(row.profileEncrypted))
-  return stored.success ? { profile: stored.data, unreadable: false } : { profile: parsePatientProfile({}), unreadable: true }
+  if (stored.success) return { profile: stored.data, unreadable: false }
+  reportUnreadableProfile('read', params, stored.error.issues)
+  return { profile: parsePatientProfile({}), unreadable: true }
 }
 
 export async function loadPatientProfile(params: { orgId: string; studyId: string; subjectId: string }): Promise<PatientProfile> {
@@ -192,7 +220,10 @@ export async function updatePatientProfile(
 
     // Un perfil guardado que no valida no es un perfil vacío: se avisa y no se toca la fila.
     const stored = patientProfileSchema.safeParse(decryptStoredProfile(row.profileEncrypted))
-    if (!stored.success) throw new ProfileUnreadableError()
+    if (!stored.success) {
+      reportUnreadableProfile('write', params, stored.error.issues)
+      throw new ProfileUnreadableError()
+    }
     const next = await mutate(stored.data)
     // Y lo que se guarda tiene que poder leerse después: si no, el próximo en abrirlo lo vería vacío.
     if (!patientProfileSchema.safeParse(next).success) throw new ProfileInvalidError()
