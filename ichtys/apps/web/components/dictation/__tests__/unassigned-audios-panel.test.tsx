@@ -24,6 +24,7 @@ const item = (over: Record<string, unknown> = {}) => ({
   withdrawnAt: '2026-11-14T15:00:00.000Z',
   expiresAt: '2026-12-10T12:00:00.000Z',
   available: true,
+  own: true,
   ...over,
 })
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -128,6 +129,20 @@ describe('UnassignedAudiosPanel', () => {
     await show('page', json({ audios: [item()] }))
     expect(text()).toContain('Alphi no las pasa a otro sujeto')
     expect(container.querySelector('a')).toBeNull()
+  })
+
+  it('quien coordina ve las de otras personas marcadas como tales, y el texto no dice que las hizo', async () => {
+    await show('page', json({ audios: [item(), item({ id: 'dep-2', own: false })] }))
+    const rows = Array.from(container.querySelectorAll('li'))
+    expect(rows[0]!.textContent).not.toContain('otra persona')
+    expect(rows[1]!.textContent).toContain('La grabó otra persona del estudio')
+    expect(text()).not.toContain('que hiciste')
+    expect(text()).toContain('quien las grabó y quien coordina el estudio')
+  })
+
+  it('quien solo tiene las suyas lee que son las que hizo', async () => {
+    await show('page', json({ audios: [item()] }))
+    expect(text()).toContain('que hiciste')
   })
 
   it('una vencida queda como constancia y no se ofrece escucharla', async () => {

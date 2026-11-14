@@ -1,6 +1,7 @@
 import { AccessError, handleApiError, validatePhiStudyAccess } from '@ichtys/auth'
 import { resolveOrgAccessContext } from '../../../../lib/access/org-context'
-import { listUnassignedAudiosByAuthor } from '../../../../lib/dictation/audio-store'
+import { coordinatesStudy } from '../../../../lib/access/permissions'
+import { listUnassignedAudiosByAuthor, listUnassignedAudiosOfOrg } from '../../../../lib/dictation/audio-store'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -9,23 +10,27 @@ export const dynamic = 'force-dynamic'
  * GET — las grabaciones sin sujeto de quien llama
  * (docs/decisions/grabacion-en-sujeto-equivocado.md, D24, punto 3).
  *
- * - **Por ahora, solo las propias:** las que esta persona grabó. Que también las vea «quien
- *   coordina el estudio» espera una decisión: en modo `open` esa comprobación no distingue a
- *   nadie, y esto es la voz de una persona.
+ * - **Las propias, siempre.** Las que esta persona grabó.
+ * - **Las de otras personas, solo a quien coordina** (`coordinatesStudy`, que también distingue
+ *   en modo `open`). Sin eso, la grabación de quien perdió el acceso al estudio quedaba sin
+ *   nadie que la pudiera escuchar hasta vencer.
  * - **Tiene que conservar el acceso al estudio:** la grabación sigue siendo de un estudio. Se
  *   comprueba una vez por estudio; la de un estudio al que ya no entra no aparece.
  * - Sin contenido y sin sujeto: la tabla no guarda de qué sujeto se retiró, a propósito.
  */
 export async function GET(): Promise<Response> {
   try {
-    const { orgId, userId } = await resolveOrgAccessContext()
+    const { orgId, userId, access } = await resolveOrgAccessContext()
     const now = new Date()
-    // El filtro por persona va en la consulta; acá se repite para que no dependa solo de ella.
-    const own = (await listUnassignedAudiosByAuthor({ orgId, userId })).filter((row) => row.createdBy === userId)
+    // Quien no coordina: el filtro por persona va en la consulta, y acá se repite para que no
+    // dependa solo de ella.
+    const visible = coordinatesStudy(access)
+      ? await listUnassignedAudiosOfOrg({ orgId })
+      : (await listUnassignedAudiosByAuthor({ orgId, userId })).filter((row) => row.createdBy === userId)
 
     const studyNames = new Map<string, string>()
     const denied = new Set<string>()
-    for (const row of own) {
+    for (const row of visible) {
       if (studyNames.has(row.studyId) || denied.has(row.studyId)) continue
       try {
         const access = await validatePhiStudyAccess(row.studyId)
@@ -38,7 +43,7 @@ export async function GET(): Promise<Response> {
       }
     }
 
-    const audios = own
+    const audios = visible
       .filter((row) => studyNames.has(row.studyId))
       .map((row) => ({
         id: row.id,
@@ -51,6 +56,8 @@ export async function GET(): Promise<Response> {
         expiresAt: row.expiresAt.toISOString(),
         // Una vencida no se escucha aunque la limpieza diaria todavía no haya pasado.
         available: row.purgedAt === null && row.expiresAt > now,
+        // `false`: la grabó otra persona y quien mira la ve porque coordina el estudio.
+        own: row.createdBy === userId,
       }))
     return Response.json({ audios })
   } catch (err) {

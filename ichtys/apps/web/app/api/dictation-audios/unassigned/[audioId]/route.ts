@@ -1,5 +1,6 @@
 import { handleApiError, validatePhiStudyAccess } from '@ichtys/auth'
 import { resolveOrgAccessContext } from '../../../../../lib/access/org-context'
+import { coordinatesStudy } from '../../../../../lib/access/permissions'
 import { writeAuditLog } from '../../../../../lib/chat/persistence'
 import { findUnassignedAudio, loadUnassignedAudioBytes } from '../../../../../lib/dictation/audio-store'
 import { clinicalRateLimit } from '../../../../../lib/security/clinical-rate-limit'
@@ -16,21 +17,25 @@ const notFound = () => new Response('Not Found', { status: 404 })
 const expired = () => Response.json({ error: 'audio_expired' }, { status: 410 })
 
 /**
- * GET — entrega una grabación sin sujeto a quien la grabó
+ * GET — entrega una grabación sin sujeto a quien la grabó o a quien coordina el estudio
  * (docs/decisions/grabacion-en-sujeto-equivocado.md, D24, punto 3).
  *
  * Sigue siendo dato clínico: mismo cuidado que la grabación de una evolución. La escucha quien
  * la grabó, si conserva el acceso al estudio; cada escucha queda registrada antes de entregar;
- * una vencida no se entrega. «Quien coordina el estudio» todavía no: espera una decisión.
+ * una vencida no se entrega. También la escucha quien coordina el estudio, y el registro dice
+ * cuál de los dos fue.
  */
 export async function GET(req: Request, { params }: Params): Promise<Response> {
   const { audioId } = await params
   try {
-    const { orgId, userId } = await resolveOrgAccessContext()
+    const { orgId, userId, access } = await resolveOrgAccessContext()
     if (!UUID.test(audioId)) return notFound()
 
     const audio = await findUnassignedAudio({ orgId, id: audioId })
-    if (!audio || audio.createdBy !== userId) return notFound()
+    if (!audio) return notFound()
+    // La escucha quien la grabó, o quien coordina el estudio (que también distingue en modo `open`).
+    const listenerRole = audio.createdBy === userId ? 'author' : coordinatesStudy(access) ? 'coordination' : null
+    if (!listenerRole) return notFound()
 
     // La grabación sigue siendo de un estudio: quien ya no entra en él no la escucha.
     await validatePhiStudyAccess(audio.studyId)
@@ -51,7 +56,8 @@ export async function GET(req: Request, { params }: Params): Promise<Response> {
       userId,
       resourceType: 'unassigned_dictation_audio',
       resourceId: audio.id,
-      metadata: { evolutionId: audio.evolutionId, take: audio.take, unassigned: true },
+      // Quién escuchó la voz: quien la grabó, o la coordinación del estudio.
+      metadata: { evolutionId: audio.evolutionId, take: audio.take, unassigned: true, listenerRole },
     })
 
     return new Response(bytes as BodyInit, {

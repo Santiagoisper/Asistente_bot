@@ -13,6 +13,8 @@ export interface UnassignedAudioItem {
   withdrawnAt: string
   expiresAt: string
   available: boolean
+  /** `false`: la grabó otra persona; quien mira la ve porque coordina el estudio. Falta en una versión anterior. */
+  own?: boolean
 }
 
 const day = (iso: string) => new Date(iso).toLocaleDateString('es-AR')
@@ -71,6 +73,7 @@ function UnassignedAudioRow({ audio }: { audio: UnassignedAudioItem }) {
         Grabación del {day(audio.recordedAt)} · toma {audio.take} · {recordingClock(audio.durationSec)}
         {audio.studyName ? ` · ${audio.studyName}` : ''}
       </p>
+      {audio.own === false ? <p className="mt-1 text-xs text-alphi-muted">La grabó otra persona del estudio. La ves porque coordinás el estudio.</p> : null}
       {gone ? (
         <p className="mt-1 text-xs text-alphi-muted">
           Se retiró del sujeto el {day(audio.withdrawnAt)} y se borró al vencer el plazo de conservación ({day(audio.expiresAt)}).
@@ -100,7 +103,7 @@ function UnassignedAudioRow({ audio }: { audio: UnassignedAudioItem }) {
 
 /**
  * «Grabaciones sin sujeto» (docs/decisions/grabacion-en-sujeto-equivocado.md, D24, punto 3).
- * Por ahora cada persona ve las que grabó.
+ * Cada persona ve las que grabó; quien coordina, también las de su estudio.
  *
  * - `inicio`: aparece solo si hay alguna. Si la lista no se pudo leer lo dice en una línea y
  *   lleva a la página: callar se leería como «no hay», y estas grabaciones vencen.
@@ -150,6 +153,8 @@ export function UnassignedAudiosPanel({ variant }: { variant: 'inicio' | 'page' 
     return variant === 'inicio' ? null : <p className="text-sm text-alphi-muted">No tenés grabaciones sin sujeto.</p>
   }
 
+  // Quien coordina puede estar viendo también las de otras personas: el texto no dice «que hiciste».
+  const whose = audios.some((audio) => audio.own === false) ? 'que' : 'que hiciste y que'
   return (
     <section id="grabaciones-sin-sujeto" className="space-y-3 rounded-2xl border border-alphi-border bg-white p-5">
       <div>
@@ -157,7 +162,7 @@ export function UnassignedAudiosPanel({ variant }: { variant: 'inicio' | 'page' 
         {variant === 'inicio' ? <h2 className="text-sm font-bold uppercase tracking-wide text-alphi-muted">Grabaciones sin sujeto</h2> : null}
         {variant === 'inicio' ? (
           <p className="mt-1 text-sm text-alphi-navy">
-            Son grabaciones que hiciste y que se retiraron de un sujeto porque la evolución se registró ahí por error. Se borran el mismo día en que se
+            Son grabaciones {whose} se retiraron de un sujeto porque la evolución se registró ahí por error. Se borran el mismo día en que se
             iban a borrar.{' '}
             <a href="/grabaciones-sin-sujeto" className="font-semibold underline underline-offset-2">
               Qué son y qué hacer con ellas
@@ -166,11 +171,11 @@ export function UnassignedAudiosPanel({ variant }: { variant: 'inicio' | 'page' 
         ) : (
           <>
             <p className="mt-1 text-sm text-alphi-navy">
-              Son grabaciones que hiciste y que se retiraron de un sujeto porque la evolución se registró ahí por error. Siguen siendo datos clínicos:
+              Son grabaciones {whose} se retiraron de un sujeto porque la evolución se registró ahí por error. Siguen siendo datos clínicos:
               están cifradas, cada escucha queda registrada y se borran el mismo día en que se iban a borrar. Alphi no las pasa a otro sujeto: la
               evolución se escribe o se dicta de nuevo en el sujeto que corresponde.
             </p>
-            <p className="mt-1 text-xs text-alphi-muted">Por ahora las ve y las escucha solo quien las grabó.</p>
+            <p className="mt-1 text-xs text-alphi-muted">Las ven y las escuchan quien las grabó y quien coordina el estudio.</p>
           </>
         )}
       </div>

@@ -5,6 +5,7 @@ import type { MemberFunction } from '@ichtys/db'
 import {
   MONITOR_MEMBERSHIP_MAX_DAYS,
   canManageOrgAccess,
+  coordinatesStudy,
   checkMembershipExpiry,
   couldManageStudyAccess,
 } from '../permissions'
@@ -119,5 +120,28 @@ describe('checkMembershipExpiry — vencimiento de la membresía del monitor (M4
   it('sin la función monitor la fecha es opcional', () => {
     expect(checkMembershipExpiry({ targetFunctions: ['study_coordinator'], expiresAt: null, now })).toBeNull()
     expect(checkMembershipExpiry({ targetFunctions: [], expiresAt: null, now })).toBeNull()
+  })
+})
+
+describe('coordinatesStudy — quién coordina un estudio (D24: declarar un error ajeno, leer una anulada, escuchar lo retirado)', () => {
+  it('modo open: coordinación del centro o más; ni el investigador ni el monitor', () => {
+    expect(coordinatesStudy(subject('open', ROLES.SITE_COORDINATOR))).toBe(true)
+    expect(coordinatesStudy(subject('open', ROLES.STUDY_ADMIN))).toBe(true)
+    expect(coordinatesStudy(subject('open', ROLES.ORG_ADMIN))).toBe(true)
+    // El investigador tiene el mismo rango que la coordinación y no coordina: escribir evoluciones no es coordinar.
+    expect(coordinatesStudy(subject('open', ROLES.PRINCIPAL_INVESTIGATOR))).toBe(false)
+    expect(coordinatesStudy(subject('open', ROLES.READ_ONLY_MONITOR))).toBe(false)
+  })
+
+  it('modo open: las funciones cargadas no restringen ni amplían nada', () => {
+    expect(coordinatesStudy(subject('open', ROLES.PRINCIPAL_INVESTIGATOR, ['study_coordinator']))).toBe(false)
+    expect(coordinatesStudy(subject('open', ROLES.SITE_COORDINATOR, ['monitor']))).toBe(true)
+  })
+
+  it('modo enforced: deciden las funciones; el rol histórico no cuenta', () => {
+    expect(coordinatesStudy(subject('enforced', ROLES.READ_ONLY_MONITOR, ['study_coordinator']))).toBe(true)
+    expect(coordinatesStudy(subject('enforced', ROLES.READ_ONLY_MONITOR, ['operations_director']))).toBe(true)
+    expect(coordinatesStudy(subject('enforced', ROLES.ORG_ADMIN, ['investigator']))).toBe(false)
+    expect(coordinatesStudy(subject('enforced', ROLES.ORG_ADMIN))).toBe(false)
   })
 })

@@ -15,6 +15,24 @@ export function canManageOrgAccess(access: AccessSubject): boolean {
   return allows(access, 'access.manage_org', wasOrgAdmin)
 }
 
+/**
+ * Modo `open`: coordinar un estudio era cosa de la coordinación del centro o de quien lo
+ * administra. El investigador principal tiene el mismo rango y no coordina.
+ */
+const coordinatedStudies = (role: Role): boolean => roleSatisfies(role, ROLES.SITE_COORDINATOR) && role !== ROLES.PRINCIPAL_INVESTIGATOR
+
+/**
+ * ¿La persona coordina estudios? (capacidad `access.manage_study`; en modo `open`, coordinación
+ * del centro o más: decisión del 14/11/2026, D24). Es lo que se le pide a quien no es el autor
+ * para declarar que una evolución se registró en el sujeto equivocado, leer el texto de una
+ * anulada o escuchar una grabación retirada. **Se decide acá y no con `require` en el
+ * validador clínico:** ahí, en modo `open`, una capacidad adicional no restringe a nadie.
+ * La pertenencia al estudio la comprueba aparte el validador.
+ */
+export function coordinatesStudy(access: AccessSubject): boolean {
+  return allows(access, 'access.manage_study', coordinatedStudies)
+}
+
 /** Requisito histórico para dar acceso a un estudio: administrarlo. */
 export const STUDY_ACCESS_LEGACY_ROLE = ROLES.STUDY_ADMIN
 export const couldManageStudyAccess = (role: Role): boolean => roleSatisfies(role, STUDY_ACCESS_LEGACY_ROLE)
