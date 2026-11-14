@@ -19,11 +19,11 @@
     "test:leakage": "vitest run --dir tests/leakage"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "4.0.96",
+    "@ai-sdk/anthropic": "4.0.99",
     "@ichtys/db": "workspace:*",
     "@ichtys/ingestion": "workspace:*",
     "@ichtys/llm": "workspace:*",
-    "ai": "7.0.162",
+    "ai": "7.0.166",
     "drizzle-orm": "^0.45.3",
     "zod": "4.6.7"
   },
