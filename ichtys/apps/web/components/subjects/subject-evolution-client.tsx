@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { mergeDictationAddition, NOT_MENTIONED, studyDictationPrompts } from '@ichtys/clinical'
+import { matchProtocolVisit, mergeDictationAddition, NOT_MENTIONED, studyDictationPrompts, type ProtocolVisit } from '@ichtys/clinical'
 import { bloodPressureProposalLabel } from '../../lib/subjects/proposal-display'
 import { unapprovedSpecNotice } from '../../lib/subjects/spec-notice'
 import { DictationPanel, type DictationRecording, type DictationSource } from './dictation-panel'
@@ -135,6 +135,8 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const [protocolDocumentId, setProtocolDocumentId] = useState<string | null>(null)
   const [specAvailable, setSpecAvailable] = useState(false)
   const [specNotice, setSpecNotice] = useState<string | null>(null)
+  /** Las visitas del cronograma del protocolo, con sus procedimientos. */
+  const [protocolVisits, setProtocolVisits] = useState<ProtocolVisit[]>([])
   const [content, setContent] = useState('')
   // Presente cuando el texto del cuadro salió de un dictado: viaja al registro al guardar.
   const [dictationSource, setDictationSource] = useState<DictationSource | null>(null)
@@ -155,6 +157,8 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
 
   /** Qué más decir en este estudio para este sujeto: sale de los criterios a revisar. */
   const studyPrompts = useMemo(() => studyDictationPrompts(assessments), [assessments])
+  /** La visita del cronograma que coincide con lo escrito en «¿Qué visita es?». Si no señala una sola, ninguna. */
+  const protocolVisit = useMemo(() => matchProtocolVisit(visitLabel, protocolVisits), [visitLabel, protocolVisits])
 
   const loadScreening = useCallback(async () => {
     try {
@@ -167,12 +171,14 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         specStatus?: string | null
         specVersion?: number | null
         protocolDocumentId?: string | null
+        visits?: ProtocolVisit[]
       }
       setProfile(data.profile)
       setAssessments(data.assessments)
       setSpecAvailable(data.specAvailable)
       setSpecNotice(data.specAvailable ? unapprovedSpecNotice(data.specStatus, data.specVersion) : null)
       setProtocolDocumentId(data.protocolDocumentId ?? null)
+      setProtocolVisits(data.visits ?? [])
     } catch {
       // screening es complementario — no bloquea la página
     }
@@ -434,8 +440,18 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
               value={visitLabel}
               onChange={(e) => setVisitLabel(e.target.value)}
               placeholder="Selección, Visita 2, Basal…"
+              list={protocolVisits.length > 0 ? 'protocol-visits' : undefined}
               className="w-64 max-w-full rounded-lg border border-alphi-border bg-white px-3 py-2 text-sm"
             />
+            {protocolVisits.length > 0 ? (
+              <datalist id="protocol-visits">
+                {protocolVisits.map((visit, index) => (
+                  <option key={`${index}-${visit.name}`} value={visit.name}>
+                    {visit.label ?? ''}
+                  </option>
+                ))}
+              </datalist>
+            ) : null}
             <p className="mt-1 max-w-sm text-xs text-alphi-muted">
               Sirve para encontrarla después: aparece junto a la fecha en el historial. No forma parte del texto clínico.
             </p>
@@ -445,7 +461,12 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
           </button>
         </div>
         </div>
-        <DictationGuide studyPrompts={studyPrompts} unapprovedProtocol={specNotice !== null} />
+        <DictationGuide
+          studyPrompts={studyPrompts}
+          unapprovedProtocol={specNotice !== null}
+          visit={protocolVisit}
+          visitsAvailable={protocolVisits.length > 0}
+        />
         </div>
       </form>
 
