@@ -39,8 +39,8 @@ describe('ProfileSummary', () => {
   it('un bloque por dato, con su rótulo, en el orden de las pestañas de la historia clínica del centro', () => {
     show(full)
     // Alpha CR: patologías, medicamentos, laboratorios, signos vitales (relevado el 14/11/2026).
-    expect(blocks().map((b) => b.getAttribute('data-block'))).toEqual(['edad', 'condiciones', 'medicamentos', 'laboratorios', 'presion'])
-    expect(titles()).toEqual(['Edad', 'Condiciones', 'Medicamentos', 'Laboratorios', 'Presión arterial (TA)'])
+    expect(blocks().map((b) => b.getAttribute('data-block'))).toEqual(['edad', 'condiciones', 'medicamentos', 'laboratorios', 'vitales'])
+    expect(titles()).toEqual(['Edad', 'Condiciones', 'Medicamentos', 'Laboratorios', 'Signos vitales'])
   })
 
   it('el rótulo va en negrita y cada bloque se separa del anterior', () => {
@@ -53,8 +53,8 @@ describe('ProfileSummary', () => {
 
   it('la presión que se muestra es la guardada en números, no la etiqueta que puede quedar vieja', () => {
     show(full)
-    const pressure = blocks().find((b) => b.getAttribute('data-block') === 'presion')!.textContent
-    expect(pressure).toContain('132/84 mmHg')
+    const pressure = blocks().find((b) => b.getAttribute('data-block') === 'vitales')!.textContent
+    expect(pressure).toContain('Presión arterial (TA): 132/84 mmHg')
     expect(pressure).not.toContain('130/85')
   })
 
@@ -75,5 +75,44 @@ describe('ProfileSummary', () => {
     show({ ...full, fieldConfidence: { ageYears: 'high', labs: { hba1c: 'low' } } }, (level) => (level ? <em data-level={level}>{level}</em> : null))
     expect(blocks()[0]!.querySelector('[data-level="high"]')).not.toBeNull()
     expect(container.querySelectorAll('[data-level="low"]')).toHaveLength(1)
+  })
+
+  it('peso y talla van a antropometría y la frecuencia cardíaca a signos vitales: no se muestran como laboratorios', () => {
+    show({
+      ...full,
+      labs: [
+        { name: 'Peso', value: 78, unit: 'kg' },
+        { name: 'HbA1c', value: 7.9, unit: '%' },
+        { name: 'Talla', value: 163, unit: 'cm' },
+        { name: 'Frecuencia cardíaca', value: 72, unit: 'lpm' },
+      ],
+    })
+    const of = (id: string) => blocks().find((b) => b.getAttribute('data-block') === id)?.textContent ?? ''
+    expect(blocks().map((b) => b.getAttribute('data-block'))).toEqual(['edad', 'condiciones', 'medicamentos', 'laboratorios', 'vitales', 'antropometria'])
+    expect(of('antropometria')).toContain('Peso: 78 kg')
+    expect(of('antropometria')).toContain('Talla: 163 cm')
+    expect(of('vitales')).toContain('Frecuencia cardíaca: 72 lpm')
+    expect(of('vitales')).toContain('132/84 mmHg')
+    expect(of('laboratorios')).toContain('HbA1c: 7.9 %')
+    expect(of('laboratorios')).not.toContain('Peso')
+    expect(of('laboratorios')).not.toContain('Frecuencia')
+  })
+
+  it('ningún dato se pierde al repartirlo: lo que entra en laboratorios sale en algún bloque, una vez', () => {
+    const labs = [{ name: 'Peso', value: 78 }, { name: 'Peso molecular', value: 3 }, { name: 'FR', value: 16 }, { name: 'Glucemia', value: 132 }]
+    show({ labs, medications: [], conditions: [] })
+    const text = container.textContent ?? ''
+    for (const lab of labs) expect(text.split(`${lab.name}: ${lab.value}`).length - 1, lab.name).toBe(1)
+  })
+
+  it('con frecuencia cardíaca y sin presión, signos vitales aparece igual', () => {
+    show({ labs: [{ name: 'FC', value: 80 }], medications: [], conditions: [] })
+    expect(blocks().map((b) => b.getAttribute('data-block'))).toEqual(['vitales'])
+  })
+
+  it('la confianza de un dato lo acompaña al bloque donde se muestra', () => {
+    show({ labs: [{ name: 'Peso', value: 78 }], medications: [], conditions: [], fieldConfidence: { labs: { peso: 'low' } } }, (level) => (level ? <em data-level={level}>{level}</em> : null))
+    expect(blocks()[0]!.getAttribute('data-block')).toBe('antropometria')
+    expect(blocks()[0]!.querySelector('[data-level="low"]')).not.toBeNull()
   })
 })
