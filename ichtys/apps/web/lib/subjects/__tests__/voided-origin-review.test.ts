@@ -54,8 +54,12 @@ describe('retireErrorMessage — ningún rechazo se traga en silencio', () => {
     expect(retireErrorMessage(422, 'profile_unreadable')).toContain('no se pudo leer')
   })
 
-  it('cualquier otra cosa: no se retiró nada', () => {
-    expect(retireErrorMessage(500, 'request_failed')).toBe('No se pudo retirar. El perfil no cambió.')
+  it('un pedido que el servidor rechazó por otra cosa: el perfil no cambió', () => {
+    expect(retireErrorMessage(400, 'request_failed')).toBe('No se pudo retirar. El perfil no cambió.')
+  })
+
+  it('un fallo del servidor no prueba que el perfil no cambió: no se afirma', () => {
+    expect(retireErrorMessage(500, 'request_failed')).toBe('No se pudo confirmar si se retiró. Mirá el perfil antes de volver a intentar.')
   })
 })
 

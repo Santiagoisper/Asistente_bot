@@ -150,7 +150,11 @@ export function retireErrorMessage(status: number, code: string): string {
   if (code === 'evolution_not_voided' || status === 404) return 'Esa evolución no figura como registrada por error en este sujeto. No se retiró nada: recargá la página.'
   if (status === 403) return 'Retirar datos del perfil lo hace quien puede escribir evoluciones de este sujeto. No se retiró nada: avisá a quien coordina el estudio.'
   if (status === 429) return 'Demasiados pedidos seguidos. No se retiró nada. Esperá un momento y volvé a intentar.'
-  return profileWriteErrorMessage(code) ?? 'No se pudo retirar. El perfil no cambió.'
+  const known = profileWriteErrorMessage(code)
+  if (known) return known
+  if (status >= 400 && status < 500) return 'No se pudo retirar. El perfil no cambió.'
+  // Sin respuesta o con un fallo del servidor no se sabe si el cambio entró: no se afirma.
+  return 'No se pudo confirmar si se retiró. Mirá el perfil antes de volver a intentar.'
 }
 
 /**
