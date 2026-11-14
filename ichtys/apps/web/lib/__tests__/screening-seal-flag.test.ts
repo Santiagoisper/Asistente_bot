@@ -1,45 +1,36 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { isScreeningSealEnabled, SCREENING_SEAL_CLOSES_AT } from '../flags'
+import { SCREENING_SEAL_CLOSES_AT, screeningSealOperators } from '../flags'
 
 /**
- * La ruta de sellado (C3) es un trabajo que se hace una vez. Tiene fecha de baja: pasada esa
- * fecha no responde en ningún entorno, aunque alguien deje la variable encendida.
+ * La ruta de sellado (C3) es un trabajo de quien responde por el sistema y se hace una vez.
+ * La habilita una lista de operadores (ALPHI_SEAL_OPERATORS) y tiene fecha de baja: pasada
+ * esa fecha no hay operadores en ningún entorno, aunque la variable siga cargada.
  */
-const saved = { vercel: process.env.VERCEL_ENV, flag: process.env.ALPHI_SEAL_SCREENING }
+const saved = process.env.ALPHI_SEAL_OPERATORS
 const before = new Date('2026-11-20T12:00:00Z')
 
 afterEach(() => {
-  for (const [key, value] of [['VERCEL_ENV', saved.vercel], ['ALPHI_SEAL_SCREENING', saved.flag]] as const) {
-    if (value === undefined) delete process.env[key]
-    else process.env[key] = value
-  }
+  if (saved === undefined) delete process.env.ALPHI_SEAL_OPERATORS
+  else process.env.ALPHI_SEAL_OPERATORS = saved
 })
 
-describe('isScreeningSealEnabled — la ruta de sellado y su fecha de baja', () => {
-  it('fuera de producción está abierta hasta la fecha de baja', () => {
-    process.env.VERCEL_ENV = 'preview'
-    delete process.env.ALPHI_SEAL_SCREENING
-    expect(isScreeningSealEnabled(before)).toBe(true)
+describe('screeningSealOperators — quién puede sellar, y hasta cuándo', () => {
+  it('sin la variable no hay operadores: la ruta no existe en ningún entorno', () => {
+    delete process.env.ALPHI_SEAL_OPERATORS
+    expect(screeningSealOperators(before)).toEqual([])
+    process.env.ALPHI_SEAL_OPERATORS = '  ,  , '
+    expect(screeningSealOperators(before)).toEqual([])
   })
 
-  it('en producción está cerrada salvo que alguien la encienda a propósito', () => {
-    process.env.VERCEL_ENV = 'production'
-    delete process.env.ALPHI_SEAL_SCREENING
-    expect(isScreeningSealEnabled(before)).toBe(false)
-    process.env.ALPHI_SEAL_SCREENING = 'true'
-    expect(isScreeningSealEnabled(before)).toBe(false)
-    process.env.ALPHI_SEAL_SCREENING = 'on'
-    expect(isScreeningSealEnabled(before)).toBe(true)
+  it('lee los identificadores de usuario separados por coma, sin espacios ni repetidos', () => {
+    process.env.ALPHI_SEAL_OPERATORS = ' user_a , user_b,user_a,'
+    expect(screeningSealOperators(before)).toEqual(['user_a', 'user_b'])
   })
 
-  it('pasada la fecha de baja está cerrada en todos lados, también con la variable encendida', () => {
-    const after = new Date(SCREENING_SEAL_CLOSES_AT)
-    process.env.VERCEL_ENV = 'preview'
-    expect(isScreeningSealEnabled(after)).toBe(false)
-    process.env.VERCEL_ENV = 'production'
-    process.env.ALPHI_SEAL_SCREENING = 'on'
-    expect(isScreeningSealEnabled(after)).toBe(false)
-    expect(isScreeningSealEnabled(new Date(Date.parse(SCREENING_SEAL_CLOSES_AT) - 1))).toBe(true)
+  it('pasada la fecha de baja no hay operadores, aunque la variable siga cargada', () => {
+    process.env.ALPHI_SEAL_OPERATORS = 'user_a'
+    expect(screeningSealOperators(new Date(SCREENING_SEAL_CLOSES_AT))).toEqual([])
+    expect(screeningSealOperators(new Date(Date.parse(SCREENING_SEAL_CLOSES_AT) - 1))).toEqual(['user_a'])
   })
 
   it('la fecha de baja es el 1 de enero de 2027', () => {

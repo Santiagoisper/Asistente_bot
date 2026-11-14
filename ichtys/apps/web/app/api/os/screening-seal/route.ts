@@ -1,14 +1,10 @@
 import { auth } from '@clerk/nextjs/server'
-import { canAdministerOrg, normalizeRole } from '@ichtys/auth'
-import { loadAccessSubject } from '@ichtys/auth/access-subject'
-import { allows } from '@ichtys/auth/functions'
-import { db, eq, organizations } from '@ichtys/db'
 import { z } from 'zod'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../lib/api/body-limit'
-import { isScreeningSealEnabled } from '../../../../lib/flags'
+import { screeningSealOperators } from '../../../../lib/flags'
 import { databaseTargetOf } from '../../../../lib/subjects/screening-seal'
-import { runOrgSeal } from '../../../../lib/subjects/screening-seal-run'
-import { orgSealStore } from '../../../../lib/subjects/screening-seal-store'
+import { runSeal } from '../../../../lib/subjects/screening-seal-run'
+import { orgSealStore, sealOverview } from '../../../../lib/subjects/screening-seal-store'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -25,31 +21,39 @@ const sealInputSchema = z.object({ confirm: z.string().trim().min(1).max(300) })
  * Ruta con fecha de baja (`SCREENING_SEAL_CLOSES_AT`): sella las evaluaciones de elegibilidad
  * que se guardaron en claro antes del cifrado (C3, docs/compliance/REGULATORY-BASELINE.md).
  *
- * - Solo quien administra la organización, y solo para **su** organización: sale del token
- *   de la sesión, nunca del pedido.
- * - En producción no existe salvo que ALPHI_SEAL_SCREENING valga "on".
- * - Ninguna respuesta lleva contenido clínico: cantidades y a qué base apunta el entorno
- *   (`host/base`, sin usuario ni contraseña).
+ * - Es un trabajo de quien responde por el sistema, no de cada centro: solo los operadores de
+ *   ALPHI_SEAL_OPERATORS. Para cualquier otra persona, administre lo que administre, la ruta
+ *   no existe. Sin esa variable no existe en ningún entorno.
+ * - Recorre todas las organizaciones; cada tanda es de una sola y deja su registro a nombre
+ *   del operador.
+ * - Ninguna respuesta lleva contenido clínico ni identificadores de organización: cantidades
+ *   y a qué base apunta el entorno (`host/base`, sin usuario ni contraseña), que solo ve el
+ *   operador.
  */
-async function authorize(): Promise<{ orgId: string; userId: string } | Response> {
-  if (!isScreeningSealEnabled()) return new Response('Not Found', { status: 404 })
-  const { userId, orgId: clerkOrgId, orgRole } = await auth()
-  if (!userId || !clerkOrgId) return new Response('Unauthorized', { status: 401 })
-  const org = await db.query.organizations.findFirst({ where: eq(organizations.clerkOrgId, clerkOrgId) })
-  if (!org) return new Response('Forbidden', { status: 403 })
-  const access = await loadAccessSubject({ org, userId, role: normalizeRole(orgRole) })
-  if (!allows(access, 'org.settings', canAdministerOrg)) return new Response('Forbidden', { status: 403 })
-  return { orgId: org.id, userId }
+async function operatorId(): Promise<string | Response> {
+  const operators = screeningSealOperators()
+  if (operators.length === 0) return new Response('Not Found', { status: 404 })
+  const { userId } = await auth()
+  if (!userId) return new Response('Unauthorized', { status: 401 })
+  if (!operators.includes(userId)) return new Response('Not Found', { status: 404 })
+  return userId
 }
 
-/** GET — cuánto hay para sellar en la organización. No escribe ni lee contenido: cuenta. */
+/** GET — cuánto hay para sellar en todo el sistema. No escribe ni lee contenido: cuenta. */
 export async function GET(): Promise<Response> {
   try {
-    const who = await authorize()
-    if (who instanceof Response) return who
-    const store = orgSealStore(who.orgId)
-    const [rows, plain, foreignEnvelope] = await Promise.all([store.countRows(), store.countPlain(), store.countForeign()])
-    return Response.json({ rows, plain, foreignEnvelope, target: databaseTargetOf(process.env.DATABASE_URL) })
+    const operator = await operatorId()
+    if (operator instanceof Response) return operator
+    const overview = await sealOverview()
+    const sum = (pick: (org: (typeof overview)[number]) => number) => overview.reduce((total, org) => total + pick(org), 0)
+    return Response.json({
+      organizations: overview.length,
+      organizationsWithPlain: overview.filter((org) => org.plain > 0).length,
+      rows: sum((org) => org.rows),
+      plain: sum((org) => org.plain),
+      foreignEnvelope: sum((org) => org.foreignEnvelope),
+      target: databaseTargetOf(process.env.DATABASE_URL),
+    })
   } catch {
     return Response.json({ error: 'seal_status_failed' }, { status: 500 })
   }
@@ -61,8 +65,8 @@ export async function GET(): Promise<Response> {
  */
 export async function POST(req: Request): Promise<Response> {
   try {
-    const who = await authorize()
-    if (who instanceof Response) return who
+    const operator = await operatorId()
+    if (operator instanceof Response) return operator
 
     let body: unknown
     try {
@@ -77,9 +81,9 @@ export async function POST(req: Request): Promise<Response> {
     const target = databaseTargetOf(process.env.DATABASE_URL)
     if (target === null || parsed.data.confirm !== target) return Response.json({ error: 'target_mismatch' }, { status: 409 })
 
-    const outcome = await runOrgSeal(orgSealStore(who.orgId), { orgId: who.orgId, userId: who.userId, batchSize: BATCH_SIZE, budgetMs: BUDGET_MS })
-    if (outcome.status === 'done' || outcome.status === 'partial') return Response.json(outcome)
-    return Response.json({ error: outcome.status }, { status: 409 })
+    const outcome = await runSeal({ overview: sealOverview, storeFor: orgSealStore }, { userId: operator, batchSize: BATCH_SIZE, budgetMs: BUDGET_MS })
+    if (outcome.status === 'no_key') return Response.json({ error: 'no_key' }, { status: 409 })
+    return Response.json(outcome)
   } catch (err) {
     // Sin contenido ni identificadores: el mensaje de un error de ida y vuelta nombra la fila.
     const roundTrip = err instanceof Error && err.name === 'ScreeningSealRoundTripError'

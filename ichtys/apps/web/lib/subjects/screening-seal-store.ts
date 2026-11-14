@@ -1,14 +1,14 @@
 /**
- * C3: lo que el sellado necesita de la base, **dentro de una organización**
- * (`screening-seal-run.ts` hace el recorrido). Toda consulta lleva la organización: quien
- * administra un centro no cuenta ni escribe filas de otro.
+ * C3: lo que el sellado necesita de la base (`screening-seal-run.ts` hace el recorrido).
+ * `sealOverview` cuenta, por organización, para el operador. `orgSealStore` trabaja **dentro
+ * de una organización**: toda consulta la lleva, y una tanda nunca mezcla filas de dos centros.
  *
  * Las condiciones son las mismas que usa `scripts/seal-screening-assessments.ts`, y eligen lo
  * mismo que `screeningColumnState`: un sobre es un objeto con `enc` y `ciphertext`.
  */
 import { and, count, db, eq, patientProfiles, screeningAssessments, sql } from '@ichtys/db'
 import { insertAuditLog } from '../audit/audited-write'
-import type { SealStore } from './screening-seal-run'
+import type { SealOverviewRow, SealStore } from './screening-seal-run'
 
 const KEY_SAMPLES = 5
 const cols = screeningAssessments
@@ -18,6 +18,20 @@ const summaryIsEnvelope = sql`(jsonb_typeof(${cols.summary}) = 'object' AND json
 const hasPlainColumn = sql`(NOT ${assessmentsIsEnvelope} OR NOT ${summaryIsEnvelope})`
 const hasForeignEnvelope = sql`((${assessmentsIsEnvelope} AND ${cols.assessments}->>'enc' IS DISTINCT FROM 'phi.v1') OR (${summaryIsEnvelope} AND ${cols.summary}->>'enc' IS DISTINCT FROM 'phi.v1'))`
 const assessmentsSealed = sql`(${assessmentsIsEnvelope} AND ${cols.assessments}->>'enc' = 'phi.v1')`
+
+/** Cantidades por organización, ordenadas. Sin contenido. */
+export async function sealOverview(): Promise<SealOverviewRow[]> {
+  return db
+    .select({
+      organizationId: cols.organizationId,
+      rows: count(),
+      plain: sql<number>`(count(*) FILTER (WHERE ${hasPlainColumn}))::int`,
+      foreignEnvelope: sql<number>`(count(*) FILTER (WHERE ${hasForeignEnvelope}))::int`,
+    })
+    .from(cols)
+    .groupBy(cols.organizationId)
+    .orderBy(cols.organizationId)
+}
 
 export function orgSealStore(orgId: string): SealStore {
   const inOrg = eq(cols.organizationId, orgId)
