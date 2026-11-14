@@ -56,6 +56,15 @@ describe('EvolutionAudios — de qué tomas no quedó grabación', () => {
     expect(text).not.toContain('no quedó')
   })
 
+  it('tres tomas y las tres vencidas: una grabación borrada por vencimiento no es una que falta', () => {
+    // El listado trae también las vencidas, sin contenido. Pedido de Architect en el #170.
+    const expired = (take: number): EvolutionAudioInfo => ({ ...audio(take), available: false })
+    const text = show({ audios: [expired(1), expired(2), expired(3)], dictationTakes: 3 })
+    expect(text).toContain('se borró al vencer el plazo de conservación')
+    expect(text).not.toContain('no hay grabación')
+    expect(text).not.toContain('no quedó')
+  })
+
   it('recién guardada por otra persona: no afirma que falte una grabación que puede estar subiendo', () => {
     expect(show({ audios: [], dictationTakes: 2, settled: false })).toBe('')
     expect(show({ audios: [audio(1)], dictationTakes: 2, settled: false })).not.toContain('no hay grabación')
