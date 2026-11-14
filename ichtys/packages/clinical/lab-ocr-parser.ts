@@ -17,21 +17,43 @@ export function redactLabHeaderPii(text: string): { text: string; redactedCount:
   return { text: result, redactedCount }
 }
 
+/** Cada patrón termina en el número (grupo 1). La unidad se lee aparte, de lo que sigue. */
 const LAB_LINE_PATTERNS: Array<{
   pattern: RegExp
   name: string
   unit?: string
 }> = [
-  { pattern: /hemoglobina\s+glicosilada\s*:?\s*(\d+[.,]\d+)\s*%?/i, name: 'HbA1c', unit: '%' },
-  { pattern: /hba1c\s*:?\s*(\d+[.,]\d+)\s*%?/i, name: 'HbA1c', unit: '%' },
-  { pattern: /glucosa\s*(?:en\s+ayunas)?\s*:?\s*(\d+[.,]?\d*)\s*(?:mg\/dl|mg\/dL)?/i, name: 'Glucosa', unit: 'mg/dL' },
-  { pattern: /creatinina\s*:?\s*(\d+[.,]?\d*)\s*(?:mg\/dl|mg\/dL)?/i, name: 'Creatinina', unit: 'mg/dL' },
+  { pattern: /hemoglobina\s+glicosilada\s*:?\s*(\d+[.,]\d+)/i, name: 'HbA1c', unit: '%' },
+  // «Hemoglobina glicosilada (HbA1c): 7,8 %»: el paréntesis que cierra queda antes de los dos puntos.
+  { pattern: /hba1c\)?\s*:?\s*(\d+[.,]\d+)/i, name: 'HbA1c', unit: '%' },
+  // «Glucemia» es como la informan los laboratorios de acá; es el mismo analito y se guarda
+  // con el mismo nombre, para que no quede duplicado con una «Glucosa» que venga de otra fuente.
+  {
+    pattern: /(?:glucosa|glucemia|glicemia)\s*(?:en\s+ayunas|basal)?\s*:?\s*(\d+[.,]?\d*)/i,
+    name: 'Glucosa',
+    unit: 'mg/dL',
+  },
+  { pattern: /creatinina\s*:?\s*(\d+[.,]?\d*)/i, name: 'Creatinina', unit: 'mg/dL' },
   {
     pattern: /(?:eGFR|TFG|filtrado\s+glomerular)\s*:?\s*(\d+[.,]?\d*)/i,
     name: 'eGFR',
     unit: 'mL/min',
   },
 ]
+
+/** Una unidad pegada al número: `%`, `mg%`, o algo con barra (`mg/dL`, `mmol/L`, `mL/min/1,73m2`). */
+const WRITTEN_UNIT = /^\s*(%|[a-zµμ]+%|[a-zµμ]+(?:\/[a-z0-9.,²]+){1,2})/i
+
+/**
+ * La unidad del valor. Si el texto trae una unidad distinta de la habitual, manda la escrita:
+ * proponer «7,3 mmol/L» como «7,3 mg/dL» es proponer otro valor. Si trae la habitual (con
+ * otra forma de escribirla, o con algo más detrás) o no trae ninguna, queda la habitual.
+ */
+function unitFor(afterNumber: string, usual: string | undefined): string | undefined {
+  const written = afterNumber.match(WRITTEN_UNIT)?.[1]
+  if (!written || !usual) return written ?? usual
+  return written.toLowerCase().startsWith(usual.toLowerCase()) ? usual : written
+}
 
 export interface LabOcrParseResult {
   requiresHumanReview: true
@@ -56,7 +78,8 @@ export function parseLabOcrText(rawText: string): LabOcrParseResult {
   for (const { pattern, name, unit } of LAB_LINE_PATTERNS) {
     const match = redacted.match(pattern)
     if (match?.[1]) {
-      labs = upsertLab(labs, { name, value: parseDecimal(match[1]), unit })
+      const afterNumber = redacted.slice((match.index ?? 0) + match[0].length)
+      labs = upsertLab(labs, { name, value: parseDecimal(match[1]), unit: unitFor(afterNumber, unit) })
     }
   }
 
