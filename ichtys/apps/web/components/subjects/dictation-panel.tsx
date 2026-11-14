@@ -20,6 +20,7 @@ import {
   DICTATION_RECORDING_BITS_PER_SECOND,
   type TranscriberEvent,
 } from '../../lib/dictation/protocol'
+import { takesNotice } from '../../lib/dictation/takes'
 import { useMicLevel } from '../../lib/dictation/use-mic-level'
 import { RecordButton } from './record-button'
 
@@ -347,11 +348,7 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
                 </div>
               ) : null}
               <p className="text-xs text-alphi-muted">
-                {takes > 1
-                  ? 'Se sumó a lo que ya estaba. Junto a la evolución se guarda la grabación de la primera toma; lo agregado después queda como texto.'
-                  : tooLarge
-                  ? 'Esta grabación es demasiado grande para guardarse junto a la evolución: va a quedar solo el texto.'
-                  : `Al guardar la evolución, la grabación queda guardada ${DICTATION_AUDIO_RETENTION_DAYS} días. Todavía no se guardó nada.`}
+                {takesNotice({ takes, tooLarge, retentionDays: DICTATION_AUDIO_RETENTION_DAYS })}
               </p>
               {draft.repetitions.length > 0 ? (
                 <div role="alert" className="rounded border border-alphi-rose bg-red-50 px-3 py-2 text-xs text-red-900">

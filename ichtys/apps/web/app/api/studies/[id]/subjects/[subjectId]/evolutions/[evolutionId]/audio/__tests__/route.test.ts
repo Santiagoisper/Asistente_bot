@@ -137,6 +137,24 @@ describe('POST — guardar la grabación', () => {
     expect(mocks.audits[0]).toMatchObject({ metadata: { stored: false } })
   })
 
+  it('sin número de toma guarda la primera; con X-Take guarda esa, y el registro la nombra (D22)', async () => {
+    await POST(upload(), params)
+    expect(mocks.storeDictationAudio.mock.calls[0]![1]).toMatchObject({ take: 1 })
+    expect(mocks.audits[0]).toMatchObject({ metadata: { take: 1 } })
+
+    await POST(upload({ headers: { 'x-take': '3' } }), params)
+    expect(mocks.storeDictationAudio.mock.calls[1]![1]).toMatchObject({ take: 3 })
+    expect(mocks.audits[1]).toMatchObject({ metadata: { take: 3, stored: true } })
+  })
+
+  it.each(['0', '6', 'dos', '1.5', ''])('un número de toma inválido (%j) se rechaza con 400 y no se guarda nada', async (take) => {
+    const res = await POST(upload({ headers: { 'x-take': take } }), params)
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ error: 'invalid_take', maxTakes: 5 })
+    expect(mocks.storeDictationAudio).not.toHaveBeenCalled()
+    expect(mocks.audits).toHaveLength(0)
+  })
+
   it('lo vencido que se limpia de paso queda registrado como borrado del sistema', async () => {
     mocks.purgeExpiredDictationAudios.mockResolvedValue([{ id: 'old-1', organizationId: 'org-9', studyId: 'study-9' }])
     await POST(upload(), params)
@@ -152,6 +170,23 @@ describe('GET — escuchar la grabación', () => {
     expect(res.headers.get('content-type')).toBe('audio/webm')
     expect(res.headers.get('cache-control')).toBe('private, no-store')
     expect(mocks.writeAuditLog).toHaveBeenCalledWith(expect.objectContaining({ action: 'evolution.audio.listen', userId: 'user_author', resourceId: 'audio-1' }))
+  })
+
+  it('pide la toma de la URL (la primera si no dice cuál) y el registro la nombra (D22)', async () => {
+    mocks.loadDictationAudio.mockResolvedValue({ state: 'ok', id: 'audio-2', mime: 'audio/webm', bytes: new Uint8Array([9]) })
+    await GET(new Request('http://test/audio'), params)
+    expect(mocks.loadDictationAudio.mock.calls[0]![0]).toMatchObject({ evolutionId: EVOLUTION, take: 1 })
+
+    await GET(new Request('http://test/audio?take=2'), params)
+    expect(mocks.loadDictationAudio.mock.calls[1]![0]).toMatchObject({ evolutionId: EVOLUTION, take: 2 })
+    expect(mocks.writeAuditLog).toHaveBeenLastCalledWith(expect.objectContaining({ resourceId: 'audio-2', metadata: expect.objectContaining({ take: 2 }) }))
+  })
+
+  it.each(['0', '6', 'dos'])('una toma inválida en la URL (%j) responde como si no existiera, sin buscar ni registrar', async (take) => {
+    const res = await GET(new Request(`http://test/audio?take=${take}`), params)
+    expect(res.status).toBe(404)
+    expect(mocks.loadDictationAudio).not.toHaveBeenCalled()
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
   })
 
   it('si el registro falla, no se entrega', async () => {
