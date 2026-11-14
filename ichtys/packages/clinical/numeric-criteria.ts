@@ -223,8 +223,8 @@ function sideFails(value: number, side: 'min' | 'max', bound: NumericBound): boo
 }
 
 /**
- * Cota que se cita: la que no se cumple (mínimo primero), o el máximo cuando
- * el valor está dentro (caso "10,2 % ≤ 10,5 % (máximo inclusivo)").
+ * Cota que se cita cuando se cita una sola: la que no se cumple (mínimo primero), o la única
+ * que el criterio trae. Un rango cumplido cita las dos (ver `describeBoundComparison`).
  */
 function citedSide(value: number, bounds: AnalyteBounds, satisfies: boolean): 'min' | 'max' | null {
   if (!satisfies) {
@@ -236,7 +236,11 @@ function citedSide(value: number, bounds: AnalyteBounds, satisfies: boolean): 'm
   return null
 }
 
-/** Motivo que cita el valor ya convertido (en la unidad del criterio) y la cota que decide. */
+/**
+ * Motivo que cita el valor ya convertido (en la unidad del criterio) y la cota que decide.
+ * Si el criterio es un rango y el valor está adentro, deciden las dos cotas y se citan las
+ * dos: «HbA1c 7,9 % ≥ 7,0 % (mínimo inclusivo) y ≤ 10,5 % (máximo inclusivo)».
+ */
 export function describeBoundComparison(
   analyte: AnalyteId,
   valueInCriterionUnit: number,
@@ -244,6 +248,12 @@ export function describeBoundComparison(
   satisfies: boolean,
 ): string {
   const display = `${formatClinicalNumber(valueInCriterionUnit)} ${bounds.unit}`
+  if (satisfies && bounds.min && bounds.max) {
+    const low = boundClause(analyte, display, 'min', bounds.min, bounds.unit)
+    const high = boundClause(analyte, display, 'max', bounds.max, bounds.unit).slice(`${analyte} ${display} `.length)
+    const both = `${low} y ${high}`
+    return bounds.warning ? `${both}. ${bounds.warning}` : both
+  }
   const side = citedSide(valueInCriterionUnit, bounds, satisfies)
   const bound = side === 'min' ? bounds.min : side === 'max' ? bounds.max : undefined
   if (!bound || !side) return `${analyte} ${display}`
