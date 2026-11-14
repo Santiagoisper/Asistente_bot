@@ -1,4 +1,5 @@
 import { and, clinicalEvolutions, db, desc, eq, evolutionVoids, isNull, type EvolutionVoidReason } from '@ichtys/db'
+import type { DbExecutor, DbTransaction } from '../audit/audited-write'
 
 /**
  * El único lugar que lee evoluciones (docs/decisions/grabacion-en-sujeto-equivocado.md, D24).
@@ -114,9 +115,12 @@ export async function listSubjectEvolutions(scope: EvolutionScope, policy: Evolu
   }))
 }
 
-/** Una evolución, solo si es de esta organización, este estudio y este sujeto. */
-export async function findSubjectEvolution(params: EvolutionScope & { evolutionId: string }, policy: EvolutionVoidPolicy): Promise<EvolutionRef | null> {
-  const [row] = await db
+/**
+ * Una evolución, solo si es de esta organización, este estudio y este sujeto. `executor` es para
+ * leerla dentro de una transacción en curso (anular una evolución lee y escribe en la misma).
+ */
+export async function findSubjectEvolution(params: EvolutionScope & { evolutionId: string }, policy: EvolutionVoidPolicy, executor: DbExecutor = db): Promise<EvolutionRef | null> {
+  const [row] = await executor
     .select({ id: clinicalEvolutions.id, authorUserId: clinicalEvolutions.authorUserId, ...voidColumns })
     .from(clinicalEvolutions)
     .leftJoin(evolutionVoids, voidJoin())
@@ -131,6 +135,38 @@ export async function findSubjectEvolution(params: EvolutionScope & { evolutionI
     )
     .limit(1)
   return row ? { id: row.id, authorUserId: row.authorUserId, voided: markOf(row) } : null
+}
+
+/**
+ * Toma el bloqueo de la fila de una evolución dentro de la transacción en curso, y dice si la
+ * evolución está. Lo comparten las dos operaciones que no pueden cruzarse (D24, observación de
+ * Architect en el #172):
+ * - **anular** pide `'update'` (exclusivo);
+ * - **colgarle una grabación** pide `'share'`.
+ * Así una espera a la otra: o la anulación encuentra la grabación recién subida y la retira, o
+ * la subida encuentra la evolución ya anulada y no guarda nada. Sin esto, una toma que sube
+ * mientras se anula quedaba en el sujeto equivocado, sin retirar.
+ *
+ * **Es una consulta aparte, sin unir con las anulaciones, a propósito.** La anulación no modifica
+ * esta fila: agrega una en otra tabla. Una consulta que esperó el bloqueo sigue viendo la base
+ * como estaba cuando empezó, así que una unión hecha en esa misma consulta no vería la anulación
+ * que se confirmó mientras esperaba. Por eso el orden es siempre: primero este bloqueo, y
+ * después, en otra consulta, `findSubjectEvolution` con la misma transacción.
+ */
+export async function lockSubjectEvolution(params: EvolutionScope & { evolutionId: string }, mode: 'update' | 'share', tx: DbTransaction): Promise<boolean> {
+  const rows = await tx
+    .select({ id: clinicalEvolutions.id })
+    .from(clinicalEvolutions)
+    .where(
+      and(
+        eq(clinicalEvolutions.id, params.evolutionId),
+        eq(clinicalEvolutions.organizationId, params.orgId),
+        eq(clinicalEvolutions.studyId, params.studyId),
+        eq(clinicalEvolutions.subjectId, params.subjectId),
+      ),
+    )
+    .for(mode)
+  return rows.length === 1
 }
 
 /** Quiénes escribieron alguna evolución en la organización. */
