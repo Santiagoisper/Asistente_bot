@@ -107,7 +107,7 @@ Stack traces are never included in client responses (existing behavior unchanged
 
 Evoluciones, grabaciones y laboratorio no tenían límite: lo tenían 10 de las 55 rutas (chat, cargas de documentos, ingesta). Viene del requisito de que un centro con más de cien personas a la vez no pueda quedar degradado por un equipo que repite pedidos por error. Código: `apps/web/lib/security/clinical-rate-limit.ts`.
 
-**La diferencia con el chat, a propósito:** si el servicio que cuenta los pedidos no responde, el chat se bloquea (cada pedido gasta plata). Estas rutas no: **un límite no puede dejar a alguien sin poder guardar una evolución porque se cayó el contador.** En ese caso se cuenta dentro del proceso y el pedido sigue. Estas rutas nunca responden 503 por el límite. El costo: sin el servicio, el tope del centro no se aplica y el de cada persona vale por proceso, no en total.
+**La diferencia con el chat, a propósito:** si el servicio que cuenta los pedidos no responde, el chat se bloquea (cada pedido gasta plata). Estas rutas no: **un límite no puede dejar a alguien sin poder guardar una evolución porque se cayó el contador.** En ese caso se cuenta dentro del proceso y el pedido sigue. Estas rutas nunca responden 503 por el límite. En ese caso el tope del centro también se cuenta, en el proceso, primero el centro y después la persona: subir un informe de laboratorio llama a un modelo, y sin eso un centro entero quedaba sin tope de gasto mientras el contador estuviera caído (observación de Architect). El costo: contado por proceso, el tope es más flojo que el real, porque cada instancia lleva su cuenta. Nunca es más estricto.
 
 | Pedido | Por persona, por minuto | Por centro, por minuto | Variables |
 |---|---|---|---|
@@ -120,6 +120,7 @@ Evoluciones, grabaciones y laboratorio no tenían límite: lo tenían 10 de las 
 - Los topes son una estimación, no una medición: 120 personas guardando una evolución en el mismo minuto no llegan al tope del centro; una evolución lleva hasta cinco tomas. Se ajustan con la prueba de carga, que todavía no se hizo.
 - El límite se comprueba después del acceso (hace falta saber quién es) y antes de leer el cuerpo.
 - La respuesta 429 dice en castellano qué pasó y cuánto esperar. Al guardar una evolución, la pantalla avisa que no se guardó y que lo escrito sigue ahí.
+- **Una grabación frenada no se pierde.** El audio solo está en la memoria del navegador: ante un 429 al subir una toma, la pantalla espera lo que el servidor pide (cinco segundos si no lo dice, nunca más de 65) y reintenta una vez. Es el único punto donde frenar un pedido podía borrar un dato.
 - **No es una cuota de almacenamiento.** Limita el ritmo, no cuánto ocupa un centro. Con el audio dentro de la base, eso sigue pendiente.
 - **Quedan sin límite** las lecturas y las confirmaciones (sujetos, perfil, elegibilidad, confirmar o rechazar un informe o una propuesta, agenda, especificación).
 

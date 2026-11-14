@@ -4,8 +4,9 @@
  *
  * **Un límite no puede dejar a alguien sin poder guardar una evolución porque el servicio que
  * cuenta los pedidos no responde.** El chat se bloquea en ese caso (gasta plata); acá no. Si
- * el servicio no está, se cuenta dentro de este proceso y el pedido sigue. Estas rutas nunca
- * responden 503 por el límite.
+ * el servicio no está, se cuenta dentro de este proceso, por persona y por centro, y el pedido
+ * sigue. Estas rutas nunca responden 503 por el límite. Contado por proceso, el tope es más
+ * flojo que el real (cada instancia lleva su cuenta), nunca más estricto.
  *
  * Los topes están pensados para un centro con más de cien personas trabajando a la vez: el de
  * cada persona frena a un equipo que repite pedidos por error; el del centro, a muchos a la vez.
@@ -71,8 +72,10 @@ export async function clinicalRateLimit(kind: ClinicalLimitKind, context: Clinic
     limit: config.limit,
     windowSeconds: config.windowSeconds,
     ...(config.orgLimit !== undefined ? { orgKey: `${kind}-org:${context.orgId}`, orgLimit: config.orgLimit } : {}),
-    // Nunca `deny`: ver el comentario de arriba.
-    onRedisUnavailable: 'memory',
+    // Nunca `deny`: ver el comentario de arriba. El tope del centro se cuenta igual, en este
+    // proceso: subir un informe de laboratorio llama a un modelo, y sin eso un centro entero
+    // quedaba sin tope de gasto mientras el contador estuviera caído.
+    onRedisUnavailable: 'memory-with-org',
   })
   if (!result.limited) return null
 

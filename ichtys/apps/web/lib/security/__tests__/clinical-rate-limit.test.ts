@@ -55,6 +55,36 @@ describe('clinicalRateLimit — sin el servicio de conteo', () => {
   })
 })
 
+describe('clinicalRateLimit — sin el servicio de conteo, el tope del centro igual se cuenta', () => {
+  // Subir un informe de laboratorio llama a un modelo: es la única ruta clínica que gasta. Con
+  // el contador caído no se bloquea a nadie por la caída, pero el gasto del centro queda acotado.
+  it('121 subidas de laboratorio del mismo centro en un minuto: la 121 responde 429', async () => {
+    for (let i = 0; i < 120; i++) {
+      expect(await clinicalRateLimit('lab_upload', { orgId: 'org-a', userId: `user_${i}` })).toBeNull()
+    }
+    expect((await clinicalRateLimit('lab_upload', { orgId: 'org-a', userId: 'user_120' }))?.status).toBe(429)
+    expect(await clinicalRateLimit('lab_upload', { orgId: 'org-b', userId: 'user_120' })).toBeNull()
+  })
+
+  it('vale para todas las rutas clínicas con tope de centro, no solo para la que gasta', async () => {
+    vi.stubEnv('RATE_LIMIT_EVOLUTION_ORG_PER_MINUTE', '2')
+    expect(await clinicalRateLimit('evolution_write', { orgId: 'org-a', userId: 'u1' })).toBeNull()
+    expect(await clinicalRateLimit('evolution_write', { orgId: 'org-a', userId: 'u2' })).toBeNull()
+    expect((await clinicalRateLimit('evolution_write', { orgId: 'org-a', userId: 'u3' }))?.status).toBe(429)
+  })
+
+  it('un pedido frenado por el tope del centro no gasta el cupo de la persona', async () => {
+    vi.stubEnv('RATE_LIMIT_EVOLUTION_ORG_PER_MINUTE', '1')
+    vi.stubEnv('RATE_LIMIT_EVOLUTION_PER_MINUTE', '1')
+    expect(await clinicalRateLimit('evolution_write', { orgId: 'org-a', userId: 'u1' })).toBeNull()
+    expect((await clinicalRateLimit('evolution_write', { orgId: 'org-a', userId: 'u2' }))?.status).toBe(429)
+    // u2 no llegó a contarse: si el centro vuelve a tener lugar, su cupo de uno sigue entero.
+    vi.stubEnv('RATE_LIMIT_EVOLUTION_ORG_PER_MINUTE', '5')
+    expect(await clinicalRateLimit('evolution_write', { orgId: 'org-a', userId: 'u2' })).toBeNull()
+    expect((await clinicalRateLimit('evolution_write', { orgId: 'org-a', userId: 'u2' }))?.status).toBe(429)
+  })
+})
+
 describe('clinicalRateLimit — la respuesta', () => {
   it('dice en castellano qué pasó y cuánto esperar, y que no se guardó nada', async () => {
     vi.stubEnv('RATE_LIMIT_EVOLUTION_PER_MINUTE', '1')

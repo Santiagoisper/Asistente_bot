@@ -188,3 +188,59 @@ describe('uploadNotice — qué se le dice a la persona si alguna grabación no 
     expect(uploadNotice({ total: 3, failed: 1 })).toBe('La evolución se guardó. 1 de las 3 grabaciones no se pudo guardar; el texto quedó completo.')
   })
 })
+
+/**
+ * Una grabación frenada por el límite de pedidos (429) no se puede perder: el audio solo está
+ * en la memoria del navegador. Se espera lo que el servidor pide y se reintenta una vez.
+ */
+describe('uploadRecordingTakes — una toma frenada por el límite de pedidos', () => {
+  const take = (number: number) => ({ blob: new Blob(['x'], { type: 'audio/webm' }), durationSec: 5, take: number })
+  const limited = (retryAfter?: string) => new Response('{}', { status: 429, headers: retryAfter ? { 'Retry-After': retryAfter } : {} })
+  const ok = () => new Response('{}', { status: 201 })
+
+  it('espera lo que pide el servidor, reintenta y la toma queda guardada', async () => {
+    const waits: number[] = []
+    const responses = [limited('7'), ok()]
+    const result = await uploadRecordingTakes({ url: '/api/x/audio', takes: [take(1)], fetchImpl: async () => responses.shift()!, sleep: async (ms) => void waits.push(ms) })
+    expect(result).toEqual({ total: 1, failed: 0 })
+    expect(waits).toEqual([7000])
+  })
+
+  it('reintenta una sola vez: si sigue frenada, cuenta como no guardada', async () => {
+    let calls = 0
+    const result = await uploadRecordingTakes({ url: '/api/x/audio', takes: [take(1)], fetchImpl: async () => { calls += 1; return limited('3') }, sleep: async () => undefined })
+    expect(result).toEqual({ total: 1, failed: 1 })
+    expect(calls).toBe(2)
+  })
+
+  it('sin un tiempo usable espera cinco segundos; uno desmedido se recorta a poco más de un minuto', async () => {
+    for (const [header, expected] of [[undefined, 5000], ['no es un número', 5000], ['0', 5000], ['900', 65000]] as const) {
+      const waits: number[] = []
+      const responses = [limited(header), ok()]
+      await uploadRecordingTakes({ url: '/api/x/audio', takes: [take(1)], fetchImpl: async () => responses.shift()!, sleep: async (ms) => void waits.push(ms) })
+      expect(waits).toEqual([expected])
+    }
+  })
+
+  it('el reintento manda la misma toma, con su número', async () => {
+    const sent: string[] = []
+    const responses = [limited('1'), ok(), ok()]
+    await uploadRecordingTakes({
+      url: '/api/x/audio',
+      takes: [take(2), take(3)],
+      fetchImpl: async (_url, init) => {
+        sent.push((init?.headers as Record<string, string>)['X-Take']!)
+        return responses.shift()!
+      },
+      sleep: async () => undefined,
+    })
+    expect(sent).toEqual(['2', '2', '3'])
+  })
+
+  it('otro error no se reintenta', async () => {
+    let calls = 0
+    const result = await uploadRecordingTakes({ url: '/api/x/audio', takes: [take(1)], fetchImpl: async () => { calls += 1; return new Response('{}', { status: 500 }) }, sleep: async () => undefined })
+    expect(result).toEqual({ total: 1, failed: 1 })
+    expect(calls).toBe(1)
+  })
+})
