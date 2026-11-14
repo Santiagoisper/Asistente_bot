@@ -9,6 +9,7 @@ import { and, db, desc, documentVersions, eq, patientProfiles, screeningAssessme
 import type { StudySpec } from '@ichtys/ingestion/study-spec'
 import { insertAuditLog } from '../audit/audited-write'
 import { writeAuditLog, type AuditLogParams } from '../chat/persistence'
+import { openScreeningJson, sealScreeningJson } from './screening-crypto'
 
 export interface ScreeningEvaluationResult {
   assessments: CriterionAssessment[]
@@ -90,7 +91,10 @@ export async function evaluateAndPersistScreening(params: {
   // El perfil cambia de versión también cuando solo se suma o se descarta una
   // propuesta sin aceptar, que el motor no mira. Una evaluación idéntica a la
   // última, con el mismo protocolo, no es una instantánea nueva.
-  const sameResult = lastSnapshot !== undefined && canonical(lastSnapshot.assessments) === canonical(validated)
+  // La instantánea anterior puede estar cifrada (C3) o ser una fila anterior al cifrado. Una
+  // que no se puede leer no se da por igual: se guarda la nueva.
+  const previous = lastSnapshot === undefined ? null : openScreeningJson(lastSnapshot.assessments)
+  const sameResult = previous !== null && previous.ok && canonical(previous.value) === canonical(validated)
   const needsPersist =
     !lastSnapshot ||
     lastSnapshot.studySpecVersion !== params.specVersion ||
@@ -109,8 +113,9 @@ export async function evaluateAndPersistScreening(params: {
           subjectId: params.subjectId,
           studySpecVersion: params.specVersion,
           profileUpdatedAt,
-          assessments: validated,
-          summary,
+          // C3: la evaluación cita valores del sujeto; se guarda cifrada.
+          assessments: sealScreeningJson(validated),
+          summary: sealScreeningJson(summary),
         })
         .returning({ id: screeningAssessments.id })
       const snapshotId = inserted?.id ?? null
