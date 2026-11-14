@@ -68,6 +68,7 @@ vi.mock('../profile-version', () => ({
 import { parsePatientProfile, type PatientProfile } from '@ichtys/clinical'
 import { decryptProfileJson, encryptProfileJson } from '../phi-fields'
 import { db } from '@ichtys/db'
+import { retireVoidedOriginFacts } from '../voided-origin-retire-service'
 import { confirmProfileProposal, loadPatientProfile, ProfileConflictError, ProfileUnreadableError, rejectProfileProposal, retireProposalOfVoidedEvolution, updatePatientProfile } from '../patient-profile-service'
 
 const scope = { orgId: 'org-1', studyId: 'study-1', subjectId: 'subject-1' }
@@ -337,5 +338,80 @@ describe('D24 — lo retirado del perfil sobrevive a las demás escrituras', () 
     writeDirectly({ ...stored(), retiredFacts })
     await updatePatientProfile(scope, addLab('Glucosa', 92), audit)
     expect(stored().retiredFacts).toEqual(retiredFacts)
+  })
+})
+
+/** D24, 4 bis: el retiro escribe el perfil y su registro juntos, y el registro no lleva datos. */
+describe('D24 — retirar del perfil lo que entró desde una evolución anulada', () => {
+  const VOIDED = '11111111-1111-4111-8111-111111111111'
+  const who = { ...scope, userId: 'user_md', evolutionId: VOIDED }
+  const fromVoided = { name: 'Ferritina', value: 480, source: { kind: 'evolution' as const, evolutionId: VOIDED } }
+  const seed = () => writeDirectly({ ...stored(), labs: [fromVoided, lab('Glucosa', 110)], medications: [{ name: 'Atorvastatina' }], conditions: ['Hipotiroidismo'] })
+
+  it('saca lo que corresponde, lo conserva cifrado y deja un registro con cantidades', async () => {
+    seed()
+    const result = await retireVoidedOriginFacts({ ...who, medications: ['Atorvastatina'], conditions: [] })
+    expect(result.removed).toEqual({ labs: 1, medications: 1, conditions: 0, age: false, bloodPressure: false })
+    expect(stored().labs.map((entry) => entry.name)).toEqual(['Glucosa'])
+    expect(stored().retiredFacts?.[0]).toMatchObject({ evolutionId: VOIDED, retiredBy: 'user_md' })
+    expect(store.row!.profileEncrypted).not.toContain('Ferritina')
+    expect(store.looseWrites).toBe(0)
+    expect(store.audits).toHaveLength(1)
+    expect(store.audits[0]).toMatchObject({
+      action: 'profile.update',
+      userId: 'user_md',
+      resourceType: 'subject',
+      resourceId: 'subject-1',
+      metadata: { source: 'voided_origin_retire', evolutionId: VOIDED, humanConfirmed: true, labs: 1, medications: 1, conditions: 0, age: false, bloodPressure: false },
+    })
+  })
+
+  it('el registro no lleva nombres ni valores de lo retirado', async () => {
+    seed()
+    await retireVoidedOriginFacts({ ...who, medications: ['Atorvastatina'], conditions: ['Hipotiroidismo'] })
+    const text = JSON.stringify(store.audits)
+    for (const leaked of ['Ferritina', '480', 'Atorvastatina', 'Hipotiroidismo']) expect(text).not.toContain(leaked)
+  })
+
+  it('si el registro no se puede escribir, el perfil no cambia', async () => {
+    seed()
+    store.failAudit = true
+    await expect(retireVoidedOriginFacts(who)).rejects.toThrow('audit insert failed')
+  })
+
+  it('si otra persona escribe el perfil en el medio, se vuelve a aplicar sobre lo nuevo y la fecha del retiro es una sola', async () => {
+    seed()
+    store.interleave = () => writeDirectly({ ...stored(), labs: [...stored().labs, lab('Urea', 30)] })
+    await retireVoidedOriginFacts(who)
+    expect(stored().labs.map((entry) => entry.name)).toEqual(['Glucosa', 'Urea'])
+    expect(stored().retiredFacts).toHaveLength(1)
+    expect(store.audits).toHaveLength(1)
+  })
+
+  it('una revisión declarada vacía queda registrada como tal, para poder contarlas', async () => {
+    writeDirectly({ ...stored(), labs: [lab('Glucosa', 110)] })
+    await retireVoidedOriginFacts({ ...who, nothingToRetire: true })
+    expect(stored().retiredFacts).toHaveLength(1)
+    expect(store.audits[0]).toMatchObject({ metadata: { source: 'voided_origin_retire', labs: 0, medications: 0, conditions: 0, nothingToRetire: true } })
+  })
+
+  it('un retiro con algo que sacar no lleva esa marca', async () => {
+    seed()
+    await retireVoidedOriginFacts(who)
+    expect((store.audits[0] as { metadata: Record<string, unknown> }).metadata).not.toHaveProperty('nothingToRetire')
+  })
+
+  it('sin nada que sacar y sin declararlo, no escribe nada', async () => {
+    writeDirectly({ ...stored(), labs: [lab('Glucosa', 110)] })
+    await expect(retireVoidedOriginFacts(who)).rejects.toMatchObject({ code: 'selection_required' })
+    expect(store.writes).toBe(0)
+    expect(store.audits).toHaveLength(0)
+  })
+
+  it('una elección que ya no está en el perfil no escribe nada', async () => {
+    seed()
+    await expect(retireVoidedOriginFacts({ ...who, medications: ['Enalapril'] })).rejects.toMatchObject({ code: 'not_in_profile' })
+    expect(store.writes).toBe(0)
+    expect(store.audits).toHaveLength(0)
   })
 })

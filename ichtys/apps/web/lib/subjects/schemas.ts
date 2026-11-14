@@ -81,3 +81,20 @@ export const labOcrConfirmSchema = z
     labs: z.array(labObservationInputSchema).max(MAX_LAB_ITEMS).optional(),
   })
   .strict()
+
+/**
+ * Retirar del perfil lo que entró desde una evolución anulada (D24, 4 bis). Los laboratorios de
+ * ese origen salen siempre y no se mandan; la persona elige el resto, por nombre.
+ */
+export const retireVoidedOriginInput = z
+  .object({
+    evolutionId: z.string().max(36).uuid(),
+    confirmedSubjectCode: z.string().trim().min(1).max(64),
+    removeAge: z.boolean().optional(),
+    removeBloodPressure: z.boolean().optional(),
+    medications: z.array(z.string().trim().min(1).max(200)).max(100).optional(),
+    conditions: z.array(z.string().trim().min(1).max(300)).max(100).optional(),
+    /** «Revisé el perfil y no hay nada de esa evolución». Solo vale como `true`. */
+    nothingToRetire: z.literal(true).optional(),
+  })
+  .strict()

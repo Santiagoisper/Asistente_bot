@@ -53,6 +53,8 @@ interface PatientProfileView {
     redactedSourcePreview?: string
   }
   /** Lo que se extrajo de una evolución y todavía nadie aceptó: no es parte del perfil. */
+  /** Evoluciones anuladas por las que una persona ya revisó el perfil (D24). Lo retirado no viaja. */
+  retiredFrom?: Array<{ evolutionId: string; retiredAt: string }>
   pendingEvolutionProposals?: Array<{
     requiresHumanReview: true
     evolutionId: string
@@ -427,6 +429,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
     labs: profile?.labs ?? [],
     voided: evolutions.filter((evo) => evo.voided).map((evo) => ({ id: evo.id, createdAt: evo.createdAt })),
     acceptedFrom: acceptedFromVoided ?? [],
+    reviewed: (profile?.retiredFrom ?? []).map((entry) => entry.evolutionId),
   })
   const pendingLabs = profile?.pendingLabReview
   const hasProfileData =

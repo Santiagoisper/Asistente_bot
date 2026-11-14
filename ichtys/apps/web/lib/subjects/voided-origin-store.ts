@@ -36,6 +36,8 @@ export async function listAcceptedProposalEvolutionIds(scope: SubjectScope, evol
         eq(auditLogs.resourceType, 'subject'),
         eq(auditLogs.resourceId, scope.subjectId),
         inArray(evolutionId, [...evolutionIds]),
+        // El retiro también es un `profile.update` con esa evolución, y no es una aceptación.
+        sql`coalesce(${auditLogs.metadata}->>'source', '') <> 'voided_origin_retire'`,
       ),
     )
   return rows.map((row) => row.evolutionId)
