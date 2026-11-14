@@ -546,3 +546,88 @@ describe('límite de pedidos — guardar una evolución', () => {
     expect(limit.clinicalRateLimit).not.toHaveBeenCalled()
   })
 })
+
+describe('D22 — cuántas tomas tuvo el dictado queda guardado con la evolución', () => {
+  const SOURCE = { kind: 'dictation', durationSec: 60, model: 'whisper-small', modelRevision: 'rev-abc', corrections: 0, missingBlocks: 0 }
+
+  /** Guarda lo que la ruta manda a insertar. */
+  function captureInsert(): { values: Array<Record<string, unknown>> } {
+    const captured = { values: [] as Array<Record<string, unknown>> }
+    mocks.tx.insert.mockImplementationOnce(() => ({
+      values: (row: Record<string, unknown>) => {
+        captured.values.push(row)
+        return { returning: mocks.dbInsertReturning }
+      },
+    }))
+    return captured
+  }
+
+  function post(body: unknown): Promise<Response> {
+    return POST(
+      new Request('http://localhost/api/evolutions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+      makeParams(),
+    )
+  }
+
+  it('un dictado en tres tomas guarda el tres en la evolución y lo deja en el registro', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbInsertReturning.mockResolvedValueOnce([{ id: mocks.EVOLUTION_ID, visitLabel: null, createdAt: new Date() }])
+    const captured = captureInsert()
+
+    const res = await post({ content: CLINICAL_TEXT, source: { ...SOURCE, takes: 3 } })
+
+    expect(res.status).toBe(201)
+    expect(captured.values).toHaveLength(1)
+    expect(captured.values[0]?.dictationTakes).toBe(3)
+    const auditCall = mocks.writeAuditLog.mock.calls[0]?.[0] as { metadata?: { source?: Record<string, unknown> } }
+    expect(auditCall.metadata?.source?.takes).toBe(3)
+  })
+
+  it('una evolución escrita a mano deja el número vacío', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbInsertReturning.mockResolvedValueOnce([{ id: mocks.EVOLUTION_ID, visitLabel: null, createdAt: new Date() }])
+    const captured = captureInsert()
+
+    const res = await post({ content: CLINICAL_TEXT })
+
+    expect(res.status).toBe(201)
+    expect(captured.values[0]?.dictationTakes).toBeNull()
+  })
+
+  it('un dictado de una pantalla anterior, que no manda las tomas, se guarda y deja el número vacío', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbInsertReturning.mockResolvedValueOnce([{ id: mocks.EVOLUTION_ID, visitLabel: null, createdAt: new Date() }])
+    const captured = captureInsert()
+
+    const res = await post({ content: CLINICAL_TEXT, source: SOURCE })
+
+    expect(res.status).toBe(201)
+    expect(captured.values[0]?.dictationTakes).toBeNull()
+  })
+
+  it.each([0, -1, 1.5, 100, '3'])('rechaza %s como cantidad de tomas y no guarda nada', async (takes) => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+
+    const res = await post({ content: CLINICAL_TEXT, source: { ...SOURCE, takes } })
+
+    expect(res.status).toBe(400)
+    expect(mocks.tx.insert).not.toHaveBeenCalled()
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+  })
+
+  it('GET devuelve las tomas de cada evolución, y vacío donde no se dictó o es anterior', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbFindMany.mockResolvedValueOnce([
+      { id: 'evo-dictada', visitLabel: null, contentEncrypted: 'enc:a', authorUserId: mocks.USER_ID, createdAt: new Date('2026-11-14T12:00:00Z'), dictationTakes: 2 },
+      { id: 'evo-a-mano', visitLabel: null, contentEncrypted: 'enc:b', authorUserId: mocks.USER_ID, createdAt: new Date('2026-11-13T12:00:00Z'), dictationTakes: null },
+    ])
+
+    const res = await GET(new Request('http://localhost/api/evolutions'), makeParams())
+    const body = (await res.json()) as { evolutions: Array<{ id: string; dictationTakes: number | null }> }
+
+    expect(body.evolutions.map((evolution) => [evolution.id, evolution.dictationTakes])).toEqual([
+      ['evo-dictada', 2],
+      ['evo-a-mano', null],
+    ])
+  })
+})
