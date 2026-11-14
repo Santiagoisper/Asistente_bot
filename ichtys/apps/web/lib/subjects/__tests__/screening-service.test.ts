@@ -59,7 +59,10 @@ vi.mock('@ichtys/db', () => {
 })
 vi.mock('../../chat/persistence', () => ({ writeAuditLog: mocks.writeAuditLog }))
 
+import { openScreeningJson, sealScreeningJson } from '../screening-crypto'
 import { evaluateAndPersistScreening } from '../screening-service'
+
+process.env.PHI_ENCRYPTION_KEY = '0f1e2d3c4b5a69788796a5b4c3d2e1f0'.repeat(2)
 
 const T0 = new Date('2026-11-12T12:00:00.000Z')
 const T1 = new Date('2026-11-12T13:00:00.000Z')
@@ -149,5 +152,49 @@ describe('evaluateAndPersistScreening — instantánea y registro', () => {
 
     expect(mocks.inserts).toEqual([])
     expect(mocks.writeAuditLog).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('evaluateAndPersistScreening — C3: la instantánea se guarda cifrada', () => {
+  it('lo que se inserta son dos sobres cifrados; el criterio y el motivo no quedan legibles', async () => {
+    mocks.lastSnapshot.mockResolvedValue(undefined)
+    await call()
+
+    const values = snapshotInserts()[0]!.values as { assessments: unknown; summary: unknown; studySpecVersion: number }
+    expect(values.studySpecVersion).toBe(2)
+    for (const sealed of [values.assessments, values.summary]) {
+      expect(sealed).toMatchObject({ enc: 'phi.v1', ciphertext: expect.stringMatching(/^v1:/) })
+    }
+    const stored = JSON.stringify(values)
+    for (const fragment of ['HbA1c', 'Dentro del rango', 'inclusion']) expect(stored).not.toContain(fragment)
+    expect(openScreeningJson(values.assessments)).toEqual({ ok: true, value: [PASS] })
+    expect(openScreeningJson(values.summary)).toEqual({ ok: true, value: { pass: 1, fail: 0, unknown: 0 } })
+  })
+
+  it('la respuesta a quien consulta sigue llevando la evaluación en claro', async () => {
+    mocks.lastSnapshot.mockResolvedValue(undefined)
+    const result = await call()
+    expect(result.assessments).toEqual([PASS])
+    expect(result.summary).toEqual({ pass: 1, fail: 0, unknown: 0 })
+  })
+
+  it('la instantánea anterior está cifrada y dice lo mismo: no guarda otra', async () => {
+    mocks.lastSnapshot.mockResolvedValue({ id: 'snapshot-old', studySpecVersion: 2, profileUpdatedAt: T0, assessments: sealScreeningJson([PASS_REORDERED]) })
+    const result = await call()
+    expect(mocks.inserts).toEqual([])
+    expect(result.persistedSnapshotId).toBe('snapshot-old')
+  })
+
+  it('la instantánea anterior está cifrada y dice otra cosa: guarda la nueva', async () => {
+    mocks.lastSnapshot.mockResolvedValue({ id: 'snapshot-old', studySpecVersion: 2, profileUpdatedAt: T0, assessments: sealScreeningJson([FAIL]) })
+    await call()
+    expect(snapshotInserts()).toHaveLength(1)
+    expect(auditInserts()).toHaveLength(1)
+  })
+
+  it('la instantánea anterior no se puede leer: no se da por igual, se guarda una nueva', async () => {
+    mocks.lastSnapshot.mockResolvedValue({ id: 'snapshot-old', studySpecVersion: 2, profileUpdatedAt: T0, assessments: { enc: 'phi.v1', ciphertext: 'roto' } })
+    await call()
+    expect(snapshotInserts()).toHaveLength(1)
   })
 })
