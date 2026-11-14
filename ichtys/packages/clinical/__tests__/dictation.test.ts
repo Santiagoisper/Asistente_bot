@@ -229,6 +229,34 @@ describe('bloques de la evolución dictada', () => {
       expect(byId.evaluacion).toBe('Estable.')
     })
 
+    describe('«Evaluación» también es el nombre de una visita', () => {
+      const byId = (text: string) => Object.fromEntries(splitIntoBlocks(text).map((block) => [block.id, block.text]))
+
+      it('«Evaluación de ingreso al estudio» al empezar es la apertura, no el apartado Evaluación', () => {
+        const blocks = byId('Evaluación de ingreso al estudio. Paciente de 58 años. Motivo de la visita. Control programado.')
+        expect(blocks.apertura).toBe('Evaluación de ingreso al estudio. Paciente de 58 años.')
+        expect(blocks.motivo).toBe('Control programado.')
+        expect(blocks.evaluacion).toBeNull()
+      })
+
+      it('«Evaluación basal» o «Evaluaciones de seguridad» en medio del dictado son texto del apartado en curso', () => {
+        const blocks = byId('Evolución. Evaluación basal sin particularidades. Evaluaciones de seguridad al día.')
+        expect(blocks.evolucion).toBe('Evaluación basal sin particularidades. Evaluaciones de seguridad al día.')
+        expect(blocks.evaluacion).toBeNull()
+      })
+
+      it('sola, con pausa, dos puntos o coma, sigue abriendo el apartado', () => {
+        expect(byId('Evaluación. Paciente estable.').evaluacion).toBe('Paciente estable.')
+        expect(byId('Evaluación: paciente estable.').evaluacion).toBe('Paciente estable.')
+        expect(byId('Plan. Continúa igual, evaluación, paciente estable.')).toMatchObject({ plan: 'Continúa igual.', evaluacion: 'Paciente estable.' })
+        expect(byId('Evaluaciones. Paciente estable.').evaluacion).toBe('Paciente estable.')
+      })
+
+      it('«Impresión clínica», que es lo que la guía manda decir, abre el apartado también de corrido', () => {
+        expect(byId('Impresión clínica paciente estable.').evaluacion).toBe('Paciente estable.')
+      })
+    })
+
     it('una frase que termina como un encabezado largo no lo abre', () => {
       const blocks = splitIntoBlocks('Eventos adversos. Ninguno desde la última visita.')
       const byId = Object.fromEntries(blocks.map((block) => [block.id, block.text]))
