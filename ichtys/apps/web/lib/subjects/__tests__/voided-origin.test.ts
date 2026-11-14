@@ -86,6 +86,31 @@ describe('voidedOriginNotice', () => {
   })
 })
 
+/**
+ * Cuando una persona ya revisó el perfil por esa evolución (hay una entrada en lo retirado), el
+ * aviso se va: lo que no guardaba origen ya lo miró alguien. Si todavía quedara un laboratorio
+ * de ese origen, sigue avisando: eso se sabe con certeza.
+ */
+describe('voidedOriginNotice — después de la revisión', () => {
+  it('una anulada con propuesta aceptada, ya revisada y sin laboratorios de ese origen, no avisa', () => {
+    expect(voidedOriginNotice({ labs: [fromEvolution('Glucosa', CURRENT)], voided: [voided(VOIDED)], acceptedFrom: [VOIDED], reviewed: [VOIDED] })).toBeNull()
+  })
+
+  it('una anulada anterior al registro, ya revisada, tampoco', () => {
+    expect(voidedOriginNotice({ labs: [], voided: [voided(OLD, '2026-11-10T09:00:00.000Z')], acceptedFrom: [], reviewed: [OLD] })).toBeNull()
+  })
+
+  it('revisada pero con un laboratorio de ese origen todavía en el perfil: sigue avisando', () => {
+    const notice = voidedOriginNotice({ labs: [fromEvolution('HbA1c', VOIDED)], voided: [voided(VOIDED)], acceptedFrom: [VOIDED], reviewed: [VOIDED] })
+    expect(notice?.labNames).toEqual(['HbA1c'])
+  })
+
+  it('revisar una no apaga el aviso de otra', () => {
+    const notice = voidedOriginNotice({ labs: [], voided: [voided(VOIDED), voided(OLD)], acceptedFrom: [VOIDED, OLD], reviewed: [VOIDED] })
+    expect(notice?.evolutionIds).toEqual([OLD])
+  })
+})
+
 describe('voidedOriginLines — lo que se le dice a la persona', () => {
   const accepted = { labNames: ['HbA1c', 'Glucosa'], evolutionIds: [VOIDED], acceptedProposal: true, beforeLogging: false }
 

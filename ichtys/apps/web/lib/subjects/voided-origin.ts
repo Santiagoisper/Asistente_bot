@@ -61,6 +61,12 @@ export function voidedOriginNotice(input: {
   labs: readonly LabWithOrigin[]
   voided: readonly VoidedEvolutionRef[]
   acceptedFrom: readonly string[]
+  /**
+   * Evoluciones por las que una persona ya revisó el perfil (hay una entrada en lo retirado).
+   * Lo que no guarda origen ya lo miró alguien: no se vuelve a avisar por eso. Un laboratorio
+   * de ese origen que siga en el perfil sí avisa: eso se sabe con certeza.
+   */
+  reviewed?: readonly string[]
 }): VoidedOriginNotice | null {
   const voided = new Set(input.voided.map((evolution) => evolution.id))
   if (voided.size === 0) return null
@@ -76,15 +82,16 @@ export function voidedOriginNotice(input: {
     if (!labNames.includes(lab.name)) labNames.push(lab.name)
     note(origin)
   }
+  const reviewed = new Set(input.reviewed ?? [])
   let acceptedProposal = false
   for (const evolutionId of input.acceptedFrom) {
-    if (!voided.has(evolutionId)) continue
+    if (!voided.has(evolutionId) || reviewed.has(evolutionId)) continue
     acceptedProposal = true
     note(evolutionId)
   }
   let beforeLogging = false
   for (const evolution of input.voided) {
-    if (!predatesLogging(evolution.createdAt)) continue
+    if (!predatesLogging(evolution.createdAt) || reviewed.has(evolution.id)) continue
     beforeLogging = true
     note(evolution.id)
   }
