@@ -39,6 +39,17 @@ describe('camino 2 — texto pegado y revisado', () => {
   })
 })
 
+describe('camino 2 — un texto pegado solo aporta nombre, valor y unidad', () => {
+  it('ni fecha de muestra ni rango de referencia: esos llegan solo de un informe confirmado', () => {
+    const labs = labsFromPastedText([{ name: 'ALT', value: 31, unit: 'U/L', referenceRange: 'hasta 400', sampleDate: '2026-09-24' }])
+    expect(labs).toEqual([{ name: 'ALT', value: 31, unit: 'U/L', source: { kind: 'pasted_text' } }])
+  })
+
+  it('sin unidad, no agrega la clave', () => {
+    expect(labsFromPastedText([{ name: 'ALT', value: 31 }])).toEqual([{ name: 'ALT', value: 31, source: { kind: 'pasted_text' } }])
+  })
+})
+
 describe('camino 3 — propuesta de una evolución, aceptada', () => {
   it('source = { kind: evolution, evolutionId } exacto, y sourceEvolutionId se conserva', () => {
     const merged = mergeProfileWithExtraction(

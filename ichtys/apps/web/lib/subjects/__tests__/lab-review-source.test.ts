@@ -46,6 +46,14 @@ describe('confirmLabOcrReview — origen de lo confirmado', () => {
     expect(profile.labs.find((lab) => lab.name === 'Glucemia')).toEqual({ name: 'Glucemia', value: 128, source: { kind: 'pasted_text' } })
   })
 
+  it('aunque lleguen con fecha de muestra y rango de referencia, lo guardado no los trae', async () => {
+    const profile = await confirmLabOcrReview({
+      ...scope,
+      labsOverride: [{ name: 'ALT', value: 31, unit: 'U/L', referenceRange: 'hasta 400', sampleDate: '2026-09-24' } as never],
+    })
+    expect(profile.labs.find((lab) => lab.name === 'ALT')).toEqual({ name: 'ALT', value: 31, unit: 'U/L', source: { kind: 'pasted_text' } })
+  })
+
   it('un valor que ya estaba en el perfil conserva su origen', async () => {
     const profile = await confirmLabOcrReview(scope)
     expect(profile.labs.find((lab) => lab.name === 'Creatinina')).toEqual({ name: 'Creatinina', value: 0.9, sourceEvolutionId: EVOLUTION, source: { kind: 'evolution', evolutionId: EVOLUTION } })

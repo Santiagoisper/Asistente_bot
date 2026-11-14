@@ -19,9 +19,19 @@ export function labsFromLabReport(labs: readonly IncomingLab[], reportId: string
   return labs.map((lab) => ({ ...withoutOrigin(lab), source: { kind: 'lab_report', reportId } }))
 }
 
-/** Valores de un texto pegado que una persona revisó. */
+/**
+ * Valores de un texto pegado que una persona revisó. De lo que llega se toman solo el nombre,
+ * el valor y la unidad: el rango de referencia y la fecha de la muestra llegan únicamente de
+ * un informe confirmado (el rango decide criterios como el de las transaminasas), y un texto
+ * pegado no puede aportarlos aunque el pedido los traiga.
+ */
 export function labsFromPastedText(labs: readonly IncomingLab[]): LabObservation[] {
-  return labs.map((lab) => ({ ...withoutOrigin(lab), source: { kind: 'pasted_text' } }))
+  return labs.map((lab) => ({
+    name: lab.name,
+    value: lab.value,
+    ...(lab.unit ? { unit: lab.unit } : {}),
+    source: { kind: 'pasted_text' },
+  }))
 }
 
 /**
