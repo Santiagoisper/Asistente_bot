@@ -29,7 +29,7 @@ Segunda objeción, de nombre: **«audios no identificados» no es cierto.** Una 
 Una acción sobre la evolución: «Se registró en el sujeto equivocado». Pide un motivo corto y una confirmación que nombra al sujeto, como D23.
 
 - **Quién puede (propuesta):** quien escribió la evolución, o quien coordina el estudio. Nadie más.
-- **No tiene vuelta atrás desde la pantalla.** Si se declaró por error, se corrige con una evolución nueva.
+- **No tiene vuelta atrás.** La base admite una sola anulación por evolución y no hay forma de revocarla sin borrar esa fila, que sería tapar un registro. Si se declaró por error, se corrige con una evolución nueva que lo diga. Architect pidió que esto se decida a sabiendas antes de aplicar la migración: es el punto 7 de lo que tiene que decidir Santiago.
 
 ### 2. La evolución se anula, no se borra
 
@@ -59,12 +59,12 @@ Una acción sobre la evolución: «Se registró en el sujeto equivocado». Pide 
 
 ## Datos
 
-Dos tablas nuevas. **Ninguna tabla existente cambia.** La migración la confirma Santiago.
+Dos tablas nuevas y una columna opcional en la tabla de grabaciones (migración `0021`). La tabla de evoluciones no cambia. La migración la confirma Santiago.
 
 - **Anulaciones de evoluciones:** una fila por evolución anulada. Evolución, organización, estudio, sujeto, motivo (lista cerrada; hoy solo «sujeto equivocado»), nota corta cifrada, quién y cuándo. La fila de la evolución no se modifica: que está anulada se sabe porque existe esta fila.
 - **Grabaciones sin sujeto:** una fila por toma. Organización, estudio, de qué grabación y de qué evolución vino, formato, tamaño, duración, huella, contenido cifrado, quién la grabó, cuándo vence, cuándo se borró, quién declaró el error y cuándo. Sin columna de sujeto.
 
-El contenido cifrado se copia a la tabla nueva y se vacía en la original, en la misma transacción. La fila original queda, como queda hoy una grabación vencida.
+El contenido cifrado se copia a la tabla nueva y se vacía en la original, en la misma transacción. La fila original queda, con la fecha en que se retiró (la columna nueva): así no se confunde con una grabación vencida, que lleva su fecha de borrado, y el borrado diario no la toma por pendiente. **La fila original no se borra nunca:** la del depósito cuelga de ella, y borrarla se la llevaría.
 
 El borrado diario de grabaciones vencidas tiene que recorrer también el depósito, con la misma regla.
 
@@ -94,7 +94,8 @@ En la misma transacción que el cambio: una entrada por la anulación y una por 
 3. **El aviso:** lista en Inicio, correo, o las dos.
 4. **Si el depósito se llama «Grabaciones sin sujeto»** en pantalla.
 5. **Medicaciones y condiciones:** si alcanza con que el aviso diga que su lista puede estar incompleta, o si se les agrega origen ahora.
-6. **La migración** de las dos tablas.
+6. **La migración** `0021`.
+7. **Si anular es definitivo.** Así está diseñado. La alternativa es una revocación con su propio registro; si se quiere, hay que decirlo antes de aplicar la migración, porque cambia la tabla.
 
 ## Sin verificar
 
