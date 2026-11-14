@@ -1,5 +1,7 @@
 export {
   patientProfileSchema,
+  retiredProfileFactsSchema,
+  type RetiredProfileFacts,
   emptyPatientProfile,
   parsePatientProfile,
   labObservationSchema,

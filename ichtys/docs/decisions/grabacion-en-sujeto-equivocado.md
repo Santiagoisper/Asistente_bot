@@ -39,6 +39,7 @@ Una acción sobre la evolución: «Se registró en el sujeto equivocado». Pide 
 - **Anular la evolución no cambia la elegibilidad por sí solo.** La elegibilidad no lee evoluciones: lee el perfil (corrección de Architect, comprobada en el código). Lo único que la cambia es sacar del perfil lo que entró desde esa evolución.
 - **Si su propuesta ya se había aceptado**, Alphi no deshace nada solo. Muestra en el sujeto un aviso que no se va hasta que alguien lo resuelva: «El perfil incluye datos aceptados desde una evolución anulada». La persona corrige el perfil, y recién entonces la elegibilidad se vuelve a calcular.
   - **Laboratorios: se pueden listar uno por uno.** Cada valor guarda de qué evolución vino (`packages/clinical/lab-source.ts`).
+  - **Edad y presión arterial: tampoco, y es peor (hallazgo del 14/11, al diseñar la corrección).** Aceptar una propuesta **pisa** la edad y la presión arterial del perfil con las de la evolución (`mergeProfileWithExtraction`), sin guardar origen ni el valor anterior. Si la evolución era de otra persona, la edad del perfil puede ser la de esa persona, y la edad decide criterios de inclusión. El aviso las nombra desde el PR que corrige su texto; el primero (#174) hablaba solo de medicaciones y condiciones.
   - **Medicaciones y condiciones: no.** No guardan origen. De esas solo se puede decir que se aceptó una propuesta de esa evolución, no cuáles quedaron. Hay dos salidas: agregarles origen, que es la misma idea de C4, o que el aviso diga con todas las letras que la lista de medicaciones y condiciones puede estar incompleta. La segunda no necesita cambiar datos y es la que propongo para la primera versión.
 
 ### 3. La grabación pasa al depósito
@@ -52,6 +53,29 @@ Una acción sobre la evolución: «Se registró en el sujeto equivocado». Pide 
 
 - A quien escribió la evolución, si no fue quien declaró el error: «Una evolución tuya en el sujeto X se marcó como registrada en el sujeto equivocado. La grabación está en tus grabaciones sin sujeto hasta el día tal.»
 - **A verificar:** hoy no hay un sistema de avisos entre personas dentro de Alphi. Lo mínimo es una lista «Grabaciones sin sujeto» en Inicio para quien tiene alguna. Si alcanza con eso o hace falta un correo, es parte de la decisión.
+
+### 4 bis. Retirar del perfil lo que entró desde la evolución anulada
+
+**Estado: propuesta de Claude (14/11/2026), en construcción por pasos. Santiago puede cambiar cualquiera de estos puntos.**
+
+El punto 2 dice «la persona corrige el perfil». Hasta hoy eso no tiene camino: el perfil solo se escribe aceptando propuestas y confirmando laboratorios; no hay forma de sacar un dato. Sin esto, el aviso de la ficha no se va nunca y la elegibilidad sigue calculándose con datos de otra persona.
+
+- **Quién:** quien hoy puede escribir el perfil de ese sujeto (la misma capacidad que acepta una propuesta, `clinical.author`). Coordinar el estudio alcanza para anular la evolución, no para decidir qué dato clínico sale del perfil.
+- **Sobre qué:** una evolución anulada de ese sujeto. La acción no existe para evoluciones vigentes: no es un editor general del perfil.
+- **Qué sale:**
+  - **Laboratorios cuyo origen es esa evolución: todos, sin elegir.** Son de otra persona por definición.
+  - **Edad y presión arterial:** la persona marca si salen. No guardan origen. Si salen, quedan vacías: el valor anterior fue pisado al aceptar la propuesta y no está guardado; lo vuelve a aportar una evolución vigente.
+  - **Medicaciones y condiciones:** la persona elige de la lista actual. No guardan origen, así que Alphi no puede decir cuáles vinieron de ahí.
+- **Una persona decide y confirma** (R6). Alphi lista y no marca nada por su cuenta, salvo los laboratorios, que tienen origen.
+- **Lo retirado no se destruye.** Pasa a `retiredFacts`, dentro del perfil cifrado, con de qué evolución era, quién lo retiró y cuándo. Una corrección no puede tapar lo que había. La elegibilidad no lee ese campo.
+- **Registro** en la misma transacción que la escritura (R3): cuántos laboratorios, medicaciones y condiciones salieron y si salieron edad y presión; nunca los valores ni los nombres.
+- **El aviso se va** cuando esa evolución tiene una entrada en `retiredFacts` y no quedan laboratorios de ese origen. Una entrada sin nada retirado vale: dice «revisé y no había nada que sacar».
+- **La elegibilidad** se recalcula sola la próxima vez que se lee: lee el perfil.
+- **No hay «deshacer» en pantalla.** Lo retirado queda guardado; devolverlo es volver a cargarlo por el camino normal.
+
+**Por qué en dos pasos.** El esquema del perfil descarta las claves que no conoce. Si el código que escribe `retiredFacts` llegara junto con el que lo lee, cualquier versión anterior que escribiera el perfil lo borraría sin avisar. Primero entra el lector (y un guardián que recorre el esquema), después quien escribe.
+
+**Para Calidad:** si retirar un dato del perfil necesita un motivo escrito además de la referencia a la evolución anulada, y si quien retira puede ser la misma persona que escribió la evolución.
 
 ### 5. Lo que esta versión no hace
 

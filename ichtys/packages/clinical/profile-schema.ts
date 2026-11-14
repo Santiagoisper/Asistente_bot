@@ -101,6 +101,37 @@ export const pendingProfileProposalSchema = z.object({
 })
 export type PendingProfileProposal = z.infer<typeof pendingProfileProposalSchema>
 
+/**
+ * Lo que una persona retiró del perfil porque había entrado desde una evolución que después se
+ * declaró registrada en el sujeto equivocado (docs/decisions/grabacion-en-sujeto-equivocado.md).
+ * No se destruye: queda acá, dentro del perfil cifrado, con de qué evolución era, quién lo
+ * retiró y cuándo. La elegibilidad no lo lee: lee `labs`, `medications`, `conditions`,
+ * `demographics` y `vitals`.
+ *
+ * Una entrada sin nada retirado también vale: dice que alguien revisó el perfil por esa
+ * evolución y no encontró qué sacar.
+ */
+export const retiredProfileFactsSchema = z.object({
+  evolutionId: z.string().uuid(),
+  retiredAt: z.string(),
+  /** Identificador de usuario de quien lo retiró. */
+  retiredBy: z.string().min(1),
+  labs: z.array(labObservationSchema).default([]),
+  medications: z.array(medicationSchema).default([]),
+  conditions: z.array(z.string()).default([]),
+  /** La edad que se quitó, si se quitó. El valor anterior a esa evolución no está guardado. */
+  ageYears: z.number().int().positive().optional(),
+  /** La presión arterial que se quitó, si se quitó. */
+  vitals: z
+    .object({
+      systolic: z.number().int().positive().optional(),
+      diastolic: z.number().int().positive().optional(),
+      bloodPressureLabel: z.string().optional(),
+    })
+    .optional(),
+})
+export type RetiredProfileFacts = z.infer<typeof retiredProfileFactsSchema>
+
 export const patientProfileSchema = z.object({
   version: z.literal(1).default(1),
   demographics: z
@@ -124,6 +155,12 @@ export const patientProfileSchema = z.object({
   pendingLabReview: pendingLabReviewSchema.optional(),
   /** Propuestas extraídas de evoluciones, pendientes de confirmación humana (R6). */
   pendingEvolutionProposals: z.array(pendingProfileProposalSchema).optional(),
+  /**
+   * Retirado por venir de una evolución anulada (D24). **Quien arme un perfil de cero tiene que
+   * copiarlo:** el esquema descarta lo que no conoce, y perderlo es perder el rastro de una
+   * corrección. Lo vigila `profile-retired-facts.test.ts`.
+   */
+  retiredFacts: z.array(retiredProfileFactsSchema).optional(),
   lastUpdatedAt: z.string().optional(),
   lastEvolutionId: z.string().uuid().optional(),
 })

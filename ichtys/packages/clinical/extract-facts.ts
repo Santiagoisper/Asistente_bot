@@ -152,6 +152,7 @@ export function mergeProfileWithFacts(
     labs,
     medications,
     conditions,
+    ...(current.retiredFacts ? { retiredFacts: current.retiredFacts } : {}),
     lastUpdatedAt: new Date().toISOString(),
     lastEvolutionId: evolutionId,
   }
