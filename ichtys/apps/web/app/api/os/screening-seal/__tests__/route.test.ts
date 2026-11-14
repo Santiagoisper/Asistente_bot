@@ -11,11 +11,12 @@ const mocks = vi.hoisted(() => ({
   runSeal: vi.fn(),
   sealOverview: vi.fn(),
   orgSealStore: vi.fn(),
+  sealKeySamples: vi.fn(),
 }))
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: mocks.auth }))
 vi.mock('../../../../../lib/subjects/screening-seal-run', () => ({ runSeal: mocks.runSeal }))
-vi.mock('../../../../../lib/subjects/screening-seal-store', () => ({ orgSealStore: mocks.orgSealStore, sealOverview: mocks.sealOverview }))
+vi.mock('../../../../../lib/subjects/screening-seal-store', () => ({ orgSealStore: mocks.orgSealStore, sealOverview: mocks.sealOverview, sealKeySamples: mocks.sealKeySamples }))
 
 import { GET, POST } from '../route'
 
@@ -101,7 +102,7 @@ describe('POST /api/os/screening-seal — sellar', () => {
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual(DONE)
     expect(mocks.runSeal).toHaveBeenCalledWith(
-      { overview: mocks.sealOverview, storeFor: mocks.orgSealStore },
+      { overview: mocks.sealOverview, keySamples: mocks.sealKeySamples, storeFor: mocks.orgSealStore },
       expect.objectContaining({ userId: OPERATOR }),
     )
   })

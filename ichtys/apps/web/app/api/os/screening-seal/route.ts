@@ -4,7 +4,7 @@ import { JsonBodyTooLargeError, readJsonBody } from '../../../../lib/api/body-li
 import { screeningSealOperators } from '../../../../lib/flags'
 import { databaseTargetOf } from '../../../../lib/subjects/screening-seal'
 import { runSeal } from '../../../../lib/subjects/screening-seal-run'
-import { orgSealStore, sealOverview } from '../../../../lib/subjects/screening-seal-store'
+import { orgSealStore, sealKeySamples, sealOverview } from '../../../../lib/subjects/screening-seal-store'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -81,7 +81,7 @@ export async function POST(req: Request): Promise<Response> {
     const target = databaseTargetOf(process.env.DATABASE_URL)
     if (target === null || parsed.data.confirm !== target) return Response.json({ error: 'target_mismatch' }, { status: 409 })
 
-    const outcome = await runSeal({ overview: sealOverview, storeFor: orgSealStore }, { userId: operator, batchSize: BATCH_SIZE, budgetMs: BUDGET_MS })
+    const outcome = await runSeal({ overview: sealOverview, keySamples: sealKeySamples, storeFor: orgSealStore }, { userId: operator, batchSize: BATCH_SIZE, budgetMs: BUDGET_MS })
     if (outcome.status === 'no_key') return Response.json({ error: 'no_key' }, { status: 409 })
     return Response.json(outcome)
   } catch (err) {

@@ -11,6 +11,7 @@ import { insertAuditLog } from '../audit/audited-write'
 import type { SealOverviewRow, SealStore } from './screening-seal-run'
 
 const KEY_SAMPLES = 5
+const SYSTEM_KEY_SAMPLES = 20
 const cols = screeningAssessments
 
 const assessmentsIsEnvelope = sql`(jsonb_typeof(${cols.assessments}) = 'object' AND jsonb_exists(${cols.assessments}, 'enc') AND jsonb_exists(${cols.assessments}, 'ciphertext'))`
@@ -31,6 +32,20 @@ export async function sealOverview(): Promise<SealOverviewRow[]> {
     .from(cols)
     .groupBy(cols.organizationId)
     .orderBy(cols.organizationId)
+}
+
+/**
+ * Textos ya cifrados de cualquier organización: solo para comprobar que la clave de la
+ * aplicación descifra lo que la base tiene. No se devuelven a nadie.
+ */
+export async function sealKeySamples(): Promise<string[]> {
+  const profiles = await db.select({ payload: patientProfiles.profileEncrypted }).from(patientProfiles).limit(SYSTEM_KEY_SAMPLES)
+  const sealed = await db
+    .select({ payload: sql<string>`${cols.assessments}->>'ciphertext'` })
+    .from(cols)
+    .where(assessmentsSealed)
+    .limit(SYSTEM_KEY_SAMPLES)
+  return [...profiles, ...sealed].map((sample) => sample.payload)
 }
 
 export function orgSealStore(orgId: string): SealStore {
