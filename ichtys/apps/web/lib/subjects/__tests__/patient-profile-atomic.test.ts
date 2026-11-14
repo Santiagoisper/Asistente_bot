@@ -39,6 +39,8 @@ vi.mock('@ichtys/db', async (importOriginal) => {
     })
   // La transacción: por acá entran el perfil y su registro de auditoría.
   const tx = {
+    // Lectura con la fila bloqueada, dentro de la transacción de quien llama.
+    select: () => ({ from: () => ({ where: () => ({ for: async () => (store.row ? [{ ...store.row }] : []) }) }) }),
     update: update('tx'),
     insert: (table: unknown) => ({
       values: async (values: Record<string, unknown>) => {
@@ -65,7 +67,8 @@ vi.mock('../profile-version', () => ({
 
 import { parsePatientProfile, type PatientProfile } from '@ichtys/clinical'
 import { decryptProfileJson, encryptProfileJson } from '../phi-fields'
-import { loadPatientProfile, ProfileConflictError, updatePatientProfile } from '../patient-profile-service'
+import { db } from '@ichtys/db'
+import { loadPatientProfile, ProfileConflictError, ProfileUnreadableError, retireProposalOfVoidedEvolution, updatePatientProfile } from '../patient-profile-service'
 
 const scope = { orgId: 'org-1', studyId: 'study-1', subjectId: 'subject-1' }
 const audit = (next: PatientProfile) => ({ action: 'profile.update' as const, orgId: 'org-1', studyId: 'study-1', userId: 'user_1', resourceType: 'subject', resourceId: 'subject-1', metadata: { source: 'test', labCount: next.labs.length } })
@@ -178,16 +181,18 @@ describe('perfil del sujeto — escritura cuando dos personas trabajan a la vez'
   })
 })
 
+/** Lo que se extrajo de una evolución y espera a que una persona lo confirme. */
+const proposal = (evolutionId: string, name: string, value: number) => ({
+  requiresHumanReview: true as const,
+  evolutionId,
+  extractedAt: '2026-11-12T12:00:00.000Z',
+  facts: { labs: [lab(name, value)], medications: [{ name: 'Metformina' }], conditions: [] },
+  fieldConfidence: { labs: { [name.toLowerCase()]: 'medium' as const } },
+})
+
 describe('perfil del sujeto — lo que se extrae de una evolución espera a una persona (R6)', () => {
   const EVO = '11111111-1111-4111-8111-111111111111'
   const OTHER = '22222222-2222-4222-8222-222222222222'
-  const proposal = (evolutionId: string, name: string, value: number) => ({
-    requiresHumanReview: true as const,
-    evolutionId,
-    extractedAt: '2026-11-12T12:00:00.000Z',
-    facts: { labs: [lab(name, value)], medications: [{ name: 'Metformina' }], conditions: [] },
-    fieldConfidence: { labs: { [name.toLowerCase()]: 'medium' as const } },
-  })
   const pendingLabReview = { requiresHumanReview: true as const, extractedAt: '2026-11-11T10:00:00.000Z', labs: [lab('Urea', 30)], redactedSourcePreview: '' }
   const who = { ...scope, userId: 'user_md' }
 
@@ -247,5 +252,48 @@ describe('perfil del sujeto — lo que se extrae de una evolución espera a una 
     await expect(confirmProfileProposal({ ...who, evolutionId: EVO })).rejects.toMatchObject({ code: 'no_pending_proposal' })
     expect(stored().labs).toHaveLength(1)
     expect(store.audits).toHaveLength(1)
+  })
+})
+
+describe('D24 — la propuesta pendiente que salió de una evolución anulada', () => {
+  const VOIDED = '11111111-1111-4111-8111-111111111111'
+  const KEPT = '22222222-2222-4222-8222-222222222222'
+  const retire = (evolutionId: string) =>
+    db.transaction((tx) => retireProposalOfVoidedEvolution(tx as never, { ...scope, evolutionId, userId: 'user_1' }))
+
+  it('se retira sola, deja las otras propuestas y lo que ya estaba en el perfil, y queda registrado por qué', async () => {
+    writeDirectly({ ...stored(), labs: [lab('Creatinina', 0.9)], pendingEvolutionProposals: [proposal(VOIDED, 'HbA1c', 8.2), proposal(KEPT, 'Glucosa', 110)] })
+    expect(await retire(VOIDED)).toBe(true)
+    expect(stored().pendingEvolutionProposals?.map((entry) => entry.evolutionId)).toEqual([KEPT])
+    expect(stored().labs.map((entry) => entry.name)).toEqual(['Creatinina'])
+    expect(store.writes).toBe(1)
+    expect(store.looseWrites).toBe(0)
+    expect(store.audits).toHaveLength(1)
+    expect(store.audits[0]).toMatchObject({ action: 'profile.proposal.reject', metadata: expect.objectContaining({ humanConfirmed: false, reason: 'evolution_voided' }) })
+  })
+
+  it('si de esa evolución no quedó nada pendiente, no escribe ni registra', async () => {
+    writeDirectly({ ...stored(), pendingEvolutionProposals: [proposal(KEPT, 'Glucosa', 110)] })
+    expect(await retire(VOIDED)).toBe(false)
+    expect(store.writes).toBe(0)
+    expect(store.audits).toHaveLength(0)
+  })
+
+  it('sin perfil guardado no hay nada que retirar', async () => {
+    store.row = null
+    expect(await retire(VOIDED)).toBe(false)
+    expect(store.audits).toHaveLength(0)
+  })
+
+  it('si el perfil no se puede leer, tira: la anulación no sigue con una propuesta que quizá quedó', async () => {
+    store.row = { profileEncrypted: 'esto-no-es-un-perfil', updatedAt: new Date('2026-11-11T10:00:00.000Z') }
+    await expect(retire(VOIDED)).rejects.toBeInstanceOf(ProfileUnreadableError)
+    expect(store.writes).toBe(0)
+  })
+
+  it('si el registro no se puede escribir, tira: quien llama deshace todo', async () => {
+    writeDirectly({ ...stored(), pendingEvolutionProposals: [proposal(VOIDED, 'HbA1c', 8.2)] })
+    store.failAudit = true
+    await expect(retire(VOIDED)).rejects.toThrow('audit insert failed')
   })
 })
