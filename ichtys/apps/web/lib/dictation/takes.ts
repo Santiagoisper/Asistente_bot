@@ -119,6 +119,8 @@ export interface AudioListingItem {
   durationSec: number
   expiresAt: string
   available: boolean
+  /** Retirada al depósito (D24). Falta en la respuesta de una versión anterior. */
+  withdrawn?: boolean
 }
 
 /** El listado del sujeto, por evolución y en orden de toma. */

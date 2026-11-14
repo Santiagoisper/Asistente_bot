@@ -15,6 +15,14 @@ export function profileWriteErrorMessage(code: unknown): string | null {
   return typeof code === 'string' && Object.hasOwn(MESSAGES, code) ? MESSAGES[code as ProfileWriteErrorCode] : null
 }
 
+/**
+ * Aceptar una propuesta cuya evolución se anuló (D24). La ruta responde 409 `evolution_voided`:
+ * no es «otra persona ya la resolvió», así que la pantalla no puede recargar en silencio.
+ */
+export const PROPOSAL_OF_VOIDED_EVOLUTION_CODE = 'evolution_voided'
+export const PROPOSAL_OF_VOIDED_EVOLUTION_MESSAGE =
+  'Esa evolución quedó marcada como registrada por error en este sujeto, así que lo que se extrajo de ella no se puede aceptar. El perfil no cambió. Podés descartar la propuesta.'
+
 /** El aviso fijo de la ficha cuando lo guardado no se pudo leer. */
 export const PROFILE_UNREADABLE_NOTICE = {
   title: 'El perfil guardado de este sujeto no se pudo leer',

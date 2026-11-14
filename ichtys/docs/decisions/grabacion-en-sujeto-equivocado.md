@@ -82,6 +82,7 @@ En la misma transacción que el cambio: una entrada por la anulación y una por 
 
 - La anulación y el traslado van juntos: si falla el traslado de una toma, la evolución no queda anulada.
 - Una evolución anulada no entra en las propuestas, y su propuesta pendiente se retira.
+- **La propuesta que llega tarde (observación de Architect, #173):** la propuesta se escribe unos segundos después de guardar la evolución, mientras espera al modelo. Si en ese rato alguien la anula, la anulación no la encuentra y la propuesta aparece después. Por eso **aceptar una propuesta exige que su evolución siga vigente**: si está anulada, la ruta responde 409 `evolution_voided`, el perfil no se toca y la pantalla lo dice. Descartarla sigue pudiéndose.
 - Nadie lee evoluciones por fuera de la función de lectura de vigentes.
 - El plazo de la grabación no cambia al pasar al depósito: una grabación trasladada el día 29 se borra el día 30, no el 59.
 - Quien perdió el acceso al estudio no escucha la grabación del depósito, aunque la haya grabado.
@@ -92,8 +93,10 @@ En la misma transacción que el cambio: una entrada por la anulación y una por 
 ## Lo que tiene que decidir Santiago
 
 1. **Quién declara y quién escucha.** Propuesta: autor y coordinación del estudio.
+   - **Construido así (PR #173):** quien escribió la evolución la puede declarar siempre que conserve acceso al sujeto, **aunque hoy ya no tenga la función de escribir evoluciones**. No es un olvido: la responsabilidad por lo que escribió no se le va con el cambio de función. A quien no la escribió se le exige coordinar el estudio, y esa comprobación va antes de cualquier respuesta que dependa de lo que mandó.
 2. **Si el texto de la evolución anulada se puede abrir** desde la historia del sujeto equivocado, o solo lo ve quien la escribió y coordinación. Es una pregunta para Calidad: una corrección no debe tapar el original, pero ese original habla de otra persona.
    - **Pendiente, para que no quede resuelto de hecho (observación de Architect en el #171):** la lectura de la historia ya trae las anuladas con su marca, y hoy devolvería también su texto descifrado a cualquiera que pueda ver la historia de ese sujeto. No expone nada mientras no exista la forma de anular. Santiago respondió «todo sí» el 14/11, leído como «el texto se puede abrir, plegado»; la consulta a Calidad sigue abierta. **El PR que agregue la anulación tiene que aplicar lo que se decida en la ruta**, no en la pantalla: si el texto de una anulada no le corresponde a quien lo pide, no viaja.
+   - **Aplicado en la ruta (PR de la ruta de anulación, 14/11), con el criterio más estrecho mientras Calidad no responda:** el texto de una evolución anulada viaja solo a quien la escribió y a quien coordina el estudio. A cualquier otra persona con acceso a la historia le llega la marca, la fecha y `contentWithheld: true`, sin el texto. Es **más estrecho** que la lectura de «todo sí»; ampliarlo es cambiar una condición, y estrecharlo después de haberlo mostrado no se puede deshacer. Lo decide Santiago con la respuesta de Calidad.
 3. **El aviso:** lista en Inicio, correo, o las dos.
 4. **Si el depósito se llama «Grabaciones sin sujeto»** en pantalla.
 5. **Medicaciones y condiciones:** si alcanza con que el aviso diga que su lista puede estar incompleta, o si se les agrega origen ahora.

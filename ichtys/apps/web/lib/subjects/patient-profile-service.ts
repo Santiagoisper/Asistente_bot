@@ -12,7 +12,7 @@ import { and, db, eq, getOrgLlmApiKeys, patientProfiles, recordUsage } from '@ic
 import { PhiCryptoError } from '@ichtys/crypto'
 import { runWithLlmFallback } from '@ichtys/llm'
 import { generateObject } from 'ai'
-import { insertAuditLog } from '../audit/audited-write'
+import { insertAuditLog, type DbTransaction } from '../audit/audited-write'
 import type { AuditLogParams } from '../chat/persistence'
 import { labReviewMarker } from './lab-review-marker'
 import { llmFactsSchema, normalizeLlmFacts } from './llm-facts'
@@ -405,6 +405,56 @@ export async function confirmProfileProposal(params: ProposalScope): Promise<Pat
     },
     () => proposalAudit(params, 'profile.update', { automated: false, humanConfirmed: true, factCount }),
   )
+}
+
+/**
+ * Retira la propuesta pendiente que salió de una evolución que se acaba de anular (D24), dentro
+ * de la transacción de la anulación: si la evolución se registró en el sujeto equivocado, lo
+ * que Alphi propuso a partir de ella no puede quedar esperando que alguien lo acepte.
+ *
+ * Devuelve si había una. Que no haya no es un error: la evolución pudo no dejar propuesta, o
+ * alguien ya la aceptó o descartó. Lo ya aceptado no se deshace acá: Alphi no corrige el perfil
+ * solo, lo avisa (docs/decisions/grabacion-en-sujeto-equivocado.md).
+ *
+ * Si el perfil guardado no se puede leer, tira: no se anula a ciegas, sin saber si quedó una
+ * propuesta colgada.
+ */
+export async function retireProposalOfVoidedEvolution(tx: DbTransaction, params: ProposalScope): Promise<boolean> {
+  const [row] = await tx
+    .select({ profileEncrypted: patientProfiles.profileEncrypted, updatedAt: patientProfiles.updatedAt })
+    .from(patientProfiles)
+    .where(and(eq(patientProfiles.organizationId, params.orgId), eq(patientProfiles.studyId, params.studyId), eq(patientProfiles.subjectId, params.subjectId)))
+    .for('update')
+  if (!row) return false
+
+  const read = readStoredProfile('write', params, row.profileEncrypted)
+  if (!read.ok) {
+    reportUndecodableProfile('write', params, read.reason)
+    throw new ProfileUnreadableError()
+  }
+  const stored = patientProfileSchema.safeParse(read.value)
+  if (!stored.success) {
+    reportUnreadableProfile('write', params, stored.error.issues)
+    throw new ProfileUnreadableError()
+  }
+
+  const pending = stored.data.pendingEvolutionProposals ?? []
+  if (!pending.some((entry) => entry.evolutionId === params.evolutionId)) return false
+  const next = withProposals(stored.data, pending.filter((entry) => entry.evolutionId !== params.evolutionId))
+
+  const rows = await tx
+    .update(patientProfiles)
+    .set({
+      profileEncrypted: encryptProfileJson(next as Record<string, unknown>),
+      ...labReviewMarker(next),
+      updatedAt: nextVersion(row.updatedAt),
+    })
+    .where(whereProfileUnchanged(params, row.updatedAt))
+    .returning({ subjectId: patientProfiles.subjectId })
+  // Con la fila bloqueada nadie más pudo escribirla; si igual no se escribió, no se sigue.
+  if (rows.length === 0) throw new ProfileConflictError()
+  await insertAuditLog(tx, proposalAudit(params, 'profile.proposal.reject', { humanConfirmed: false, reason: 'evolution_voided' }))
+  return true
 }
 
 /** Una persona descarta la propuesta: el perfil queda como estaba. */

@@ -489,8 +489,10 @@ describe('Autoría clínica — escribir una evolución pide más que leerla', (
   })
 
   it('si el validador rechaza por la capacidad, no se escribe nada y la respuesta es 403', async () => {
-    mocks.validateSubjectAccess.mockRejectedValue(new mocks.AccessError('Forbidden', 403))
-    mocks.handleApiError.mockReturnValue(new Response('Forbidden', { status: 403 }))
+    // «Una vez»: una respuesta fija sobrevive a `clearAllMocks` y dejaba a todas las pruebas
+    // siguientes del archivo respondiendo 403 ante cualquier error. El manejador simulado ya
+    // traduce el 403 del validador; no hace falta pisarlo.
+    mocks.validateSubjectAccess.mockRejectedValueOnce(new mocks.AccessError('Forbidden', 403))
 
     const res = await POST(
       new Request('http://localhost/api/evolutions', {
@@ -663,5 +665,74 @@ describe('D24 — la historia trae las evoluciones anuladas, con su marca', () =
       ['evo-vigente', null],
     ])
     expect(text).not.toContain('user_que_declaro')
+  })
+})
+
+describe('D24 — quién lee el texto de una evolución anulada', () => {
+  const voided = (authorUserId: string) => ({
+    id: 'evo-anulada',
+    visitLabel: null,
+    contentEncrypted: 'enc:texto de otra persona',
+    authorUserId,
+    dictationTakes: null,
+    createdAt: new Date('2026-11-14T12:00:00Z'),
+    voided: { reason: 'wrong_subject', declaredBy: 'user_x', declaredAt: new Date('2026-11-14T15:00:00Z') },
+  })
+  const current = { id: 'evo-vigente', visitLabel: null, contentEncrypted: 'enc:texto vigente', authorUserId: 'user_otro', dictationTakes: null, createdAt: new Date('2026-11-13T12:00:00Z'), voided: null }
+
+  async function history() {
+    const res = await GET(new Request('http://localhost/api/evolutions'), makeParams())
+    const text = await res.text()
+    return { text, evolutions: (JSON.parse(text) as { evolutions: Array<{ id: string; content: string | null; contentWithheld?: boolean }> }).evolutions }
+  }
+
+  it('quien la escribió lo lee, sin pedir otra capacidad', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbFindMany.mockResolvedValueOnce([voided(mocks.USER_ID), current])
+
+    const { evolutions } = await history()
+
+    expect(evolutions[0]).toMatchObject({ content: 'texto de otra persona' })
+    expect(evolutions[0]).not.toHaveProperty('contentWithheld')
+    expect(mocks.validateSubjectAccess).toHaveBeenCalledTimes(1)
+  })
+
+  it('quien coordina el estudio lo lee', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext()).mockResolvedValueOnce(subjectContext())
+    mocks.dbFindMany.mockResolvedValueOnce([voided('user_otro'), current])
+
+    const { evolutions } = await history()
+
+    expect(evolutions[0]!.content).toBe('texto de otra persona')
+    expect(mocks.validateSubjectAccess.mock.calls[1]![2]).toEqual({ require: 'access.manage_study' })
+  })
+
+  it('cualquier otra persona con acceso a la historia ve la marca, y el texto no viaja', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext()).mockRejectedValueOnce(new mocks.AccessError('Forbidden', 403))
+    mocks.dbFindMany.mockResolvedValueOnce([voided('user_otro'), current])
+
+    const { text, evolutions } = await history()
+
+    expect(evolutions[0]).toMatchObject({ id: 'evo-anulada', content: null, contentWithheld: true })
+    expect(text).not.toContain('texto de otra persona')
+    // Lo vigente se sigue leyendo.
+    expect(evolutions[1]).toMatchObject({ content: 'texto vigente' })
+  })
+
+  it('sin anuladas no se pide la capacidad de coordinación', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbFindMany.mockResolvedValueOnce([current])
+    await history()
+    expect(mocks.validateSubjectAccess).toHaveBeenCalledTimes(1)
+  })
+
+  it('si la comprobación falla por otra cosa que un permiso, no se entrega nada', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext()).mockRejectedValueOnce(new Error('sin conexión'))
+    mocks.dbFindMany.mockResolvedValueOnce([voided('user_otro')])
+    const res = await GET(new Request('http://localhost/api/evolutions'), makeParams())
+    // No es un permiso negado: el error sube al manejador común y no sale la historia.
+    expect(res.status).toBe(500)
+    expect(await res.text()).not.toContain('texto de otra persona')
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
   })
 })
