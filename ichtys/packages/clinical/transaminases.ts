@@ -89,6 +89,9 @@ function saysEitherIsEnough(criterionText: string): boolean {
   const joint = criterionText
     .slice(spans[0]!.end, spans[1]!.start)
     .replace(/\([^)]*\)/g, ' ')
+    // «ó» con tilde, como se escribía entre cifras, es la misma «o».
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .trim()
   return EITHER.test(joint)
 }

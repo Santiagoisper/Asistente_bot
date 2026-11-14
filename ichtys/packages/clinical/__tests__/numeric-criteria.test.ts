@@ -18,7 +18,28 @@ describe('ADR-7 §2.1 umbrales de HbA1c', () => {
       exclusionCriteria: [],
     })
     expect(result?.status).toBe('pass')
-    expect(result?.reason).toBe('HbA1c 10,2 % ≤ 10,5 % (máximo inclusivo)')
+    // Un rango cumplido se comparó contra los dos extremos: el motivo cita los dos.
+    expect(result?.reason).toBe('HbA1c 10,2 % ≥ 7,0 % (mínimo inclusivo) y ≤ 10,5 % (máximo inclusivo)')
+  })
+
+  it('T1b: el motivo de un rango cumplido cita los dos extremos, con el operador de cada uno', () => {
+    const lab = profile([{ name: 'HbA1c', value: 7.9, unit: '%' }])
+    const [strictLow] = assessScreening(lab, { inclusionCriteria: [{ number: '1', text: 'HbA1c > 7,0 % y ≤ 10,5 %' }], exclusionCriteria: [] })
+    expect(strictLow?.status).toBe('pass')
+    expect(strictLow?.reason).toBe('HbA1c 7,9 % > 7,0 % (mínimo estricto) y ≤ 10,5 % (máximo inclusivo)')
+    // En una exclusión, lo mismo: lo que la activa es estar adentro del rango entero.
+    const [excluded] = assessScreening(lab, { inclusionCriteria: [], exclusionCriteria: [{ number: '2', text: 'HbA1c ≥ 7,5 % y ≤ 9,0 %' }] })
+    expect(excluded?.status).toBe('fail')
+    expect(excluded?.reason).toBe('HbA1c 7,9 % ≥ 7,5 % (mínimo inclusivo) y ≤ 9,0 % (máximo inclusivo): activaría este criterio de exclusión.')
+  })
+
+  it('T1c: un rango que no se cumple sigue citando solo el extremo que falla', () => {
+    const [low] = assessScreening(profile([{ name: 'HbA1c', value: 6.4, unit: '%' }]), {
+      inclusionCriteria: [{ number: '1', text: 'HbA1c ≥7,0 % y ≤10,5 %' }],
+      exclusionCriteria: [],
+    })
+    expect(low?.status).toBe('fail')
+    expect(low?.reason).toBe('HbA1c 6,4 % ≥ 7,0 % (mínimo inclusivo) no se cumple')
   })
 
   it('T2: 7,0 % no cumple un mínimo estricto > 7,0', () => {
