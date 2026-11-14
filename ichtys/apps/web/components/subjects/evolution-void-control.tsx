@@ -100,7 +100,10 @@ function VoidForm(props: Props) {
       )}
       <ul className="list-disc space-y-1 pl-5">
         <li>La evolución queda en la historia con la marca «Registrada por error en este sujeto» y el texto original plegado. No se borra.</li>
-        <li>Sus grabaciones, si tiene, salen de este sujeto y pasan a las grabaciones sin sujeto. Todavía no hay una pantalla para escucharlas desde ahí.</li>
+        <li>
+          Sus grabaciones, si tiene, salen de este sujeto y pasan a las grabaciones sin sujeto. Quien las grabó las sigue pudiendo escuchar desde ahí
+          hasta que venzan; por ahora, nadie más.
+        </li>
         <li>Si Alphi tenía una propuesta pendiente para el perfil a partir de esta evolución, se retira.</li>
         <li>El perfil no se corrige solo. Si de esta evolución ya se había aceptado algo, la ficha lo avisa para que lo revises.</li>
       </ul>
