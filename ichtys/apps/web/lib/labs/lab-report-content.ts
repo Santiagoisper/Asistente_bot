@@ -80,6 +80,13 @@ export const labReportContentSchema = z
     source: z.enum(['pdf_text', 'image']).optional(),
     /** Hojas de imagen guardadas mientras el informe está pendiente. */
     imagePages: z.number().int().min(0).max(MAX_LAB_IMAGES).optional(),
+    /**
+     * Fecha de la muestra del informe, YYYY-MM-DD, confirmada por una persona
+     * (C4, decisiones D3 y D4). Campo opcional de la versión 1: los informes
+     * ya guardados no lo tienen y siguen abriendo. Null = se miró el informe
+     * y no trae fecha de muestra.
+     */
+    sampleDate: z.string().date().nullable().optional(),
     /** Quién leyó: `first` y `second` nombran el lector ("reglas", "openai"…); `second` null = una sola lectura. */
     readers: z
       .object({

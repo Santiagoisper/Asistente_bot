@@ -113,6 +113,33 @@ describe('ruta segura — formas de esquema que el perfil va a tener (C4) y las 
 })
 
 /**
+ * C4 paso 1 (#145): el valor de laboratorio del perfil pasa a tener transformación, una unión
+ * por tipo en `source` y la fecha de la muestra. El registro operativo tiene que seguir
+ * diciendo qué campo falló, con el esquema real del perfil.
+ */
+describe('ruta segura con el esquema del perfil después de C4 paso 1', () => {
+  const lab = (extra: Record<string, unknown>) => ({ version: 1, labs: [{ name: 'HbA1c', value: 7.4, unit: '%' }, { name: 'Creatinina', value: 0.9, ...extra }] })
+
+  it('una fecha de muestra mal formada: labs[1].sampleDate', () => {
+    expect(firstPath(patientProfileSchema, lab({ sampleDate: 'ayer' }))).toBe('labs[1].sampleDate')
+  })
+
+  it('un origen de informe con identificador mal formado: labs[1].source.reportId', () => {
+    expect(firstPath(patientProfileSchema, lab({ source: { kind: 'lab_report', reportId: 'no-es-uuid' } }))).toBe('labs[1].source.reportId')
+  })
+
+  it('un origen de evolución con identificador mal formado: labs[1].source.evolutionId', () => {
+    expect(firstPath(patientProfileSchema, lab({ source: { kind: 'evolution', evolutionId: 'x' } }))).toBe('labs[1].source.evolutionId')
+  })
+
+  it('un tipo de origen que no existe: labs[1].source.kind, sin el valor', () => {
+    const text = firstPath(patientProfileSchema, lab({ source: { kind: 'Diabetes tipo 2' } }))
+    expect(text).toBe('labs[1].source.kind')
+    expect(text).not.toContain('Diabetes')
+  })
+})
+
+/**
  * Pedido de Architect en el #152. Hoy el perfil no tiene objetos estrictos; si C4 suma uno,
  * la clave sobrante puede ser un dato (el nombre de una condición escrito como campo). zod la
  * informa en `issue.keys`, no en la ruta, y el registro operativo no copia `issue.keys`. Estas
