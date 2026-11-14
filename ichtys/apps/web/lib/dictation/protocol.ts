@@ -15,7 +15,8 @@ export type TranscriberRequest = { type: 'transcribe'; samples: Float32Array; se
 export type TranscriberEvent =
   | { type: 'model-progress'; percent: number }
   | { type: 'transcribing'; device: 'webgpu' | 'wasm'; done: number; total: number }
-  | { type: 'result'; text: string; device: 'webgpu' | 'wasm' }
+  /** `segmentTexts`: lo que el modelo devolvió para cada tramo pedido, en el mismo orden y sin tocar. */
+  | { type: 'result'; text: string; device: 'webgpu' | 'wasm'; segmentTexts?: string[] }
   | { type: 'error'; message: string }
 
 /**
