@@ -3,8 +3,10 @@
  * sujeto equivocado (docs/decisions/grabacion-en-sujeto-equivocado.md, D24, punto 2).
  *
  * Alphi no saca nada del perfil solo: avisa. Los laboratorios guardan de qué evolución vinieron
- * y se pueden nombrar. Las medicaciones y las condiciones no guardan origen: de esas solo se
- * sabe que se aceptó una propuesta de esa evolución, no cuáles quedaron, y el aviso lo dice.
+ * y se pueden nombrar. La edad, la presión arterial, las medicaciones y las condiciones no
+ * guardan origen: de esas solo se sabe que se aceptó una propuesta de esa evolución, no cuáles
+ * quedaron, y el aviso lo dice. Aceptar una propuesta **pisa** la edad y la presión arterial
+ * (`mergeProfileWithExtraction`): el valor anterior no queda en el perfil.
  *
  * Sin dependencias en ejecución (solo un tipo): lo importan componentes de cliente.
  */
@@ -110,10 +112,10 @@ export function voidedOriginLines(notice: VoidedOriginNotice): string[] {
   return [
     ...(notice.labNames.length > 0 ? [`Laboratorios que vinieron de esa evolución: ${notice.labNames.join(', ')}.`] : []),
     ...(stated
-      ? ['Las medicaciones y las condiciones no guardan de qué evolución vinieron: pueden incluir datos de esa evolución, y acá no se pueden listar.']
+      ? ['La edad, la presión arterial, las medicaciones y las condiciones no guardan de qué evolución vinieron: pueden ser de esa evolución, y acá no se puede saber cuáles.']
       : []),
     ...(notice.beforeLogging
-      ? ['Hay una evolución anulada anterior a que el sistema registrara qué entraba al perfil: puede haber dejado medicaciones o condiciones, y no se puede comprobar.']
+      ? ['Hay una evolución anulada anterior a que el sistema registrara qué entraba al perfil: puede haber dejado edad, presión arterial, medicaciones o condiciones, y no se puede comprobar.']
       : []),
     'Alphi no saca estos datos solo. Mientras sigan en el perfil, la elegibilidad se calcula con ellos.',
     'Avisá a quien coordina el estudio.',
