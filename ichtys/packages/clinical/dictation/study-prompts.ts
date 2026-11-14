@@ -37,6 +37,12 @@ const TEMPLATES: Record<StudyPrompt['id'], Template> = {
   },
   'weight-height': { id: 'weight-height', ask: 'El peso y la talla', say: ['Peso 78 kilos.', 'Talla 1 metro 63.'] },
   egfr: { id: 'egfr', ask: 'El filtrado glomerular', say: [], note: 'No se dicta: se resuelve al cargar el laboratorio.' },
+  transaminases: {
+    id: 'transaminases',
+    ask: 'Las transaminasas (ALT y AST)',
+    say: [],
+    note: 'No se dictan: se resuelven al cargar el laboratorio, que trae el valor y su rango de referencia.',
+  },
   pancreatitis: {
     id: 'pancreatitis',
     ask: 'Si tuvo pancreatitis',

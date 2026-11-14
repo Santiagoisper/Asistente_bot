@@ -35,15 +35,24 @@ describe('la guía según el protocolo', () => {
       ['hba1c', ['2.2']],
       ['weight-height', ['2.3']],
       ['egfr', ['3.1']],
+      ['transaminases', ['3.2']],
       ['pancreatitis', ['3.3']],
       ['pregnancy-lactation', ['3.4']],
     ])
   })
 
-  it('no pide lo que el sistema no sabe leer: el tiempo con metformina ni las transaminasas', () => {
+  it('no pide lo que el sistema no sabe leer: el tiempo con metformina', () => {
     const criteria = promptsFor(emptyPatientProfile()).flatMap((prompt) => prompt.criteria)
     expect(criteria).not.toContain('2.4')
-    expect(criteria).not.toContain('3.2')
+  })
+
+  it('lo que llega por el laboratorio figura, pero sin frase para dictar', () => {
+    const fromLab = promptsFor(emptyPatientProfile()).filter((prompt) => prompt.id === 'egfr' || prompt.id === 'transaminases')
+    expect(fromLab).toHaveLength(2)
+    for (const prompt of fromLab) {
+      expect(prompt.say).toEqual([])
+      expect(prompt.note).toMatch(/laboratorio/)
+    }
   })
 
   it('el filtrado no se dicta: la guía dice que se resuelve con el laboratorio', () => {
@@ -55,7 +64,7 @@ describe('la guía según el protocolo', () => {
   it('decir cada frase de la guía resuelve el dato: después solo falta el laboratorio', () => {
     const everything = promptsFor(emptyPatientProfile()).flatMap((prompt) => prompt.say).join(' ')
     const profile = afterSaying(emptyPatientProfile(), everything)
-    expect(promptsFor(profile).map((prompt) => prompt.id)).toEqual(['egfr'])
+    expect(promptsFor(profile).map((prompt) => prompt.id)).toEqual(['egfr', 'transaminases'])
     const byNumber = Object.fromEntries(assessScreening(profile, PROTOCOL).map((item) => [item.criterionNumber, item.status]))
     expect(byNumber).toMatchObject({ '2.1': 'pass', '2.2': 'pass', '2.3': 'pass', '3.3': 'pass', '3.4': 'pass' })
   })
