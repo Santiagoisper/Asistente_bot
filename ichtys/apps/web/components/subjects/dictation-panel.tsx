@@ -302,7 +302,9 @@ export function DictationPanel({ subjectCode, onDraft, onDiscard, resetSignal }:
                   className="sr-only"
                   onClick={(event) => {
                     // Sin el aviso aceptado no se abre el selector: primero se confirma el sujeto.
-                    if (confirmed) return
+                    // Se mira la referencia y no el estado: al aceptar, el clic programado llega
+                    // antes de que la pantalla se vuelva a dibujar.
+                    if (confirmedRef.current) return
                     event.preventDefault()
                     setAsking('upload')
                   }}
