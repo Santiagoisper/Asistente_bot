@@ -403,6 +403,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_21rem]">
         <div className="min-w-0 space-y-4">
         <DictationPanel
+          subjectCode={subjectCode}
           resetSignal={savedCount}
           onDraft={(draft, source, recording) => {
             // Lo dictado va al mismo cuadro donde se escribe. Si ya había texto, lo nuevo se suma
