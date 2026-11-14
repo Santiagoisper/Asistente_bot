@@ -354,3 +354,22 @@ describe('GET lab-reports/[reportId]/export — sin sistema de destino', () => {
     expect(mocks.validateSubjectAccess).not.toHaveBeenCalled()
   })
 })
+
+const limit = vi.hoisted(() => ({ clinicalRateLimit: vi.fn(async (): Promise<Response | null> => null) }))
+vi.mock('../../../../../../../../lib/security/clinical-rate-limit', () => limit)
+
+describe('límite de pedidos — subir un informe de laboratorio', () => {
+  it('cuenta el pedido contra la persona y su organización', async () => {
+    await upload(uploadRequest(pdf()), ctx)
+    expect(limit.clinicalRateLimit).toHaveBeenCalledWith('lab_upload', expect.objectContaining({ orgId: 'org-1', userId: 'user_1' }))
+  })
+
+  it('con el cupo agotado no se lee el archivo ni se crea el informe', async () => {
+    limit.clinicalRateLimit.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'rate_limited' }), { status: 429, headers: { 'Retry-After': '30' } }))
+    const req = uploadRequest(pdf())
+    const res = await upload(req, ctx)
+    expect(res.status).toBe(429)
+    expect(req.bodyUsed).toBe(false)
+    expect(mocks.createLabReportFromPdf).not.toHaveBeenCalled()
+  })
+})

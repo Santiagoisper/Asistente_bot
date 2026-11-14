@@ -12,6 +12,7 @@ import { createEvolutionSchema } from '../../../../../../../lib/subjects/schemas
 import { proposeProfileFromEvolution } from '../../../../../../../lib/subjects/patient-profile-service'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../../lib/api/body-limit'
 import { getOrCreateRequestId } from '../../../../../../../lib/observability/logger'
+import { clinicalRateLimit } from '../../../../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -79,6 +80,10 @@ export async function POST(
   } catch (err) {
     return handleApiError(err)
   }
+
+  // Límite de pedidos: después del acceso (hace falta saber quién es) y antes de leer el cuerpo.
+  const limited = await clinicalRateLimit('evolution_write', { orgId: access.orgId, userId: access.userId, studyId: access.study.id, req, endpoint: '/api/studies/[id]/subjects/[subjectId]/evolutions' })
+  if (limited) return limited
 
   let body: unknown
   try {

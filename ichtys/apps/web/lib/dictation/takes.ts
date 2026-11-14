@@ -91,17 +91,22 @@ export interface UploadResult {
  * Sube la grabación de cada toma, en orden y con su número, después de guardar la evolución. Una que falla no
  * frena a las siguientes: el texto ya está guardado y cada grabación vale por sí sola. Un 409
  * es «esa toma ya estaba» (un reintento), no una falla.
+ *
+ * Una toma frenada por el límite de pedidos (429) no se da por perdida: el audio solo está en
+ * la memoria del navegador. Se espera lo que el servidor pide y se reintenta **una** vez.
  */
 export async function uploadRecordingTakes(params: {
   url: string
   takes: ReadonlyArray<{ blob: Blob; durationSec: number; take: number }>
   fetchImpl?: (input: string, init?: RequestInit) => Promise<Response>
+  sleep?: (ms: number) => Promise<void>
 }): Promise<UploadResult> {
   const send = params.fetchImpl ?? ((input: string, init?: RequestInit) => fetch(input, init))
+  const sleep = params.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
   let failed = 0
   for (const take of params.takes) {
-    try {
-      const res = await send(params.url, {
+    const post = () =>
+      send(params.url, {
         method: 'POST',
         headers: {
           'Content-Type': take.blob.type || 'audio/webm',
@@ -110,12 +115,29 @@ export async function uploadRecordingTakes(params: {
         },
         body: take.blob,
       })
+    try {
+      let res = await post()
+      if (res.status === 429) {
+        await sleep(retryWaitMs(res.headers.get('Retry-After')))
+        res = await post()
+      }
       if (!res.ok && res.status !== 409) failed += 1
     } catch {
       failed += 1
     }
   }
   return { total: params.takes.length, failed }
+}
+
+/** Sin un tiempo usable del servidor. */
+const DEFAULT_RETRY_WAIT_MS = 5_000
+/** La ventana del límite es de un minuto: esperar más que eso no tiene sentido. */
+const MAX_RETRY_WAIT_MS = 65_000
+
+function retryWaitMs(retryAfter: string | null): number {
+  const seconds = Number(retryAfter)
+  if (retryAfter === null || !Number.isFinite(seconds) || seconds <= 0) return DEFAULT_RETRY_WAIT_MS
+  return Math.min(MAX_RETRY_WAIT_MS, Math.ceil(seconds * 1000))
 }
 
 /** El aviso después de guardar, si alguna grabación no se guardó. `null`: nada que avisar. */

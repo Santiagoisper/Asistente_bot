@@ -1,4 +1,5 @@
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
+import { clinicalRateLimit } from '../../../../../../../../lib/security/clinical-rate-limit'
 import { isOsEnabled } from '../../../../../../../../lib/flags'
 import { createLabReportFromImages, validateLabImages } from '../../../../../../../../lib/labs/lab-image-report'
 import { MAX_LAB_IMAGE_BYTES, MAX_LAB_IMAGES, MAX_LAB_PDF_BYTES } from '../../../../../../../../lib/labs/lab-report-content'
@@ -31,6 +32,10 @@ export async function POST(
   } catch (err) {
     return handleApiError(err)
   }
+
+  // Límite de pedidos, antes de leer el cuerpo.
+  const limited = await clinicalRateLimit('lab_upload', { orgId: access.orgId, userId: access.userId, req, endpoint: '/api/studies/[id]/subjects/[subjectId]/lab-reports' })
+  if (limited) return limited
 
   const declaredHeader = req.headers.get('content-length')
   if (declaredHeader !== null) {
