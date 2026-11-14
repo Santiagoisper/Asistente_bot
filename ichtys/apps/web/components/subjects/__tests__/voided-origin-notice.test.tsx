@@ -46,6 +46,12 @@ describe('VoidedOriginNoticeCard', () => {
     expect(el.textContent).not.toContain(EVO)
   })
 
+  it('debajo del aviso va lo que la persona puede hacer; sin aviso no se muestra', () => {
+    const actions = <button type="button">Revisar el perfil</button>
+    expect(show({ notice: { labNames: [], evolutionIds: [EVO], acceptedProposal: true, beforeLogging: false }, checkFailed: false, actions }).textContent).toContain('Revisar el perfil')
+    expect(show({ notice: null, checkFailed: false, actions }).textContent).toBe('')
+  })
+
   it('si no se pudo comprobar, lo dice: no afirma que no hay nada', () => {
     const el = show({ notice: null, checkFailed: true })
     expect(el.textContent).toContain(VOIDED_ORIGIN_UNKNOWN)
