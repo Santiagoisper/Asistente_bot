@@ -7,6 +7,7 @@ Viene del estudio de Heidi y Abridge (documento del proyecto `claude/estudio-gra
 ## Qué hay hoy
 
 - El audio se corta por pausas y cada tramo se transcribe por separado (D15). El comienzo y el fin de cada tramo se conocen en el momento de transcribir.
+- **Esos tiempos están medidos sobre la grabación entera**, llevada a 16 kHz (`prepareAudio` corta los tramos sobre todas las muestras). El recorte de silencios de D3 ya no se aplica: D15 lo reemplazó y la aplicación no lo llama. Comprobado en el código el 14/11, después de que Architect planteara lo contrario. Si alguna vez se vuelve a recortar antes de cortar los tramos, los tiempos dejan de valer: por eso va con una prueba (ver abajo).
 - Esos tiempos se descartan. Al servidor llega el texto final, ya editado por la persona, y la grabación entera de cada toma.
 - La grabación se escucha completa, desde la evolución. Cada escucha queda registrada (D14).
 
@@ -24,6 +25,7 @@ Junto a la grabación de cada toma, una lista plegada con los tramos tal como sa
 
 - Quien verifica lee la evolución, abre la lista, encuentra la frase y la escucha.
 - Los tramos son lo que el transcriptor escribió, sin las correcciones de la persona. Se dice en pantalla: «Texto del transcriptor, sin corregir».
+- **Cómo se reproduce un tramo:** no se mueve el reproductor. Los archivos que entrega el grabador del navegador salen sin índice y muchas veces sin duración, y saltar a un punto no es confiable. Se decodifica la toma, como ya se hace para transcribir, y se reproduce ese pedazo de las muestras (propuesta de Architect). Funciona igual con cualquier formato que el equipo decodifique.
 - Lo marcado como repetición sospechosa del transcriptor (D10) se muestra marcado.
 
 ### Segunda versión, solo si la primera se usa
@@ -47,6 +49,7 @@ Desde una frase de la evolución, proponer el tramo que más se le parece. Con u
 ## Cómo se prueba
 
 - Las cuentas de tiempo y las validaciones, sin navegador.
+- **Un audio con un silencio largo al principio:** el primer tramo tiene que apuntar a su tiempo real en la grabación, no a cero. Es la prueba que sostiene que el botón reproduce lo que dice.
 - Que los tramos se borren con la grabación.
 - Que otra organización no los pueda leer.
 - Con micrófono, por una persona: que el botón de un tramo reproduzca ese pedazo y no otro. Es lo único que una prueba automática no cubre.
@@ -59,6 +62,6 @@ Desde una frase de la evolución, proponer el tramo que más se le parece. Con u
 
 ## Sin verificar
 
-- Que los tiempos de cada tramo estén medidos sobre la grabación original y no sobre el audio ya recortado. Si es lo segundo, hay que guardar el desplazamiento.
-- Que el reproductor del navegador salte con precisión a un punto de un audio webm u mp4 sin índice. Si no, hay que cortar el tramo en el equipo antes de reproducirlo.
+- Que decodificar una toma larga para escuchar un tramo no tarde demasiado en un equipo lento. Una toma de cuatro megas se decodifica entera aunque se quiera oír cinco segundos.
+- Que el tiempo de un tramo, medido a 16 kHz, coincida al oído con la grabación original. La cuenta dice que sí; con micrófono no se probó.
 - Cuánto ocupa la lista de una toma larga.
