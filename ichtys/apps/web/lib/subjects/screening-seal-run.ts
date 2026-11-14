@@ -44,6 +44,11 @@ export interface OrgSealOptions {
   checkKey?: (samples: readonly string[]) => KeyCheck
   /** Tira `PhiConfigError` si falta la clave. */
   probeKey?: () => void
+  /**
+   * La clave ya se comprobó contra lo cifrado de otra organización. La clave es una sola para
+   * todo el sistema: con esto, una organización sin nada propio cifrado se sella igual.
+   */
+  keyVerified?: boolean
 }
 
 export async function runOrgSeal(store: SealStore, options: OrgSealOptions): Promise<OrgSealOutcome> {
@@ -67,7 +72,7 @@ export async function runOrgSeal(store: SealStore, options: OrgSealOptions): Pro
     // La clave tiene que ser la de esta base: sellar con otra deja las filas ilegibles.
     const keyCheck = checkKey(await store.keySamples())
     if (keyCheck === 'mismatch') return { status: 'key_mismatch' }
-    if (keyCheck === 'no_sample') return { status: 'key_unverified' }
+    if (keyCheck === 'no_sample' && !options.keyVerified) return { status: 'key_unverified' }
 
     while (now() - started < budgetMs) {
       const written = await store.sealBatch(batchSize, planRowSeal, (rows) => sealAuditEntry({ organizationId: orgId, rows }, userId))
@@ -111,6 +116,8 @@ export type SealOutcome =
 
 export interface SealDeps {
   overview: () => Promise<SealOverviewRow[]>
+  /** Textos ya cifrados de cualquier organización, para comprobar la clave una vez. */
+  keySamples: () => Promise<string[]>
   storeFor: (orgId: string) => SealStore
   sealOrg?: typeof runOrgSeal
 }
@@ -118,24 +125,43 @@ export interface SealDeps {
 /**
  * Sella lo anterior al cifrado en **todas** las organizaciones, una por una, a nombre del
  * operador. Es obligación de quien responde por el sistema, no una opción de cada centro. El
- * tope de tiempo es uno solo para todo el pedido; una organización cuya clave no se pudo
- * comprobar se saltea y se informa, sin frenar a las demás.
+ * tope de tiempo es uno solo para todo el pedido.
+ *
+ * La clave es la de la aplicación y es una sola: se comprueba una vez contra lo cifrado de
+ * cualquier organización. Si lo propio de una organización está cifrado con otra clave, esa
+ * se saltea y se informa, sin frenar a las demás.
  */
 export async function runSeal(deps: SealDeps, options: Omit<OrgSealOptions, 'orgId'>): Promise<SealOutcome> {
   const now = options.now ?? Date.now
   const sealOrg = deps.sealOrg ?? runOrgSeal
+  const checkKey = options.checkKey ?? checkKeyAgainstStored
+  const probeKey = options.probeKey ?? (() => void sealScreeningJson({ probe: true }))
   const started = now()
+  const pending = (await deps.overview()).filter((org) => org.plain > 0)
+
+  let keyVerified = false
+  if (pending.length > 0) {
+    try {
+      probeKey()
+    } catch (err) {
+      if (err instanceof PhiConfigError) return { status: 'no_key' }
+      throw err
+    }
+    // Alcanza con que una muestra se descifre: lo que esté cifrado con otra clave lo detecta
+    // la comprobación de su propia organización.
+    keyVerified = (await deps.keySamples()).some((sample) => checkKey([sample]) === 'ok')
+  }
+
   let organizations = 0
   let sealed = 0
   let batches = 0
   let keyMismatch = 0
   let keyUnverified = 0
 
-  for (const org of await deps.overview()) {
-    if (org.plain === 0) continue
+  for (const org of pending) {
     const left = options.budgetMs - (now() - started)
     if (left <= 0) break
-    const outcome = await sealOrg(deps.storeFor(org.organizationId), { ...options, orgId: org.organizationId, budgetMs: left })
+    const outcome = await sealOrg(deps.storeFor(org.organizationId), { ...options, orgId: org.organizationId, budgetMs: left, keyVerified })
     if (outcome.status === 'no_key') return { status: 'no_key' }
     if (outcome.status === 'key_mismatch') keyMismatch += 1
     else if (outcome.status === 'key_unverified') keyUnverified += 1

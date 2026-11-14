@@ -86,6 +86,19 @@ describe('runOrgSeal — sellar lo anterior al cifrado, una organización', () =
     expect(store.sealBatch).not.toHaveBeenCalled()
   })
 
+  it('sin nada propio contra qué comprobar, pero con la clave ya comprobada contra el sistema, sella', async () => {
+    const store = fakeStore({ batches: [5], keySamples: vi.fn(async () => []) })
+    const outcome = await runOrgSeal(store, { ...base, probeKey: () => undefined, checkKey: () => 'no_sample', keyVerified: true })
+    expect(outcome).toEqual({ status: 'done', sealed: 5, batches: 1, remaining: 0, foreignEnvelope: 0 })
+  })
+
+  it('si lo propio está cifrado con otra clave no escribe, aunque la clave sirva para el resto del sistema', async () => {
+    const store = fakeStore({ batches: [5] })
+    const outcome = await runOrgSeal(store, { ...base, probeKey: () => undefined, checkKey: () => 'mismatch', keyVerified: true })
+    expect(outcome).toEqual({ status: 'key_mismatch' })
+    expect(store.sealBatch).not.toHaveBeenCalled()
+  })
+
   it('al llegar al tope de tiempo corta entre tandas y dice cuánto quedó', async () => {
     let clock = 0
     const store = fakeStore({ batches: [200, 200, 200] })
@@ -127,14 +140,15 @@ describe('runOrgSeal — sellar lo anterior al cifrado, una organización', () =
  * centro (C3): el operador recorre todas las organizaciones, una por una.
  */
 describe('runSeal — todas las organizaciones, a nombre del operador', () => {
-  const options = { userId: USER, batchSize: 200, budgetMs: 20_000 }
+  const options = { userId: USER, batchSize: 200, budgetMs: 20_000, probeKey: () => undefined, checkKey: (samples: readonly string[]) => (samples[0] === 'descifra' ? ('ok' as const) : ('mismatch' as const)) }
   const row = (organizationId: string, plain: number, foreignEnvelope = 0) => ({ organizationId, rows: plain + 3, plain, foreignEnvelope })
 
   function setup(before: ReturnType<typeof row>[], after: ReturnType<typeof row>[], outcomes: Record<string, OrgSealOutcome>) {
     const overview = vi.fn().mockResolvedValueOnce(before).mockResolvedValueOnce(after)
     const storeFor = vi.fn((orgId: string) => ({ orgId }) as unknown as SealStore)
+    const keySamples = vi.fn(async () => ['descifra'])
     const sealOrg = vi.fn(async (_store: SealStore, opts: OrgSealOptions): Promise<OrgSealOutcome> => outcomes[opts.orgId]!)
-    return { overview, storeFor, sealOrg }
+    return { overview, storeFor, keySamples, sealOrg }
   }
   const sealedOrg = (sealed: number, batches = 1): OrgSealOutcome => ({ status: 'done', sealed, batches, remaining: 0, foreignEnvelope: 0 })
 
@@ -202,5 +216,64 @@ describe('runSeal — todas las organizaciones, a nombre del operador', () => {
   it('los sobres de otra versión se informan y dejan el resultado en parcial', async () => {
     const deps = setup([row('org-a', 0, 2)], [row('org-a', 0, 2)], {})
     expect(await runSeal(deps, options)).toMatchObject({ status: 'partial', foreignEnvelope: 2, remaining: 0 })
+  })
+})
+
+/**
+ * La clave es una sola para todo el sistema y es la de la aplicación. Se comprueba una vez,
+ * contra lo cifrado de cualquier organización: una organización sin nada propio cifrado no
+ * puede quedar sin sellar para siempre (observación de Architect).
+ */
+describe('runSeal — la clave se comprueba una vez, contra todo el sistema', () => {
+  const options = { userId: USER, batchSize: 200, budgetMs: 20_000, probeKey: () => undefined }
+  const overviewOf = (plain: number) => [{ organizationId: 'org-a', rows: plain + 1, plain, foreignEnvelope: 0 }]
+  const done: OrgSealOutcome = { status: 'done', sealed: 1, batches: 1, remaining: 0, foreignEnvelope: 0 }
+
+  function deps(samples: string[], plain = 3) {
+    return {
+      overview: vi.fn(async () => overviewOf(plain)),
+      storeFor: vi.fn(() => ({}) as unknown as SealStore),
+      keySamples: vi.fn(async () => samples),
+      sealOrg: vi.fn(async (_store: SealStore, _opts: OrgSealOptions): Promise<OrgSealOutcome> => done),
+    }
+  }
+  const checkKey = (samples: readonly string[]) => (samples[0] === 'descifra' ? ('ok' as const) : ('mismatch' as const))
+
+  it('si alguna muestra del sistema se descifra, cada organización recibe la clave como comprobada', async () => {
+    const d = deps(['otra-clave', 'descifra'])
+    await runSeal(d, { ...options, checkKey })
+    expect(d.sealOrg.mock.calls[0]![1].keyVerified).toBe(true)
+  })
+
+  it('si ninguna muestra del sistema se descifra, no se da por comprobada', async () => {
+    const d = deps(['otra-clave'])
+    await runSeal(d, { ...options, checkKey })
+    expect(d.sealOrg.mock.calls[0]![1].keyVerified).toBe(false)
+  })
+
+  it('sin nada cifrado en todo el sistema, no se da por comprobada', async () => {
+    const d = deps([])
+    await runSeal(d, { ...options, checkKey })
+    expect(d.sealOrg.mock.calls[0]![1].keyVerified).toBe(false)
+  })
+
+  it('sin nada en claro no se leen muestras', async () => {
+    const d = deps(['descifra'], 0)
+    await runSeal(d, { ...options, checkKey })
+    expect(d.keySamples).not.toHaveBeenCalled()
+  })
+
+  it('si falta la clave no se leen muestras ni se abre ninguna organización', async () => {
+    const d = deps(['descifra'])
+    const outcome = await runSeal(d, {
+      ...options,
+      checkKey,
+      probeKey: () => {
+        throw new PhiConfigError('falta la clave')
+      },
+    })
+    expect(outcome).toEqual({ status: 'no_key' })
+    expect(d.keySamples).not.toHaveBeenCalled()
+    expect(d.sealOrg).not.toHaveBeenCalled()
   })
 })
