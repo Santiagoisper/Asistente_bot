@@ -149,6 +149,8 @@ export async function GET(req: Request, { params }: Params): Promise<Response> {
     })
     if (audio.state === 'missing') return notFound()
     if (audio.state === 'expired') return Response.json({ error: 'audio_expired' }, { status: 410 })
+    // Retirada al depósito (D24): ya no se escucha desde la historia de este sujeto.
+    if (audio.state === 'withdrawn') return Response.json({ error: 'audio_withdrawn' }, { status: 410 })
 
     // El registro va antes de entregar: si no se puede registrar, no se entrega.
     await writeAuditLog({

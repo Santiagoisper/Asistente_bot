@@ -197,6 +197,14 @@ describe('GET — escuchar la grabación', () => {
     expect(mocks.writeAuditLog).not.toHaveBeenCalled()
   })
 
+  it('una grabación retirada al depósito no se entrega ni se registra como escucha (D24)', async () => {
+    mocks.loadDictationAudio.mockResolvedValue({ state: 'withdrawn' })
+    const res = await GET(new Request(`http://localhost/api/studies/${STUDY}/subjects/${SUBJECT}/evolutions/${EVOLUTION}/audio`), params)
+    expect(res.status).toBe(410)
+    expect(await res.json()).toEqual({ error: 'audio_withdrawn' })
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+  })
+
   it('si el registro falla, no se entrega', async () => {
     mocks.loadDictationAudio.mockResolvedValue({ state: 'ok', id: 'audio-1', mime: 'audio/webm', bytes: new Uint8Array([9]) })
     mocks.writeAuditLog.mockRejectedValue(new Error('db down'))

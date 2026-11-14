@@ -1,4 +1,5 @@
 import { and, clinicalEvolutions, db, desc, eq, evolutionVoids, isNull, type EvolutionVoidReason } from '@ichtys/db'
+import type { DbExecutor } from '../audit/audited-write'
 
 /**
  * El único lugar que lee evoluciones (docs/decisions/grabacion-en-sujeto-equivocado.md, D24).
@@ -114,9 +115,12 @@ export async function listSubjectEvolutions(scope: EvolutionScope, policy: Evolu
   }))
 }
 
-/** Una evolución, solo si es de esta organización, este estudio y este sujeto. */
-export async function findSubjectEvolution(params: EvolutionScope & { evolutionId: string }, policy: EvolutionVoidPolicy): Promise<EvolutionRef | null> {
-  const [row] = await db
+/**
+ * Una evolución, solo si es de esta organización, este estudio y este sujeto. `executor` es para
+ * leerla dentro de una transacción en curso (anular una evolución lee y escribe en la misma).
+ */
+export async function findSubjectEvolution(params: EvolutionScope & { evolutionId: string }, policy: EvolutionVoidPolicy, executor: DbExecutor = db): Promise<EvolutionRef | null> {
+  const [row] = await executor
     .select({ id: clinicalEvolutions.id, authorUserId: clinicalEvolutions.authorUserId, ...voidColumns })
     .from(clinicalEvolutions)
     .leftJoin(evolutionVoids, voidJoin())
