@@ -63,7 +63,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.transactions = 0
   mocks.order.length = 0
-  mocks.validateSubjectAccess.mockResolvedValue(context)
+  // mockReset: una respuesta «una vez» que una prueba no llegó a consumir no pasa a la siguiente.
+  mocks.validateSubjectAccess.mockReset().mockResolvedValue(context)
   mocks.rateLimit.mockResolvedValue(null)
   mocks.findEvolution.mockResolvedValue({ id: EVOLUTION, authorUserId: 'user_author', voided: null })
   mocks.txVoidStore.mockReturnValue({ store: true })
@@ -124,6 +125,21 @@ describe('POST — declarar que la evolución se registró en el sujeto equivoca
     expect(mocks.transactions).toBe(0)
     // Lo que se le pidió al validador la segunda vez: la capacidad de coordinación sobre este estudio.
     expect(mocks.validateSubjectAccess.mock.calls[1]).toEqual([SUBJECT, STUDY, { require: 'access.manage_study' }])
+  })
+
+  it('quien no puede anular recibe 403 antes de cualquier respuesta que dependa de lo que mandó (primero quién es y qué puede)', async () => {
+    mocks.findEvolution.mockResolvedValue({ id: EVOLUTION, authorUserId: 'user_other', voided: null })
+    const denied = () =>
+      mocks.validateSubjectAccess.mockReset().mockResolvedValueOnce(context).mockRejectedValueOnce(new mocks.AccessError('Forbidden', 403))
+
+    denied()
+    expect((await POST(request({ reason: 'wrong_subject', confirmedSubjectCode: 'OTRO-999' }), params)).status).toBe(403)
+    denied()
+    expect((await POST(request({ reason: 'otro motivo' }), params)).status).toBe(403)
+    denied()
+    mocks.findEvolution.mockResolvedValue({ id: EVOLUTION, authorUserId: 'user_other', voided: { reason: 'wrong_subject' } })
+    expect((await POST(request(), params)).status).toBe(403)
+    expect(mocks.transactions).toBe(0)
   })
 
   it('quien coordina el estudio puede anular la de otra persona', async () => {

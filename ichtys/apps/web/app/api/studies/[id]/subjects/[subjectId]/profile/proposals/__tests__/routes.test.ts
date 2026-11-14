@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => {
   }
   class MockUnreadableError extends Error {}
   class MockInvalidError extends Error {}
-  return { AccessError: MockAccessError, ProfileProposalError: MockProposalError, ProfileUnreadableError: MockUnreadableError, ProfileInvalidError: MockInvalidError, validateSubjectAccess: vi.fn(), confirmProfileProposal: vi.fn(), rejectProfileProposal: vi.fn() }
+  return { AccessError: MockAccessError, ProfileProposalError: MockProposalError, ProfileUnreadableError: MockUnreadableError, ProfileInvalidError: MockInvalidError, validateSubjectAccess: vi.fn(), confirmProfileProposal: vi.fn(), rejectProfileProposal: vi.fn(), findSubjectEvolution: vi.fn() }
 })
 
 vi.mock('@ichtys/auth', () => ({
@@ -28,6 +28,7 @@ vi.mock('../../../../../../../../../lib/subjects/patient-profile-service', () =>
   rejectProfileProposal: mocks.rejectProfileProposal,
 }))
 vi.mock('../../../../../../../../../lib/subjects/phi-fields', () => ({ PhiConfigError: class extends Error {} }))
+vi.mock('../../../../../../../../../lib/subjects/evolution-reader', () => ({ findSubjectEvolution: mocks.findSubjectEvolution }))
 
 import { POST as confirm } from '../[evolutionId]/confirm/route'
 import { POST as reject } from '../[evolutionId]/reject/route'
@@ -41,6 +42,7 @@ const req = () => new Request('https://os.example.test/x', { method: 'POST' })
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.validateSubjectAccess.mockResolvedValue({ orgId: 'org-1', userId: 'user_md', study: { id: STUDY }, subject: { id: SUBJECT, subjectCode: 'E2E-001' } })
+  mocks.findSubjectEvolution.mockResolvedValue({ id: EVO, authorUserId: 'user_md', voided: null })
   mocks.confirmProfileProposal.mockResolvedValue({ version: 1, labs: [] })
   mocks.rejectProfileProposal.mockResolvedValue({ version: 1, labs: [] })
 })
@@ -91,5 +93,37 @@ describe('propuestas para el perfil — aceptar y descartar', () => {
     const res = await confirm(req(), ctx())
     expect(res.status).toBe(422)
     expect(await res.json()).toEqual({ error: 'profile_invalid' })
+  })
+})
+
+/**
+ * D24: la propuesta se escribe unos segundos después de guardar la evolución (espera al modelo).
+ * Si en ese rato alguien la anuló, la propuesta aparece tarde, sobre una evolución anulada.
+ * No puede entrar al perfil del sujeto equivocado; descartarla sí se puede.
+ */
+describe('propuestas para el perfil — la evolución se anuló', () => {
+  beforeEach(() => {
+    mocks.findSubjectEvolution.mockResolvedValue({ id: EVO, authorUserId: 'user_md', voided: { reason: 'wrong_subject', declaredBy: 'user_x', declaredAt: new Date() } })
+  })
+
+  it('aceptar: 409 con código propio, y el perfil no se toca', async () => {
+    const res = await confirm(req(), ctx())
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({ error: 'evolution_voided' })
+    expect(mocks.findSubjectEvolution).toHaveBeenCalledWith({ orgId: 'org-1', studyId: STUDY, subjectId: SUBJECT, evolutionId: EVO }, 'with-voided')
+    expect(mocks.confirmProfileProposal).not.toHaveBeenCalled()
+  })
+
+  it('descartar sigue pudiéndose: es la forma de sacarla', async () => {
+    expect((await reject(req(), ctx())).status).toBe(200)
+    expect(mocks.rejectProfileProposal).toHaveBeenCalledTimes(1)
+  })
+
+  it('una evolución que no existe en este sujeto no tiene propuesta que aceptar', async () => {
+    mocks.findSubjectEvolution.mockResolvedValue(null)
+    const res = await confirm(req(), ctx())
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({ error: 'no_pending_proposal' })
+    expect(mocks.confirmProfileProposal).not.toHaveBeenCalled()
   })
 })

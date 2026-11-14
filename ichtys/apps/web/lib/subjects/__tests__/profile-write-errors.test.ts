@@ -4,7 +4,7 @@ vi.mock('@ichtys/db', () => ({ db: {}, and: vi.fn(), eq: vi.fn(), patientProfile
 
 import { ProfileConflictError, ProfileInvalidError, ProfileUnreadableError } from '../patient-profile-service'
 import { profileWriteErrorResponse } from '../profile-write-errors'
-import { profileWriteErrorMessage, PROFILE_UNREADABLE_NOTICE } from '../profile-write-messages'
+import { profileWriteErrorMessage, PROFILE_UNREADABLE_NOTICE, PROPOSAL_OF_VOIDED_EVOLUTION_MESSAGE } from '../profile-write-messages'
 
 describe('errores de escritura del perfil: código propio para la pantalla', () => {
   it('un perfil guardado que no se pudo leer responde 422 con su código, sin ningún dato', async () => {
@@ -44,6 +44,12 @@ describe('lo que la pantalla le dice a la persona', () => {
     const text = profileWriteErrorMessage('profile_invalid')
     expect(text).toContain('no se guardó')
     expect(text).toContain('quedó como estaba')
+  })
+
+  it('propuesta de una evolución anulada: dice por qué no entra, que el perfil no cambió y qué se puede hacer', () => {
+    expect(PROPOSAL_OF_VOIDED_EVOLUTION_MESSAGE).toContain('registrada por error en este sujeto')
+    expect(PROPOSAL_OF_VOIDED_EVOLUTION_MESSAGE).toContain('El perfil no cambió')
+    expect(PROPOSAL_OF_VOIDED_EVOLUTION_MESSAGE).toContain('descartar')
   })
 
   it('un código que no es de estos no tiene mensaje propio', () => {
