@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { FUNCTION_CAPABILITIES } from '@ichtys/auth/functions'
 import { ROLES } from '@ichtys/auth/roles'
-import { MONITOR_MEMBERSHIP_MAX_DAYS } from '../permissions'
-import { ACCESS_EXPIRY_GUIDE, API_ERROR_TEXTS, FUNCTION_HINTS, FUNCTION_LABELS, MODE_TEXTS, ROLE_LABELS } from '../team-ui'
+import { ACCESS_OPEN_DEFAULT_DAYS, MONITOR_MEMBERSHIP_MAX_DAYS } from '../permissions'
+import {
+  ACCESS_EXPIRY_GUIDE,
+  API_ERROR_TEXTS,
+  FUNCTION_HINTS,
+  FUNCTION_LABELS,
+  MODE_CONFIRM_TEXTS,
+  MODE_DEADLINE_TEXTS,
+  MODE_ERROR_TEXTS,
+  MODE_TEXTS,
+  ROLE_LABELS,
+} from '../team-ui'
 
 /**
  * L6: la pantalla enseña con estas constantes y su prueba las recorre. Acá lo
@@ -45,5 +55,30 @@ describe('team-ui — textos de modo y de errores', () => {
     // M18 y M19 nombradas: quien lee la pantalla puede buscar la decisión.
     expect(ACCESS_EXPIRY_GUIDE).toContain('M18')
     expect(ACCESS_EXPIRY_GUIDE).toContain('M19')
+  })
+})
+
+describe('team-ui — textos del modo', () => {
+  it('MODE_ERROR_TEXTS traduce cada rechazo que la ruta de modo puede devolver', () => {
+    for (const code of ['deadline_passed', 'no_change', 'invalid_input']) {
+      expect(MODE_ERROR_TEXTS[code as keyof typeof MODE_ERROR_TEXTS].length, code).toBeGreaterThan(0)
+    }
+  })
+
+  it('el plazo que los textos citan es la misma constante del servidor (M8)', () => {
+    expect(MODE_CONFIRM_TEXTS.toOpen.risk).toContain(String(ACCESS_OPEN_DEFAULT_DAYS))
+  })
+
+  it('L21: cada confirmación trae las dos frases, la que empuja y la que frena', () => {
+    for (const direction of ['toEnforced', 'toOpen'] as const) {
+      expect(MODE_CONFIRM_TEXTS[direction].gains.length, direction).toBeGreaterThan(0)
+      expect(MODE_CONFIRM_TEXTS[direction].risk.length, direction).toBeGreaterThan(0)
+    }
+  })
+
+  it('el plazo restante se escribe con su número y su plural', () => {
+    expect(MODE_DEADLINE_TEXTS.daysLeft(1)).toContain('1 día')
+    expect(MODE_DEADLINE_TEXTS.daysLeft(42)).toContain('42 días')
+    expect(MODE_DEADLINE_TEXTS.expired.length).toBeGreaterThan(0)
   })
 })

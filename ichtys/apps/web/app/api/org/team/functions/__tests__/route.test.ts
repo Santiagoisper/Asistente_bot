@@ -57,14 +57,14 @@ describe('POST /api/org/team/functions — autorización', () => {
   })
 
   it('modo enforced: un rol alto sin la función de administración tampoco', async () => {
-    fx.org = { ...fx.org, accessMode: 'enforced' }
+    fx.org.accessMode = 'enforced'
     fx.memberFunctionRows = [activeFunction('user-2', 'investigator')]
     fx.auth = { userId: 'user-2', orgId: 'org_clerk_1', orgRole: 'org:principal_investigator' }
     expect((await grant({ userId: 'user-3', functionKey: 'study_coordinator' })).status).toBe(403)
   })
 
   it('modo enforced: Operaciones y plataforma asignan; el administrador de la organización, siempre (M14)', async () => {
-    fx.org = { ...fx.org, accessMode: 'enforced' }
+    fx.org.accessMode = 'enforced'
     fx.memberFunctionRows = [activeFunction('user-2', 'operations_director')]
     fx.auth = { userId: 'user-2', orgId: 'org_clerk_1', orgRole: 'org:read_only_monitor' }
     expect((await grant({ userId: 'user-3', functionKey: 'lab_assistant' })).status).toBe(201)
