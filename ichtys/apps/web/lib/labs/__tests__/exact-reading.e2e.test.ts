@@ -283,10 +283,12 @@ describe('Foto o escaneo — dos lecturas independientes', () => {
     expect((store.audits[1]!.metadata as { secondsSinceUpload: number }).secondsSinceUpload).toBeGreaterThanOrEqual(0)
     expect(JSON.stringify(store.audits[1]!.metadata)).not.toContain('Hemoglobina')
     expect(store.deletes).toEqual([])
+    // Cada valor guarda de qué informe salió (C4, D1).
+    const source = { kind: 'lab_report', reportId: created.reportId }
     expect(store.persisted[0]?.labs).toEqual([
-      { name: 'Hemoglobina', value: 18.5, unit: 'g/dL' },
-      { name: 'Glucosa', value: 92, unit: 'mg/dL' },
-      { name: 'Creatinina', value: 0.9, unit: 'mg/dL' },
+      { name: 'Hemoglobina', value: 18.5, unit: 'g/dL', source },
+      { name: 'Glucosa', value: 92, unit: 'mg/dL', source },
+      { name: 'Creatinina', value: 0.9, unit: 'mg/dL', source },
     ])
     // Confirmado: por defecto la evidencia se conserva y se puede volver a ver.
     expect(store.images).toHaveLength(2)
