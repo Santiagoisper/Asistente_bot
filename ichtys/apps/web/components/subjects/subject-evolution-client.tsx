@@ -425,7 +425,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const pendingProposals = profile?.pendingEvolutionProposals ?? []
   const voidedOrigin = voidedOriginNotice({
     labs: profile?.labs ?? [],
-    voidedEvolutionIds: evolutions.filter((evo) => evo.voided).map((evo) => evo.id),
+    voided: evolutions.filter((evo) => evo.voided).map((evo) => ({ id: evo.id, createdAt: evo.createdAt })),
     acceptedFrom: acceptedFromVoided ?? [],
   })
   const pendingLabs = profile?.pendingLabReview
