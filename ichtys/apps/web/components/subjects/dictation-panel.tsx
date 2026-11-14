@@ -22,6 +22,7 @@ import {
 } from '../../lib/dictation/protocol'
 import { takesNotice } from '../../lib/dictation/takes'
 import { useMicLevel } from '../../lib/dictation/use-mic-level'
+import { RecordingNotice } from './recording-notice'
 import { RecordButton } from './record-button'
 
 export interface DictationSource {
@@ -31,6 +32,11 @@ export interface DictationSource {
   modelRevision: string
   corrections: number
   missingBlocks: number
+  /**
+   * El código del sujeto que la persona confirmó en el aviso, antes de grabar o de subir el
+   * audio (D23). El servidor lo compara con el sujeto donde se guarda la evolución.
+   */
+  confirmedSubjectCode?: string
   /** Cómo quedó armado el borrador: por apartados nombrados o en texto corrido. */
   layout: 'blocks' | 'narrative'
   /** Frases que el transcriptor repitió en bucle y se dejaron una sola vez. */
@@ -44,6 +50,8 @@ export interface DictationRecording {
 }
 
 export interface DictationPanelProps {
+  /** Código del sujeto en pantalla. El aviso de antes de grabar lo nombra (D23). */
+  subjectCode: string
   /** El borrador está listo: la pantalla lo pone en el cuadro de la evolución. */
   onDraft: (draft: DictationDraft, source: DictationSource, recording: DictationRecording | null) => void
   /** La persona descartó el dictado: la pantalla saca el texto y la grabación. */
@@ -54,24 +62,20 @@ export interface DictationPanelProps {
 
 type Phase = 'idle' | 'recording' | 'paused' | 'preparing' | 'model' | 'transcribing' | 'ready' | 'error'
 
-const CONSENT_KEY = 'alphi-dictation-consent'
 /** Tope de una grabación: pasado esto se detiene sola y se transcribe lo grabado. */
 const MAX_RECORDING_SEC = 20 * 60
 /** Segundos sin voz al empezar para avisar que el micrófono no está tomando nada. */
 const SILENCE_WARNING_SEC = 4
 const SILENCE_LEVEL = 0.06
 
-function readConsent(): boolean {
-  try {
-    return sessionStorage.getItem(CONSENT_KEY) === 'yes'
-  } catch {
-    return false
-  }
-}
-
-export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPanelProps) {
-  const [consent, setConsent] = useState(false)
-  const [askingConsent, setAskingConsent] = useState(false)
+export function DictationPanel({ subjectCode, onDraft, onDiscard, resetSignal }: DictationPanelProps) {
+  /**
+   * El aviso se acepta una vez por evolución (D23): al guardar o descartar, el dictado
+   * siguiente lo vuelve a pedir, porque puede ser de otro sujeto. Se guarda el código que se
+   * confirmó y no un sí: si el sujeto en pantalla cambia, lo confirmado para el anterior no vale.
+   */
+  const [confirmedCode, setConfirmedCode] = useState<string | null>(null)
+  const [asking, setAsking] = useState<'record' | 'upload' | null>(null)
   const [phase, setPhase] = useState<Phase>('idle')
   const [seconds, setSeconds] = useState(0)
   const [modelPercent, setModelPercent] = useState(0)
@@ -89,6 +93,10 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
   const workerRef = useRef<Worker | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const previewRef = useRef<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const confirmedCodeRef = useRef<string | null>(null)
+  const currentCode = subjectCode.trim()
+  const confirmed = confirmedCode !== null && confirmedCode === currentCode
 
   const stopTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current)
@@ -105,7 +113,6 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
   }
 
   useEffect(() => {
-    setConsent(readConsent())
     return () => {
       stopTimer()
       recorderRef.current?.stream.getTracks().forEach((track) => track.stop())
@@ -123,6 +130,9 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
     setMessage(null)
     setTakes(0)
     setPhase('idle')
+    confirmedCodeRef.current = null
+    setConfirmedCode(null)
+    setAsking(null)
   }, [resetSignal])
 
   // Avisar si pasan unos segundos y todavía no entró voz; tope de duración.
@@ -184,6 +194,7 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
               modelRevision: DICTATION_MODEL_REVISION,
               corrections: built.corrections.length,
               missingBlocks: built.missing.length,
+              ...(confirmedCodeRef.current ? { confirmedSubjectCode: confirmedCodeRef.current } : {}),
               layout: built.layout,
               repetitions: built.repetitions.length,
             },
@@ -243,13 +254,14 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
     setPhase('recording')
   }
 
-  function acceptConsent() {
-    try {
-      sessionStorage.setItem(CONSENT_KEY, 'yes')
-    } catch {
-      // Sin almacenamiento de sesión: el aviso se vuelve a mostrar la próxima vez.
-    }
-    setConsent(true)
+  /** Aceptó el aviso que nombra al sujeto: sigue con lo que había pedido. */
+  function acceptNotice() {
+    const next = asking
+    confirmedCodeRef.current = currentCode
+    setConfirmedCode(currentCode)
+    setAsking(null)
+    if (next === 'record') void startRecording()
+    else if (next === 'upload') fileInputRef.current?.click()
   }
 
   function discard() {
@@ -259,6 +271,9 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
     setMessage(null)
     setTakes(0)
     setPhase('idle')
+    confirmedCodeRef.current = null
+    setConfirmedCode(null)
+    setAsking(null)
     onDiscard()
   }
 
@@ -276,7 +291,7 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
               silent={phase === 'recording' && !heardVoice && seconds >= SILENCE_WARNING_SEC}
               adding={takes > 0}
               onStart={() => {
-                if (!consent) setAskingConsent(true)
+                if (!confirmed) setAsking('record')
                 else void startRecording()
               }}
               onPause={pauseRecording}
@@ -287,9 +302,18 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
               <label className={`alphi-btn-secondary cursor-pointer ${busy ? 'pointer-events-none opacity-40' : ''}`}>
                 Subir un audio
                 <input
+                  ref={fileInputRef}
                   type="file"
                   accept="audio/*,video/mp4,video/webm"
                   className="sr-only"
+                  onClick={(event) => {
+                    // Sin el aviso aceptado no se abre el selector: primero se confirma el sujeto.
+                    // Se mira la referencia y no el estado: al aceptar, el clic programado llega
+                    // antes de que la pantalla se vuelva a dibujar.
+                    if (confirmedCodeRef.current !== null && confirmedCodeRef.current === currentCode) return
+                    event.preventDefault()
+                    setAsking('upload')
+                  }}
                   onChange={(event) => {
                     const file = event.target.files?.[0]
                     event.target.value = ''
@@ -300,30 +324,14 @@ export function DictationPanel({ onDraft, onDiscard, resetSignal }: DictationPan
             )}
           </div>
 
-          {askingConsent && !consent ? (
-            <div className="space-y-2 rounded-lg border border-alphi-border bg-alphi-slate p-3 text-sm" role="group" aria-label="Antes de grabar">
-              <p>
-                Se graba <strong>tu dictado</strong> para armar un borrador. El audio se transcribe en este equipo. Si guardás la
-                evolución, la grabación se guarda cifrada junto a ella durante {DICTATION_AUDIO_RETENTION_DAYS} días y después se
-                borra; si descartás el dictado, no se guarda nada. Grabar a un paciente exige su consentimiento.
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    acceptConsent()
-                    setAskingConsent(false)
-                    void startRecording()
-                  }}
-                  className="alphi-btn-primary"
-                >
-                  Entendido, empezar a grabar
-                </button>
-                <button type="button" onClick={() => setAskingConsent(false)} className="alphi-btn-secondary">
-                  Ahora no
-                </button>
-              </div>
-            </div>
+          {asking && !confirmed ? (
+            <RecordingNotice
+              subjectCode={subjectCode}
+              retentionDays={DICTATION_AUDIO_RETENTION_DAYS}
+              action={asking}
+              onAccept={acceptNotice}
+              onCancel={() => setAsking(null)}
+            />
           ) : null}
 
           {busy || active ? (

@@ -267,6 +267,12 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         setError('Esta instalación no tiene configurado el cifrado de datos clínicos. No se guardó nada. Avisá a quien administra la plataforma.')
         return
       }
+      if (res.status === 409 && data.error === 'subject_mismatch') {
+        setError(
+          `Este dictado se confirmó para otro sujeto, no para ${subjectCode}. No se guardó nada. Descartá el dictado y volvé a dictar en el sujeto correcto.`,
+        )
+        return
+      }
       if (!res.ok) throw new Error(data.error ?? 'save_failed')
       if (data.piiWarnings?.length) setPiiWarnings(data.piiWarnings)
       // La evolución ya está guardada. La grabación va después y, si falla, se avisa: no se pierde el texto.
@@ -403,6 +409,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_21rem]">
         <div className="min-w-0 space-y-4">
         <DictationPanel
+          subjectCode={subjectCode}
           resetSignal={savedCount}
           onDraft={(draft, source, recording) => {
             // Lo dictado va al mismo cuadro donde se escribe. Si ya había texto, lo nuevo se suma

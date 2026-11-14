@@ -26,6 +26,12 @@ export const evolutionSourceSchema = z
     missingBlocks: z.number().int().min(0).max(50),
     /** Opcionales: un cliente anterior a este cambio no los manda. */
     layout: z.enum(['blocks', 'narrative']).optional(),
+    /**
+     * El código del sujeto que la persona confirmó en el aviso de antes de grabar (D23). La ruta
+     * lo compara con el sujeto donde se guarda la evolución: si no coincide, no guarda. No va
+     * al registro: ahí queda `subjectConfirmed`, que es el resultado de esa comparación.
+     */
+    confirmedSubjectCode: z.string().trim().min(1).max(64).optional(),
     repetitions: z.number().int().min(0).max(50).optional(),
   })
   .strict()

@@ -248,6 +248,85 @@ describe('OQ-007 — audit log sin contenido PHI', () => {
     expect(JSON.stringify(auditCall.metadata)).not.toContain('Metformina')
   })
 
+  it('POST de una evolución dictada: el sujeto confirmado antes de grabar coincide con el de la ruta y queda comprobado en el registro (D23)', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbInsertReturning.mockResolvedValueOnce([
+      { id: mocks.EVOLUTION_ID, visitLabel: 'V1', createdAt: new Date('2026-11-14T12:00:00Z') },
+    ])
+    mocks.writeAuditLog.mockClear()
+    const source = { kind: 'dictation', durationSec: 40, model: 'whisper-small', modelRevision: 'rev-abc', corrections: 0, missingBlocks: 1, confirmedSubjectCode: 'GZBO-001' }
+    const res = await POST(
+      new Request('http://localhost/api/evolutions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: CLINICAL_TEXT, visitLabel: 'V1', source }),
+      }),
+      makeParams(),
+    )
+    expect(res.status).toBe(201)
+    const auditCall = mocks.writeAuditLog.mock.calls[0]?.[0] as { metadata?: { source?: Record<string, unknown> } }
+    // El registro dice que se comprobó; el código del sujeto no se copia al registro.
+    expect(auditCall.metadata?.source?.subjectConfirmed).toBe(true)
+    expect(auditCall.metadata?.source).not.toHaveProperty('confirmedSubjectCode')
+    expect(JSON.stringify(auditCall.metadata)).not.toContain('GZBO-001')
+  })
+
+  it('POST de un dictado confirmado para OTRO sujeto: 409 y no se guarda nada (D23)', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.writeAuditLog.mockClear()
+    mocks.dbInsertReturning.mockClear()
+    const source = { kind: 'dictation', durationSec: 40, model: 'm', modelRevision: 'r', corrections: 0, missingBlocks: 0, confirmedSubjectCode: 'GZBO-002' }
+    const res = await POST(
+      new Request('http://localhost/api/evolutions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: CLINICAL_TEXT, source }),
+      }),
+      makeParams(),
+    )
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({ error: 'subject_mismatch' })
+    expect(mocks.dbInsertReturning).not.toHaveBeenCalled()
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+  })
+
+  it('POST de un dictado sin sujeto confirmado (cliente anterior): se guarda y el registro no afirma la confirmación', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbInsertReturning.mockResolvedValueOnce([
+      { id: mocks.EVOLUTION_ID, visitLabel: null, createdAt: new Date('2026-11-14T12:00:00Z') },
+    ])
+    mocks.writeAuditLog.mockClear()
+    const source = { kind: 'dictation', durationSec: 40, model: 'm', modelRevision: 'r', corrections: 0, missingBlocks: 0 }
+    const res = await POST(
+      new Request('http://localhost/api/evolutions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: CLINICAL_TEXT, source }),
+      }),
+      makeParams(),
+    )
+    expect(res.status).toBe(201)
+    const auditCall = mocks.writeAuditLog.mock.calls[0]?.[0] as { metadata?: { source?: Record<string, unknown> } }
+    expect(auditCall.metadata?.source).not.toHaveProperty('subjectConfirmed')
+  })
+
+  it('POST rechaza un código de sujeto confirmado que no sea un texto corto', async () => {
+    mocks.validateSubjectAccess.mockResolvedValue(subjectContext())
+    for (const confirmedSubjectCode of [true, '', 'X'.repeat(65)]) {
+      const source = { kind: 'dictation', durationSec: 40, model: 'm', modelRevision: 'r', corrections: 0, missingBlocks: 0, confirmedSubjectCode }
+      const res = await POST(
+        new Request('http://localhost/api/evolutions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: CLINICAL_TEXT, source }),
+        }),
+        makeParams(),
+      )
+      expect(res.status).toBe(400)
+    }
+    mocks.validateSubjectAccess.mockReset()
+  })
+
   it('POST rechaza un origen con campos de más o con texto libre', async () => {
     mocks.validateSubjectAccess.mockResolvedValue(subjectContext())
     for (const source of [
