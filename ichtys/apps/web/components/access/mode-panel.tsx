@@ -159,6 +159,9 @@ export function ModePanel({ onChanged }: { onChanged: () => void }) {
           <p className="text-xs text-alphi-amber">
             {confirming === 'toEnforced' ? MODE_CONFIRM_TEXTS.toEnforced.risk : MODE_CONFIRM_TEXTS.toOpen.risk}
           </p>
+          {confirming === 'toEnforced' && data.deadlinePassed ? (
+            <p className="text-xs font-semibold text-alphi-rose">{MODE_CONFIRM_TEXTS.toEnforced.riskAfterDeadline}</p>
+          ) : null}
 
           {confirming === 'toEnforced' ? (
             <div className="space-y-1">

@@ -164,6 +164,34 @@ describe('ModePanel — confirmar el paso a estricto', () => {
     expect(onChanged).toHaveBeenCalled() // la pantalla madre refresca su banner
   })
 
+  it('M20: con el plazo vencido, la confirmación avisa que pasar a estricto no tiene vuelta', async () => {
+    modePayload = { mode: 'open', columnMode: 'open', openUntil: isoIn(-3), daysLeft: -3, deadlinePassed: true, impact: [] }
+    mount()
+    await settled()
+
+    await act(async () => {
+      button(MODE_PANEL_LABELS.toEnforcedButton).click()
+      await Promise.resolve()
+    })
+
+    const text = container.textContent ?? ''
+    expect(text).toContain(MODE_CONFIRM_TEXTS.toEnforced.risk)
+    expect(text).toContain(MODE_CONFIRM_TEXTS.toEnforced.riskAfterDeadline)
+    expect(MODE_CONFIRM_TEXTS.toEnforced.riskAfterDeadline).toContain('no puede volver al modo abierto')
+  })
+
+  it('con el plazo todavía vigente, la confirmación no dice que no hay vuelta', async () => {
+    mount()
+    await settled()
+
+    await act(async () => {
+      button(MODE_PANEL_LABELS.toEnforcedButton).click()
+      await Promise.resolve()
+    })
+
+    expect(container.textContent ?? '').not.toContain(MODE_CONFIRM_TEXTS.toEnforced.riskAfterDeadline)
+  })
+
   it('sin nadie afectado, la confirmación lo dice en lugar de una lista vacía', async () => {
     modePayload = { ...defaultPayload(), impact: [] }
     mount()

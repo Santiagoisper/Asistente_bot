@@ -102,6 +102,9 @@ export const MODE_CONFIRM_TEXTS = {
       'Cada estudio queda visible solo para quien tiene un acceso dado: membresía vigente o función con alcance total.',
     risk:
       'Cada persona de la lista deja de ver los estudios nombrados; quien queda sin ninguno deja de entrar a todos hasta que se le dé acceso.',
+    /** Se suma al riesgo cuando el plazo del modo abierto ya venció (M20 + M5): el paso es permanente. */
+    riskAfterDeadline:
+      'El plazo ya venció: después de este paso la organización no puede volver al modo abierto.',
   },
   toOpen: {
     gains: 'Todo integrante de la organización vuelve a ver todos los estudios, como hoy: sirve para corregir una carga.',
