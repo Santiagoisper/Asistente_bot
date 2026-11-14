@@ -22,6 +22,7 @@ import {
 } from '../../lib/dictation/protocol'
 import { takesNotice } from '../../lib/dictation/takes'
 import { useMicLevel } from '../../lib/dictation/use-mic-level'
+import { DictationThread } from './dictation-thread'
 import { RecordingNotice } from './recording-notice'
 import { RecordButton } from './record-button'
 
@@ -283,6 +284,8 @@ export function DictationPanel({ subjectCode, onDraft, onDiscard, resetSignal }:
 
   return (
     <section className="space-y-3" aria-label="Dictar la evolución">
+          {/* El hilo de qué decir, donde se graba: en una tableta la guía completa queda lejos. */}
+          {phase === 'idle' || active ? <DictationThread /> : null}
           <div className="flex flex-wrap items-center justify-between gap-4">
             <RecordButton
               state={phase === 'recording' ? 'recording' : phase === 'paused' ? 'paused' : busy ? 'busy' : 'idle'}
