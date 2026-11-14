@@ -12,8 +12,9 @@ import {
 
 /**
  * C3 (docs/compliance/REGULATORY-BASELINE.md, R5), lo anterior al cifrado: decide qué se
- * escribe en cada fila de `screening_assessments` que quedó en claro. La usa el script de
- * operación `scripts/seal-screening-assessments.ts`; está acá para probarla sin base.
+ * escribe en cada fila de `screening_assessments` que quedó en claro. La usan el script de
+ * operación `scripts/seal-screening-assessments.ts` y la ruta `/api/os/screening-seal`
+ * (`screening-seal-run.ts`); está acá para probarla sin base.
  *
  * Sellar no cambia la evaluación: es el mismo contenido, guardado de otra forma. Por eso
  * solo se tocan las dos columnas y el registro de auditoría dice «se cifró».
@@ -159,6 +160,22 @@ export function databaseHostOf(connectionString: string | undefined): string | n
   try {
     const host = new URL(connectionString).hostname
     return host ? host.toLowerCase() : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * A qué base apunta una dirección de conexión: `host/base`, sin usuario ni contraseña. Un mismo
+ * host puede tener más de una base, así que el host solo no alcanza para confirmar el destino.
+ * El nombre de la base se deja tal cual: en Postgres distingue mayúsculas.
+ */
+export function databaseTargetOf(connectionString: string | undefined): string | null {
+  const host = databaseHostOf(connectionString)
+  if (host === null || !connectionString) return null
+  try {
+    const database = decodeURIComponent(new URL(connectionString).pathname.replace(/^\//, ''))
+    return database ? `${host}/${database}` : null
   } catch {
     return null
   }
