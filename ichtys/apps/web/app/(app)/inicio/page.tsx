@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { Suspense, type ReactNode } from 'react'
 import { BookOpen, CalendarDays, FlaskConical, MessageSquare, Mic } from 'lucide-react'
 import { ModuleCard } from '../../../components/os/module-card'
+import { UnassignedAudiosPanel } from '../../../components/dictation/unassigned-audios-panel'
 import { ProtocolIntelligence } from '../../../components/os/protocol-intelligence'
 import { ButtonLink, Card, EmptyState, LoadError, Pill, StatCard, cardClass } from '../../../components/os/ui'
 import { KIND_LABELS, STATUS_LABELS } from '../../../lib/agenda/agenda-schema'
@@ -333,6 +334,9 @@ export default async function InicioPage() {
       <Suspense fallback={<Skeleton className="h-32" />}>
         <Greeting />
       </Suspense>
+
+      {/* Aparece solo si la persona tiene alguna grabación retirada de un sujeto (D24). */}
+      <UnassignedAudiosPanel variant="inicio" />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Suspense fallback={<Skeleton />}>

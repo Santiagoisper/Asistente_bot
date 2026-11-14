@@ -102,6 +102,9 @@ describe('EvolutionVoidControl', () => {
     expect(text).toContain('No tiene vuelta atrás')
     expect(text).toContain('Registrada por error en este sujeto')
     expect(text).toContain('grabaciones sin sujeto')
+    // Lo que se dice de escucharlas es lo que hoy existe: quien las grabó, desde su lista.
+    expect(text).toContain('Quien las grabó las sigue pudiendo escuchar')
+    expect(text).not.toContain('Todavía no hay')
     expect(text).toContain('El perfil no se corrige solo')
   })
 
