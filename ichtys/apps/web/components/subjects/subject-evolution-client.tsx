@@ -16,7 +16,8 @@ import { criterionStatusLabel } from '../../lib/subjects/screening-labels'
 import { EvolutionAudios, type EvolutionAudioInfo } from './evolution-audio'
 import { EvolutionBody, type EvolutionVoidInfo } from './evolution-body'
 import { VoidedOriginNoticeCard } from './voided-origin-notice'
-import { voidedOriginNotice } from '../../lib/subjects/voided-origin'
+import { VoidedOriginReviewForm, type RetireChoice } from './voided-origin-review'
+import { labNamesFromEvolution, retireErrorMessage, storedBloodPressureText, voidedOriginNotice } from '../../lib/subjects/voided-origin'
 
 interface EvolutionItem {
   id: string
@@ -176,6 +177,10 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const [audiosKnown, setAudiosKnown] = useState(false)
   // De qué evoluciones anuladas entró algo al perfil (D24). `null`: no se pudo consultar.
   const [acceptedFromVoided, setAcceptedFromVoided] = useState<string[] | null>([])
+  // Revisión del perfil por una evolución anulada (D24, 4 bis): cuál está abierta, y su estado.
+  const [reviewing, setReviewing] = useState<string | null>(null)
+  const [reviewBusy, setReviewBusy] = useState(false)
+  const [reviewError, setReviewError] = useState<string | null>(null)
   // Cuándo se leyó la lista: con eso se sabe si una grabación todavía puede estar subiendo.
   const [listedAt, setListedAt] = useState(0)
   // Evoluciones cuyas grabaciones terminó de subir esta misma pantalla: de esas ya se sabe.
@@ -400,6 +405,38 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       setError(profileWriteErrorMessage(codeOf(err)) ?? 'No se pudo descartar la revisión de labs.')
     } finally {
       setLabBusy(false)
+    }
+  }
+
+  /** Una persona retira del perfil lo que entró desde una evolución anulada. Ningún rechazo se traga. */
+  async function handleRetire(evolutionId: string, choice: RetireChoice) {
+    setReviewBusy(true)
+    setReviewError(null)
+    try {
+      const res = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/profile/voided-origin/retire`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          evolutionId,
+          confirmedSubjectCode: subjectCode,
+          ...(choice.removeAge ? { removeAge: true } : {}),
+          ...(choice.removeBloodPressure ? { removeBloodPressure: true } : {}),
+          medications: choice.medications,
+          conditions: choice.conditions,
+          ...(choice.nothingToRetire ? { nothingToRetire: true } : {}),
+        }),
+      })
+      if (res.ok) {
+        setReviewing(null)
+      } else {
+        setReviewError(retireErrorMessage(res.status, await errorCode(res)))
+      }
+      // Salió o no, se vuelve a leer: el perfil pudo cambiar, y la lista tiene que ser la de ahora.
+      await loadScreening()
+    } catch {
+      setReviewError(retireErrorMessage(0, 'request_failed'))
+    } finally {
+      setReviewBusy(false)
     }
   }
 
@@ -685,7 +722,52 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
           <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-alphi-muted">
             Perfil extraído
           </h3>
-          <VoidedOriginNoticeCard notice={voidedOrigin} checkFailed={acceptedFromVoided === null} />
+          <VoidedOriginNoticeCard
+            notice={voidedOrigin}
+            checkFailed={acceptedFromVoided === null}
+            actions={
+              voidedOrigin ? (
+                <div className="mt-3 space-y-2">
+                  {voidedOrigin.evolutionIds.map((evolutionId) => {
+                    const evolution = evolutions.find((evo) => evo.id === evolutionId)
+                    const label = evolution ? `la evolución del ${new Date(evolution.createdAt).toLocaleDateString('es-AR')}` : 'esa evolución'
+                    return reviewing === evolutionId ? (
+                      <VoidedOriginReviewForm
+                        key={evolutionId}
+                        subjectCode={subjectCode}
+                        evolutionLabel={label}
+                        labNames={labNamesFromEvolution(profile?.labs ?? [], evolutionId)}
+                        ageYears={profile?.demographics?.ageYears}
+                        bloodPressure={storedBloodPressureText(profile?.vitals)}
+                        medications={(profile?.medications ?? []).map((med) => med.name)}
+                        conditions={profile?.conditions ?? []}
+                        busy={reviewBusy}
+                        error={reviewError}
+                        onSubmit={(choice) => void handleRetire(evolutionId, choice)}
+                        onCancel={() => {
+                          setReviewing(null)
+                          setReviewError(null)
+                        }}
+                      />
+                    ) : (
+                      <button
+                        key={evolutionId}
+                        type="button"
+                        className="alphi-btn-secondary text-sm"
+                        disabled={reviewBusy}
+                        onClick={() => {
+                          setReviewError(null)
+                          setReviewing(evolutionId)
+                        }}
+                      >
+                        Revisar el perfil por {label}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : null
+            }
+          />
           {!hasProfileData ? (
             <p className="text-sm text-alphi-muted">
               Guardá una evolución con datos estructurados (edad, HbA1c, PA, medicación) para ver el perfil.

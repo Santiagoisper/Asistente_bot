@@ -71,6 +71,9 @@ El punto 2 dice «la persona corrige el perfil». Hasta hoy eso no tiene camino:
 - **Registro** en la misma transacción que la escritura (R3): cuántos laboratorios, medicaciones y condiciones salieron y si salieron edad y presión; nunca los valores ni los nombres.
 - **El aviso se va** cuando esa evolución tiene una entrada en `retiredFacts` y no quedan laboratorios de ese origen. Una entrada sin nada retirado vale: dice «revisé y no había nada que sacar».
 - **Una revisión que no saca nada es una declaración explícita** (observación de Architect, #178): la persona tiene que decir «revisé y no hay nada de esa evolución». Sin esa declaración no se registra ninguna revisión y el aviso sigue. Si declara que no hay nada y sí hay, tampoco se registra. El registro marca las revisiones vacías para poder contarlas.
+- **La declaración vale solo mientras su casilla está a la vista** (observación de Architect, #179): si la persona elige algo, o aparece un laboratorio de ese origen, la declaración se borra; cuando la casilla vuelve, vuelve sin marcar.
+- **La presión que se ofrece retirar es la guardada en números** (observación de Architect, #179): la etiqueta puede haber quedado vieja, y los números son los que usa la elegibilidad y los que salen. La etiqueta se muestra solo si no hay números. La ficha, fuera de este formulario, sigue mostrando la etiqueta: ese defecto es aparte y sigue abierto.
+- **El código del sujeto no lo confirma la persona; lo manda la pantalla.** No es la misma garantía que D23. Protege contra una pestaña vieja o una ruta cruzada, no contra estar mirando al sujeto equivocado. Acá alcanza porque la acción solo existe sobre una evolución ya anulada de ese sujeto, y el botón lo nombra.
 - **La elegibilidad** se recalcula sola la próxima vez que se lee: lee el perfil.
 - **No hay «deshacer» en pantalla.** Lo retirado queda guardado; devolverlo es volver a cargarlo por el camino normal.
 

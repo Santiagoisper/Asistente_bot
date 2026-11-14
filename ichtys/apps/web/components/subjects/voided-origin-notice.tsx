@@ -1,11 +1,12 @@
+import type { ReactNode } from 'react'
 import { VOIDED_ORIGIN_UNKNOWN, voidedOriginLines, voidedOriginTitle, type VoidedOriginNotice } from '../../lib/subjects/voided-origin'
 
 /**
  * El aviso de la ficha cuando el perfil incluye datos que entraron desde una evolución anulada
  * (D24, punto 2). No se puede cerrar: se va cuando esos datos ya no están en el perfil.
- * Alphi no los saca solo.
+ * Alphi no los saca solo. `actions`: lo que la persona puede hacer con eso (revisar el perfil).
  */
-export function VoidedOriginNoticeCard({ notice, checkFailed }: { notice: VoidedOriginNotice | null; checkFailed: boolean }) {
+export function VoidedOriginNoticeCard({ notice, checkFailed, actions }: { notice: VoidedOriginNotice | null; checkFailed: boolean; actions?: ReactNode }) {
   if (!notice) {
     return checkFailed ? <p className="mb-3 text-xs text-alphi-muted">{VOIDED_ORIGIN_UNKNOWN}</p> : null
   }
@@ -17,6 +18,7 @@ export function VoidedOriginNoticeCard({ notice, checkFailed }: { notice: Voided
           <li key={line}>{line}</li>
         ))}
       </ul>
+      {actions}
     </div>
   )
 }
