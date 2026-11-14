@@ -1,4 +1,5 @@
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
+import { clinicalRateLimit } from '../../../../../../../lib/security/clinical-rate-limit'
 import { validatePdfUpload } from '../../../../../../../lib/documents/pdf-upload-validation'
 import { isOsEnabled } from '../../../../../../../lib/flags'
 import { MAX_LAB_PDF_BYTES } from '../../../../../../../lib/labs/lab-report-content'
@@ -32,6 +33,10 @@ export async function POST(
   } catch (err) {
     return handleApiError(err)
   }
+
+  // Límite de pedidos, antes de leer el cuerpo.
+  const limited = await clinicalRateLimit('lab_upload', { orgId: access.orgId, userId: access.userId, req, endpoint: '/api/studies/[id]/subjects/[subjectId]/lab-reports' })
+  if (limited) return limited
 
   // Corte temprano si el tamaño viene declarado. Si no viene (envío por partes),
   // el tope lo ponen la plataforma y el control del archivo más abajo.

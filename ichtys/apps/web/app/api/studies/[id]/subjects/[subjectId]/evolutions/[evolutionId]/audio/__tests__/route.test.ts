@@ -206,3 +206,30 @@ describe('GET — escuchar la grabación', () => {
     expect((await GET(new Request('http://test/audio'), params)).status).toBe(404)
   })
 })
+
+const limit = vi.hoisted(() => ({ clinicalRateLimit: vi.fn(async (): Promise<Response | null> => null) }))
+vi.mock('../../../../../../../../../../lib/security/clinical-rate-limit', () => limit)
+
+describe('límite de pedidos — grabaciones', () => {
+  it('guardar una grabación cuenta contra la persona y su organización', async () => {
+    await POST(upload(), params)
+    expect(limit.clinicalRateLimit).toHaveBeenCalledWith('audio_write', expect.objectContaining({ orgId: 'org-1', userId: 'user_author' }))
+  })
+
+  it('con el cupo agotado no se lee el cuerpo ni se guarda la grabación', async () => {
+    limit.clinicalRateLimit.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'rate_limited' }), { status: 429, headers: { 'Retry-After': '30' } }))
+    const req = upload()
+    const res = await POST(req, params)
+    expect(res.status).toBe(429)
+    expect(req.bodyUsed).toBe(false)
+    expect(mocks.storeDictationAudio).not.toHaveBeenCalled()
+  })
+
+  it('escuchar lleva su propia cuenta, y con el cupo agotado no entrega ni registra la escucha', async () => {
+    limit.clinicalRateLimit.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'rate_limited' }), { status: 429, headers: { 'Retry-After': '30' } }))
+    const res = await GET(new Request('http://test/audio'), params)
+    expect(res.status).toBe(429)
+    expect(limit.clinicalRateLimit).toHaveBeenCalledWith('audio_listen', expect.objectContaining({ orgId: 'org-1', userId: 'user_author' }))
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+  })
+})

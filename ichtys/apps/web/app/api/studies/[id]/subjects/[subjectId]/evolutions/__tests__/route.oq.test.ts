@@ -509,3 +509,40 @@ describe('Autoría clínica — escribir una evolución pide más que leerla', (
     expect(mocks.dbInsertReturning).not.toHaveBeenCalled()
   })
 })
+
+// Límite de pedidos (docs/decisions/rate-limiting-observability.md): se comprueba después del
+// acceso y antes de leer el cuerpo.
+const limit = vi.hoisted(() => ({ clinicalRateLimit: vi.fn(async (): Promise<Response | null> => null) }))
+vi.mock('../../../../../../../../lib/security/clinical-rate-limit', () => limit)
+
+describe('límite de pedidos — guardar una evolución', () => {
+  const request = () =>
+    new Request('http://localhost/api/evolutions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: CLINICAL_TEXT }),
+    })
+
+  it('cuenta el pedido contra la persona y su organización', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbInsertReturning.mockResolvedValueOnce([{ id: mocks.EVOLUTION_ID, createdAt: new Date() }])
+    await POST(request(), makeParams())
+    expect(limit.clinicalRateLimit).toHaveBeenCalledWith('evolution_write', expect.objectContaining({ orgId: mocks.ORG_ID, userId: mocks.USER_ID }))
+  })
+
+  it('con el cupo agotado responde 429 y no guarda ni registra nada', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    limit.clinicalRateLimit.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'rate_limited' }), { status: 429, headers: { 'Retry-After': '30' } }))
+    const res = await POST(request(), makeParams())
+    expect(res.status).toBe(429)
+    expect(mocks.tx.insert).not.toHaveBeenCalled()
+    expect(mocks.looseInsert).not.toHaveBeenCalled()
+    expect(mocks.encryptClinicalContent).not.toHaveBeenCalled()
+  })
+
+  it('sin acceso no se cuenta nada', async () => {
+    mocks.validateSubjectAccess.mockRejectedValueOnce(new mocks.AccessError('Unauthorized', 401))
+    await POST(request(), makeParams())
+    expect(limit.clinicalRateLimit).not.toHaveBeenCalled()
+  })
+})

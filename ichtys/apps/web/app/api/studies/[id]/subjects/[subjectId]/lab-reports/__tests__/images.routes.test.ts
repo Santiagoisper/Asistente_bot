@@ -179,3 +179,22 @@ describe('POST confirm — informe leído de una imagen', () => {
     expect(mocks.confirmLabReport).not.toHaveBeenCalled()
   })
 })
+
+const limit = vi.hoisted(() => ({ clinicalRateLimit: vi.fn(async (): Promise<Response | null> => null) }))
+vi.mock('../../../../../../../../lib/security/clinical-rate-limit', () => limit)
+
+describe('límite de pedidos — subir fotos de un informe', () => {
+  it('cuenta el pedido contra la persona y su organización', async () => {
+    await uploadImages(imagesRequest([jpeg()]), ctx)
+    expect(limit.clinicalRateLimit).toHaveBeenCalledWith('lab_upload', expect.objectContaining({ orgId: 'org-1', userId: 'user_1' }))
+  })
+
+  it('con el cupo agotado no se lee ninguna imagen ni se crea el informe', async () => {
+    limit.clinicalRateLimit.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'rate_limited' }), { status: 429, headers: { 'Retry-After': '30' } }))
+    const req = imagesRequest([jpeg()])
+    const res = await uploadImages(req, ctx)
+    expect(res.status).toBe(429)
+    expect(req.bodyUsed).toBe(false)
+    expect(mocks.createLabReportFromImages).not.toHaveBeenCalled()
+  })
+})

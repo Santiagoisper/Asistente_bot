@@ -14,8 +14,11 @@ export type RateLimitParams = {
    * `allow`: solo lecturas. Sin Redis, el request sigue.
    * `memory`: ráfaga dentro de este proceso. No reemplaza el cupo compartido.
    * El modo memory no descuenta el cupo de la organización: las rutas caras no lo usan.
+   * `memory-with-org`: como `memory`, pero cuenta también el cupo de la organización en este
+   * proceso, primero la organización y después la persona. Para rutas que no pueden
+   * bloquearse por una caída del contador y aun así tienen que acotar a un centro entero.
    */
-  onRedisUnavailable?: 'deny' | 'allow' | 'memory'
+  onRedisUnavailable?: 'deny' | 'allow' | 'memory' | 'memory-with-org'
 }
 
 export interface RateLimitConfig {
@@ -136,6 +139,10 @@ function whenRedisUnavailable(params: RateLimitParams, failureCode: string): Rat
     if (failureCode !== 'redis_unconfigured') logRateLimitFailure(failureCode)
     return enforceMemoryQuota(params)
   }
+  if (params.onRedisUnavailable === 'memory-with-org') {
+    if (failureCode !== 'redis_unconfigured') logRateLimitFailure(failureCode)
+    return enforceMemoryQuotaWithOrg(params)
+  }
   if (params.onRedisUnavailable === 'allow') {
     if (failureCode === 'redis_unconfigured') {
       warnRateLimitDisabledOnce('falta config Redis REST (UPSTASH_REDIS_REST_URL/TOKEN)')
@@ -169,8 +176,15 @@ function enforcePreviewMemoryQuota(params: RateLimitParams): RateLimitResult {
     previewMemoryWarned = true
     console.warn('[rate-limit] vista previa sin Redis: el cupo se cuenta en memoria, por proceso')
   }
-  // El cupo de la organización también se cuenta, para que el comportamiento
-  // se parezca al real: primero la organización, después quien hace el pedido.
+  return enforceMemoryQuotaWithOrg(params)
+}
+
+/**
+ * El cupo de la organización también se cuenta, para que el comportamiento se parezca al
+ * real: primero la organización, después quien hace el pedido. Si la organización ya llegó,
+ * la persona no se descuenta. Vale por proceso: nunca es más estricto que el cupo compartido.
+ */
+function enforceMemoryQuotaWithOrg(params: RateLimitParams): RateLimitResult {
   if (params.orgKey && params.orgLimit) {
     const org = enforceMemoryQuota({ key: params.orgKey, limit: params.orgLimit, windowSeconds: params.windowSeconds })
     if (org.limited) return org
