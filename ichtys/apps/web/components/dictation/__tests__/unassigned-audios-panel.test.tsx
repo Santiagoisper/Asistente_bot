@@ -73,8 +73,20 @@ describe('UnassignedAudiosPanel', () => {
     expect(container.innerHTML).toBe('')
   })
 
-  it('en Inicio, si la lista no se pudo leer, no afirma nada', async () => {
+  it('en Inicio, si la lista no se pudo leer, lo dice en una línea y lleva a la página: callar sería decir que no hay, y estas grabaciones vencen', async () => {
     await show('inicio', json({}, 500))
+    expect(container.querySelector('[role="status"]')?.textContent).toContain('No se pudo comprobar si tenés grabaciones sin sujeto')
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('/grabaciones-sin-sujeto')
+    expect(text()).not.toContain('No tenés grabaciones')
+    await show('inicio', new Error('sin red'))
+    expect(text()).toContain('No se pudo comprobar')
+  })
+
+  it('en Inicio, mientras carga, no ocupa lugar ni afirma nada', async () => {
+    fetchMock.mockReturnValueOnce(new Promise<Response>(() => {}))
+    await act(async () => {
+      root.render(<UnassignedAudiosPanel variant="inicio" />)
+    })
     expect(container.innerHTML).toBe('')
   })
 

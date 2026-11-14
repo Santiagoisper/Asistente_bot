@@ -102,8 +102,8 @@ function UnassignedAudioRow({ audio }: { audio: UnassignedAudioItem }) {
  * «Grabaciones sin sujeto» (docs/decisions/grabacion-en-sujeto-equivocado.md, D24, punto 3).
  * Por ahora cada persona ve las que grabó.
  *
- * - `inicio`: aparece solo si hay alguna. Si la lista no se pudo leer no dice nada: no afirma
- *   que no hay, y la página propia sí avisa.
+ * - `inicio`: aparece solo si hay alguna. Si la lista no se pudo leer lo dice en una línea y
+ *   lleva a la página: callar se leería como «no hay», y estas grabaciones vencen.
  * - `page`: dice también cuando no hay ninguna y cuando no se pudo leer.
  */
 export function UnassignedAudiosPanel({ variant }: { variant: 'inicio' | 'page' }) {
@@ -128,7 +128,17 @@ export function UnassignedAudiosPanel({ variant }: { variant: 'inicio' | 'page' 
   }, [])
 
   if (failed) {
-    if (variant === 'inicio') return null
+    if (variant === 'inicio') {
+      // Callar sería decir «no tenés ninguna», y estas grabaciones vencen (Architect, #181).
+      return (
+        <p role="status" className="text-sm text-alphi-muted">
+          No se pudo comprobar si tenés grabaciones sin sujeto.{' '}
+          <a href="/grabaciones-sin-sujeto" className="font-semibold text-alphi-navy underline underline-offset-2">
+            Ver grabaciones sin sujeto
+          </a>
+        </p>
+      )
+    }
     return (
       <p role="alert" className="rounded-lg border border-alphi-rose/30 bg-alphi-rose/10 px-3 py-2 text-sm text-alphi-rose">
         No se pudieron cargar las grabaciones sin sujeto. Recargá la página.
