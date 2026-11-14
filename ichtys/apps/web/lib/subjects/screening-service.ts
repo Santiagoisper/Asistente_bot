@@ -9,7 +9,7 @@ import { and, db, desc, documentVersions, eq, patientProfiles, screeningAssessme
 import type { StudySpec } from '@ichtys/ingestion/study-spec'
 import { insertAuditLog } from '../audit/audited-write'
 import { writeAuditLog, type AuditLogParams } from '../chat/persistence'
-import { canonicalJson } from './canonical-json'
+import { canonicalJson } from '../audit/fingerprint'
 import { openScreeningJson, sealScreeningJson } from './screening-crypto'
 
 export interface ScreeningEvaluationResult {

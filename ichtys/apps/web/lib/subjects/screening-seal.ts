@@ -1,6 +1,6 @@
 import { PhiCryptoError } from '@ichtys/crypto'
 import type { AuditLogParams } from '../chat/persistence'
-import { canonicalJson } from './canonical-json'
+import { canonicalJson } from '../audit/fingerprint'
 import { decryptClinicalContent } from './phi-fields'
 import {
   isSealedScreeningJson,
@@ -146,5 +146,20 @@ export function sealAuditEntry(count: OrgSealCount, operator: string): AuditLogP
       humanConfirmed: false,
       operator,
     },
+  }
+}
+
+/**
+ * El host de la base a la que apunta la corrida, sin usuario, contraseña ni nombre de la
+ * base. Quien corre el script lo tiene que repetir en `--confirm-host`: es fácil creer que
+ * se apunta a la base de prueba y estar apuntando a otra.
+ */
+export function databaseHostOf(connectionString: string | undefined): string | null {
+  if (!connectionString) return null
+  try {
+    const host = new URL(connectionString).hostname
+    return host ? host.toLowerCase() : null
+  } catch {
+    return null
   }
 }

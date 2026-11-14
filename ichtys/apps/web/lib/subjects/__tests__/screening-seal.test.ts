@@ -6,6 +6,7 @@ import {
   ScreeningSealRoundTripError,
   checkKeyAgainstStored,
   countRowsByOrg,
+  databaseHostOf,
   planRowSeal,
   screeningColumnState,
   sealAuditEntry,
@@ -169,5 +170,22 @@ describe('auditoría de la tanda', () => {
       humanConfirmed: false,
       operator: 'user_operador',
     })
+  })
+})
+
+describe('databaseHostOf — a qué base apunta la corrida', () => {
+  it('devuelve solo el host: ni usuario, ni contraseña, ni nombre de la base', () => {
+    const host = databaseHostOf('postgresql://operador:secreto@ep-prueba-123.sa-east-1.aws.neon.tech/neondb?sslmode=require')
+    expect(host).toBe('ep-prueba-123.sa-east-1.aws.neon.tech')
+  })
+
+  it('sin dirección, o con algo que no es una dirección, no hay host que confirmar', () => {
+    expect(databaseHostOf(undefined)).toBeNull()
+    expect(databaseHostOf('')).toBeNull()
+    expect(databaseHostOf('no es una dirección')).toBeNull()
+  })
+
+  it('compara en minúsculas, como se escribe un host', () => {
+    expect(databaseHostOf('postgres://u:p@EP-Prueba.Neon.Tech/db')).toBe('ep-prueba.neon.tech')
   })
 })

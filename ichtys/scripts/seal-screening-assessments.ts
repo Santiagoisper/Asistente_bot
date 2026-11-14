@@ -7,6 +7,8 @@
  * es un script y no una ruta de la aplicación.
  *
  * Qué hace con `--apply`:
+ *   - Exige `--confirm-host <host>` igual al host de DATABASE_URL: quien lo corre confirma a
+ *     qué base apunta. El host sale en la corrida sin `--apply`. Si no coincide, no escribe.
  *   - Antes de la primera tanda comprueba que hay clave y que es la de esa base (descifra
  *     perfiles y evaluaciones ya selladas). Si no puede comprobarlo, no escribe nada.
  *   - Elige las filas por la forma del dato (una columna que no es un sobre), en tandas,
@@ -25,9 +27,14 @@
  * base hasta que venza su retención (ver C3 en docs/compliance/REGULATORY-BASELINE.md).
  *
  * Uso:
- *   npx tsx@4.19.2 scripts/seal-screening-assessments.ts                                  (cuenta)
- *   npx tsx@4.19.2 scripts/seal-screening-assessments.ts --apply --operator <userId>      (escribe)
+ *   npx tsx@4.19.2 scripts/seal-screening-assessments.ts
+ *       cuenta y muestra el host de destino; no escribe
+ *   npx tsx@4.19.2 scripts/seal-screening-assessments.ts --apply --operator <userId> --confirm-host <host>
+ *       escribe
  *   ... --batch <n>   filas por tanda (por defecto 200)
+ *
+ * `--operator` es el identificador de usuario de quien responde por la corrida, el mismo que
+ * figura en el resto de los registros de auditoría; no un nombre.
  *
  * Requiere DATABASE_URL y PHI_ENCRYPTION_KEY (se leen de apps/web/.env.local si no están en
  * el entorno). Primero en la base de prueba; en producción, con autorización expresa.
@@ -80,6 +87,11 @@ async function main(): Promise<void> {
     process.exitCode = 1
     return
   }
+  if (apply && !readArg(process.argv, '--confirm-host')) {
+    console.error(`${TAG} --apply exige --confirm-host <host>: el host de la base, como lo muestra la corrida sin --apply.`)
+    process.exitCode = 1
+    return
+  }
   if (batchSize === null) {
     console.error(`${TAG} --batch tiene que ser un entero entre 1 y 1000.`)
     process.exitCode = 1
@@ -88,9 +100,22 @@ async function main(): Promise<void> {
 
   const { PhiConfigError } = await import('../apps/web/lib/subjects/phi-fields')
   const { sealScreeningJson } = await import('../apps/web/lib/subjects/screening-crypto')
-  const { checkKeyAgainstStored, countRowsByOrg, planRowSeal, sealAuditEntry } = await import(
+  const { checkKeyAgainstStored, countRowsByOrg, databaseHostOf, planRowSeal, sealAuditEntry } = await import(
     '../apps/web/lib/subjects/screening-seal'
   )
+
+  // A qué base apunta: se confirma antes de abrirla. Sin usuario ni contraseña.
+  const host = databaseHostOf(process.env.DATABASE_URL)
+  if (host === null) {
+    console.error(`${TAG} DATABASE_URL falta o no es una dirección: no se abre ninguna base.`)
+    process.exitCode = 1
+    return
+  }
+  if (apply && readArg(process.argv, '--confirm-host')?.toLowerCase() !== host) {
+    console.error(`${TAG} --confirm-host no coincide con la base de destino (${host}): no se escribe nada.`)
+    process.exitCode = 1
+    return
+  }
 
   // Si falta la clave se corta acá, antes de abrir la base y de la primera tanda.
   if (apply) {
@@ -136,6 +161,7 @@ async function main(): Promise<void> {
     console.log(
       JSON.stringify({
         mode: 'dry-run',
+        host,
         rows: total,
         plain: pendingBefore,
         organizationsWithPlain: plainBefore.length,
@@ -215,6 +241,7 @@ async function main(): Promise<void> {
   console.log(
     JSON.stringify({
       mode: 'apply',
+      host,
       rows: total,
       plainBefore: pendingBefore,
       sealed,
