@@ -17,7 +17,7 @@ import { EvolutionAudios, type EvolutionAudioInfo } from './evolution-audio'
 import { EvolutionBody, type EvolutionVoidInfo } from './evolution-body'
 import { VoidedOriginNoticeCard } from './voided-origin-notice'
 import { VoidedOriginReviewForm, type RetireChoice } from './voided-origin-review'
-import { labNamesFromEvolution, retireErrorMessage, voidedOriginNotice } from '../../lib/subjects/voided-origin'
+import { labNamesFromEvolution, retireErrorMessage, storedBloodPressureText, voidedOriginNotice } from '../../lib/subjects/voided-origin'
 
 interface EvolutionItem {
   id: string
@@ -738,12 +738,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                         evolutionLabel={label}
                         labNames={labNamesFromEvolution(profile?.labs ?? [], evolutionId)}
                         ageYears={profile?.demographics?.ageYears}
-                        bloodPressure={
-                          profile?.vitals?.bloodPressureLabel ??
-                          (profile?.vitals?.systolic !== undefined || profile?.vitals?.diastolic !== undefined
-                            ? `${profile?.vitals?.systolic ?? '—'}/${profile?.vitals?.diastolic ?? '—'}`
-                            : undefined)
-                        }
+                        bloodPressure={storedBloodPressureText(profile?.vitals)}
                         medications={(profile?.medications ?? []).map((med) => med.name)}
                         conditions={profile?.conditions ?? []}
                         busy={reviewBusy}

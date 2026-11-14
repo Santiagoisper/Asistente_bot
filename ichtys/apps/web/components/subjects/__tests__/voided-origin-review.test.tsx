@@ -116,6 +116,28 @@ describe('VoidedOriginReviewForm', () => {
     expect(onSubmit).toHaveBeenCalledWith({ removeAge: false, removeBloodPressure: false, medications: ['Metformina'], conditions: [], nothingToRetire: false })
   })
 
+  it('declarar «no hay nada», elegir algo y sacarlo: la casilla vuelve sin marcar y no se manda sola', () => {
+    const { onSubmit } = show({ labNames: [] })
+    click(box('no hay nada de esa evolución')!)
+    click(box('Metformina')!)
+    click(box('Metformina')!)
+    const back = box('no hay nada de esa evolución')
+    expect(back).toBeDefined()
+    expect(back!.checked).toBe(false)
+    expect(submit().disabled).toBe(true)
+    click(submit())
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('si aparece un laboratorio de ese origen mientras estaba declarado «no hay nada» y después se va, la declaración no vuelve sola', () => {
+    const { onSubmit } = show({ labNames: [] })
+    click(box('no hay nada de esa evolución')!)
+    act(() => root.render(<VoidedOriginReviewForm {...base} onSubmit={onSubmit} labNames={['Ferritina']} />))
+    act(() => root.render(<VoidedOriginReviewForm {...base} onSubmit={onSubmit} labNames={[]} />))
+    expect(box('no hay nada de esa evolución')!.checked).toBe(false)
+    expect(submit().disabled).toBe(true)
+  })
+
   it('el botón repite el código del sujeto, y mientras se guarda no se puede mandar dos veces', () => {
     show()
     expect(submit().textContent).toContain('GZBO-001')
