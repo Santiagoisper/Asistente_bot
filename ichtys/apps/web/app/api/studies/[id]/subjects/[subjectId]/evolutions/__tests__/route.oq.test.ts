@@ -248,6 +248,41 @@ describe('OQ-007 — audit log sin contenido PHI', () => {
     expect(JSON.stringify(auditCall.metadata)).not.toContain('Metformina')
   })
 
+  it('POST de una evolución dictada: queda en el registro que la persona confirmó el sujeto antes de grabar (D23)', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbInsertReturning.mockResolvedValueOnce([
+      { id: mocks.EVOLUTION_ID, visitLabel: 'V1', createdAt: new Date('2026-11-14T12:00:00Z') },
+    ])
+    mocks.writeAuditLog.mockClear()
+    const source = { kind: 'dictation', durationSec: 40, model: 'whisper-small', modelRevision: 'rev-abc', corrections: 0, missingBlocks: 1, subjectConfirmed: true }
+    const res = await POST(
+      new Request('http://localhost/api/evolutions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: CLINICAL_TEXT, visitLabel: 'V1', source }),
+      }),
+      makeParams(),
+    )
+    expect(res.status).toBe(201)
+    const auditCall = mocks.writeAuditLog.mock.calls[0]?.[0] as { metadata?: { source?: { subjectConfirmed?: boolean } } }
+    expect(auditCall.metadata?.source?.subjectConfirmed).toBe(true)
+  })
+
+  it('POST rechaza una confirmación de sujeto que no sea sí o no', async () => {
+    mocks.validateSubjectAccess.mockResolvedValue(subjectContext())
+    const source = { kind: 'dictation', durationSec: 40, model: 'm', modelRevision: 'r', corrections: 0, missingBlocks: 0, subjectConfirmed: 'ENSAYO-008' }
+    const res = await POST(
+      new Request('http://localhost/api/evolutions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: CLINICAL_TEXT, source }),
+      }),
+      makeParams(),
+    )
+    expect(res.status).toBe(400)
+    mocks.validateSubjectAccess.mockReset()
+  })
+
   it('POST rechaza un origen con campos de más o con texto libre', async () => {
     mocks.validateSubjectAccess.mockResolvedValue(subjectContext())
     for (const source of [

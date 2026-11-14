@@ -26,6 +26,11 @@ export const evolutionSourceSchema = z
     missingBlocks: z.number().int().min(0).max(50),
     /** Opcionales: un cliente anterior a este cambio no los manda. */
     layout: z.enum(['blocks', 'narrative']).optional(),
+    /**
+     * La persona aceptó, antes de grabar o de subir el audio, el aviso que nombra al sujeto (D23).
+     * Lo informa el navegador: el servidor lo registra, no lo comprueba.
+     */
+    subjectConfirmed: z.boolean().optional(),
     repetitions: z.number().int().min(0).max(50).optional(),
   })
   .strict()
