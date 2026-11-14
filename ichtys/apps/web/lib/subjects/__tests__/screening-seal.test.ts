@@ -7,6 +7,7 @@ import {
   checkKeyAgainstStored,
   countRowsByOrg,
   databaseHostOf,
+  databaseTargetOf,
   planRowSeal,
   screeningColumnState,
   sealAuditEntry,
@@ -187,5 +188,23 @@ describe('databaseHostOf — a qué base apunta la corrida', () => {
 
   it('compara en minúsculas, como se escribe un host', () => {
     expect(databaseHostOf('postgres://u:p@EP-Prueba.Neon.Tech/db')).toBe('ep-prueba.neon.tech')
+  })
+})
+
+describe('databaseTargetOf — a qué base apunta, con el nombre de la base', () => {
+  it('devuelve host y base, sin usuario ni contraseña; el nombre de la base se respeta tal cual', () => {
+    expect(databaseTargetOf('postgresql://usuario:secreto@EP-Prueba-123.aws.neon.tech/NeonDB?sslmode=require')).toBe('ep-prueba-123.aws.neon.tech/NeonDB')
+  })
+
+  it('dos bases en el mismo host no se confunden', () => {
+    const a = databaseTargetOf('postgresql://u:p@ep-x.neon.tech/prueba')
+    const b = databaseTargetOf('postgresql://u:p@ep-x.neon.tech/produccion')
+    expect(a).not.toBe(b)
+  })
+
+  it('sin dirección, sin host o sin nombre de base no devuelve nada', () => {
+    expect(databaseTargetOf(undefined)).toBeNull()
+    expect(databaseTargetOf('no es una dirección')).toBeNull()
+    expect(databaseTargetOf('postgresql://u:p@ep-x.neon.tech/')).toBeNull()
   })
 })
