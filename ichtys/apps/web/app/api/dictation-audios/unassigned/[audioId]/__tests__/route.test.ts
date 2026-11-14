@@ -41,6 +41,8 @@ const ID = '44444444-4444-4444-8444-444444444444'
 const NOW = new Date('2026-11-14T22:00:00Z')
 const params = (audioId = ID) => ({ params: Promise.resolve({ audioId }) })
 const request = () => new Request('http://test/audio')
+// Por defecto: modo estricto, investiga y no coordina.
+const ctx = (access: Record<string, unknown> = {}) => ({ orgId: 'org-1', userId: 'user_me', access: { mode: 'enforced', role: 'principal_investigator', functions: ['investigator'], ...access } })
 const meta = (over: Record<string, unknown> = {}) => ({
   id: ID,
   studyId: 'study-1',
@@ -58,7 +60,7 @@ beforeEach(() => {
   vi.useFakeTimers()
   vi.setSystemTime(NOW)
   mocks.order.length = 0
-  mocks.orgContext.mockReset().mockResolvedValue({ orgId: 'org-1', userId: 'user_me' })
+  mocks.orgContext.mockReset().mockResolvedValue(ctx())
   mocks.find.mockReset().mockResolvedValue(meta())
   mocks.studyAccess.mockReset().mockResolvedValue({ study: { id: 'study-1' } })
   mocks.rateLimit.mockReset().mockResolvedValue(null)
@@ -87,7 +89,7 @@ describe('GET — escuchar una grabación sin sujeto', () => {
       userId: 'user_me',
       resourceType: 'unassigned_dictation_audio',
       resourceId: ID,
-      metadata: { evolutionId: 'evo-1', take: 2, unassigned: true },
+      metadata: { evolutionId: 'evo-1', take: 2, unassigned: true, listenerRole: 'author' },
     })
     expect(mocks.order).toEqual(['descifrar', 'registrar'])
   })
@@ -99,7 +101,7 @@ describe('GET — escuchar una grabación sin sujeto', () => {
     expect(await res.text()).not.toContain('\u0001')
   })
 
-  it('la de otra persona responde como si no existiera: sin comprobar el estudio, sin descifrar y sin registrar', async () => {
+  it('la de otra persona, para quien no coordina, responde como si no existiera: sin comprobar el estudio, sin descifrar y sin registrar', async () => {
     mocks.find.mockResolvedValue(meta({ createdBy: 'user_otro' }))
     const res = await GET(request(), params())
     expect(res.status).toBe(404)
@@ -165,3 +167,46 @@ describe('GET — escuchar una grabación sin sujeto', () => {
     expect(mocks.find).not.toHaveBeenCalled()
   })
 })
+
+describe('GET — quien coordina el estudio escucha la de otra persona, y el registro lo dice', () => {
+  const others = () => mocks.find.mockResolvedValue(meta({ createdBy: 'user_otro' }))
+  const listenerRole = () => (mocks.audit.mock.calls[0]![0] as { metadata: { listenerRole: string } }).metadata.listenerRole
+
+  it('modo estricto, con la función de coordinar: la escucha, y queda registrado que escuchó la coordinación', async () => {
+    mocks.orgContext.mockResolvedValue(ctx({ functions: ['study_coordinator'] }))
+    others()
+    expect((await GET(request(), params())).status).toBe(200)
+    expect(listenerRole()).toBe('coordination')
+    expect(mocks.order).toEqual(['descifrar', 'registrar'])
+  })
+
+  it('modo abierto: la coordinación del centro la escucha; un investigador que no la grabó recibe 404', async () => {
+    mocks.orgContext.mockResolvedValue(ctx({ mode: 'open', role: 'site_coordinator', functions: [] }))
+    others()
+    expect((await GET(request(), params())).status).toBe(200)
+    expect(listenerRole()).toBe('coordination')
+
+    mocks.audit.mockClear()
+    mocks.loadBytes.mockClear()
+    mocks.orgContext.mockResolvedValue(ctx({ mode: 'open', role: 'principal_investigator', functions: ['study_coordinator'] }))
+    expect((await GET(request(), params())).status).toBe(404)
+    expect(mocks.loadBytes).not.toHaveBeenCalled()
+    expect(mocks.audit).not.toHaveBeenCalled()
+  })
+
+  it('coordinar no alcanza sin entrar a ese estudio', async () => {
+    mocks.orgContext.mockResolvedValue(ctx({ functions: ['study_coordinator'] }))
+    others()
+    mocks.studyAccess.mockRejectedValue(new mocks.AccessError('Not Found', 404))
+    expect((await GET(request(), params())).status).toBe(404)
+    expect(mocks.loadBytes).not.toHaveBeenCalled()
+    expect(mocks.audit).not.toHaveBeenCalled()
+  })
+
+  it('quien la grabó y además coordina queda registrado como quien la grabó', async () => {
+    mocks.orgContext.mockResolvedValue(ctx({ functions: ['study_coordinator'] }))
+    await GET(request(), params())
+    expect(listenerRole()).toBe('author')
+  })
+})
+

@@ -1,4 +1,5 @@
-import { AccessError, validateSubjectAccess, handleApiError } from '@ichtys/auth'
+import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
+import { coordinatesStudy } from '../../../../../../../lib/access/permissions'
 import { clinicalEvolutions } from '@ichtys/db'
 import { auditedWrite } from '../../../../../../../lib/audit/audited-write'
 import { writeAuditLog } from '../../../../../../../lib/chat/persistence'
@@ -28,7 +29,7 @@ export async function GET(
   const { id: routeStudyId, subjectId } = await params
 
   try {
-    const { orgId, userId, study, subject } = await validateSubjectAccess(subjectId, routeStudyId)
+    const { orgId, userId, study, subject, access } = await validateSubjectAccess(subjectId, routeStudyId)
 
     // La historia muestra también las anuladas, con su marca: una corrección no tapa lo escrito (D24).
     const rows = await listSubjectEvolutions({ orgId, studyId: study.id, subjectId: subject.id }, 'with-voided')
@@ -36,23 +37,12 @@ export async function GET(
     // El texto de una evolución anulada habla de otra persona (D24, pregunta 2, que sigue
     // abierta para Calidad). Mientras no se decida más amplio, viaja solo a quien la escribió y
     // a quien coordina el estudio. Se decide acá, en la ruta: lo que no corresponde no sale.
-    let coordinates: boolean | null = null
-    const canReadVoided = async (authorUserId: string): Promise<boolean> => {
-      if (authorUserId === userId) return true
-      if (coordinates === null) {
-        try {
-          await validateSubjectAccess(subjectId, routeStudyId, { require: 'access.manage_study' })
-          coordinates = true
-        } catch (err) {
-          if (!(err instanceof AccessError) || err.status !== 403) throw err
-          coordinates = false
-        }
-      }
-      return coordinates
-    }
+    // «Coordina» se decide con `coordinatesStudy`, que también distingue en modo `open`.
+    const coordinates = coordinatesStudy(access)
+    const canReadVoided = (authorUserId: string): boolean => authorUserId === userId || coordinates
     const withheld = new Set<string>()
     for (const row of rows) {
-      if (row.voided && !(await canReadVoided(row.authorUserId))) withheld.add(row.id)
+      if (row.voided && !canReadVoided(row.authorUserId)) withheld.add(row.id)
     }
 
     const evolutions = rows.map((row) => ({
@@ -65,13 +55,10 @@ export async function GET(
       dictationTakes: row.dictationTakes ?? null,
       // Registrada por error en este sujeto: quién no viaja a la pantalla, solo cuándo y por qué.
       voided: row.voided ? { reason: row.voided.reason, declaredAt: row.voided.declaredAt.toISOString() } : null,
-      // Si la pantalla le ofrece a esta persona declarar que se registró en el sujeto equivocado.
-      // Por ahora solo a quien la escribió, que es lo que no depende del rol: en modo `open`
-      // «coordinar» hoy no distingue a nadie, y qué rol coordina en ese modo es una decisión de
-      // Santiago (D24, punto 1). La ruta de anular aplica lo mismo fuera del modo estricto; en
-      // modo estricto deja además a la coordinación, y la pantalla todavía no se lo ofrece.
-      // Decide la ruta, no este campo.
-      canVoid: !row.voided && row.authorUserId === userId,
+      // Si la pantalla le ofrece a esta persona declarar que se registró en el sujeto equivocado:
+      // quien la escribió o quien coordina el estudio, la misma regla que aplica la ruta de
+      // anular. Decide esa ruta, no este campo.
+      canVoid: !row.voided && (row.authorUserId === userId || coordinates),
       createdAt: row.createdAt.toISOString(),
     }))
 
