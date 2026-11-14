@@ -66,8 +66,17 @@ export type VoidEvolutionResult =
   | { status: 'not_found' }
   | { status: 'already_voided' }
 
-/** La fila del depósito: todo copiado de la original, sin sujeto. */
+/** `true`: la grabación ya venció aunque el borrado diario todavía no la haya vaciado. */
+function overdue(audio: SourceAudio, now: Date): boolean {
+  return audio.expiresAt.getTime() <= now.getTime()
+}
+
+/**
+ * La fila del depósito: todo copiado de la original, sin sujeto. Una grabación que ya venció
+ * pasa como constancia, sin contenido: si no, viviría en el depósito hasta el próximo borrado.
+ */
 export function depositRowFrom(audio: SourceAudio, declared: { by: string; at: Date }): NewUnassignedDictationAudio {
+  const expired = overdue(audio, declared.at)
   return {
     organizationId: audio.organizationId,
     studyId: audio.studyId,
@@ -78,13 +87,13 @@ export function depositRowFrom(audio: SourceAudio, declared: { by: string; at: D
     sizeBytes: audio.sizeBytes,
     durationSec: audio.durationSec,
     sha256: audio.sha256,
-    contentEncrypted: audio.contentEncrypted,
-    segmentsEncrypted: audio.segmentsEncrypted,
+    contentEncrypted: expired ? null : audio.contentEncrypted,
+    segmentsEncrypted: expired ? null : audio.segmentsEncrypted,
     createdBy: audio.createdBy,
     // Copiados, no recalculados: el plazo no se reinicia.
     createdAt: audio.createdAt,
     expiresAt: audio.expiresAt,
-    purgedAt: audio.purgedAt,
+    purgedAt: audio.purgedAt ?? (expired ? declared.at : null),
     declaredBy: declared.by,
     declaredAt: declared.at,
   }
@@ -112,7 +121,15 @@ export async function voidEvolution(store: VoidStore, params: VoidEvolutionParam
       action: 'evolution.audio.withdraw',
       resourceType: 'dictation_audio',
       resourceId: audio.id,
-      metadata: { subjectId: params.subjectId, evolutionId: params.evolutionId, take: audio.take, depositId, reason: params.reason },
+      metadata: {
+        subjectId: params.subjectId,
+        evolutionId: params.evolutionId,
+        take: audio.take,
+        depositId,
+        reason: params.reason,
+        // Ya había vencido: su contenido no pasó al depósito.
+        ...(audio.contentEncrypted !== null && overdue(audio, params.now) ? { contentExpired: true } : {}),
+      },
     })
   }
 

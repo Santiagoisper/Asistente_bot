@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  * marca de anulación, y que nadie puede leer sin decir cuál de las dos quiere.
  */
 const mocks = vi.hoisted(() => {
-  const calls = { where: [] as unknown[], join: [] as unknown[], order: [] as unknown[], limit: [] as number[] }
+  const calls = { where: [] as unknown[], join: [] as unknown[], order: [] as unknown[], limit: [] as number[], lock: [] as unknown[] }
   const state = { rows: [] as unknown[] }
   const builder = () => {
     const chain: Record<string, unknown> = {}
@@ -25,6 +25,10 @@ const mocks = vi.hoisted(() => {
     }
     chain.limit = (count: number) => {
       calls.limit.push(count)
+      return chain
+    }
+    chain.for = (...lock: unknown[]) => {
+      calls.lock.push(lock)
       return chain
     }
     chain.then = (resolve: (rows: unknown[]) => unknown) => Promise.resolve(state.rows).then(resolve)
@@ -63,7 +67,7 @@ vi.mock('@ichtys/db', () => {
   }
 })
 
-import { findSubjectEvolution, listEvolutionAuthors, listSubjectEvolutions } from '../evolution-reader'
+import { findSubjectEvolution, listEvolutionAuthors, listSubjectEvolutions, lockSubjectEvolution } from '../evolution-reader'
 
 const SCOPE = { orgId: 'org-1', studyId: 'study-1', subjectId: 'subject-1' }
 const ONLY_CURRENT = { isNull: { column: 'void.id' } }
@@ -77,6 +81,7 @@ beforeEach(() => {
   mocks.calls.join.length = 0
   mocks.calls.order.length = 0
   mocks.calls.limit.length = 0
+  mocks.calls.lock.length = 0
   mocks.state.rows = []
 })
 
@@ -170,5 +175,43 @@ describe('listEvolutionAuthors', () => {
 
     await listEvolutionAuthors('org-1', 'current')
     expect(lastWhere().and).toContainEqual(ONLY_CURRENT)
+  })
+})
+
+describe('lockSubjectEvolution — el bloqueo que comparten anular y colgar una grabación', () => {
+  const params = { ...SCOPE, evolutionId: 'evo-1' }
+  // La transacción en curso: el bloqueo solo sirve dentro de una.
+  const tx = { select: () => mocks.builder() } as never
+
+  it('bloquea la fila de la evolución, dentro de su organización, estudio y sujeto', async () => {
+    mocks.state.rows = [{ id: 'evo-1' }]
+
+    expect(await lockSubjectEvolution(params, 'update', tx)).toBe(true)
+
+    expect(mocks.calls.lock.at(-1)).toEqual(['update'])
+    expect(lastWhere().and).toEqual([
+      { eq: [{ column: 'evolution.id' }, 'evo-1'] },
+      { eq: [{ column: 'evolution.org' }, 'org-1'] },
+      { eq: [{ column: 'evolution.study' }, 'study-1'] },
+      { eq: [{ column: 'evolution.subject' }, 'subject-1'] },
+    ])
+  })
+
+  it('quien cuelga una grabación pide el bloqueo compartido', async () => {
+    mocks.state.rows = [{ id: 'evo-1' }]
+    await lockSubjectEvolution(params, 'share', tx)
+    expect(mocks.calls.lock.at(-1)).toEqual(['share'])
+  })
+
+  it('no une con las anulaciones: es una consulta aparte, a propósito', async () => {
+    mocks.state.rows = [{ id: 'evo-1' }]
+    const joins = mocks.calls.join.length
+    await lockSubjectEvolution(params, 'update', tx)
+    expect(mocks.calls.join.length).toBe(joins)
+  })
+
+  it('si la evolución no está, lo dice', async () => {
+    mocks.state.rows = []
+    expect(await lockSubjectEvolution(params, 'update', tx)).toBe(false)
   })
 })

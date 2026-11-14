@@ -1,6 +1,6 @@
 import { and, asc, dictationAudios, eq, evolutionVoids, isNull, unassignedDictationAudios } from '@ichtys/db'
 import { insertAuditLog, type DbTransaction } from '../audit/audited-write'
-import { findSubjectEvolution, type EvolutionScope } from './evolution-reader'
+import { findSubjectEvolution, lockSubjectEvolution, type EvolutionScope } from './evolution-reader'
 import type { VoidStore } from './evolution-void'
 import { encryptClinicalContent } from './phi-fields'
 
@@ -10,8 +10,13 @@ import { encryptClinicalContent } from './phi-fields'
  */
 export function txVoidStore(tx: DbTransaction, scope: EvolutionScope & { evolutionId: string }): VoidStore {
   return {
+    // Primero el bloqueo exclusivo: una grabación que esté subiendo espera, o ya terminó y se
+    // va a retirar con las demás. Después se mira, en otra consulta (ver `lockSubjectEvolution`).
     // Con las anuladas, para poder decir «ya estaba anulada» en vez de «no existe».
-    findEvolution: () => findSubjectEvolution(scope, 'with-voided', tx),
+    findEvolution: async () => {
+      if (!(await lockSubjectEvolution(scope, 'update', tx))) return null
+      return findSubjectEvolution(scope, 'with-voided', tx)
+    },
 
     insertVoid: async (row) => {
       const inserted = await tx
