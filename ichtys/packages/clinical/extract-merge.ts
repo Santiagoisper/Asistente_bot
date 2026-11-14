@@ -1,4 +1,5 @@
 import type { ExtractedFacts } from './extract-facts'
+import { labFromEvolution } from './lab-source'
 import { upsertLab } from './lab-utils'
 import type { FieldConfidenceLevel, PatientProfile, ProfileFieldConfidence } from './profile-schema'
 import { deniesTerm, HISTORY_TERMS } from './stated-history'
@@ -148,7 +149,7 @@ export function mergeProfileWithExtraction(
 
   let labs = [...current.labs]
   for (const lab of facts.labs) {
-    labs = upsertLab(labs, { ...lab, sourceEvolutionId: evolutionId })
+    labs = upsertLab(labs, labFromEvolution(lab, evolutionId))
   }
 
   const medNames = new Set(current.medications.map((m) => m.name.toLowerCase()))

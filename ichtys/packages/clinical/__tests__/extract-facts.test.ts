@@ -54,3 +54,23 @@ describe('mergeProfileWithFacts', () => {
     expect(merged.lastEvolutionId).toBe('00000000-0000-4000-8000-000000000001')
   })
 })
+
+/** C4 paso 2 (docs/decisions/huella-y-procedencia-de-archivos.md, D1): el origen de cada valor. */
+describe('C4: el valor que sale de una evolución guarda su origen (reglas)', () => {
+  it('source = { kind: evolution, evolutionId } exacto, y sourceEvolutionId se conserva', () => {
+    const evolutionId = '00000000-0000-4000-8000-0000000000e1'
+    const merged = mergeProfileWithFacts(emptyPatientProfile(), extractFactsFromEvolution('HbA1c 7.5%', evolutionId), evolutionId)
+    expect(merged.labs).toHaveLength(1)
+    expect(merged.labs[0]!.source).toEqual({ kind: 'evolution', evolutionId })
+    expect(merged.labs[0]!.sourceEvolutionId).toBe(evolutionId)
+  })
+
+  it('un valor nuevo del mismo analito reemplaza al anterior con su propio origen', () => {
+    const first = '00000000-0000-4000-8000-0000000000e1'
+    const second = '00000000-0000-4000-8000-0000000000e2'
+    const base = mergeProfileWithFacts(emptyPatientProfile(), extractFactsFromEvolution('HbA1c 7.5%', first), first)
+    const merged = mergeProfileWithFacts(base, extractFactsFromEvolution('HbA1c 8.1%', second), second)
+    expect(merged.labs).toHaveLength(1)
+    expect(merged.labs[0]).toMatchObject({ value: 8.1, sourceEvolutionId: second, source: { kind: 'evolution', evolutionId: second } })
+  })
+})

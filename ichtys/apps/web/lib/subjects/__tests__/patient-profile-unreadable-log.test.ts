@@ -95,6 +95,7 @@ describe('perfil guardado que no valida — queda un registro operativo', () => 
     ['una lista en lugar de un perfil', [{ name: 'HbA1c', value: 7.4, unit: '%' }], '(raíz)', 'invalid_type', 1],
     ['un texto en lugar de un perfil', 'perfil', '(raíz)', 'invalid_type', 1],
     ['la confianza de una condición', { version: 1, conditions: ['Diabetes tipo 2'], fieldConfidence: { conditions: { 'Diabetes tipo 2': 'altísima' } } }, 'fieldConfidence.conditions.*', 'invalid_value', 1],
+    ['una fecha de muestra mal formada (C4)', { version: 1, labs: [{ name: 'HbA1c', value: 8.2, unit: '%', sampleDate: '24/09/2026' }], conditions: ['Diabetes tipo 2'] }, 'labs[0].sampleDate', 'invalid_format', 1],
     ['dos datos mal formados', { ...damaged, medications: [{ name: 'metformina' }, { dose: '850 mg' }] }, 'labs[1].value', 'invalid_type', 2],
   ])('con %s: la ruta y el motivo del primer dato, y cuántos fallaron', async (_label, value, path, issueCode, issueCount) => {
     for (const run of [read, write]) {

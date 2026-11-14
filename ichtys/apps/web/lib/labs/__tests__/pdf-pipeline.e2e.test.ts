@@ -197,11 +197,13 @@ describe('Carga de laboratorios — PDF digital de punta a punta', () => {
     expect(store.analytes.map((entry) => entry.normalizedKey).sort()).toEqual(['glucosa', 'hemoglobina', 'leucocitos', 'proteinas en orina'])
     expect(store.analytes.filter((entry) => entry.normalizedKey !== 'glucosa').every((entry) => entry.organizationId === 'org-1')).toBe(true)
     // Al perfil van solo los valores con número; el cualitativo queda en el informe.
-    // Cada uno lleva el rango de referencia que imprimió ese laboratorio, tal cual.
+    // Cada uno lleva el rango de referencia que imprimió ese laboratorio, tal cual, y de qué
+    // informe salió (C4, D1).
+    const source = { kind: 'lab_report', reportId }
     expect(store.persisted[0]?.labs).toEqual([
-      { name: 'Hemoglobina', value: 13.5, unit: 'g/dL', referenceRange: '12,0 - 16,0' },
-      { name: 'Leucocitos', value: 7300, unit: '/mm3', referenceRange: '4.000 - 10.000' },
-      { name: 'Glucosa', value: 92, unit: 'mg/dl', referenceRange: '70 - 110' },
+      { name: 'Hemoglobina', value: 13.5, unit: 'g/dL', referenceRange: '12,0 - 16,0', source },
+      { name: 'Leucocitos', value: 7300, unit: '/mm3', referenceRange: '4.000 - 10.000', source },
+      { name: 'Glucosa', value: 92, unit: 'mg/dl', referenceRange: '70 - 110', source },
     ])
     const confirmed = await loadLabReport({ ...scope, reportId })
     expect(confirmed.content.rows.every((row) => row.status === 'read' && row.reviewReason === null)).toBe(true)
