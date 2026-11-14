@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { measurementSection } from '../../lib/subjects/profile-sections'
 import { storedBloodPressureText } from '../../lib/subjects/voided-origin'
 
 export type ProfileConfidenceLevel = 'high' | 'medium' | 'low'
@@ -36,8 +37,8 @@ function Block({ id, title, badge, children }: { id: string; title: string; badg
 /**
  * El perfil extraído del sujeto, por bloques con su rótulo y un separador entre uno y otro.
  * El orden sigue el de las pestañas de la historia clínica del centro (Alpha CR, relevado el
- * 14/11/2026): edad, condiciones, medicamentos, laboratorios, signos vitales. Un bloque sin
- * datos no aparece.
+ * 14/11/2026): edad, condiciones, medicamentos, laboratorios, signos vitales, antropometría. Un
+ * bloque sin datos no aparece.
  *
  * La presión que se muestra es la guardada en números, que es la que usa la elegibilidad; la
  * etiqueta puede haber quedado vieja si una propuesta trajo un solo valor.
@@ -45,6 +46,18 @@ function Block({ id, title, badge, children }: { id: string; title: string; badg
 export function ProfileSummary({ profile, badge = () => null }: { profile: ProfileSummaryData; badge?: (level?: ProfileConfidenceLevel) => ReactNode }) {
   const fc = profile.fieldConfidence
   const pressure = storedBloodPressureText(profile.vitals)
+  // El perfil guarda peso, talla o frecuencia cardíaca junto a los laboratorios; acá se reparten
+  // como los separa la historia clínica del centro. Solo cambia dónde se muestran.
+  const labs = profile.labs.filter((lab) => measurementSection(lab.name) === 'laboratorio')
+  const vitals = profile.labs.filter((lab) => measurementSection(lab.name) === 'vitales')
+  const anthropometry = profile.labs.filter((lab) => measurementSection(lab.name) === 'antropometria')
+  const measurement = (lab: ProfileSummaryData['labs'][number]) => (
+    <p key={lab.name}>
+      {lab.name}: {lab.value}
+      {lab.unit ? ` ${lab.unit}` : ''}
+      {badge(fc?.labs?.[lab.name.toLowerCase()])}
+    </p>
+  )
   return (
     <dl className="space-y-3 text-sm text-alphi-navy">
       {profile.demographics?.ageYears ? (
@@ -74,20 +87,25 @@ export function ProfileSummary({ profile, badge = () => null }: { profile: Profi
           ))}
         </Block>
       ) : null}
-      {profile.labs.length > 0 ? (
+      {labs.length > 0 ? (
         <Block id="laboratorios" title="Laboratorios">
-          {profile.labs.map((lab) => (
-            <p key={lab.name}>
-              {lab.name}: {lab.value}
-              {lab.unit ? ` ${lab.unit}` : ''}
-              {badge(fc?.labs?.[lab.name.toLowerCase()])}
-            </p>
-          ))}
+          {labs.map(measurement)}
         </Block>
       ) : null}
-      {pressure ? (
-        <Block id="presion" title="Presión arterial (TA)" badge={badge(fc?.bloodPressure)}>
-          <p>{pressure} mmHg</p>
+      {pressure || vitals.length > 0 ? (
+        <Block id="vitales" title="Signos vitales">
+          {pressure ? (
+            <p>
+              Presión arterial (TA): {pressure} mmHg
+              {badge(fc?.bloodPressure)}
+            </p>
+          ) : null}
+          {vitals.map(measurement)}
+        </Block>
+      ) : null}
+      {anthropometry.length > 0 ? (
+        <Block id="antropometria" title="Antropometría">
+          {anthropometry.map(measurement)}
         </Block>
       ) : null}
     </dl>
