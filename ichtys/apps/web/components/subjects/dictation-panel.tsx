@@ -32,8 +32,11 @@ export interface DictationSource {
   modelRevision: string
   corrections: number
   missingBlocks: number
-  /** La persona aceptó, antes de grabar o de subir el audio, el aviso que nombra al sujeto (D23). */
-  subjectConfirmed: boolean
+  /**
+   * El código del sujeto que la persona confirmó en el aviso, antes de grabar o de subir el
+   * audio (D23). El servidor lo compara con el sujeto donde se guarda la evolución.
+   */
+  confirmedSubjectCode?: string
   /** Cómo quedó armado el borrador: por apartados nombrados o en texto corrido. */
   layout: 'blocks' | 'narrative'
   /** Frases que el transcriptor repitió en bucle y se dejaron una sola vez. */
@@ -68,9 +71,10 @@ const SILENCE_LEVEL = 0.06
 export function DictationPanel({ subjectCode, onDraft, onDiscard, resetSignal }: DictationPanelProps) {
   /**
    * El aviso se acepta una vez por evolución (D23): al guardar o descartar, el dictado
-   * siguiente lo vuelve a pedir, porque puede ser de otro sujeto.
+   * siguiente lo vuelve a pedir, porque puede ser de otro sujeto. Se guarda el código que se
+   * confirmó y no un sí: si el sujeto en pantalla cambia, lo confirmado para el anterior no vale.
    */
-  const [confirmed, setConfirmed] = useState(false)
+  const [confirmedCode, setConfirmedCode] = useState<string | null>(null)
   const [asking, setAsking] = useState<'record' | 'upload' | null>(null)
   const [phase, setPhase] = useState<Phase>('idle')
   const [seconds, setSeconds] = useState(0)
@@ -90,7 +94,9 @@ export function DictationPanel({ subjectCode, onDraft, onDiscard, resetSignal }:
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const previewRef = useRef<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const confirmedRef = useRef(false)
+  const confirmedCodeRef = useRef<string | null>(null)
+  const currentCode = subjectCode.trim()
+  const confirmed = confirmedCode !== null && confirmedCode === currentCode
 
   const stopTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current)
@@ -124,8 +130,8 @@ export function DictationPanel({ subjectCode, onDraft, onDiscard, resetSignal }:
     setMessage(null)
     setTakes(0)
     setPhase('idle')
-    confirmedRef.current = false
-    setConfirmed(false)
+    confirmedCodeRef.current = null
+    setConfirmedCode(null)
     setAsking(null)
   }, [resetSignal])
 
@@ -188,7 +194,7 @@ export function DictationPanel({ subjectCode, onDraft, onDiscard, resetSignal }:
               modelRevision: DICTATION_MODEL_REVISION,
               corrections: built.corrections.length,
               missingBlocks: built.missing.length,
-              subjectConfirmed: confirmedRef.current,
+              ...(confirmedCodeRef.current ? { confirmedSubjectCode: confirmedCodeRef.current } : {}),
               layout: built.layout,
               repetitions: built.repetitions.length,
             },
@@ -251,8 +257,8 @@ export function DictationPanel({ subjectCode, onDraft, onDiscard, resetSignal }:
   /** Aceptó el aviso que nombra al sujeto: sigue con lo que había pedido. */
   function acceptNotice() {
     const next = asking
-    confirmedRef.current = true
-    setConfirmed(true)
+    confirmedCodeRef.current = currentCode
+    setConfirmedCode(currentCode)
     setAsking(null)
     if (next === 'record') void startRecording()
     else if (next === 'upload') fileInputRef.current?.click()
@@ -265,8 +271,8 @@ export function DictationPanel({ subjectCode, onDraft, onDiscard, resetSignal }:
     setMessage(null)
     setTakes(0)
     setPhase('idle')
-    confirmedRef.current = false
-    setConfirmed(false)
+    confirmedCodeRef.current = null
+    setConfirmedCode(null)
     setAsking(null)
     onDiscard()
   }
@@ -302,7 +308,9 @@ export function DictationPanel({ subjectCode, onDraft, onDiscard, resetSignal }:
                   className="sr-only"
                   onClick={(event) => {
                     // Sin el aviso aceptado no se abre el selector: primero se confirma el sujeto.
-                    if (confirmed) return
+                    // Se mira la referencia y no el estado: al aceptar, el clic programado llega
+                    // antes de que la pantalla se vuelva a dibujar.
+                    if (confirmedCodeRef.current !== null && confirmedCodeRef.current === currentCode) return
                     event.preventDefault()
                     setAsking('upload')
                   }}
