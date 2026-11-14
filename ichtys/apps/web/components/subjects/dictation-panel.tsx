@@ -22,6 +22,7 @@ import {
 } from '../../lib/dictation/protocol'
 import { takesNotice } from '../../lib/dictation/takes'
 import { useMicLevel } from '../../lib/dictation/use-mic-level'
+import { pickRecordingMimeType, recordingBudget, takeLimitNotice } from '../../lib/dictation/recording'
 import { RecordingNotice } from './recording-notice'
 import { RecordButton } from './record-button'
 
@@ -67,6 +68,8 @@ const MAX_RECORDING_SEC = 20 * 60
 /** Segundos sin voz al empezar para avisar que el micrófono no está tomando nada. */
 const SILENCE_WARNING_SEC = 4
 const SILENCE_LEVEL = 0.06
+/** Cada cuánto entrega un tramo el grabador. Con un segundo, la cuenta de tramos es el tiempo grabado. */
+const RECORDING_TIMESLICE_MS = 1000
 
 export function DictationPanel({ subjectCode, onDraft, onDiscard, resetSignal }: DictationPanelProps) {
   /**
@@ -86,6 +89,8 @@ export function DictationPanel({ subjectCode, onDraft, onDiscard, resetSignal }:
   const [heardVoice, setHeardVoice] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [tooLarge, setTooLarge] = useState(false)
+  /** Aviso del tope de la grabación: cuánto queda en esta toma, o que se detuvo sola (D25). */
+  const [limitNotice, setLimitNotice] = useState<string | null>(null)
   /** Cuántas tomas lleva este dictado. Desde la segunda, lo dictado se suma a lo que ya está. */
   const [takes, setTakes] = useState(0)
   const level = useMicLevel(phase === 'recording' ? stream : null)
@@ -127,6 +132,7 @@ export function DictationPanel({ subjectCode, onDraft, onDiscard, resetSignal }:
     setDraft(null)
     setPreview(null)
     setTooLarge(false)
+    setLimitNotice(null)
     setMessage(null)
     setTakes(0)
     setPhase('idle')
@@ -217,10 +223,31 @@ export function DictationPanel({ subjectCode, onDraft, onDiscard, resetSignal }:
       const media = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       })
-      const recorder = new MediaRecorder(media, { audioBitsPerSecond: DICTATION_RECORDING_BITS_PER_SECOND })
+      // Se pide un formato que respete la calidad pedida, si este equipo lo graba y lo lee (D25).
+      const mimeType = pickRecordingMimeType(
+        (type) => MediaRecorder.isTypeSupported(type),
+        (type) => document.createElement('audio').canPlayType(type) !== '',
+      )
+      const recorder = new MediaRecorder(media, {
+        audioBitsPerSecond: DICTATION_RECORDING_BITS_PER_SECOND,
+        ...(mimeType ? { mimeType } : {}),
+      })
       const chunks: Blob[] = []
+      let bytes = 0
       recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) chunks.push(event.data)
+        if (event.data.size === 0) return
+        chunks.push(event.data)
+        bytes += event.data.size
+        // Un tramo por segundo: la cantidad de tramos es el tiempo grabado, sin contar las pausas.
+        const budget = recordingBudget({
+          bytes,
+          seconds: chunks.length,
+          lastChunkBytes: event.data.size,
+          maxBytes: DICTATION_AUDIO_MAX_BYTES,
+        })
+        setLimitNotice(takeLimitNotice(budget))
+        // Antes de pasarse del tope se detiene sola: se transcribe y se guarda lo grabado.
+        if (budget.stop && recorder.state !== 'inactive') recorder.stop()
       }
       recorder.onstop = () => {
         media.getTracks().forEach((track) => track.stop())
@@ -229,7 +256,9 @@ export function DictationPanel({ subjectCode, onDraft, onDiscard, resetSignal }:
         void transcribe(new Blob(chunks, { type: recorder.mimeType }))
       }
       recorderRef.current = recorder
-      recorder.start()
+      setLimitNotice(null)
+      // Un tramo por segundo, para saber cuánto pesa lo grabado mientras se graba.
+      recorder.start(RECORDING_TIMESLICE_MS)
       setStream(media)
       setHeardVoice(false)
       setSeconds(0)
@@ -268,6 +297,7 @@ export function DictationPanel({ subjectCode, onDraft, onDiscard, resetSignal }:
     setDraft(null)
     setPreview(null)
     setTooLarge(false)
+    setLimitNotice(null)
     setMessage(null)
     setTakes(0)
     setPhase('idle')
@@ -342,6 +372,7 @@ export function DictationPanel({ subjectCode, onDraft, onDiscard, resetSignal }:
               {active && 'Podés dictar de corrido o nombrar los apartados. Si te equivocás, decí «corrijo» y el dato bueno.'}
             </p>
           ) : null}
+          {limitNotice ? <p className="text-sm font-medium text-alphi-amber" role="status">{limitNotice}</p> : null}
           {message ? <p className="text-sm font-medium text-alphi-rose" role="alert">{message}</p> : null}
 
           {phase === 'ready' && draft ? (
