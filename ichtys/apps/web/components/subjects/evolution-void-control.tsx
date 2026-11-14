@@ -21,6 +21,8 @@ interface Props {
   evolutionLabel: string
   /** La evolución ya figura como registrada por error: no hay nada que declarar. */
   voided: boolean
+  /** La historia dice que a esta persona se le ofrece la acción en esta evolución. Decide la ruta. */
+  allowed: boolean
   open: boolean
   busy: boolean
   feedback: VoidFeedback | null
@@ -41,7 +43,7 @@ const NOTE_MAX = 500
  */
 export function EvolutionVoidControl(props: Props) {
   const { feedback } = props
-  if (props.voided) {
+  if (props.voided || !props.allowed) {
     // Lo que pasó se sigue diciendo aunque ya no haya nada que declarar.
     return feedback ? <FeedbackLine feedback={feedback} /> : null
   }

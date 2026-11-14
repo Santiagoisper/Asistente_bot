@@ -29,6 +29,7 @@ const base = {
   subjectCode: 'GZBO-001',
   evolutionLabel: 'la evolución del 14/11/2026',
   voided: false,
+  allowed: true,
   open: false,
   busy: false,
   feedback: null,
@@ -71,6 +72,20 @@ describe('EvolutionVoidControl', () => {
     expect(open.disabled).toBe(true)
     click(open)
     expect(onOpen).not.toHaveBeenCalled()
+  })
+
+  it('a quien la historia no le dice que puede, no se le ofrece nada, ni abierto', () => {
+    show({ allowed: false })
+    expect(buttons()).toHaveLength(0)
+    show({ allowed: false, open: true })
+    expect(buttons()).toHaveLength(0)
+    expect(note()).toBeNull()
+  })
+
+  it('aunque ya no pueda, lo que pasó con su intento se le sigue diciendo', () => {
+    show({ allowed: false, feedback: { kind: 'error', text: 'No se declaró nada.' } })
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe('No se declaró nada.')
+    expect(buttons()).toHaveLength(0)
   })
 
   it('sobre una evolución ya anulada no se ofrece nada, ni abierto', () => {

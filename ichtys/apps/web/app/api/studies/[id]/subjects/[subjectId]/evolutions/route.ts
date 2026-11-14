@@ -65,6 +65,12 @@ export async function GET(
       dictationTakes: row.dictationTakes ?? null,
       // Registrada por error en este sujeto: quién no viaja a la pantalla, solo cuándo y por qué.
       voided: row.voided ? { reason: row.voided.reason, declaredAt: row.voided.declaredAt.toISOString() } : null,
+      // Si la pantalla le ofrece a esta persona declarar que se registró en el sujeto equivocado.
+      // Por ahora solo a quien la escribió, que es lo que no depende del rol: la coordinación
+      // también puede por la ruta, pero en modo `open` «coordinar» hoy no distingue a nadie, y
+      // qué rol coordina en ese modo es una decisión de Santiago (D24, punto 1). La pantalla es
+      // más estrecha que la ruta a propósito; la que decide sigue siendo la ruta.
+      canVoid: !row.voided && row.authorUserId === userId,
       createdAt: row.createdAt.toISOString(),
     }))
 

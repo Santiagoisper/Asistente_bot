@@ -28,6 +28,8 @@ interface EvolutionItem {
   content: string | null
   /** Registrada por error en este sujeto. Falta en la respuesta de una versión anterior. */
   voided?: EvolutionVoidInfo | null
+  /** La pantalla le ofrece a esta persona declarar el error en esta evolución. Falta en una versión anterior. */
+  canVoid?: boolean
   /** Cuántas tomas tuvo el dictado (D22). Falta en la respuesta de una versión anterior. */
   dictationTakes?: number | null
   createdAt: string
@@ -950,6 +952,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                   subjectCode={subjectCode}
                   evolutionLabel={`la evolución del ${new Date(evo.createdAt).toLocaleString('es-AR')}`}
                   voided={Boolean(evo.voided)}
+                  allowed={evo.canVoid === true}
                   open={voiding === evo.id}
                   busy={voidBusy}
                   feedback={voidFeedback?.evolutionId === evo.id ? voidFeedback : null}
