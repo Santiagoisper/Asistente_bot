@@ -30,6 +30,9 @@ Una acción sobre la evolución: «Se registró en el sujeto equivocado». Pide 
 
 - **Quién puede (propuesta):** quien escribió la evolución, o quien coordina el estudio. Nadie más.
 - **No tiene vuelta atrás.** La base admite una sola anulación por evolución y no hay forma de revocarla sin borrar esa fila, que sería tapar un registro. Si se declaró por error, se corrige con una evolución nueva que lo diga. Architect pidió que esto se decida a sabiendas antes de aplicar la migración: es el punto 7 de lo que tiene que decidir Santiago.
+- **La pantalla (14/11/2026, propuesta de Claude; Santiago puede cambiarla):** la acción «Se registró en el sujeto equivocado» está en cada evolución vigente de la historia. Abre un diálogo que nombra al sujeto y a la evolución, dice qué pasa al confirmar y que es definitivo. El botón que confirma repite el código del sujeto, y lo que viaja es ese código, como el aviso de antes de grabar (D23). El motivo es opcional y se guarda cifrado junto a la declaración. Después de cada intento, salga o no, se vuelve a leer la historia.
+- **A quién se le muestra:** a quien ve la historia. La pantalla no sabe de antemano si la persona escribió la evolución o coordina el estudio: decide el servidor, y el rechazo se explica con su texto. Cuando el modo estricto esté en uso conviene que la historia diga, en cada evolución, si la persona puede.
+- **Hecho leído en el código (14/11/2026), sin decidir:** «quien la escribió o quien coordina» rige en modo estricto. En modo `open`, que es el único en uso hoy, pedir una capacidad no restringe: declara el error cualquier persona con acceso clínico al sujeto. Pasa lo mismo con leer el texto de una evolución anulada y con retirar datos del perfil. Es el comportamiento histórico del modo `open` para escribir evoluciones; para una acción definitiva puede no alcanzar. Queda para Santiago.
 
 ### 2. La evolución se anula, no se borra
 

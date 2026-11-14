@@ -15,9 +15,11 @@ import { addRecordingTake, clampTakesCount, groupAudiosByEvolution, uploadNotice
 import { criterionStatusLabel } from '../../lib/subjects/screening-labels'
 import { EvolutionAudios, type EvolutionAudioInfo } from './evolution-audio'
 import { EvolutionBody, type EvolutionVoidInfo } from './evolution-body'
+import { EvolutionVoidControl, type VoidConfirmation, type VoidFeedback } from './evolution-void-control'
 import { VoidedOriginNoticeCard } from './voided-origin-notice'
 import { VoidedOriginReviewForm, type RetireChoice } from './voided-origin-review'
 import { labNamesFromEvolution, retireErrorMessage, storedBloodPressureText, voidedOriginNotice } from '../../lib/subjects/voided-origin'
+import { voidDoneMessage, voidErrorMessage, type VoidOutcome } from '../../lib/subjects/evolution-void-screen'
 
 interface EvolutionItem {
   id: string
@@ -181,6 +183,10 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const [reviewing, setReviewing] = useState<string | null>(null)
   const [reviewBusy, setReviewBusy] = useState(false)
   const [reviewError, setReviewError] = useState<string | null>(null)
+  // Declarar que una evolución se registró en el sujeto equivocado: cuál está abierta, y qué pasó.
+  const [voiding, setVoiding] = useState<string | null>(null)
+  const [voidBusy, setVoidBusy] = useState(false)
+  const [voidFeedback, setVoidFeedback] = useState<(VoidFeedback & { evolutionId: string }) | null>(null)
   // Cuándo se leyó la lista: con eso se sabe si una grabación todavía puede estar subiendo.
   const [listedAt, setListedAt] = useState(0)
   // Evoluciones cuyas grabaciones terminó de subir esta misma pantalla: de esas ya se sabe.
@@ -228,8 +234,9 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
     }
   }, [studyId, subjectId])
 
-  const loadEvolutions = useCallback(async () => {
-    setLoading(true)
+  const loadEvolutions = useCallback(async (quiet = false) => {
+    // `quiet`: releer sin vaciar la lista, para no cerrar lo que la persona tiene abierto en ella.
+    if (!quiet) setLoading(true)
     setError(null)
     try {
       const res = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/evolutions`)
@@ -405,6 +412,39 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       setError(profileWriteErrorMessage(codeOf(err)) ?? 'No se pudo descartar la revisión de labs.')
     } finally {
       setLabBusy(false)
+    }
+  }
+
+  /**
+   * Una persona declara que una evolución se registró en el sujeto equivocado (D24, punto 1).
+   * Viaja el código que confirmó en el diálogo. Salga o no, se vuelve a leer la historia: lo que
+   * se muestra después es lo que quedó, no lo que se supone.
+   */
+  async function handleVoid(evolutionId: string, confirmation: VoidConfirmation) {
+    setVoidBusy(true)
+    setVoidFeedback(null)
+    let feedback: VoidFeedback
+    try {
+      const res = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/evolutions/${evolutionId}/void`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'wrong_subject', ...confirmation }),
+      })
+      if (res.ok) {
+        const outcome = (await res.json().catch(() => ({}))) as VoidOutcome
+        feedback = { kind: 'done', text: voidDoneMessage(outcome) }
+        setVoiding(null)
+      } else {
+        feedback = { kind: 'error', text: voidErrorMessage(res.status, await errorCode(res)) }
+      }
+    } catch {
+      feedback = { kind: 'error', text: voidErrorMessage(0, 'request_failed') }
+    }
+    setVoidFeedback({ evolutionId, ...feedback })
+    try {
+      await loadEvolutions(true)
+    } finally {
+      setVoidBusy(false)
     }
   }
 
@@ -906,6 +946,22 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                   )}
                 </div>
                 <EvolutionBody content={evo.content} voided={evo.voided ?? null} />
+                <EvolutionVoidControl
+                  subjectCode={subjectCode}
+                  evolutionLabel={`la evolución del ${new Date(evo.createdAt).toLocaleString('es-AR')}`}
+                  voided={Boolean(evo.voided)}
+                  open={voiding === evo.id}
+                  busy={voidBusy}
+                  feedback={voidFeedback?.evolutionId === evo.id ? voidFeedback : null}
+                  onOpen={() => {
+                    // Con una declaración en curso no se abre otra.
+                    if (voidBusy) return
+                    setVoidFeedback(null)
+                    setVoiding(evo.id)
+                  }}
+                  onCancel={() => setVoiding(null)}
+                  onConfirm={(confirmation) => void handleVoid(evo.id, confirmation)}
+                />
                 <EvolutionAudios
                   studyId={studyId}
                   subjectId={subjectId}
