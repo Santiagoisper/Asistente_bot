@@ -29,6 +29,7 @@ const ANTHROPOMETRY: ReadonlySet<string> = new Set([
   'perimetro de cintura',
   'circunferencia de cintura',
   'perimetro abdominal',
+  'circunferencia abdominal',
 ])
 
 const VITALS: ReadonlySet<string> = new Set([
@@ -41,10 +42,23 @@ const VITALS: ReadonlySet<string> = new Set([
   'saturacion',
   'saturacion de oxigeno',
   'spo2',
+  'sat o2',
+  'sato2',
+  'pulso',
 ])
 
+/** Unidades que a veces vienen escritas dentro del nombre: «Peso (kg)», «Temperatura °C». */
+const UNIT_TOKENS: ReadonlySet<string> = new Set(['kg', 'g', 'cm', 'm', 'mts', 'm2', 'c', 'lpm', 'rpm', 'bpm'])
+
+/** El nombre sin la unidad del final. Solo saca palabras del final, y nunca la única que hay. */
+function withoutUnit(key: string): string {
+  const words = key.split(' ')
+  while (words.length > 1 && UNIT_TOKENS.has(words[words.length - 1]!)) words.pop()
+  return words.join(' ')
+}
+
 export function measurementSection(name: string): MeasurementSection {
-  const key = plain(name)
+  const key = withoutUnit(plain(name))
   if (ANTHROPOMETRY.has(key)) return 'antropometria'
   if (VITALS.has(key)) return 'vitales'
   return 'laboratorio'

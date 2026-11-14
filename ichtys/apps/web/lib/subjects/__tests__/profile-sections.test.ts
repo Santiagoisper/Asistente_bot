@@ -24,4 +24,24 @@ describe('measurementSection', () => {
       expect(measurementSection(name), name).toBe('laboratorio')
     }
   })
+
+  it('la unidad escrita dentro del nombre no lo manda a laboratorios', () => {
+    for (const name of ['Peso (kg)', 'Peso corporal (kg)', 'Talla (cm)', 'Talla cm', 'IMC (kg/m2)', 'P. Cintura (cm)']) {
+      expect(measurementSection(name), name).toBe('antropometria')
+    }
+    for (const name of ['Temperatura °C', 'Temperatura (°C)', 'Frecuencia cardíaca (lpm)', 'FR (rpm)', 'Saturación (%)']) {
+      expect(measurementSection(name), name).toBe('vitales')
+    }
+  })
+
+  it('pulso, saturación abreviada y circunferencia abdominal, como se dicen en un consultorio', () => {
+    for (const name of ['Pulso', 'Sat O2', 'SatO2']) expect(measurementSection(name), name).toBe('vitales')
+    expect(measurementSection('Circunferencia abdominal')).toBe('antropometria')
+  })
+
+  it('sacar la unidad no convierte en antropometría lo que no lo es', () => {
+    for (const name of ['Peso molecular (kg)', 'Calcio (mg/dL)', 'Hierro (m)', 'Creatinina cm', 'Sodio %']) {
+      expect(measurementSection(name), name).toBe('laboratorio')
+    }
+  })
 })
