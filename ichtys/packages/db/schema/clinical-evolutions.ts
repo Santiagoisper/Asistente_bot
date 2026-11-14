@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, index } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, timestamp, index, integer } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { organizations } from './organizations'
 import { studies } from './studies'
@@ -24,6 +24,12 @@ export const clinicalEvolutions = pgTable(
     authorUserId: text('author_user_id').notNull(),
     visitLabel: text('visit_label'),
     contentEncrypted: text('content_encrypted').notNull(),
+    /**
+     * Cuántas tomas tuvo el dictado del que salió esta evolución (D22). Vacío si no se dictó o
+     * si se guardó antes de que existiera la columna. Se escribe una sola vez, al crearla: con
+     * esto la pantalla puede decir de qué tomas no quedó grabación, incluida la última.
+     */
+    dictationTakes: integer('dictation_takes'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
