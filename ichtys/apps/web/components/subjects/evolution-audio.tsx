@@ -6,7 +6,7 @@
  * cuando alguien toca «Escuchar», y cada pedido queda registrado.
  */
 import { useEffect, useRef, useState } from 'react'
-import { audioLabel, missingTakes, missingTakesNotice } from '../../lib/dictation/takes'
+import { audioLabel, evolutionTakesNotice } from '../../lib/dictation/takes'
 import { recordingClock } from './record-button'
 
 export interface EvolutionAudioInfo {
@@ -76,16 +76,36 @@ export function EvolutionAudio({ studyId, subjectId, audio, several = false }: {
   )
 }
 
-/** Las grabaciones de una evolución, una por toma, y el aviso si de alguna toma no quedó grabación (D22). */
-export function EvolutionAudios({ studyId, subjectId, audios }: { studyId: string; subjectId: string; audios: EvolutionAudioInfo[] }) {
-  if (audios.length === 0) return null
-  const gaps = missingTakesNotice(missingTakes(audios.map((audio) => audio.take)))
+/**
+ * Las grabaciones de una evolución, una por toma, y el aviso si de alguna toma no quedó grabación
+ * (D22). Con `dictationTakes` el aviso alcanza a la última toma y al caso en que no quedó ninguna.
+ */
+export function EvolutionAudios({
+  studyId,
+  subjectId,
+  audios,
+  dictationTakes = null,
+  settled = true,
+  listingKnown = true,
+}: {
+  studyId: string
+  subjectId: string
+  audios: EvolutionAudioInfo[]
+  /** Cuántas tomas tuvo el dictado. Vacío: no se dictó, o la evolución es anterior a ese dato. */
+  dictationTakes?: number | null
+  /** Ya no puede haber una grabación de esta evolución subiendo. */
+  settled?: boolean
+  /** El listado de grabaciones se pudo leer. */
+  listingKnown?: boolean
+}) {
+  const notice = evolutionTakesNotice({ stored: audios.map((audio) => audio.take), total: dictationTakes, settled, listingKnown })
+  if (audios.length === 0 && !notice) return null
   return (
     <>
       {audios.map((audio) => (
         <EvolutionAudio key={audio.take} studyId={studyId} subjectId={subjectId} audio={audio} several={audios.length > 1} />
       ))}
-      {gaps ? <p className="mt-2 text-xs text-alphi-muted">{gaps}</p> : null}
+      {notice ? <p className={audios.length === 0 ? 'mt-3 border-t border-alphi-border pt-2 text-xs text-alphi-muted' : 'mt-2 text-xs text-alphi-muted'}>{notice}</p> : null}
     </>
   )
 }

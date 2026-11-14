@@ -11,7 +11,7 @@ import { DictationGuide } from './dictation-guide'
 import { ProfileUnreadableNotice } from './profile-unreadable-notice'
 import { profileWriteErrorMessage } from '../../lib/subjects/profile-write-messages'
 import { rateLimitedSaveMessage } from '../../lib/security/rate-limit-message'
-import { addRecordingTake, groupAudiosByEvolution, uploadNotice, uploadRecordingTakes, type AudioListingItem } from '../../lib/dictation/takes'
+import { addRecordingTake, clampTakesCount, groupAudiosByEvolution, uploadNotice, uploadRecordingTakes, uploadsSettled, type AudioListingItem } from '../../lib/dictation/takes'
 import { criterionStatusLabel } from '../../lib/subjects/screening-labels'
 import { EvolutionAudios, type EvolutionAudioInfo } from './evolution-audio'
 
@@ -19,6 +19,8 @@ interface EvolutionItem {
   id: string
   visitLabel: string | null
   content: string
+  /** Cuántas tomas tuvo el dictado (D22). Falta en la respuesta de una versión anterior. */
+  dictationTakes?: number | null
   createdAt: string
 }
 
@@ -162,6 +164,12 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   // Cuántas tomas se dictaron en este borrador: la grabación de cada una lleva ese número.
   const dictationTakeRef = useRef(0)
   const [audios, setAudios] = useState<Record<string, EvolutionAudioInfo[]>>({})
+  // El listado de grabaciones se pudo leer. Si no, no se afirma que de una toma no quedó grabación.
+  const [audiosKnown, setAudiosKnown] = useState(false)
+  // Cuándo se leyó la lista: con eso se sabe si una grabación todavía puede estar subiendo.
+  const [listedAt, setListedAt] = useState(0)
+  // Evoluciones cuyas grabaciones terminó de subir esta misma pantalla: de esas ya se sabe.
+  const [uploadsDoneFor, setUploadsDoneFor] = useState<ReadonlySet<string>>(new Set())
   const [audioNotice, setAudioNotice] = useState<string | null>(null)
   /** Sube con cada guardado: le avisa al panel de dictado que vuelva al inicio. */
   const [savedCount, setSavedCount] = useState(0)
@@ -221,13 +229,17 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       if (!res.ok) throw new Error('fetch_failed')
       const data = (await res.json()) as { subjectCode: string; evolutions: EvolutionItem[] }
       setSubjectCode(data.subjectCode)
+      // Hasta leer el listado de grabaciones no se sabe cuáles hay: mientras, no se afirma nada.
+      setAudiosKnown(false)
       setEvolutions(data.evolutions)
+      setListedAt(Date.now())
       // Qué evoluciones tienen grabación. Si esto falla, la lista se muestra igual.
       try {
         const audioRes = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/dictation-audios`)
         if (audioRes.ok) {
           const listing = (await audioRes.json()) as { audios: AudioListingItem[] }
           setAudios(groupAudiosByEvolution(listing.audios))
+          setAudiosKnown(true)
         }
       } catch {
         setAudios({})
@@ -250,6 +262,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
     setSaving(true)
     setError(null)
     setPiiWarnings([])
+    const takesCount = clampTakesCount(dictationTakeRef.current)
     try {
       const res = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/evolutions`, {
         method: 'POST',
@@ -258,8 +271,15 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
           content: content.trim(),
           visitLabel: visitLabel.trim() || undefined,
           // Los apartados sin dictar se cuentan sobre el texto que se guarda, no sobre el borrador.
+          // Y cuántas tomas tuvo el dictado: queda con la evolución (D22).
           ...(dictationSource
-            ? { source: { ...dictationSource, missingBlocks: content.split('\n').filter((line) => line.trimEnd().endsWith(NOT_MENTIONED)).length } }
+            ? {
+                source: {
+                  ...dictationSource,
+                  missingBlocks: content.split('\n').filter((line) => line.trimEnd().endsWith(NOT_MENTIONED)).length,
+                  ...(takesCount !== undefined ? { takes: takesCount } : {}),
+                },
+              }
             : {}),
         }),
       })
@@ -290,6 +310,9 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         })
         setAudioNotice(uploadNotice(uploaded))
       }
+      // Acá ya no queda ninguna grabación de esta evolución por subir: lo que falte, falta.
+      const savedId = data.id
+      if (dictationSource && savedId) setUploadsDoneFor((previous) => new Set(previous).add(savedId))
       setContent('')
       setDictationSource(null)
       setDictationRecordings([])
@@ -770,7 +793,14 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                   )}
                 </div>
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-alphi-navy">{evo.content}</p>
-                <EvolutionAudios studyId={studyId} subjectId={subjectId} audios={audios[evo.id] ?? []} />
+                <EvolutionAudios
+                  studyId={studyId}
+                  subjectId={subjectId}
+                  audios={audios[evo.id] ?? []}
+                  dictationTakes={evo.dictationTakes ?? null}
+                  settled={uploadsDoneFor.has(evo.id) || uploadsSettled(evo.createdAt, listedAt)}
+                  listingKnown={audiosKnown}
+                />
               </li>
             ))}
           </ul>
