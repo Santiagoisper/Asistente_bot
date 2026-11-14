@@ -9,6 +9,7 @@ import { and, db, desc, documentVersions, eq, patientProfiles, screeningAssessme
 import type { StudySpec } from '@ichtys/ingestion/study-spec'
 import { insertAuditLog } from '../audit/audited-write'
 import { writeAuditLog, type AuditLogParams } from '../chat/persistence'
+import { canonicalJson } from './canonical-json'
 import { openScreeningJson, sealScreeningJson } from './screening-crypto'
 
 export interface ScreeningEvaluationResult {
@@ -26,17 +27,6 @@ export interface ScreeningAuditFacts {
   snapshotId: string | null
   /** `true` si esta consulta guardó una instantánea nueva. */
   snapshotCreated: boolean
-}
-
-/** Texto canónico de un valor JSON: mismas claves en cualquier orden dan el mismo texto (JSONB no conserva el orden). */
-function canonical(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
-  if (value !== null && typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>).filter(([, v]) => v !== undefined)
-    entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(',')}}`
-  }
-  return JSON.stringify(value) ?? 'null'
 }
 
 function mapCriteria(spec: StudySpec) {
@@ -94,7 +84,7 @@ export async function evaluateAndPersistScreening(params: {
   // La instantánea anterior puede estar cifrada (C3) o ser una fila anterior al cifrado. Una
   // que no se puede leer no se da por igual: se guarda la nueva.
   const previous = lastSnapshot === undefined ? null : openScreeningJson(lastSnapshot.assessments)
-  const sameResult = previous !== null && previous.ok && canonical(previous.value) === canonical(validated)
+  const sameResult = previous !== null && previous.ok && canonicalJson(previous.value) === canonicalJson(validated)
   const needsPersist =
     !lastSnapshot ||
     lastSnapshot.studySpecVersion !== params.specVersion ||
