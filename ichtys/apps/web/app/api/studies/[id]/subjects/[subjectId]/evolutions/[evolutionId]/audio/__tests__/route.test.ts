@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
     AccessError: MockAccessError,
     validateSubjectAccess: vi.fn(),
     findEvolution: vi.fn(),
+    lockEvolution: vi.fn(),
     storeDictationAudio: vi.fn(),
     loadDictationAudio: vi.fn(),
     purgeExpiredDictationAudios: vi.fn(),
@@ -39,13 +40,13 @@ vi.mock('../../../../../../../../../../lib/audit/audited-write', () => ({
 }))
 vi.mock('../../../../../../../../../../lib/chat/persistence', () => ({ writeAuditLog: mocks.writeAuditLog }))
 vi.mock('../../../../../../../../../../lib/subjects/phi-fields', () => ({ PhiConfigError: class extends Error {} }))
+vi.mock('../../../../../../../../../../lib/subjects/evolution-reader', () => ({ findSubjectEvolution: mocks.findEvolution, lockSubjectEvolution: mocks.lockEvolution }))
 vi.mock('../../../../../../../../../../lib/dictation/audio-store', () => ({
   DICTATION_AUDIO_MAX_BYTES: 4_000_000,
   baseMime: (value: string | null) => {
     const base = (value ?? '').split(';')[0]!.trim().toLowerCase()
     return ['audio/webm', 'audio/mp4', 'video/mp4'].includes(base) ? base : null
   },
-  findEvolution: mocks.findEvolution,
   storeDictationAudio: mocks.storeDictationAudio,
   loadDictationAudio: mocks.loadDictationAudio,
   purgeExpiredDictationAudios: mocks.purgeExpiredDictationAudios,
@@ -72,6 +73,7 @@ beforeEach(() => {
   mocks.audits.length = 0
   mocks.validateSubjectAccess.mockResolvedValue(context)
   mocks.findEvolution.mockResolvedValue({ id: EVOLUTION, authorUserId: 'user_author' })
+  mocks.lockEvolution.mockResolvedValue(true)
   mocks.purgeExpiredDictationAudios.mockResolvedValue([])
   mocks.storeDictationAudio.mockResolvedValue({ id: 'audio-1', sha256: 'abc', sizeBytes: 4, expiresAt: new Date('2026-12-12T00:00:00Z') })
   mocks.writeAuditLog.mockResolvedValue(undefined)
@@ -117,6 +119,56 @@ describe('POST — guardar la grabación', () => {
   it('una evolución que no es de este sujeto responde como si no existiera', async () => {
     mocks.findEvolution.mockResolvedValue(null)
     expect((await POST(upload(), params)).status).toBe(404)
+  })
+
+  it('si la evolución se anula mientras la grabación sube, no se guarda ni se registra: 404 (D24)', async () => {
+    // Vigente en la primera mirada; anulada cuando la subida ya tiene el bloqueo.
+    mocks.findEvolution.mockResolvedValueOnce({ id: EVOLUTION, authorUserId: 'user_author' }).mockResolvedValueOnce(null)
+
+    const res = await POST(upload(), params)
+
+    expect(res.status).toBe(404)
+    expect(mocks.storeDictationAudio).not.toHaveBeenCalled()
+    expect(mocks.audits).toEqual([])
+  })
+
+  it('antes de guardar toma el bloqueo compartido de la evolución y vuelve a mirar, las dos cosas dentro de la transacción', async () => {
+    const order: string[] = []
+    mocks.lockEvolution.mockImplementation(async () => {
+      order.push('bloqueo')
+      return true
+    })
+    mocks.findEvolution.mockImplementation(async (_scope: unknown, _policy: unknown, executor: unknown) => {
+      order.push(executor ? 'mirar-en-transaccion' : 'mirar')
+      return { id: EVOLUTION, authorUserId: 'user_author' }
+    })
+    mocks.storeDictationAudio.mockImplementation(async () => {
+      order.push('guardar')
+      return { id: 'audio-1', sha256: 'abc', sizeBytes: 4, expiresAt: new Date('2026-12-12T00:00:00Z') }
+    })
+
+    expect((await POST(upload(), params)).status).toBe(201)
+
+    expect(order).toEqual(['mirar', 'bloqueo', 'mirar-en-transaccion', 'guardar'])
+    const [scope, mode, executor] = mocks.lockEvolution.mock.calls[0] as [Record<string, string>, string, unknown]
+    expect(mode).toBe('share')
+    expect(scope.evolutionId).toBe(EVOLUTION)
+    expect(executor).toBeDefined()
+    expect(mocks.findEvolution.mock.calls[1]![1]).toBe('current')
+  })
+
+  it('si la evolución ya no está al tomar el bloqueo, tampoco se guarda', async () => {
+    mocks.lockEvolution.mockResolvedValue(false)
+    expect((await POST(upload(), params)).status).toBe(404)
+    expect(mocks.storeDictationAudio).not.toHaveBeenCalled()
+  })
+
+  it('busca la evolución entre las vigentes: una anulada no recibe una grabación (D24)', async () => {
+    await POST(upload(), params)
+    const [scope, policy] = mocks.findEvolution.mock.calls[0] as [Record<string, string>, string]
+    expect(policy).toBe('current')
+    expect(scope.evolutionId).toBe(EVOLUTION)
+    expect(Object.keys(scope).sort()).toEqual(['evolutionId', 'orgId', 'studyId', 'subjectId'])
   })
 
   it.each([
@@ -186,6 +238,14 @@ describe('GET — escuchar la grabación', () => {
     const res = await GET(new Request(`http://test/audio?take=${take}`), params)
     expect(res.status).toBe(404)
     expect(mocks.loadDictationAudio).not.toHaveBeenCalled()
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+  })
+
+  it('una grabación retirada al depósito no se entrega ni se registra como escucha (D24)', async () => {
+    mocks.loadDictationAudio.mockResolvedValue({ state: 'withdrawn' })
+    const res = await GET(new Request(`http://localhost/api/studies/${STUDY}/subjects/${SUBJECT}/evolutions/${EVOLUTION}/audio`), params)
+    expect(res.status).toBe(410)
+    expect(await res.json()).toEqual({ error: 'audio_withdrawn' })
     expect(mocks.writeAuditLog).not.toHaveBeenCalled()
   })
 

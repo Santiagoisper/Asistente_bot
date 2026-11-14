@@ -72,15 +72,15 @@ Hay **tres caminos** que escriben `profile.labs`. Todos terminan en `upsertLab`,
 
 | Cambio | Dónde | Migración |
 |---|---|---|
-| Huella, quién y camino en documentos | `document_versions`: `sha256 text`, `uploaded_by text`, `upload_channel text` (`single` \| `bulk_import`) | **Sí**: `0020`, columnas nulas, `ADD COLUMN IF NOT EXISTS` |
-| Huella del archivo recibido en informes de laboratorio | `lab_reports`: `source_sha256 text` (del PDF tal como llegó, antes de leerlo). Quién y camino ya están (`created_by`, `source_kind`) | Sí, en la misma `0020` |
-| Huella de cada recorte | `lab_report_images`: `sha256 text` (del recorte recibido, antes de cifrar) | Sí, en la misma `0020` |
+| Huella, quién y camino en documentos | `document_versions`: `sha256 text`, `uploaded_by text`, `upload_channel text` (`single` \| `bulk_import`) | **Sí**: `0023`, columnas nulas, `ADD COLUMN IF NOT EXISTS` |
+| Huella del archivo recibido en informes de laboratorio | `lab_reports`: `source_sha256 text` (del PDF tal como llegó, antes de leerlo). Quién y camino ya están (`created_by`, `source_kind`) | Sí, en la misma `0023` |
+| Huella de cada recorte | `lab_report_images`: `sha256 text` (del recorte recibido, antes de cifrar) | Sí, en la misma `0023` |
 | Origen y fecha de cada valor | dentro de `patient_profiles.profile_encrypted` (JSON cifrado) | **No**: es zod en `packages/clinical` |
 | Fecha confirmada del informe | dentro de `lab_reports.content_encrypted` | **No**. Va cifrada: una fecha de muestra de un paciente es dato de salud (R5) y no va en columna en claro |
 
-**Número de migración:** esta nota la llamaba `0019`. El 14/11/2026 ese número lo tomó la migración de las grabaciones por toma del dictado (`0019_dictation_audio_takes`, consulta-dictada D22), así que la de esta nota pasa a ser la `0020`. El contenido no cambia.
+**Número de migración:** esta nota la llamaba `0019`. El 14/11/2026 ese número lo tomó la migración de las grabaciones por toma del dictado (`0019_dictation_audio_takes`, consulta-dictada D22), así que la de esta nota pasó a ser la `0020`. El contenido no cambia. El mismo día los números `0020` a `0022` los tomaron otras tres migraciones del dictado (cuántas tomas tuvo una evolución, anular una evolución y retirar su grabación, y los tramos de lo dictado). Esta pasa a ser la **`0023`**.
 
-Reglas para la `0020`:
+Reglas para la `0023`:
 - Las columnas son **nulas** y las filas viejas quedan en `null`, que se lee «no se registró». No se calcula hacia atrás: los PDF están en el blob, pero recalcular la huella hoy no prueba lo que llegó entonces.
 - Se aplica **a mano, con SQL idempotente, antes del código**. Nunca con `db:migrate` (el journal está desordenado, #76; R8).
 - `packages/db` es el carril de **Fable**: la escribe Fable o alguien con su OK explícito. La huella se calcula igual que en `lib/dictation/audio-store.ts` (`createHash('sha256')` sobre los bytes recibidos). No se crea otro helper; `lib/audit/fingerprint.ts` es para JSON, no para archivos.
@@ -109,7 +109,7 @@ Cada prueba asierta el valor exacto, nunca «no es otra cosa» (L27).
 1. **Lector tolerante:** `labObservationSchema` acepta `source` y `sampleDate` opcionales, y `labReportContentSchema` acepta `sampleDate` opcional. Incluye las pruebas 9 y 10. Sin migración.
 2. **Origen en los tres caminos** (pruebas 5 a 8, todavía sin fecha). Sin migración.
 3. **Fecha propuesta y confirmada** en la pantalla de revisión del informe (pruebas 5, 6, 7 y 11). Con pantalla, así que L1, L2 y L6: captura a 1360px mirada.
-4. **`0020` + huella, quién y camino** (pruebas 1 a 4). Aplicar la `0020` antes de integrar. Carril de Fable.
+4. **`0023` + huella, quién y camino** (pruebas 1 a 4). Aplicar la `0023` antes de integrar. Carril de Fable.
 
 ## Sin resolver (para Santiago)
 

@@ -1,5 +1,6 @@
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
-import { and, clinicalEvolutions, db, desc, eq } from '@ichtys/db'
+import { coordinatesStudy } from '../../../../../../../lib/access/permissions'
+import { clinicalEvolutions } from '@ichtys/db'
 import { auditedWrite } from '../../../../../../../lib/audit/audited-write'
 import { writeAuditLog } from '../../../../../../../lib/chat/persistence'
 import {
@@ -9,6 +10,7 @@ import {
   PhiConfigError,
 } from '../../../../../../../lib/subjects/phi-fields'
 import { createEvolutionSchema } from '../../../../../../../lib/subjects/schemas'
+import { listSubjectEvolutions } from '../../../../../../../lib/subjects/evolution-reader'
 import { proposeProfileFromEvolution } from '../../../../../../../lib/subjects/patient-profile-service'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../../lib/api/body-limit'
 import { getOrCreateRequestId } from '../../../../../../../lib/observability/logger'
@@ -27,22 +29,36 @@ export async function GET(
   const { id: routeStudyId, subjectId } = await params
 
   try {
-    const { orgId, userId, study, subject } = await validateSubjectAccess(subjectId, routeStudyId)
+    const { orgId, userId, study, subject, access } = await validateSubjectAccess(subjectId, routeStudyId)
 
-    const rows = await db.query.clinicalEvolutions.findMany({
-      where: and(
-        eq(clinicalEvolutions.subjectId, subject.id),
-        eq(clinicalEvolutions.organizationId, orgId),
-        eq(clinicalEvolutions.studyId, study.id),
-      ),
-      orderBy: [desc(clinicalEvolutions.createdAt)],
-    })
+    // La historia muestra también las anuladas, con su marca: una corrección no tapa lo escrito (D24).
+    const rows = await listSubjectEvolutions({ orgId, studyId: study.id, subjectId: subject.id }, 'with-voided')
+
+    // El texto de una evolución anulada habla de otra persona (D24, pregunta 2, que sigue
+    // abierta para Calidad). Mientras no se decida más amplio, viaja solo a quien la escribió y
+    // a quien coordina el estudio. Se decide acá, en la ruta: lo que no corresponde no sale.
+    // «Coordina» se decide con `coordinatesStudy`, que también distingue en modo `open`.
+    const coordinates = coordinatesStudy(access)
+    const canReadVoided = (authorUserId: string): boolean => authorUserId === userId || coordinates
+    const withheld = new Set<string>()
+    for (const row of rows) {
+      if (row.voided && !canReadVoided(row.authorUserId)) withheld.add(row.id)
+    }
 
     const evolutions = rows.map((row) => ({
       id: row.id,
       visitLabel: row.visitLabel,
-      content: decryptClinicalContent(row.contentEncrypted),
+      content: withheld.has(row.id) ? null : decryptClinicalContent(row.contentEncrypted),
+      ...(withheld.has(row.id) ? { contentWithheld: true } : {}),
       authorUserId: row.authorUserId,
+      // Cuántas tomas tuvo el dictado (D22). Vacío si no se dictó o es anterior a la columna.
+      dictationTakes: row.dictationTakes ?? null,
+      // Registrada por error en este sujeto: quién no viaja a la pantalla, solo cuándo y por qué.
+      voided: row.voided ? { reason: row.voided.reason, declaredAt: row.voided.declaredAt.toISOString() } : null,
+      // Si la pantalla le ofrece a esta persona declarar que se registró en el sujeto equivocado:
+      // quien la escribió o quien coordina el estudio, la misma regla que aplica la ruta de
+      // anular. Decide esa ruta, no este campo.
+      canVoid: !row.voided && (row.authorUserId === userId || coordinates),
       createdAt: row.createdAt.toISOString(),
     }))
 
@@ -130,6 +146,8 @@ export async function POST(
             authorUserId: userId,
             visitLabel: parsed.data.visitLabel?.trim() || null,
             contentEncrypted,
+            // Se escribe una sola vez, acá (D22). No es contenido clínico: es un número.
+            dictationTakes: parsed.data.source?.takes ?? null,
           })
           .returning()
         if (!created) throw new Error('Evolution insert did not return a row')

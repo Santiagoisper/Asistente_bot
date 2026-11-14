@@ -2,6 +2,7 @@ import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
 import { LabReviewError, rejectLabOcrReview } from '../../../../../../../../lib/subjects/lab-review-service'
 import { profileWriteErrorResponse } from '../../../../../../../../lib/subjects/profile-write-errors'
 import { PhiConfigError } from '../../../../../../../../lib/subjects/phi-fields'
+import { profileForResponse } from '../../../../../../../../lib/subjects/profile-response'
 
 export const runtime = 'nodejs'
 
@@ -31,7 +32,7 @@ export async function POST(
 
     return Response.json({
       subjectCode: subject.subjectCode,
-      profile,
+      profile: profileForResponse(profile),
     })
   } catch (err) {
     const profileError = profileWriteErrorResponse(err)

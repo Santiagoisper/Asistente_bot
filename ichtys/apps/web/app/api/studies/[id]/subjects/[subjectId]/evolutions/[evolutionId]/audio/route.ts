@@ -5,18 +5,21 @@ import { writeAuditLog } from '../../../../../../../../../lib/chat/persistence'
 import {
   DICTATION_AUDIO_MAX_BYTES,
   baseMime,
-  findEvolution,
   loadDictationAudio,
   purgeExpiredDictationAudios,
   storeDictationAudio,
 } from '../../../../../../../../../lib/dictation/audio-store'
 import { DICTATION_AUDIO_MAX_TAKES } from '../../../../../../../../../lib/dictation/protocol'
 import { parseTake } from '../../../../../../../../../lib/dictation/takes'
+import { findSubjectEvolution, lockSubjectEvolution } from '../../../../../../../../../lib/subjects/evolution-reader'
 import { PhiConfigError } from '../../../../../../../../../lib/subjects/phi-fields'
 
 export const runtime = 'nodejs'
 
 type Params = { params: Promise<{ id: string; subjectId: string; evolutionId: string }> }
+
+/** La evolución se anuló (o dejó de estar) entre la primera mirada y el guardado. */
+class EvolutionNoLongerCurrentError extends Error {}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 /** Lo mismo que para una evolución que no existe: no se confirma nada a quien no corresponde. */
@@ -52,12 +55,9 @@ export async function POST(req: Request, { params }: Params): Promise<Response> 
       return Response.json({ error: 'audio_too_large', maxBytes: DICTATION_AUDIO_MAX_BYTES }, { status: 413 })
     }
 
-    const evolution = await findEvolution({
-      orgId: access.orgId,
-      studyId: access.study.id,
-      subjectId: access.subject.id,
-      evolutionId,
-    })
+    // Solo a una evolución vigente: a una anulada no se le cuelga una grabación (D24).
+    const evolutionScope = { orgId: access.orgId, studyId: access.study.id, subjectId: access.subject.id, evolutionId }
+    const evolution = await findSubjectEvolution(evolutionScope, 'current')
     if (!evolution) return notFound()
     // La grabación la adjunta quien dictó: nadie le cuelga un audio a la evolución de otra persona.
     if (evolution.authorUserId !== access.userId) return new Response('Forbidden', { status: 403 })
@@ -71,6 +71,11 @@ export async function POST(req: Request, { params }: Params): Promise<Response> 
     const now = new Date()
     const stored = await auditedWrite(
       async (tx) => {
+        // La evolución pudo anularse mientras llegaba el audio. Con el bloqueo compartido,
+        // anular y guardar no se cruzan: se vuelve a mirar acá, y si ya no está vigente no se
+        // guarda nada (D24). Sin esto la toma quedaba en el sujeto equivocado, sin retirar.
+        const stillThere = await lockSubjectEvolution(evolutionScope, 'share', tx)
+        if (!stillThere || !(await findSubjectEvolution(evolutionScope, 'current', tx))) throw new EvolutionNoLongerCurrentError()
         // De paso se limpia lo vencido: la conservación no depende solo de la tarea diaria.
         const purged = await purgeExpiredDictationAudios(tx, now)
         for (const audio of purged) {
@@ -122,6 +127,8 @@ export async function POST(req: Request, { params }: Params): Promise<Response> 
     if (!stored) return Response.json({ error: 'audio_already_stored' }, { status: 409 })
     return Response.json({ id: stored.id, sha256: stored.sha256, expiresAt: stored.expiresAt.toISOString() }, { status: 201 })
   } catch (err) {
+    // Igual que una evolución que no existe: nada se guardó y nada se registró.
+    if (err instanceof EvolutionNoLongerCurrentError) return notFound()
     if (err instanceof PhiConfigError) return Response.json({ error: 'phi_encryption_not_configured' }, { status: 503 })
     return handleApiError(err)
   }
@@ -150,6 +157,8 @@ export async function GET(req: Request, { params }: Params): Promise<Response> {
     })
     if (audio.state === 'missing') return notFound()
     if (audio.state === 'expired') return Response.json({ error: 'audio_expired' }, { status: 410 })
+    // Retirada al depósito (D24): ya no se escucha desde la historia de este sujeto.
+    if (audio.state === 'withdrawn') return Response.json({ error: 'audio_withdrawn' }, { status: 410 })
 
     // El registro va antes de entregar: si no se puede registrar, no se entrega.
     await writeAuditLog({

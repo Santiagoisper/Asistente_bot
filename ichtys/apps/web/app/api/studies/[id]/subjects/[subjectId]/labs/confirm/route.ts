@@ -4,6 +4,7 @@ import { profileWriteErrorResponse } from '../../../../../../../../lib/subjects/
 import { PhiConfigError } from '../../../../../../../../lib/subjects/phi-fields'
 import { labOcrConfirmSchema } from '../../../../../../../../lib/subjects/schemas'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../../../lib/api/body-limit'
+import { profileForResponse } from '../../../../../../../../lib/subjects/profile-response'
 
 export const runtime = 'nodejs'
 
@@ -63,7 +64,7 @@ export async function POST(
 
     return Response.json({
       subjectCode: subject.subjectCode,
-      profile,
+      profile: profileForResponse(profile),
     })
   } catch (err) {
     const profileError = profileWriteErrorResponse(err)

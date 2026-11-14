@@ -9,16 +9,29 @@ import { unapprovedSpecNotice } from '../../lib/subjects/spec-notice'
 import { DictationPanel, type DictationRecording, type DictationSource } from './dictation-panel'
 import { DictationGuide } from './dictation-guide'
 import { ProfileUnreadableNotice } from './profile-unreadable-notice'
-import { profileWriteErrorMessage } from '../../lib/subjects/profile-write-messages'
+import { profileWriteErrorMessage, PROPOSAL_OF_VOIDED_EVOLUTION_CODE, PROPOSAL_OF_VOIDED_EVOLUTION_MESSAGE } from '../../lib/subjects/profile-write-messages'
 import { rateLimitedSaveMessage } from '../../lib/security/rate-limit-message'
-import { addRecordingTake, groupAudiosByEvolution, uploadNotice, uploadRecordingTakes, type AudioListingItem } from '../../lib/dictation/takes'
+import { addRecordingTake, clampTakesCount, groupAudiosByEvolution, uploadNotice, uploadRecordingTakes, uploadsSettled, type AudioListingItem } from '../../lib/dictation/takes'
 import { criterionStatusLabel } from '../../lib/subjects/screening-labels'
 import { EvolutionAudios, type EvolutionAudioInfo } from './evolution-audio'
+import { EvolutionBody, type EvolutionVoidInfo } from './evolution-body'
+import { EvolutionVoidControl, type VoidConfirmation, type VoidFeedback } from './evolution-void-control'
+import { VoidedOriginNoticeCard } from './voided-origin-notice'
+import { VoidedOriginReviewForm, type RetireChoice } from './voided-origin-review'
+import { labNamesFromEvolution, retireErrorMessage, storedBloodPressureText, voidedOriginNotice } from '../../lib/subjects/voided-origin'
+import { voidDoneMessage, voidErrorMessage, type VoidOutcome } from '../../lib/subjects/evolution-void-screen'
 
 interface EvolutionItem {
   id: string
   visitLabel: string | null
-  content: string
+  /** `null`: evolución anulada cuyo texto no le corresponde a quien mira (D24). */
+  content: string | null
+  /** Registrada por error en este sujeto. Falta en la respuesta de una versión anterior. */
+  voided?: EvolutionVoidInfo | null
+  /** La pantalla le ofrece a esta persona declarar el error en esta evolución. Falta en una versión anterior. */
+  canVoid?: boolean
+  /** Cuántas tomas tuvo el dictado (D22). Falta en la respuesta de una versión anterior. */
+  dictationTakes?: number | null
   createdAt: string
 }
 
@@ -45,6 +58,8 @@ interface PatientProfileView {
     redactedSourcePreview?: string
   }
   /** Lo que se extrajo de una evolución y todavía nadie aceptó: no es parte del perfil. */
+  /** Evoluciones anuladas por las que una persona ya revisó el perfil (D24). Lo retirado no viaja. */
+  retiredFrom?: Array<{ evolutionId: string; retiredAt: string }>
   pendingEvolutionProposals?: Array<{
     requiresHumanReview: true
     evolutionId: string
@@ -162,6 +177,22 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   // Cuántas tomas se dictaron en este borrador: la grabación de cada una lleva ese número.
   const dictationTakeRef = useRef(0)
   const [audios, setAudios] = useState<Record<string, EvolutionAudioInfo[]>>({})
+  // El listado de grabaciones se pudo leer. Si no, no se afirma que de una toma no quedó grabación.
+  const [audiosKnown, setAudiosKnown] = useState(false)
+  // De qué evoluciones anuladas entró algo al perfil (D24). `null`: no se pudo consultar.
+  const [acceptedFromVoided, setAcceptedFromVoided] = useState<string[] | null>([])
+  // Revisión del perfil por una evolución anulada (D24, 4 bis): cuál está abierta, y su estado.
+  const [reviewing, setReviewing] = useState<string | null>(null)
+  const [reviewBusy, setReviewBusy] = useState(false)
+  const [reviewError, setReviewError] = useState<string | null>(null)
+  // Declarar que una evolución se registró en el sujeto equivocado: cuál está abierta, y qué pasó.
+  const [voiding, setVoiding] = useState<string | null>(null)
+  const [voidBusy, setVoidBusy] = useState(false)
+  const [voidFeedback, setVoidFeedback] = useState<(VoidFeedback & { evolutionId: string }) | null>(null)
+  // Cuándo se leyó la lista: con eso se sabe si una grabación todavía puede estar subiendo.
+  const [listedAt, setListedAt] = useState(0)
+  // Evoluciones cuyas grabaciones terminó de subir esta misma pantalla: de esas ya se sabe.
+  const [uploadsDoneFor, setUploadsDoneFor] = useState<ReadonlySet<string>>(new Set())
   const [audioNotice, setAudioNotice] = useState<string | null>(null)
   /** Sube con cada guardado: le avisa al panel de dictado que vuelva al inicio. */
   const [savedCount, setSavedCount] = useState(0)
@@ -205,8 +236,9 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
     }
   }, [studyId, subjectId])
 
-  const loadEvolutions = useCallback(async () => {
-    setLoading(true)
+  const loadEvolutions = useCallback(async (quiet = false) => {
+    // `quiet`: releer sin vaciar la lista, para no cerrar lo que la persona tiene abierto en ella.
+    if (!quiet) setLoading(true)
     setError(null)
     try {
       const res = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/evolutions`)
@@ -221,16 +253,31 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       if (!res.ok) throw new Error('fetch_failed')
       const data = (await res.json()) as { subjectCode: string; evolutions: EvolutionItem[] }
       setSubjectCode(data.subjectCode)
+      // Hasta leer el listado de grabaciones no se sabe cuáles hay: mientras, no se afirma nada.
+      setAudiosKnown(false)
       setEvolutions(data.evolutions)
+      setListedAt(Date.now())
       // Qué evoluciones tienen grabación. Si esto falla, la lista se muestra igual.
       try {
         const audioRes = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/dictation-audios`)
         if (audioRes.ok) {
           const listing = (await audioRes.json()) as { audios: AudioListingItem[] }
           setAudios(groupAudiosByEvolution(listing.audios))
+          setAudiosKnown(true)
         }
       } catch {
         setAudios({})
+      }
+      // Solo si hay alguna anulada: de cuáles entró algo al perfil. Si falla, se dice que no se sabe.
+      if (data.evolutions.some((evo) => evo.voided)) {
+        try {
+          const originRes = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/profile/voided-origin`)
+          setAcceptedFromVoided(originRes.ok ? ((await originRes.json()) as { acceptedFrom: string[] }).acceptedFrom : null)
+        } catch {
+          setAcceptedFromVoided(null)
+        }
+      } else {
+        setAcceptedFromVoided([])
       }
       await loadScreening()
     } catch {
@@ -250,6 +297,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
     setSaving(true)
     setError(null)
     setPiiWarnings([])
+    const takesCount = clampTakesCount(dictationTakeRef.current)
     try {
       const res = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/evolutions`, {
         method: 'POST',
@@ -258,8 +306,15 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
           content: content.trim(),
           visitLabel: visitLabel.trim() || undefined,
           // Los apartados sin dictar se cuentan sobre el texto que se guarda, no sobre el borrador.
+          // Y cuántas tomas tuvo el dictado: queda con la evolución (D22).
           ...(dictationSource
-            ? { source: { ...dictationSource, missingBlocks: content.split('\n').filter((line) => line.trimEnd().endsWith(NOT_MENTIONED)).length } }
+            ? {
+                source: {
+                  ...dictationSource,
+                  missingBlocks: content.split('\n').filter((line) => line.trimEnd().endsWith(NOT_MENTIONED)).length,
+                  ...(takesCount !== undefined ? { takes: takesCount } : {}),
+                },
+              }
             : {}),
         }),
       })
@@ -290,6 +345,9 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         })
         setAudioNotice(uploadNotice(uploaded))
       }
+      // Acá ya no queda ninguna grabación de esta evolución por subir: lo que falte, falta.
+      const savedId = data.id
+      if (dictationSource && savedId) setUploadsDoneFor((previous) => new Set(previous).add(savedId))
       setContent('')
       setDictationSource(null)
       setDictationRecordings([])
@@ -359,17 +417,85 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
     }
   }
 
+  /**
+   * Una persona declara que una evolución se registró en el sujeto equivocado (D24, punto 1).
+   * Viaja el código que confirmó en el diálogo. Salga o no, se vuelve a leer la historia: lo que
+   * se muestra después es lo que quedó, no lo que se supone.
+   */
+  async function handleVoid(evolutionId: string, confirmation: VoidConfirmation) {
+    setVoidBusy(true)
+    setVoidFeedback(null)
+    let feedback: VoidFeedback
+    try {
+      const res = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/evolutions/${evolutionId}/void`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'wrong_subject', ...confirmation }),
+      })
+      if (res.ok) {
+        const outcome = (await res.json().catch(() => ({}))) as VoidOutcome
+        feedback = { kind: 'done', text: voidDoneMessage(outcome) }
+        setVoiding(null)
+      } else {
+        feedback = { kind: 'error', text: voidErrorMessage(res.status, await errorCode(res)) }
+      }
+    } catch {
+      feedback = { kind: 'error', text: voidErrorMessage(0, 'request_failed') }
+    }
+    setVoidFeedback({ evolutionId, ...feedback })
+    try {
+      await loadEvolutions(true)
+    } finally {
+      setVoidBusy(false)
+    }
+  }
+
+  /** Una persona retira del perfil lo que entró desde una evolución anulada. Ningún rechazo se traga. */
+  async function handleRetire(evolutionId: string, choice: RetireChoice) {
+    setReviewBusy(true)
+    setReviewError(null)
+    try {
+      const res = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/profile/voided-origin/retire`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          evolutionId,
+          confirmedSubjectCode: subjectCode,
+          ...(choice.removeAge ? { removeAge: true } : {}),
+          ...(choice.removeBloodPressure ? { removeBloodPressure: true } : {}),
+          medications: choice.medications,
+          conditions: choice.conditions,
+          ...(choice.nothingToRetire ? { nothingToRetire: true } : {}),
+        }),
+      })
+      if (res.ok) {
+        setReviewing(null)
+      } else {
+        setReviewError(retireErrorMessage(res.status, await errorCode(res)))
+      }
+      // Salió o no, se vuelve a leer: el perfil pudo cambiar, y la lista tiene que ser la de ahora.
+      await loadScreening()
+    } catch {
+      setReviewError(retireErrorMessage(0, 'request_failed'))
+    } finally {
+      setReviewBusy(false)
+    }
+  }
+
   async function handleProposal(evolutionId: string, decision: 'confirm' | 'reject') {
     setProposalBusy(true)
     setError(null)
     try {
       const res = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/profile/proposals/${evolutionId}/${decision}`, { method: 'POST' })
-      // 409: otra persona ya la resolvió. Se recarga y se muestra lo que hay.
-      if (!res.ok && res.status !== 409) throw new Error(await errorCode(res))
+      const code = res.ok ? null : await errorCode(res)
+      // 409: otra persona ya la resolvió. Se recarga y se muestra lo que hay. Salvo que la
+      // evolución se haya anulado (D24): la propuesta sigue ahí, y hay que decir por qué no entra.
+      if (!res.ok && (res.status !== 409 || code === PROPOSAL_OF_VOIDED_EVOLUTION_CODE)) throw new Error(code ?? 'request_failed')
       await loadScreening()
     } catch (err) {
       setError(
-        profileWriteErrorMessage(codeOf(err)) ??
+        (codeOf(err) === PROPOSAL_OF_VOIDED_EVOLUTION_CODE ? PROPOSAL_OF_VOIDED_EVOLUTION_MESSAGE : null) ??
+          profileWriteErrorMessage(codeOf(err)) ??
           (decision === 'confirm' ? 'No se pudo aceptar la propuesta. El perfil no cambió.' : 'No se pudo descartar la propuesta.'),
       )
     } finally {
@@ -378,6 +504,12 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   }
 
   const pendingProposals = profile?.pendingEvolutionProposals ?? []
+  const voidedOrigin = voidedOriginNotice({
+    labs: profile?.labs ?? [],
+    voided: evolutions.filter((evo) => evo.voided).map((evo) => ({ id: evo.id, createdAt: evo.createdAt })),
+    acceptedFrom: acceptedFromVoided ?? [],
+    reviewed: (profile?.retiredFrom ?? []).map((entry) => entry.evolutionId),
+  })
   const pendingLabs = profile?.pendingLabReview
   const hasProfileData =
     profile &&
@@ -632,6 +764,52 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
           <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-alphi-muted">
             Perfil extraído
           </h3>
+          <VoidedOriginNoticeCard
+            notice={voidedOrigin}
+            checkFailed={acceptedFromVoided === null}
+            actions={
+              voidedOrigin ? (
+                <div className="mt-3 space-y-2">
+                  {voidedOrigin.evolutionIds.map((evolutionId) => {
+                    const evolution = evolutions.find((evo) => evo.id === evolutionId)
+                    const label = evolution ? `la evolución del ${new Date(evolution.createdAt).toLocaleDateString('es-AR')}` : 'esa evolución'
+                    return reviewing === evolutionId ? (
+                      <VoidedOriginReviewForm
+                        key={evolutionId}
+                        subjectCode={subjectCode}
+                        evolutionLabel={label}
+                        labNames={labNamesFromEvolution(profile?.labs ?? [], evolutionId)}
+                        ageYears={profile?.demographics?.ageYears}
+                        bloodPressure={storedBloodPressureText(profile?.vitals)}
+                        medications={(profile?.medications ?? []).map((med) => med.name)}
+                        conditions={profile?.conditions ?? []}
+                        busy={reviewBusy}
+                        error={reviewError}
+                        onSubmit={(choice) => void handleRetire(evolutionId, choice)}
+                        onCancel={() => {
+                          setReviewing(null)
+                          setReviewError(null)
+                        }}
+                      />
+                    ) : (
+                      <button
+                        key={evolutionId}
+                        type="button"
+                        className="alphi-btn-secondary text-sm"
+                        disabled={reviewBusy}
+                        onClick={() => {
+                          setReviewError(null)
+                          setReviewing(evolutionId)
+                        }}
+                      >
+                        Revisar el perfil por {label}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : null
+            }
+          />
           {!hasProfileData ? (
             <p className="text-sm text-alphi-muted">
               Guardá una evolución con datos estructurados (edad, HbA1c, PA, medicación) para ver el perfil.
@@ -769,8 +947,32 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                     <span className="alphi-pill text-[10px]">{evo.visitLabel}</span>
                   )}
                 </div>
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-alphi-navy">{evo.content}</p>
-                <EvolutionAudios studyId={studyId} subjectId={subjectId} audios={audios[evo.id] ?? []} />
+                <EvolutionBody content={evo.content} voided={evo.voided ?? null} />
+                <EvolutionVoidControl
+                  subjectCode={subjectCode}
+                  evolutionLabel={`la evolución del ${new Date(evo.createdAt).toLocaleString('es-AR')}`}
+                  voided={Boolean(evo.voided)}
+                  allowed={evo.canVoid === true}
+                  open={voiding === evo.id}
+                  busy={voidBusy}
+                  feedback={voidFeedback?.evolutionId === evo.id ? voidFeedback : null}
+                  onOpen={() => {
+                    // Con una declaración en curso no se abre otra.
+                    if (voidBusy) return
+                    setVoidFeedback(null)
+                    setVoiding(evo.id)
+                  }}
+                  onCancel={() => setVoiding(null)}
+                  onConfirm={(confirmation) => void handleVoid(evo.id, confirmation)}
+                />
+                <EvolutionAudios
+                  studyId={studyId}
+                  subjectId={subjectId}
+                  audios={audios[evo.id] ?? []}
+                  dictationTakes={evo.dictationTakes ?? null}
+                  settled={uploadsDoneFor.has(evo.id) || uploadsSettled(evo.createdAt, listedAt)}
+                  listingKnown={audiosKnown}
+                />
               </li>
             ))}
           </ul>

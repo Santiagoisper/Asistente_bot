@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto'
-import { and, clinicalEvolutions, db, dictationAudios, eq, isNotNull, lt } from '@ichtys/db'
+import { and, db, desc, dictationAudios, eq, isNotNull, isNull, lt, unassignedDictationAudios } from '@ichtys/db'
 import type { DbTransaction } from '../audit/audited-write'
 import { decryptClinicalContent, encryptClinicalContent } from '../subjects/phi-fields'
+import { audioState } from './audio-state'
 import { DICTATION_AUDIO_MAX_BYTES, DICTATION_AUDIO_MAX_TAKES, DICTATION_AUDIO_RETENTION_DAYS } from './protocol'
 
 export { DICTATION_AUDIO_MAX_BYTES, DICTATION_AUDIO_MAX_TAKES, DICTATION_AUDIO_RETENTION_DAYS }
@@ -21,28 +22,6 @@ export function baseMime(contentType: string | null): string | null {
 
 export function retentionDeadline(from: Date): Date {
   return new Date(from.getTime() + DICTATION_AUDIO_RETENTION_DAYS * 24 * 60 * 60 * 1000)
-}
-
-export interface EvolutionRef {
-  id: string
-  authorUserId: string
-}
-
-/** La evolución, solo si es de esta organización, este estudio y este sujeto. */
-export async function findEvolution(params: { orgId: string; studyId: string; subjectId: string; evolutionId: string }): Promise<EvolutionRef | null> {
-  const [row] = await db
-    .select({ id: clinicalEvolutions.id, authorUserId: clinicalEvolutions.authorUserId })
-    .from(clinicalEvolutions)
-    .where(
-      and(
-        eq(clinicalEvolutions.id, params.evolutionId),
-        eq(clinicalEvolutions.organizationId, params.orgId),
-        eq(clinicalEvolutions.studyId, params.studyId),
-        eq(clinicalEvolutions.subjectId, params.subjectId),
-      ),
-    )
-    .limit(1)
-  return row ?? null
 }
 
 export interface StoredAudioMeta {
@@ -98,8 +77,10 @@ export interface AudioListing {
   take: number
   durationSec: number
   expiresAt: Date
-  /** `false`: venció y se borró; queda la constancia. */
+  /** `false`: venció y se borró, o se retiró; queda la constancia. */
   available: boolean
+  /** Se retiró de este sujeto porque la evolución se registró en el equivocado (D24). No es una vencida. */
+  withdrawn: boolean
 }
 
 /** Las grabaciones de las evoluciones de un sujeto, una por toma. Sin contenido. */
@@ -111,6 +92,8 @@ export async function listSubjectAudios(params: { orgId: string; studyId: string
       durationSec: dictationAudios.durationSec,
       expiresAt: dictationAudios.expiresAt,
       purgedAt: dictationAudios.purgedAt,
+      withdrawnAt: dictationAudios.withdrawnAt,
+      contentEncrypted: dictationAudios.contentEncrypted,
     })
     .from(dictationAudios)
     .where(
@@ -120,16 +103,20 @@ export async function listSubjectAudios(params: { orgId: string; studyId: string
         eq(dictationAudios.subjectId, params.subjectId),
       ),
     )
-  return rows.map((row) => ({
-    evolutionId: row.evolutionId,
-    take: row.take,
-    durationSec: row.durationSec,
-    expiresAt: row.expiresAt,
-    available: row.purgedAt === null && row.expiresAt.getTime() > params.now.getTime(),
-  }))
+  return rows.map((row) => {
+    const state = audioState({ hasContent: row.contentEncrypted !== null, expiresAt: row.expiresAt, purgedAt: row.purgedAt, withdrawnAt: row.withdrawnAt }, params.now)
+    return {
+      evolutionId: row.evolutionId,
+      take: row.take,
+      durationSec: row.durationSec,
+      expiresAt: row.expiresAt,
+      available: state === 'available',
+      withdrawn: state === 'withdrawn',
+    }
+  })
 }
 
-export type LoadedAudio = { state: 'ok'; id: string; mime: string; bytes: Uint8Array } | { state: 'missing' } | { state: 'expired' }
+export type LoadedAudio = { state: 'ok'; id: string; mime: string; bytes: Uint8Array } | { state: 'missing' } | { state: 'expired' } | { state: 'withdrawn' }
 
 /** La grabación descifrada de una toma. Una vencida no se entrega aunque la limpieza todavía no haya pasado. */
 export async function loadDictationAudio(params: { orgId: string; studyId: string; subjectId: string; evolutionId: string; take: number; now: Date }): Promise<LoadedAudio> {
@@ -139,6 +126,8 @@ export async function loadDictationAudio(params: { orgId: string; studyId: strin
       mime: dictationAudios.mime,
       contentEncrypted: dictationAudios.contentEncrypted,
       expiresAt: dictationAudios.expiresAt,
+      purgedAt: dictationAudios.purgedAt,
+      withdrawnAt: dictationAudios.withdrawnAt,
     })
     .from(dictationAudios)
     .where(
@@ -152,16 +141,109 @@ export async function loadDictationAudio(params: { orgId: string; studyId: strin
     )
     .limit(1)
   if (!row) return { state: 'missing' }
-  if (row.contentEncrypted === null || row.expiresAt.getTime() <= params.now.getTime()) return { state: 'expired' }
+  const state = audioState({ hasContent: row.contentEncrypted !== null, expiresAt: row.expiresAt, purgedAt: row.purgedAt, withdrawnAt: row.withdrawnAt }, params.now)
+  if (state === 'withdrawn') return { state: 'withdrawn' }
+  if (state === 'expired' || row.contentEncrypted === null) return { state: 'expired' }
   const bytes = new Uint8Array(Buffer.from(decryptClinicalContent(row.contentEncrypted), 'base64'))
   return { state: 'ok', id: row.id, mime: row.mime, bytes }
 }
 
-/** Borra el contenido de las grabaciones vencidas y deja la constancia. Devuelve cuáles, por organización. */
+/**
+ * Borra el contenido de las grabaciones vencidas (y sus tramos) y deja la constancia. Devuelve
+ * cuáles, por organización. Una retirada al depósito no es una vencida: se saltea, y su
+ * contenido vence en el depósito con la misma fecha (D24).
+ */
 export async function purgeExpiredDictationAudios(tx: DbTransaction, now: Date): Promise<Array<{ id: string; organizationId: string; studyId: string }>> {
   return tx
     .update(dictationAudios)
-    .set({ contentEncrypted: null, purgedAt: now })
-    .where(and(lt(dictationAudios.expiresAt, now), isNotNull(dictationAudios.contentEncrypted)))
+    .set({ contentEncrypted: null, segmentsEncrypted: null, purgedAt: now })
+    .where(and(lt(dictationAudios.expiresAt, now), isNotNull(dictationAudios.contentEncrypted), isNull(dictationAudios.withdrawnAt)))
     .returning({ id: dictationAudios.id, organizationId: dictationAudios.organizationId, studyId: dictationAudios.studyId })
+}
+
+/** Lo mismo para el depósito de grabaciones sin sujeto: mismo plazo, misma regla (D24). */
+export async function purgeExpiredUnassignedAudios(tx: DbTransaction, now: Date): Promise<Array<{ id: string; organizationId: string; studyId: string }>> {
+  return tx
+    .update(unassignedDictationAudios)
+    .set({ contentEncrypted: null, segmentsEncrypted: null, purgedAt: now })
+    .where(and(lt(unassignedDictationAudios.expiresAt, now), isNotNull(unassignedDictationAudios.contentEncrypted)))
+    .returning({ id: unassignedDictationAudios.id, organizationId: unassignedDictationAudios.organizationId, studyId: unassignedDictationAudios.studyId })
+}
+
+/** Una grabación sin sujeto, sin contenido (D24, punto 3). */
+export interface UnassignedAudioMeta {
+  id: string
+  studyId: string
+  evolutionId: string
+  take: number
+  mime: string
+  durationSec: number
+  /** Quién la grabó. */
+  createdBy: string
+  createdAt: Date
+  expiresAt: Date
+  purgedAt: Date | null
+  /** Cuándo se retiró del sujeto. */
+  declaredAt: Date
+}
+
+const UNASSIGNED_META = {
+  id: unassignedDictationAudios.id,
+  studyId: unassignedDictationAudios.studyId,
+  evolutionId: unassignedDictationAudios.evolutionId,
+  take: unassignedDictationAudios.take,
+  mime: unassignedDictationAudios.mime,
+  durationSec: unassignedDictationAudios.durationSec,
+  createdBy: unassignedDictationAudios.createdBy,
+  createdAt: unassignedDictationAudios.createdAt,
+  expiresAt: unassignedDictationAudios.expiresAt,
+  purgedAt: unassignedDictationAudios.purgedAt,
+  declaredAt: unassignedDictationAudios.declaredAt,
+}
+
+/** Tope de la lista: una persona no acumula tantas, y la respuesta no crece sin límite. */
+export const UNASSIGNED_AUDIO_LIST_MAX = 200
+
+/** Las grabaciones sin sujeto que grabó esta persona en esta organización, las más recientes primero. Sin contenido. */
+export async function listUnassignedAudiosByAuthor(params: { orgId: string; userId: string }): Promise<UnassignedAudioMeta[]> {
+  return db
+    .select(UNASSIGNED_META)
+    .from(unassignedDictationAudios)
+    .where(and(eq(unassignedDictationAudios.organizationId, params.orgId), eq(unassignedDictationAudios.createdBy, params.userId)))
+    .orderBy(desc(unassignedDictationAudios.declaredAt))
+    .limit(UNASSIGNED_AUDIO_LIST_MAX)
+}
+
+/**
+ * Las grabaciones sin sujeto de la organización, las más recientes primero. Sin contenido. Para
+ * quien coordina; a qué estudios entra lo filtra la ruta.
+ */
+export async function listUnassignedAudiosOfOrg(params: { orgId: string }): Promise<UnassignedAudioMeta[]> {
+  return db
+    .select(UNASSIGNED_META)
+    .from(unassignedDictationAudios)
+    .where(eq(unassignedDictationAudios.organizationId, params.orgId))
+    .orderBy(desc(unassignedDictationAudios.declaredAt))
+    .limit(UNASSIGNED_AUDIO_LIST_MAX)
+}
+
+/** Una grabación sin sujeto de esta organización, sin contenido. Quién puede escucharla lo decide la ruta. */
+export async function findUnassignedAudio(params: { orgId: string; id: string }): Promise<UnassignedAudioMeta | null> {
+  const [row] = await db
+    .select(UNASSIGNED_META)
+    .from(unassignedDictationAudios)
+    .where(and(eq(unassignedDictationAudios.id, params.id), eq(unassignedDictationAudios.organizationId, params.orgId)))
+    .limit(1)
+  return row ?? null
+}
+
+/** El contenido descifrado, o `null` si ya se borró. Se llama después de decidir que se entrega. */
+export async function loadUnassignedAudioBytes(params: { orgId: string; id: string }): Promise<Uint8Array | null> {
+  const [row] = await db
+    .select({ contentEncrypted: unassignedDictationAudios.contentEncrypted })
+    .from(unassignedDictationAudios)
+    .where(and(eq(unassignedDictationAudios.id, params.id), eq(unassignedDictationAudios.organizationId, params.orgId)))
+    .limit(1)
+  if (!row || row.contentEncrypted === null) return null
+  return new Uint8Array(Buffer.from(decryptClinicalContent(row.contentEncrypted), 'base64'))
 }

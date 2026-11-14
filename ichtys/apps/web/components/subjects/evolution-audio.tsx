@@ -6,7 +6,7 @@
  * cuando alguien toca «Escuchar», y cada pedido queda registrado.
  */
 import { useEffect, useRef, useState } from 'react'
-import { audioLabel, missingTakes, missingTakesNotice } from '../../lib/dictation/takes'
+import { audioLabel, evolutionTakesNotice } from '../../lib/dictation/takes'
 import { recordingClock } from './record-button'
 
 export interface EvolutionAudioInfo {
@@ -16,6 +16,8 @@ export interface EvolutionAudioInfo {
   durationSec: number
   expiresAt: string
   available: boolean
+  /** Se retiró de este sujeto y pasó a las grabaciones sin sujeto (D24). No es una vencida. */
+  withdrawn?: boolean
 }
 
 export function EvolutionAudio({ studyId, subjectId, audio, several = false }: { studyId: string; subjectId: string; audio: EvolutionAudioInfo; several?: boolean }) {
@@ -51,6 +53,18 @@ export function EvolutionAudio({ studyId, subjectId, audio, several = false }: {
   const expires = new Date(audio.expiresAt).toLocaleDateString('es-AR')
   // El número es el de la toma dictada (D22): «toma 3» es la tercera parte del texto.
   const label = audioLabel({ take: audio.take, several })
+  if (audio.withdrawn) {
+    return (
+      <p className="mt-3 border-t border-alphi-border pt-2 text-xs text-alphi-muted">
+        {label}. La grabación ({recordingClock(audio.durationSec)}) se retiró de este sujeto y pasó a las grabaciones sin sujeto. Quien la grabó y
+        quien coordina el estudio la encuentran en{' '}
+        <a href="/grabaciones-sin-sujeto" className="font-semibold text-alphi-navy underline underline-offset-2">
+          Grabaciones sin sujeto
+        </a>
+        .
+      </p>
+    )
+  }
   if (!audio.available || state === 'expired') {
     return <p className="mt-3 border-t border-alphi-border pt-2 text-xs text-alphi-muted">{label}. La grabación ({recordingClock(audio.durationSec)}) se borró al vencer el plazo de conservación ({expires}).</p>
   }
@@ -76,16 +90,36 @@ export function EvolutionAudio({ studyId, subjectId, audio, several = false }: {
   )
 }
 
-/** Las grabaciones de una evolución, una por toma, y el aviso si de alguna toma no quedó grabación (D22). */
-export function EvolutionAudios({ studyId, subjectId, audios }: { studyId: string; subjectId: string; audios: EvolutionAudioInfo[] }) {
-  if (audios.length === 0) return null
-  const gaps = missingTakesNotice(missingTakes(audios.map((audio) => audio.take)))
+/**
+ * Las grabaciones de una evolución, una por toma, y el aviso si de alguna toma no quedó grabación
+ * (D22). Con `dictationTakes` el aviso alcanza a la última toma y al caso en que no quedó ninguna.
+ */
+export function EvolutionAudios({
+  studyId,
+  subjectId,
+  audios,
+  dictationTakes = null,
+  settled = true,
+  listingKnown = true,
+}: {
+  studyId: string
+  subjectId: string
+  audios: EvolutionAudioInfo[]
+  /** Cuántas tomas tuvo el dictado. Vacío: no se dictó, o la evolución es anterior a ese dato. */
+  dictationTakes?: number | null
+  /** Ya no puede haber una grabación de esta evolución subiendo. */
+  settled?: boolean
+  /** El listado de grabaciones se pudo leer. */
+  listingKnown?: boolean
+}) {
+  const notice = evolutionTakesNotice({ stored: audios.map((audio) => audio.take), total: dictationTakes, settled, listingKnown })
+  if (audios.length === 0 && !notice) return null
   return (
     <>
       {audios.map((audio) => (
         <EvolutionAudio key={audio.take} studyId={studyId} subjectId={subjectId} audio={audio} several={audios.length > 1} />
       ))}
-      {gaps ? <p className="mt-2 text-xs text-alphi-muted">{gaps}</p> : null}
+      {notice ? <p className={audios.length === 0 ? 'mt-3 border-t border-alphi-border pt-2 text-xs text-alphi-muted' : 'mt-2 text-xs text-alphi-muted'}>{notice}</p> : null}
     </>
   )
 }

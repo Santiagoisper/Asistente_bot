@@ -85,6 +85,9 @@ export const auditAction = [
   'evolution.audio.store',
   'evolution.audio.listen',
   'evolution.audio.purge',
+  // D24: evolución registrada en el sujeto equivocado. Texto libre en la base: sin migración.
+  'evolution.void',
+  'evolution.audio.withdraw',
   'profile.view',
   'profile.update',
   'profile.proposal.create',

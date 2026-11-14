@@ -63,16 +63,13 @@ vi.mock('@ichtys/db', () => ({
   db: {
     // Una escritura por la conexión suelta queda fuera de la transacción.
     insert: mocks.looseInsert,
-    query: {
-      clinicalEvolutions: {
-        findMany: mocks.dbFindMany,
-      },
-    },
   },
   clinicalEvolutions: {},
-  and: vi.fn(),
-  desc: vi.fn(),
-  eq: vi.fn(),
+}))
+
+// Las evoluciones se leen por el lector único (D24): la ruta no consulta la tabla.
+vi.mock('../../../../../../../../lib/subjects/evolution-reader', () => ({
+  listSubjectEvolutions: mocks.dbFindMany,
 }))
 
 // La escritura y su auditoría van juntas (R3). Acá se simula el envoltorio: corre
@@ -114,8 +111,11 @@ function makeParams(subjectId = mocks.SUBJECT_ID) {
   return { params: Promise.resolve({ id: mocks.STUDY_ID, subjectId }) }
 }
 
-function subjectContext() {
+// Por defecto: modo estricto, con la función de investigar y sin la de coordinar.
+type TestAccess = { mode: string; role: string; functions: string[] }
+function subjectContext(access: Partial<TestAccess> = {}) {
   return {
+    access: { mode: 'enforced', role: 'principal_investigator', functions: ['investigator'], ...access },
     orgId: mocks.ORG_ID,
     userId: mocks.USER_ID,
     study: { id: mocks.STUDY_ID },
@@ -492,8 +492,10 @@ describe('Autoría clínica — escribir una evolución pide más que leerla', (
   })
 
   it('si el validador rechaza por la capacidad, no se escribe nada y la respuesta es 403', async () => {
-    mocks.validateSubjectAccess.mockRejectedValue(new mocks.AccessError('Forbidden', 403))
-    mocks.handleApiError.mockReturnValue(new Response('Forbidden', { status: 403 }))
+    // «Una vez»: una respuesta fija sobrevive a `clearAllMocks` y dejaba a todas las pruebas
+    // siguientes del archivo respondiendo 403 ante cualquier error. El manejador simulado ya
+    // traduce el 403 del validador; no hace falta pisarlo.
+    mocks.validateSubjectAccess.mockRejectedValueOnce(new mocks.AccessError('Forbidden', 403))
 
     const res = await POST(
       new Request('http://localhost/api/evolutions', {
@@ -544,5 +546,251 @@ describe('límite de pedidos — guardar una evolución', () => {
     mocks.validateSubjectAccess.mockRejectedValueOnce(new mocks.AccessError('Unauthorized', 401))
     await POST(request(), makeParams())
     expect(limit.clinicalRateLimit).not.toHaveBeenCalled()
+  })
+})
+
+describe('D22 — cuántas tomas tuvo el dictado queda guardado con la evolución', () => {
+  const SOURCE = { kind: 'dictation', durationSec: 60, model: 'whisper-small', modelRevision: 'rev-abc', corrections: 0, missingBlocks: 0 }
+
+  /** Guarda lo que la ruta manda a insertar. */
+  function captureInsert(): { values: Array<Record<string, unknown>> } {
+    const captured = { values: [] as Array<Record<string, unknown>> }
+    mocks.tx.insert.mockImplementationOnce(() => ({
+      values: (row: Record<string, unknown>) => {
+        captured.values.push(row)
+        return { returning: mocks.dbInsertReturning }
+      },
+    }))
+    return captured
+  }
+
+  function post(body: unknown): Promise<Response> {
+    return POST(
+      new Request('http://localhost/api/evolutions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+      makeParams(),
+    )
+  }
+
+  it('un dictado en tres tomas guarda el tres en la evolución y lo deja en el registro', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbInsertReturning.mockResolvedValueOnce([{ id: mocks.EVOLUTION_ID, visitLabel: null, createdAt: new Date() }])
+    const captured = captureInsert()
+
+    const res = await post({ content: CLINICAL_TEXT, source: { ...SOURCE, takes: 3 } })
+
+    expect(res.status).toBe(201)
+    expect(captured.values).toHaveLength(1)
+    expect(captured.values[0]?.dictationTakes).toBe(3)
+    const auditCall = mocks.writeAuditLog.mock.calls[0]?.[0] as { metadata?: { source?: Record<string, unknown> } }
+    expect(auditCall.metadata?.source?.takes).toBe(3)
+  })
+
+  it('una evolución escrita a mano deja el número vacío', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbInsertReturning.mockResolvedValueOnce([{ id: mocks.EVOLUTION_ID, visitLabel: null, createdAt: new Date() }])
+    const captured = captureInsert()
+
+    const res = await post({ content: CLINICAL_TEXT })
+
+    expect(res.status).toBe(201)
+    expect(captured.values[0]?.dictationTakes).toBeNull()
+  })
+
+  it('un dictado de una pantalla anterior, que no manda las tomas, se guarda y deja el número vacío', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbInsertReturning.mockResolvedValueOnce([{ id: mocks.EVOLUTION_ID, visitLabel: null, createdAt: new Date() }])
+    const captured = captureInsert()
+
+    const res = await post({ content: CLINICAL_TEXT, source: SOURCE })
+
+    expect(res.status).toBe(201)
+    expect(captured.values[0]?.dictationTakes).toBeNull()
+  })
+
+  it.each([0, -1, 1.5, 100, '3'])('rechaza %s como cantidad de tomas y no guarda nada', async (takes) => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+
+    const res = await post({ content: CLINICAL_TEXT, source: { ...SOURCE, takes } })
+
+    expect(res.status).toBe(400)
+    expect(mocks.tx.insert).not.toHaveBeenCalled()
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+  })
+
+  it('GET devuelve las tomas de cada evolución, y vacío donde no se dictó o es anterior', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbFindMany.mockResolvedValueOnce([
+      { id: 'evo-dictada', visitLabel: null, contentEncrypted: 'enc:a', authorUserId: mocks.USER_ID, createdAt: new Date('2026-11-14T12:00:00Z'), dictationTakes: 2 },
+      { id: 'evo-a-mano', visitLabel: null, contentEncrypted: 'enc:b', authorUserId: mocks.USER_ID, createdAt: new Date('2026-11-13T12:00:00Z'), dictationTakes: null },
+    ])
+
+    const res = await GET(new Request('http://localhost/api/evolutions'), makeParams())
+    const body = (await res.json()) as { evolutions: Array<{ id: string; dictationTakes: number | null }> }
+
+    expect(body.evolutions.map((evolution) => [evolution.id, evolution.dictationTakes])).toEqual([
+      ['evo-dictada', 2],
+      ['evo-a-mano', null],
+    ])
+  })
+})
+
+describe('D24 — la historia trae las evoluciones anuladas, con su marca', () => {
+  it('GET pide también las anuladas, acotado al sujeto de la ruta', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbFindMany.mockResolvedValueOnce([])
+
+    await GET(new Request('http://localhost/api/evolutions'), makeParams())
+
+    expect(mocks.dbFindMany).toHaveBeenCalledWith({ orgId: mocks.ORG_ID, studyId: mocks.STUDY_ID, subjectId: mocks.SUBJECT_ID }, 'with-voided')
+  })
+
+  it('una anulada sale con cuándo y por qué, sin decir quién la declaró; una vigente, sin marca', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbFindMany.mockResolvedValueOnce([
+      {
+        id: 'evo-anulada',
+        visitLabel: null,
+        contentEncrypted: 'enc:a',
+        authorUserId: mocks.USER_ID,
+        dictationTakes: 1,
+        createdAt: new Date('2026-11-14T12:00:00Z'),
+        voided: { reason: 'wrong_subject', declaredBy: 'user_que_declaro', declaredAt: new Date('2026-11-14T15:00:00Z') },
+      },
+      { id: 'evo-vigente', visitLabel: null, contentEncrypted: 'enc:b', authorUserId: mocks.USER_ID, dictationTakes: null, createdAt: new Date('2026-11-13T12:00:00Z'), voided: null },
+    ])
+
+    const res = await GET(new Request('http://localhost/api/evolutions'), makeParams())
+    const text = await res.text()
+    const body = JSON.parse(text) as { evolutions: Array<{ id: string; voided: unknown }> }
+
+    expect(body.evolutions.map((evolution) => [evolution.id, evolution.voided])).toEqual([
+      ['evo-anulada', { reason: 'wrong_subject', declaredAt: '2026-11-14T15:00:00.000Z' }],
+      ['evo-vigente', null],
+    ])
+    expect(text).not.toContain('user_que_declaro')
+  })
+})
+
+describe('D24 — quién lee el texto de una evolución anulada', () => {
+  const voided = (authorUserId: string) => ({
+    id: 'evo-anulada',
+    visitLabel: null,
+    contentEncrypted: 'enc:texto de otra persona',
+    authorUserId,
+    dictationTakes: null,
+    createdAt: new Date('2026-11-14T12:00:00Z'),
+    voided: { reason: 'wrong_subject', declaredBy: 'user_x', declaredAt: new Date('2026-11-14T15:00:00Z') },
+  })
+  const current = { id: 'evo-vigente', visitLabel: null, contentEncrypted: 'enc:texto vigente', authorUserId: 'user_otro', dictationTakes: null, createdAt: new Date('2026-11-13T12:00:00Z'), voided: null }
+
+  async function history() {
+    const res = await GET(new Request('http://localhost/api/evolutions'), makeParams())
+    const text = await res.text()
+    return { text, evolutions: (JSON.parse(text) as { evolutions: Array<{ id: string; content: string | null; contentWithheld?: boolean }> }).evolutions }
+  }
+
+  it('quien la escribió lo lee, sin pedir otra capacidad', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbFindMany.mockResolvedValueOnce([voided(mocks.USER_ID), current])
+
+    const { evolutions } = await history()
+
+    expect(evolutions[0]).toMatchObject({ content: 'texto de otra persona' })
+    expect(evolutions[0]).not.toHaveProperty('contentWithheld')
+    expect(mocks.validateSubjectAccess).toHaveBeenCalledTimes(1)
+  })
+
+  it('quien coordina el estudio lo lee, sin volver a pedir el acceso', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext({ functions: ['study_coordinator'] }))
+    mocks.dbFindMany.mockResolvedValueOnce([voided('user_otro'), current])
+
+    const { evolutions } = await history()
+
+    expect(evolutions[0]!.content).toBe('texto de otra persona')
+    expect(mocks.validateSubjectAccess).toHaveBeenCalledTimes(1)
+  })
+
+  it('cualquier otra persona con acceso a la historia ve la marca, y el texto no viaja', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbFindMany.mockResolvedValueOnce([voided('user_otro'), current])
+
+    const { text, evolutions } = await history()
+
+    expect(evolutions[0]).toMatchObject({ id: 'evo-anulada', content: null, contentWithheld: true })
+    expect(text).not.toContain('texto de otra persona')
+    // Lo vigente se sigue leyendo.
+    expect(evolutions[1]).toMatchObject({ content: 'texto vigente' })
+  })
+
+  it('modo abierto: a un investigador que no la escribió el texto no le viaja (antes le llegaba a cualquiera con acceso clínico)', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext({ mode: 'open', functions: [] }))
+    mocks.dbFindMany.mockResolvedValueOnce([voided('user_otro'), current])
+
+    const { text, evolutions } = await history()
+
+    expect(evolutions[0]).toMatchObject({ content: null, contentWithheld: true })
+    expect(text).not.toContain('texto de otra persona')
+  })
+
+  it('modo abierto: la coordinación del centro lo lee', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext({ mode: 'open', role: 'site_coordinator', functions: [] }))
+    mocks.dbFindMany.mockResolvedValueOnce([voided('user_otro'), current])
+    expect((await history()).evolutions[0]!.content).toBe('texto de otra persona')
+  })
+})
+
+describe('D24 — la historia dice en qué evoluciones la persona puede declarar el error desde la pantalla', () => {
+  const row = (id: string, authorUserId: string, voided = false) => ({
+    id,
+    visitLabel: null,
+    contentEncrypted: 'enc:texto',
+    authorUserId,
+    dictationTakes: null,
+    createdAt: new Date('2026-11-14T12:00:00Z'),
+    voided: voided ? { reason: 'wrong_subject', declaredBy: 'user_x', declaredAt: new Date('2026-11-14T15:00:00Z') } : null,
+  })
+
+  async function history() {
+    const res = await GET(new Request('http://localhost/api/evolutions'), makeParams())
+    return (JSON.parse(await res.text()) as { evolutions: Array<{ id: string; canVoid?: boolean }> }).evolutions
+  }
+
+  it('quien coordina el estudio puede también en la de otra persona, en los dos modos; un investigador en modo abierto, no', async () => {
+    const canVoidOther = async (access: Partial<TestAccess>) => {
+      mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext(access))
+      mocks.dbFindMany.mockResolvedValueOnce([row('ajena', 'user_otro'), row('ajena-anulada', 'user_otro', true)])
+      const evolutions = await history()
+      // Una anulada no se vuelve a ofrecer a nadie.
+      expect(evolutions.find((evo) => evo.id === 'ajena-anulada')!.canVoid).toBe(false)
+      return evolutions.find((evo) => evo.id === 'ajena')!.canVoid
+    }
+    expect(await canVoidOther({ functions: ['study_coordinator'] })).toBe(true)
+    expect(await canVoidOther({ mode: 'open', role: 'site_coordinator', functions: [] })).toBe(true)
+    expect(await canVoidOther({ mode: 'open', role: 'principal_investigator', functions: [] })).toBe(false)
+    expect(await canVoidOther({ mode: 'open', role: 'principal_investigator', functions: ['study_coordinator'] })).toBe(false)
+  })
+
+  it('en la propia y vigente, sí; en la de otra persona, no', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbFindMany.mockResolvedValueOnce([row('mia', mocks.USER_ID), row('ajena', 'user_otro')])
+
+    const evolutions = await history()
+
+    expect(evolutions.find((evo) => evo.id === 'mia')!.canVoid).toBe(true)
+    expect(evolutions.find((evo) => evo.id === 'ajena')!.canVoid).toBe(false)
+  })
+
+  it('en una ya anulada, no, aunque sea propia', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbFindMany.mockResolvedValueOnce([row('mia-anulada', mocks.USER_ID, true)])
+
+    expect((await history())[0]!.canVoid).toBe(false)
+  })
+
+  it('decirlo no pide otra comprobación de acceso', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbFindMany.mockResolvedValueOnce([row('mia', mocks.USER_ID), row('ajena', 'user_otro')])
+    await history()
+    expect(mocks.validateSubjectAccess).toHaveBeenCalledTimes(1)
   })
 })

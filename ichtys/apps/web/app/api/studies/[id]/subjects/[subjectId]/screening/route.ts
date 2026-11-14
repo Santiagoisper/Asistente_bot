@@ -5,6 +5,7 @@ import { loadPatientProfileState } from '../../../../../../../lib/subjects/patie
 import { evaluateAndPersistScreening } from '../../../../../../../lib/subjects/screening-service'
 import { PhiConfigError } from '../../../../../../../lib/subjects/phi-fields'
 import { guideVisits } from '../../../../../../../lib/subjects/guide-visits'
+import { profileForResponse } from '../../../../../../../lib/subjects/profile-response'
 
 export const runtime = 'nodejs'
 
@@ -28,7 +29,7 @@ export async function GET(
     if (!specRow) {
       return Response.json({
         subjectCode: subject.subjectCode,
-        profile,
+        profile: profileForResponse(profile),
         assessments: [],
         summary: { pass: 0, fail: 0, unknown: 0 },
         specAvailable: false,
@@ -42,7 +43,7 @@ export async function GET(
     if (!parsedSpec.success) {
       return Response.json({
         subjectCode: subject.subjectCode,
-        profile,
+        profile: profileForResponse(profile),
         assessments: [],
         summary: { pass: 0, fail: 0, unknown: 0 },
         specAvailable: false,
@@ -57,7 +58,7 @@ export async function GET(
     if (profileUnreadable) {
       return Response.json({
         subjectCode: subject.subjectCode,
-        profile,
+        profile: profileForResponse(profile),
         assessments: [],
         summary: { pass: 0, fail: 0, unknown: 0 },
         specAvailable: true,
@@ -73,6 +74,7 @@ export async function GET(
       orgId,
       studyId: study.id,
       subjectId: subject.id,
+      // La evaluación recibe el perfil entero; lo que sale a la pantalla, no.
       profile,
       spec: parsedSpec.data,
       specVersion: specRow.version,
@@ -97,7 +99,7 @@ export async function GET(
 
     return Response.json({
       subjectCode: subject.subjectCode,
-      profile,
+      profile: profileForResponse(profile),
       assessments: evaluation.assessments,
       summary: evaluation.summary,
       specAvailable: true,

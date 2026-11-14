@@ -2,6 +2,7 @@ import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
 import { writeAuditLog } from '../../../../../../../lib/chat/persistence'
 import { loadPatientProfileState } from '../../../../../../../lib/subjects/patient-profile-service'
 import { PhiConfigError } from '../../../../../../../lib/subjects/phi-fields'
+import { profileForResponse } from '../../../../../../../lib/subjects/profile-response'
 
 export const runtime = 'nodejs'
 
@@ -30,7 +31,7 @@ export async function GET(
       resourceId: subject.id,
     })
 
-    return Response.json({ subjectCode: subject.subjectCode, profile, profileUnreadable: unreadable })
+    return Response.json({ subjectCode: subject.subjectCode, profile: profileForResponse(profile), profileUnreadable: unreadable })
   } catch (err) {
     if (err instanceof PhiConfigError) {
       return Response.json({ error: 'phi_encryption_not_configured' }, { status: 503 })
