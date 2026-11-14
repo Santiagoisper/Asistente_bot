@@ -1,7 +1,8 @@
 /**
- * C3 (docs/compliance/REGULATORY-BASELINE.md, R5): el recorrido del sellado de **una**
- * organización, sin base. Comprueba la clave, sella por tandas, respeta un tope de tiempo y
- * arma el registro de cada tanda. Quien toca la base es el depósito (`screening-seal-store.ts`).
+ * C3 (docs/compliance/REGULATORY-BASELINE.md, R5): el recorrido del sellado, sin base.
+ * `runSeal` recorre todas las organizaciones a nombre del operador; `runOrgSeal` hace una:
+ * comprueba la clave, sella por tandas, respeta un tope de tiempo y arma el registro de cada
+ * tanda. Quien toca la base es el depósito (`screening-seal-store.ts`).
  *
  * Se puede repetir: una fila ya sellada no se vuelve a elegir, y lo que no entró en el tope
  * de tiempo queda para el pedido siguiente.
@@ -82,4 +83,71 @@ export async function runOrgSeal(store: SealStore, options: OrgSealOptions): Pro
 
   const foreignEnvelope = await store.countForeign()
   return { status: remaining === 0 && foreignEnvelope === 0 ? 'done' : 'partial', sealed, batches, remaining, foreignEnvelope }
+}
+
+/** Una organización en el resumen del sistema: solo cantidades. */
+export interface SealOverviewRow {
+  organizationId: string
+  rows: number
+  plain: number
+  foreignEnvelope: number
+}
+
+export type SealOutcome =
+  | {
+      status: 'done' | 'partial'
+      /** Organizaciones donde se selló algo en este pedido. */
+      organizations: number
+      sealed: number
+      batches: number
+      remaining: number
+      foreignEnvelope: number
+      /** Organizaciones que se saltearon porque la clave no descifra lo que ya tienen cifrado. */
+      keyMismatch: number
+      /** Organizaciones que se saltearon porque no tienen nada cifrado contra qué comprobar la clave. */
+      keyUnverified: number
+    }
+  | { status: 'no_key' }
+
+export interface SealDeps {
+  overview: () => Promise<SealOverviewRow[]>
+  storeFor: (orgId: string) => SealStore
+  sealOrg?: typeof runOrgSeal
+}
+
+/**
+ * Sella lo anterior al cifrado en **todas** las organizaciones, una por una, a nombre del
+ * operador. Es obligación de quien responde por el sistema, no una opción de cada centro. El
+ * tope de tiempo es uno solo para todo el pedido; una organización cuya clave no se pudo
+ * comprobar se saltea y se informa, sin frenar a las demás.
+ */
+export async function runSeal(deps: SealDeps, options: Omit<OrgSealOptions, 'orgId'>): Promise<SealOutcome> {
+  const now = options.now ?? Date.now
+  const sealOrg = deps.sealOrg ?? runOrgSeal
+  const started = now()
+  let organizations = 0
+  let sealed = 0
+  let batches = 0
+  let keyMismatch = 0
+  let keyUnverified = 0
+
+  for (const org of await deps.overview()) {
+    if (org.plain === 0) continue
+    const left = options.budgetMs - (now() - started)
+    if (left <= 0) break
+    const outcome = await sealOrg(deps.storeFor(org.organizationId), { ...options, orgId: org.organizationId, budgetMs: left })
+    if (outcome.status === 'no_key') return { status: 'no_key' }
+    if (outcome.status === 'key_mismatch') keyMismatch += 1
+    else if (outcome.status === 'key_unverified') keyUnverified += 1
+    else if (outcome.status === 'done' || outcome.status === 'partial') {
+      sealed += outcome.sealed
+      batches += outcome.batches
+      if (outcome.sealed > 0) organizations += 1
+    }
+  }
+
+  const after = await deps.overview()
+  const remaining = after.reduce((total, org) => total + org.plain, 0)
+  const foreignEnvelope = after.reduce((total, org) => total + org.foreignEnvelope, 0)
+  return { status: remaining === 0 && foreignEnvelope === 0 ? 'done' : 'partial', organizations, sealed, batches, remaining, foreignEnvelope, keyMismatch, keyUnverified }
 }

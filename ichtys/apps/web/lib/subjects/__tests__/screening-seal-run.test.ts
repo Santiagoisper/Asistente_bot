@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { PhiConfigError } from '../phi-fields'
 import { ScreeningSealRoundTripError, type RowSealPlan, type ScreeningRowToSeal } from '../screening-seal'
-import { runOrgSeal, type SealStore } from '../screening-seal-run'
+import { runOrgSeal, runSeal, type OrgSealOptions, type OrgSealOutcome, type SealStore } from '../screening-seal-run'
 
 /**
  * C3: el sellado de las evaluaciones de elegibilidad anteriores al cifrado, disparado desde
@@ -119,5 +119,88 @@ describe('runOrgSeal — sellar lo anterior al cifrado, una organización', () =
       throw new ScreeningSealRoundTripError('fila-1', 'summary')
     })
     await expect(runOrgSeal(store, { ...base, ...keyOk })).rejects.toBeInstanceOf(ScreeningSealRoundTripError)
+  })
+})
+
+/**
+ * Sellar lo anterior es obligación de quien responde por el sistema, no una opción de cada
+ * centro (C3): el operador recorre todas las organizaciones, una por una.
+ */
+describe('runSeal — todas las organizaciones, a nombre del operador', () => {
+  const options = { userId: USER, batchSize: 200, budgetMs: 20_000 }
+  const row = (organizationId: string, plain: number, foreignEnvelope = 0) => ({ organizationId, rows: plain + 3, plain, foreignEnvelope })
+
+  function setup(before: ReturnType<typeof row>[], after: ReturnType<typeof row>[], outcomes: Record<string, OrgSealOutcome>) {
+    const overview = vi.fn().mockResolvedValueOnce(before).mockResolvedValueOnce(after)
+    const storeFor = vi.fn((orgId: string) => ({ orgId }) as unknown as SealStore)
+    const sealOrg = vi.fn(async (_store: SealStore, opts: OrgSealOptions): Promise<OrgSealOutcome> => outcomes[opts.orgId]!)
+    return { overview, storeFor, sealOrg }
+  }
+  const sealedOrg = (sealed: number, batches = 1): OrgSealOutcome => ({ status: 'done', sealed, batches, remaining: 0, foreignEnvelope: 0 })
+
+  it('sella cada organización que tiene algo en claro y deja en paz a las que no', async () => {
+    const deps = setup([row('org-a', 5), row('org-b', 0), row('org-c', 9)], [row('org-a', 0), row('org-b', 0), row('org-c', 0)], {
+      'org-a': sealedOrg(5),
+      'org-c': sealedOrg(9, 2),
+    })
+    const outcome = await runSeal(deps, options)
+    expect(outcome).toEqual({ status: 'done', organizations: 2, sealed: 14, batches: 3, remaining: 0, foreignEnvelope: 0, keyMismatch: 0, keyUnverified: 0 })
+    expect(deps.storeFor.mock.calls.map((call) => call[0])).toEqual(['org-a', 'org-c'])
+    expect(deps.sealOrg.mock.calls.map((call) => [call[1].orgId, call[1].userId])).toEqual([
+      ['org-a', USER],
+      ['org-c', USER],
+    ])
+  })
+
+  it('sin nada en claro en ninguna organización no abre ningún depósito', async () => {
+    const deps = setup([row('org-a', 0)], [row('org-a', 0)], {})
+    expect(await runSeal(deps, options)).toEqual({ status: 'done', organizations: 0, sealed: 0, batches: 0, remaining: 0, foreignEnvelope: 0, keyMismatch: 0, keyUnverified: 0 })
+    expect(deps.storeFor).not.toHaveBeenCalled()
+  })
+
+  it('si falta la clave corta en la primera organización', async () => {
+    const deps = setup([row('org-a', 5), row('org-b', 5)], [], { 'org-a': { status: 'no_key' } })
+    expect(await runSeal(deps, options)).toEqual({ status: 'no_key' })
+    expect(deps.sealOrg).toHaveBeenCalledTimes(1)
+  })
+
+  it('una organización cuya clave no se pudo comprobar no frena a las demás, y se informa', async () => {
+    const deps = setup([row('org-a', 5), row('org-b', 4), row('org-c', 2)], [row('org-a', 5), row('org-b', 0), row('org-c', 2)], {
+      'org-a': { status: 'key_mismatch' },
+      'org-b': sealedOrg(4),
+      'org-c': { status: 'key_unverified' },
+    })
+    expect(await runSeal(deps, options)).toEqual({ status: 'partial', organizations: 1, sealed: 4, batches: 1, remaining: 7, foreignEnvelope: 0, keyMismatch: 1, keyUnverified: 1 })
+  })
+
+  it('el tope de tiempo es uno solo para todo el pedido: lo que no entró queda para el siguiente', async () => {
+    let clock = 0
+    const deps = setup([row('org-a', 5), row('org-b', 4)], [row('org-a', 0), row('org-b', 4)], { 'org-a': sealedOrg(5) })
+    deps.sealOrg.mockImplementation(async (_store, opts) => {
+      expect(opts.budgetMs).toBe(20_000)
+      clock += 25_000
+      return sealedOrg(5)
+    })
+    const outcome = await runSeal(deps, { ...options, now: () => clock })
+    expect(outcome).toEqual({ status: 'partial', organizations: 1, sealed: 5, batches: 1, remaining: 4, foreignEnvelope: 0, keyMismatch: 0, keyUnverified: 0 })
+    expect(deps.sealOrg).toHaveBeenCalledTimes(1)
+  })
+
+  it('a la organización siguiente le toca el tiempo que quedó', async () => {
+    let clock = 0
+    const budgets: number[] = []
+    const deps = setup([row('org-a', 5), row('org-b', 4)], [row('org-a', 0), row('org-b', 0)], {})
+    deps.sealOrg.mockImplementation(async (_store, opts) => {
+      budgets.push(opts.budgetMs)
+      clock += 8_000
+      return sealedOrg(1)
+    })
+    await runSeal(deps, { ...options, now: () => clock })
+    expect(budgets).toEqual([20_000, 12_000])
+  })
+
+  it('los sobres de otra versión se informan y dejan el resultado en parcial', async () => {
+    const deps = setup([row('org-a', 0, 2)], [row('org-a', 0, 2)], {})
+    expect(await runSeal(deps, options)).toMatchObject({ status: 'partial', foreignEnvelope: 2, remaining: 0 })
   })
 })
