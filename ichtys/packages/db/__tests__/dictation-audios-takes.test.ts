@@ -38,7 +38,7 @@ describe('dictation_audios — una fila por toma', () => {
 
     it('está en el registro de migraciones, después de la 0018', () => {
       const journal = JSON.parse(readFileSync(join(__dirname, '..', 'migrations', 'meta', '_journal.json'), 'utf8')) as { entries: Array<{ idx: number; tag: string }> }
-      expect(journal.entries.slice(-2).map((entry) => [entry.idx, entry.tag])).toEqual([
+      expect(journal.entries.filter((entry) => entry.idx === 18 || entry.idx === 19).map((entry) => [entry.idx, entry.tag])).toEqual([
         [18, '0018_dictation_audios'],
         [19, '0019_dictation_audio_takes'],
       ])

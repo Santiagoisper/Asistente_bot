@@ -39,10 +39,22 @@ export const dictationAudios = pgTable(
     sha256: text('sha256').notNull(),
     /** Null después del borrado por vencimiento. */
     contentEncrypted: text('content_encrypted'),
+    /**
+     * Los tramos tal como salieron del transcriptor (comienzo, fin y texto), cifrados
+     * (docs/decisions/enlace-frase-audio.md). Vacío en las grabaciones anteriores. Vence con
+     * la grabación: se vacía en el mismo borrado.
+     */
+    segmentsEncrypted: text('segments_encrypted'),
     createdBy: text('created_by').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     purgedAt: timestamp('purged_at', { withTimezone: true }),
+    /**
+     * Cuándo se retiró al depósito de grabaciones sin sujeto (D24). El contenido queda vacío y
+     * la fila no se borra: el depósito cuelga de ella. Distinto de `purgedAt`, que es el
+     * borrado por vencimiento.
+     */
+    withdrawnAt: timestamp('withdrawn_at', { withTimezone: true }),
   },
   (table) => ({
     evolutionTakeIdx: uniqueIndex('dictation_audios_evolution_take_uniq').on(table.evolutionId, table.take),
