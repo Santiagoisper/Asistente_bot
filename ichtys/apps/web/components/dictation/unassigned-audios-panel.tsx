@@ -145,12 +145,24 @@ export function UnassignedAudiosPanel({ variant }: { variant: 'inicio' | 'page' 
       <div>
         {/* En su página el título ya está arriba. */}
         {variant === 'inicio' ? <h2 className="text-sm font-bold uppercase tracking-wide text-alphi-muted">Grabaciones sin sujeto</h2> : null}
-        <p className="mt-1 text-sm text-alphi-navy">
-          Son grabaciones que hiciste y que se retiraron de un sujeto porque la evolución se registró ahí por error. Siguen siendo datos clínicos: están
-          cifradas, cada escucha queda registrada y se borran el mismo día en que se iban a borrar. Alphi no las pasa a otro sujeto: la evolución se
-          escribe o se dicta de nuevo en el sujeto que corresponde.
-        </p>
-        <p className="mt-1 text-xs text-alphi-muted">Por ahora las ve y las escucha solo quien las grabó.</p>
+        {variant === 'inicio' ? (
+          <p className="mt-1 text-sm text-alphi-navy">
+            Son grabaciones que hiciste y que se retiraron de un sujeto porque la evolución se registró ahí por error. Se borran el mismo día en que se
+            iban a borrar.{' '}
+            <a href="/grabaciones-sin-sujeto" className="font-semibold underline underline-offset-2">
+              Qué son y qué hacer con ellas
+            </a>
+          </p>
+        ) : (
+          <>
+            <p className="mt-1 text-sm text-alphi-navy">
+              Son grabaciones que hiciste y que se retiraron de un sujeto porque la evolución se registró ahí por error. Siguen siendo datos clínicos:
+              están cifradas, cada escucha queda registrada y se borran el mismo día en que se iban a borrar. Alphi no las pasa a otro sujeto: la
+              evolución se escribe o se dicta de nuevo en el sujeto que corresponde.
+            </p>
+            <p className="mt-1 text-xs text-alphi-muted">Por ahora las ve y las escucha solo quien las grabó.</p>
+          </>
+        )}
       </div>
       <ul className="space-y-2">
         {audios.map((audio) => (
