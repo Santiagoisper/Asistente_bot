@@ -15,6 +15,8 @@ import { addRecordingTake, clampTakesCount, groupAudiosByEvolution, uploadNotice
 import { criterionStatusLabel } from '../../lib/subjects/screening-labels'
 import { EvolutionAudios, type EvolutionAudioInfo } from './evolution-audio'
 import { EvolutionBody, type EvolutionVoidInfo } from './evolution-body'
+import { VoidedOriginNoticeCard } from './voided-origin-notice'
+import { voidedOriginNotice } from '../../lib/subjects/voided-origin'
 
 interface EvolutionItem {
   id: string
@@ -170,6 +172,8 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const [audios, setAudios] = useState<Record<string, EvolutionAudioInfo[]>>({})
   // El listado de grabaciones se pudo leer. Si no, no se afirma que de una toma no quedó grabación.
   const [audiosKnown, setAudiosKnown] = useState(false)
+  // De qué evoluciones anuladas entró algo al perfil (D24). `null`: no se pudo consultar.
+  const [acceptedFromVoided, setAcceptedFromVoided] = useState<string[] | null>([])
   // Cuándo se leyó la lista: con eso se sabe si una grabación todavía puede estar subiendo.
   const [listedAt, setListedAt] = useState(0)
   // Evoluciones cuyas grabaciones terminó de subir esta misma pantalla: de esas ya se sabe.
@@ -247,6 +251,17 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         }
       } catch {
         setAudios({})
+      }
+      // Solo si hay alguna anulada: de cuáles entró algo al perfil. Si falla, se dice que no se sabe.
+      if (data.evolutions.some((evo) => evo.voided)) {
+        try {
+          const originRes = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/profile/voided-origin`)
+          setAcceptedFromVoided(originRes.ok ? ((await originRes.json()) as { acceptedFrom: string[] }).acceptedFrom : null)
+        } catch {
+          setAcceptedFromVoided(null)
+        }
+      } else {
+        setAcceptedFromVoided([])
       }
       await loadScreening()
     } catch {
@@ -408,6 +423,11 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   }
 
   const pendingProposals = profile?.pendingEvolutionProposals ?? []
+  const voidedOrigin = voidedOriginNotice({
+    labs: profile?.labs ?? [],
+    voided: evolutions.filter((evo) => evo.voided).map((evo) => ({ id: evo.id, createdAt: evo.createdAt })),
+    acceptedFrom: acceptedFromVoided ?? [],
+  })
   const pendingLabs = profile?.pendingLabReview
   const hasProfileData =
     profile &&
@@ -662,6 +682,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
           <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-alphi-muted">
             Perfil extraído
           </h3>
+          <VoidedOriginNoticeCard notice={voidedOrigin} checkFailed={acceptedFromVoided === null} />
           {!hasProfileData ? (
             <p className="text-sm text-alphi-muted">
               Guardá una evolución con datos estructurados (edad, HbA1c, PA, medicación) para ver el perfil.
