@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { parsePatientProfile } from '@ichtys/clinical'
-import { decryptProfileJson, encryptProfileJson } from '../phi-fields'
+import { parsePatientProfile, patientProfileSchema } from '@ichtys/clinical'
+import { decryptProfileJson, decryptStoredProfile, encryptProfileJson } from '../phi-fields'
 
 // Key de test local (64 hex = 32 bytes), mismo formato que exige phi-crypto.
 // No es una credential: sólo existe para este proceso de vitest.
@@ -132,19 +132,17 @@ describe('round-trip del perfil del paciente guardado en formato viejo (ADR-8 M6
     ])
   })
 
-  it('C4: un sampleDate mal formado invalida el perfil, no entra en silencio', () => {
+  it('C4: un sampleDate mal formado hace que el perfil guardado no valide, y dice qué campo es', () => {
     const encrypted = encryptProfileJson({
       ...legacyProfile,
       labs: [{ name: 'HbA1c', value: 8.2, unit: '%', sampleDate: '24/09/2026' }],
     })
-    // parsePatientProfile ya devuelve el perfil vacío ante cualquier dato que
-    // no valida: una fecha que no es YYYY-MM-DD no puede quedar guardada ni
-    // leerse como si nada.
-    expect(parsePatientProfile(decryptProfileJson(encrypted))).toEqual({
-      version: 1,
-      labs: [],
-      medications: [],
-      conditions: [],
-    })
+    // Una fecha que no es YYYY-MM-DD no puede leerse como si nada. Pero un perfil que no se
+    // pudo leer no es un perfil vacío: lo correcto es que no valide (la ficha lo avisa y la
+    // escritura se corta: #147, #151, #152), no que salga vacío como si no hubiera datos.
+    const stored = patientProfileSchema.safeParse(decryptStoredProfile(encrypted))
+    expect(stored.success).toBe(false)
+    if (stored.success) return
+    expect(stored.error.issues.map((issue) => issue.path)).toEqual([['labs', 0, 'sampleDate']])
   })
 })
