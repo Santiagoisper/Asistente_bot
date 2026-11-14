@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => {
       super(message)
     }
   }
-  return { AccessError: MockAccessError, orgContext: vi.fn(), studyAccess: vi.fn(), list: vi.fn() }
+  return { AccessError: MockAccessError, orgContext: vi.fn(), studyAccess: vi.fn(), list: vi.fn(), listOrg: vi.fn() }
 })
 
 vi.mock('@ichtys/auth', () => ({
@@ -21,7 +21,7 @@ vi.mock('@ichtys/auth', () => ({
     err instanceof mocks.AccessError ? new Response('denied', { status: err.status }) : new Response('Internal Server Error', { status: 500 }),
 }))
 vi.mock('../../../../../lib/access/org-context', () => ({ resolveOrgAccessContext: mocks.orgContext }))
-vi.mock('../../../../../lib/dictation/audio-store', () => ({ listUnassignedAudiosByAuthor: mocks.list }))
+vi.mock('../../../../../lib/dictation/audio-store', () => ({ listUnassignedAudiosByAuthor: mocks.list, listUnassignedAudiosOfOrg: mocks.listOrg }))
 
 import { GET } from '../route'
 
@@ -40,6 +40,9 @@ const row = (over: Record<string, unknown> = {}) => ({
   ...over,
 })
 
+// Por defecto: modo estricto, investiga y no coordina.
+const ctx = (access: Record<string, unknown> = {}) => ({ orgId: 'org-1', userId: 'user_me', access: { mode: 'enforced', role: 'principal_investigator', functions: ['investigator'], ...access } })
+
 async function list() {
   const res = await GET()
   return { res, body: res.status === 200 ? ((await res.json()) as { audios: Array<Record<string, unknown>> }) : null }
@@ -49,7 +52,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.useFakeTimers()
   vi.setSystemTime(NOW)
-  mocks.orgContext.mockReset().mockResolvedValue({ orgId: 'org-1', userId: 'user_me' })
+  mocks.orgContext.mockReset().mockResolvedValue(ctx())
+  mocks.listOrg.mockReset().mockResolvedValue([])
   mocks.studyAccess.mockReset().mockImplementation(async (studyId: string) => ({ study: { id: studyId, name: `Estudio ${studyId}` } }))
   mocks.list.mockReset().mockResolvedValue([row()])
 })
@@ -74,6 +78,7 @@ describe('GET — mis grabaciones sin sujeto', () => {
         withdrawnAt: '2026-11-14T15:00:00.000Z',
         expiresAt: '2026-12-10T12:00:00.000Z',
         available: true,
+        own: true,
       },
     ])
   })
@@ -130,3 +135,49 @@ describe('GET — mis grabaciones sin sujeto', () => {
     expect(mocks.list).not.toHaveBeenCalled()
   })
 })
+
+describe('GET — quien coordina ve también las de otras personas, de los estudios a los que entra', () => {
+  const rows = () => [row({ id: 'mia' }), row({ id: 'ajena', createdBy: 'user_otro' }), row({ id: 'ajena-otro-estudio', createdBy: 'user_otro', studyId: 'study-2' })]
+
+  it('modo estricto, con la función de coordinar: pide las de la organización y marca cuáles son suyas', async () => {
+    mocks.orgContext.mockResolvedValue(ctx({ functions: ['study_coordinator'] }))
+    mocks.listOrg.mockResolvedValue(rows())
+    const { body } = await list()
+    expect(mocks.listOrg).toHaveBeenCalledWith({ orgId: 'org-1' })
+    expect(mocks.list).not.toHaveBeenCalled()
+    expect(body!.audios.map((a) => [a.id, a.own])).toEqual([
+      ['mia', true],
+      ['ajena', false],
+      ['ajena-otro-estudio', false],
+    ])
+  })
+
+  it('coordinar no alcanza sin entrar al estudio: las de un estudio al que no pertenece no aparecen', async () => {
+    mocks.orgContext.mockResolvedValue(ctx({ functions: ['study_coordinator'] }))
+    mocks.listOrg.mockResolvedValue(rows())
+    mocks.studyAccess.mockImplementation(async (studyId: string) => {
+      if (studyId === 'study-2') throw new mocks.AccessError('Not Found', 404)
+      return { study: { id: studyId, name: 'Estudio uno' } }
+    })
+    expect((await list()).body!.audios.map((a) => a.id)).toEqual(['mia', 'ajena'])
+  })
+
+  it('modo abierto: la coordinación del centro las ve; un investigador sigue viendo solo las suyas', async () => {
+    mocks.orgContext.mockResolvedValue(ctx({ mode: 'open', role: 'site_coordinator', functions: [] }))
+    mocks.listOrg.mockResolvedValue(rows())
+    expect((await list()).body!.audios).toHaveLength(3)
+
+    mocks.orgContext.mockResolvedValue(ctx({ mode: 'open', role: 'principal_investigator', functions: [] }))
+    mocks.listOrg.mockClear()
+    mocks.list.mockResolvedValue([row({ id: 'mia' })])
+    expect((await list()).body!.audios.map((a) => a.id)).toEqual(['mia'])
+    expect(mocks.listOrg).not.toHaveBeenCalled()
+  })
+
+  it('modo abierto: tener cargada la función de coordinar no alcanza', async () => {
+    mocks.orgContext.mockResolvedValue(ctx({ mode: 'open', role: 'principal_investigator', functions: ['study_coordinator'] }))
+    await list()
+    expect(mocks.listOrg).not.toHaveBeenCalled()
+  })
+})
+

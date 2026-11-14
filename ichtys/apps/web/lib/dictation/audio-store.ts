@@ -214,6 +214,19 @@ export async function listUnassignedAudiosByAuthor(params: { orgId: string; user
     .limit(UNASSIGNED_AUDIO_LIST_MAX)
 }
 
+/**
+ * Las grabaciones sin sujeto de la organización, las más recientes primero. Sin contenido. Para
+ * quien coordina; a qué estudios entra lo filtra la ruta.
+ */
+export async function listUnassignedAudiosOfOrg(params: { orgId: string }): Promise<UnassignedAudioMeta[]> {
+  return db
+    .select(UNASSIGNED_META)
+    .from(unassignedDictationAudios)
+    .where(eq(unassignedDictationAudios.organizationId, params.orgId))
+    .orderBy(desc(unassignedDictationAudios.declaredAt))
+    .limit(UNASSIGNED_AUDIO_LIST_MAX)
+}
+
 /** Una grabación sin sujeto de esta organización, sin contenido. Quién puede escucharla lo decide la ruta. */
 export async function findUnassignedAudio(params: { orgId: string; id: string }): Promise<UnassignedAudioMeta | null> {
   const [row] = await db
