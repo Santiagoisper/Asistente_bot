@@ -66,10 +66,11 @@ export async function GET(
       // Registrada por error en este sujeto: quién no viaja a la pantalla, solo cuándo y por qué.
       voided: row.voided ? { reason: row.voided.reason, declaredAt: row.voided.declaredAt.toISOString() } : null,
       // Si la pantalla le ofrece a esta persona declarar que se registró en el sujeto equivocado.
-      // Por ahora solo a quien la escribió, que es lo que no depende del rol: la coordinación
-      // también puede por la ruta, pero en modo `open` «coordinar» hoy no distingue a nadie, y
-      // qué rol coordina en ese modo es una decisión de Santiago (D24, punto 1). La pantalla es
-      // más estrecha que la ruta a propósito; la que decide sigue siendo la ruta.
+      // Por ahora solo a quien la escribió, que es lo que no depende del rol: en modo `open`
+      // «coordinar» hoy no distingue a nadie, y qué rol coordina en ese modo es una decisión de
+      // Santiago (D24, punto 1). La ruta de anular aplica lo mismo fuera del modo estricto; en
+      // modo estricto deja además a la coordinación, y la pantalla todavía no se lo ofrece.
+      // Decide la ruta, no este campo.
       canVoid: !row.voided && row.authorUserId === userId,
       createdAt: row.createdAt.toISOString(),
     }))
