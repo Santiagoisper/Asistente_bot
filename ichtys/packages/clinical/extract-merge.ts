@@ -196,6 +196,8 @@ export function mergeProfileWithExtraction(
     // Lo que espera revisión humana no se pierde al sumar datos al perfil.
     ...(current.pendingLabReview ? { pendingLabReview: current.pendingLabReview } : {}),
     ...(current.pendingEvolutionProposals ? { pendingEvolutionProposals: current.pendingEvolutionProposals } : {}),
+    // Lo retirado por venir de una evolución anulada (D24) es el rastro de una corrección: sigue.
+    ...(current.retiredFacts ? { retiredFacts: current.retiredFacts } : {}),
     lastUpdatedAt: new Date().toISOString(),
     lastEvolutionId: evolutionId,
   }
