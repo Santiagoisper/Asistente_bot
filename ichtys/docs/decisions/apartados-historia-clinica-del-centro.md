@@ -49,7 +49,8 @@ Cada entrada lleva su registro de auditoría.
 ## Lo que ya se hizo
 
 - El perfil se muestra por bloques, en el orden de las pestañas del centro (PR #184).
-- **Peso, talla, IMC y cintura se muestran como «Antropometría», y frecuencia cardíaca, frecuencia respiratoria, temperatura y saturación como «Signos vitales»**, aunque el perfil los guarde junto a los laboratorios. Se clasifica por el nombre y solo al mostrar (`apps/web/lib/subjects/profile-sections.ts`): lo guardado y lo que lee la elegibilidad no cambian. Los nombres son exactos a propósito: «peso molecular» sigue siendo laboratorio.
+- **Peso, talla, IMC y cintura se muestran como «Antropometría», y frecuencia cardíaca, frecuencia respiratoria, temperatura y saturación como «Signos vitales»**, aunque el perfil los guarde junto a los laboratorios. Se clasifica por el nombre y solo al mostrar (`apps/web/lib/subjects/profile-sections.ts`): lo guardado y lo que lee la elegibilidad no cambian. Los nombres son exactos a propósito: «peso molecular» sigue siendo laboratorio. Una unidad escrita al final del nombre («Peso (kg)») no lo cambia de apartado. Un nombre que no esté en la lista queda en «Laboratorios», como antes: es una imprecisión de pantalla, no una pérdida.
+- El aviso de una evolución anulada y la pantalla de retiro dicen «Laboratorios y mediciones», para no llamar laboratorio a un peso que la ficha muestra como antropometría.
 
 ## Lo que se propone, sin hacer todavía
 
