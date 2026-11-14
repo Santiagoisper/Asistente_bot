@@ -7,7 +7,7 @@
  * Compacta a propósito: tiene que entrar en la pantalla al lado del cuadro de la
  * evolución. En pantalla ancha queda fija mientras se recorre el formulario.
  */
-import { DICTATION_GLOSSARY, DICTATION_GUIDE_RULES, DICTATION_GUIDE_STEPS, type StudyPrompt } from '@ichtys/clinical'
+import { DICTATION_GLOSSARY, DICTATION_GUIDE_RULES, DICTATION_GUIDE_STEPS, type ProtocolVisit, type StudyPrompt } from '@ichtys/clinical'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -56,14 +56,62 @@ function StudyPrompts({ prompts, unapproved }: { prompts: readonly StudyPrompt[]
   )
 }
 
+/** Cuántos procedimientos se ven sin desplegar: la guía tiene que seguir entrando al lado del cuadro. */
+const PROCEDURES_IN_VIEW = 12
+
+/**
+ * Lo que el cronograma del protocolo pide en la visita que la persona escribió (D21).
+ * Es un recordatorio: no se comprueba que cada procedimiento figure en el texto.
+ */
+function VisitProcedures({ visit, unapproved }: { visit: ProtocolVisit; unapproved: boolean }) {
+  const pages = visit.sourcePages ?? []
+  const inView = visit.procedures.slice(0, PROCEDURES_IN_VIEW)
+  const folded = visit.procedures.slice(PROCEDURES_IN_VIEW)
+  return (
+    <Section title="En esta visita, el protocolo pide">
+      <p className="text-xs text-alphi-muted">
+        <span className={said}>{visit.label ? `${visit.name} · ${visit.label}` : visit.name}</span>
+        {pages.length > 0 ? ` (${pages.length > 1 ? 'pp.' : 'p.'} ${pages.join(', ')} del protocolo)` : null}
+      </p>
+      {visit.procedures.length === 0 ? (
+        <p className="text-xs text-alphi-muted">El cronograma extraído no trae procedimientos para esta visita.</p>
+      ) : (
+        <>
+          <ul className="list-disc space-y-0.5 pl-4">
+            {inView.map((procedure, index) => (
+              <li key={`${index}-${procedure}`}>{procedure}</li>
+            ))}
+          </ul>
+          {folded.length > 0 ? (
+            <details>
+              <summary className="cursor-pointer text-xs text-alphi-teal">y {folded.length} más</summary>
+              <ul className="mt-0.5 list-disc space-y-0.5 pl-4">
+                {folded.map((procedure, index) => (
+                  <li key={`${index}-${procedure}`}>{procedure}</li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+          <p className="text-xs text-alphi-muted">Es un recordatorio: el sistema no comprueba que cada uno figure en lo que dictás.</p>
+        </>
+      )}
+      {unapproved ? <p className="text-xs text-alphi-amber">Sale del cronograma de un protocolo que nadie aprobó todavía.</p> : null}
+    </Section>
+  )
+}
+
 interface DictationGuideProps {
   /** Datos que le faltan a este sujeto para los criterios del estudio. Vacío: no se muestra nada. */
   studyPrompts?: readonly StudyPrompt[]
   /** El protocolo extraído todavía no está aprobado: la guía lo dice. */
   unapprovedProtocol?: boolean
+  /** La visita del cronograma del protocolo que coincide con lo que la persona escribió. */
+  visit?: ProtocolVisit | null
+  /** El protocolo extraído trae cronograma de visitas: si no hay visita reconocida, la guía dice dónde escribirla. */
+  visitsAvailable?: boolean
 }
 
-export function DictationGuide({ studyPrompts = [], unapprovedProtocol = false }: DictationGuideProps) {
+export function DictationGuide({ studyPrompts = [], unapprovedProtocol = false, visit = null, visitsAvailable = false }: DictationGuideProps) {
   const { correction, alwaysCheck, nothingToReport } = DICTATION_GUIDE_RULES
   return (
     <aside
@@ -78,6 +126,12 @@ export function DictationGuide({ studyPrompts = [], unapprovedProtocol = false }
 
         <div className="space-y-3 border-t border-alphi-border px-3 py-3">
           {studyPrompts.length > 0 ? <StudyPrompts prompts={studyPrompts} unapproved={unapprovedProtocol} /> : null}
+
+          {visit ? (
+            <VisitProcedures visit={visit} unapproved={unapprovedProtocol} />
+          ) : visitsAvailable ? (
+            <p className="text-xs text-alphi-muted">Escribí qué visita es, debajo del cuadro, y acá aparece lo que el protocolo pide para esa visita.</p>
+          ) : null}
 
           <Section title="Decí el apartado y después el dato">
             <ol className="space-y-1">

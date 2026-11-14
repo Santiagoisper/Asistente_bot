@@ -92,3 +92,63 @@ describe('DictationGuide — lo que pide este estudio', () => {
     expect(titles[0]).toBe('Para este estudio, decí también')
   })
 })
+
+describe('DictationGuide — lo que el cronograma del protocolo pide en esta visita', () => {
+  const visit = {
+    name: 'Visita 3',
+    label: 'Semana 4',
+    procedures: ['Signos vitales', 'Electrocardiograma (ECG)', 'Registro de eventos adversos'],
+    sourcePages: [41, 42],
+  }
+  const text = () => container.textContent ?? ''
+
+  it('sin cronograma en el protocolo no agrega nada', () => {
+    expect(text()).not.toContain('En esta visita')
+    expect(text()).not.toContain('qué visita es')
+  })
+
+  it('muestra la visita, cada procedimiento y la página del protocolo', () => {
+    act(() => root.render(<DictationGuide visit={visit} visitsAvailable />))
+    expect(text()).toContain('En esta visita, el protocolo pide')
+    expect(text()).toContain('Visita 3 · Semana 4')
+    for (const procedure of visit.procedures) expect(text()).toContain(procedure)
+    expect(text()).toContain('pp. 41, 42 del protocolo')
+  })
+
+  it('dice que es un recordatorio: el sistema no comprueba que estén en el texto', () => {
+    act(() => root.render(<DictationGuide visit={visit} visitsAvailable />))
+    expect(text()).toContain('Es un recordatorio: el sistema no comprueba que cada uno figure en lo que dictás.')
+  })
+
+  it('con cronograma pero sin visita reconocida, dice dónde escribirla', () => {
+    act(() => root.render(<DictationGuide visitsAvailable />))
+    expect(text()).not.toContain('En esta visita, el protocolo pide')
+    expect(text()).toContain('Escribí qué visita es, debajo del cuadro, y acá aparece lo que el protocolo pide para esa visita.')
+  })
+
+  it('una visita sin procedimientos en el cronograma lo dice, no muestra una lista vacía', () => {
+    act(() => root.render(<DictationGuide visit={{ ...visit, procedures: [] }} visitsAvailable />))
+    expect(text()).toContain('El cronograma extraído no trae procedimientos para esta visita.')
+  })
+
+  it('una lista larga muestra doce y guarda el resto plegado, sin perder ninguno', () => {
+    const many = Array.from({ length: 15 }, (_, index) => `Procedimiento ${index + 1}`)
+    act(() => root.render(<DictationGuide visit={{ ...visit, procedures: many }} visitsAvailable />))
+    expect(text()).toContain('y 3 más')
+    for (const procedure of many) expect(text()).toContain(procedure)
+  })
+
+  it('avisa cuando el protocolo extraído no está aprobado, y solo entonces', () => {
+    act(() => root.render(<DictationGuide visit={visit} visitsAvailable />))
+    expect(text()).not.toContain('nadie aprobó')
+    act(() => root.render(<DictationGuide visit={visit} visitsAvailable unapprovedProtocol />))
+    expect(text()).toContain('Sale del cronograma de un protocolo que nadie aprobó todavía.')
+  })
+
+  it('va después de lo que falta para los criterios y antes de los apartados', () => {
+    const prompts = studyDictationPrompts([{ criterionNumber: '2.3', status: 'unknown', missing: ['weight-height'] }])
+    act(() => root.render(<DictationGuide studyPrompts={prompts} visit={visit} visitsAvailable />))
+    const titles = [...container.querySelectorAll('h4')].map((title) => title.textContent)
+    expect(titles.slice(0, 3)).toEqual(['Para este estudio, decí también', 'En esta visita, el protocolo pide', 'Decí el apartado y después el dato'])
+  })
+})
