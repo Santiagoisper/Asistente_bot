@@ -1,5 +1,6 @@
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
 import { confirmLabOcrReview, LabReviewError } from '../../../../../../../../lib/subjects/lab-review-service'
+import { profileWriteErrorResponse } from '../../../../../../../../lib/subjects/profile-write-errors'
 import { PhiConfigError } from '../../../../../../../../lib/subjects/phi-fields'
 import { labOcrConfirmSchema } from '../../../../../../../../lib/subjects/schemas'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../../../lib/api/body-limit'
@@ -65,6 +66,8 @@ export async function POST(
       profile,
     })
   } catch (err) {
+    const profileError = profileWriteErrorResponse(err)
+    if (profileError) return profileError
     if (err instanceof LabReviewError) {
       return Response.json({ error: err.code }, { status: 409 })
     }

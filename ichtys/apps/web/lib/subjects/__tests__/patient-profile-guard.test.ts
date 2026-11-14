@@ -64,7 +64,7 @@ vi.mock('../profile-version', () => ({
 
 import { type PatientProfile } from '@ichtys/clinical'
 import { decryptProfileJson, encryptClinicalContent, encryptProfileJson } from '../phi-fields'
-import { ProfileInvalidError, ProfileUnreadableError, updatePatientProfile } from '../patient-profile-service'
+import { loadPatientProfile, loadPatientProfileState, ProfileInvalidError, ProfileUnreadableError, updatePatientProfile } from '../patient-profile-service'
 
 const scope = { orgId: 'org-1', studyId: 'study-1', subjectId: 'subject-1' }
 const audit = (next: PatientProfile) => ({ action: 'profile.update' as const, orgId: 'org-1', studyId: 'study-1', userId: 'user_1', resourceType: 'subject', resourceId: 'subject-1', metadata: { source: 'test', labCount: next.labs.length } })
@@ -164,3 +164,39 @@ describe('perfil del sujeto — lo que se va a guardar tiene que ser un perfil v
     expect(store.audits).toEqual([expect.objectContaining({ action: 'profile.update', metadata: { source: 'test', labCount: 2 } })])
   })
 })
+
+describe('leer un perfil guardado que no valida: se dice, no se muestra como vacío', () => {
+  it('un perfil válido se lee entero y no se marca', async () => {
+    storeJson({ version: 1, labs: [{ name: 'HbA1c', value: 7.4, unit: '%' }], medications: [], conditions: [] })
+    const state = await loadPatientProfileState(scope)
+    expect(state.unreadable).toBe(false)
+    expect(state.profile.labs).toEqual([{ name: 'HbA1c', value: 7.4, unit: '%' }])
+  })
+
+  it('un sujeto sin fila de perfil, o con el perfil recién creado, no está dañado', async () => {
+    store.row = null
+    expect(await loadPatientProfileState(scope)).toMatchObject({ unreadable: false, profile: { labs: [], medications: [], conditions: [] } })
+    storeJson({})
+    expect((await loadPatientProfileState(scope)).unreadable).toBe(false)
+  })
+
+  it.each([
+    ['un dato mal formado', damaged],
+    ['una versión que este código no conoce', { version: 2, labs: [], medications: [], conditions: [] }],
+    ['algo que no es un objeto', ['no', 'es', 'un', 'perfil']],
+  ])('%s: queda marcado como ilegible y no devuelve ningún dato de lo guardado', async (_name, stored) => {
+    storeJson(stored)
+    const state = await loadPatientProfileState(scope)
+    expect(state.unreadable).toBe(true)
+    expect(state.profile).toEqual({ version: 1, labs: [], medications: [], conditions: [] })
+    // Leer no escribe ni registra nada, y la fila queda como estaba.
+    expect(store.writes).toBe(0)
+    expect(store.audits).toEqual([])
+  })
+
+  it('la lectura de siempre sigue devolviendo solo el perfil', async () => {
+    storeJson(damaged)
+    expect(await loadPatientProfile(scope)).toEqual({ version: 1, labs: [], medications: [], conditions: [] })
+  })
+})
+

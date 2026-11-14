@@ -86,7 +86,7 @@ vi.mock('../../../../../../../../lib/chat/persistence', () => ({
 }))
 
 vi.mock('../../../../../../../../lib/subjects/patient-profile-service', () => ({
-  loadPatientProfile: mocks.loadPatientProfile,
+  loadPatientProfileState: mocks.loadPatientProfile,
 }))
 
 vi.mock('../../../../../../../../lib/subjects/screening-service', () => ({
@@ -170,7 +170,7 @@ describe('OQ-SCR02 — screening cross-org', () => {
 describe('OQ-SCR03 — sin spec en DB', () => {
   it('GET devuelve specAvailable false y assessments vacíos', async () => {
     mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
-    mocks.loadPatientProfile.mockResolvedValueOnce(mocks.mockProfile)
+    mocks.loadPatientProfile.mockResolvedValueOnce({ profile: mocks.mockProfile, unreadable: false })
     mocks.getLatestStudySpec.mockResolvedValueOnce(null)
 
     const res = await GET(new Request('http://localhost/api/screening'), makeParams())
@@ -191,7 +191,7 @@ describe('OQ-SCR03 — sin spec en DB', () => {
 describe('OQ-SCR04 — con spec mock', () => {
   it('GET devuelve specAvailable true y assessments del service', async () => {
     mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
-    mocks.loadPatientProfile.mockResolvedValueOnce(mocks.mockProfile)
+    mocks.loadPatientProfile.mockResolvedValueOnce({ profile: mocks.mockProfile, unreadable: false })
     mocks.getLatestStudySpec.mockResolvedValueOnce({
       version: 1,
       status: 'approved',
@@ -219,7 +219,7 @@ describe('OQ-SCR04 — con spec mock', () => {
 describe('OQ-SCR05 — audit screening.view sin PHI', () => {
   it('metadata solo pass/fail/unknown/snapshotId y si se guardó una instantánea', async () => {
     mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
-    mocks.loadPatientProfile.mockResolvedValueOnce(mocks.mockProfile)
+    mocks.loadPatientProfile.mockResolvedValueOnce({ profile: mocks.mockProfile, unreadable: false })
     mocks.getLatestStudySpec.mockResolvedValueOnce({
       version: 1,
       status: 'approved',
@@ -258,7 +258,7 @@ describe('OQ-SCR05 — audit screening.view sin PHI', () => {
 describe('OQ-SCR06 — screening determinista (no LLM)', () => {
   it('usa evaluateAndPersistScreening (rule engine), no generación LLM', async () => {
     mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
-    mocks.loadPatientProfile.mockResolvedValueOnce(mocks.mockProfile)
+    mocks.loadPatientProfile.mockResolvedValueOnce({ profile: mocks.mockProfile, unreadable: false })
     mocks.getLatestStudySpec.mockResolvedValueOnce({
       version: 1,
       status: 'approved',
@@ -292,3 +292,33 @@ describe('S4 — screening compara el estudio de la URL', () => {
     expect(mocks.validateSubjectAccess).toHaveBeenCalledWith(mocks.SUBJECT_ID, otherStudyId)
   })
 })
+
+describe('perfil guardado que no se pudo leer', () => {
+  it('lo dice, no evalúa la elegibilidad y no guarda ninguna instantánea', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.loadPatientProfile.mockResolvedValueOnce({ profile: { version: 1, labs: [], medications: [], conditions: [] }, unreadable: true })
+    mocks.getLatestStudySpec.mockResolvedValueOnce({ version: 1, status: 'approved', documentVersionId: 'doc-v1', spec: VALID_SPEC })
+
+    const res = await GET(new Request('http://localhost/api/screening'), makeParams())
+    const body = (await res.json()) as { profileUnreadable: boolean; assessments: unknown[]; summary: unknown; specAvailable: boolean }
+
+    expect(res.status).toBe(200)
+    expect(body.profileUnreadable).toBe(true)
+    expect(body.assessments).toEqual([])
+    expect(body.summary).toEqual({ pass: 0, fail: 0, unknown: 0 })
+    expect(body.specAvailable).toBe(true)
+    // Evaluar un perfil vacío dejaría guardada una evaluación falsa, con todo «a revisar».
+    expect(mocks.evaluateAndPersistScreening).not.toHaveBeenCalled()
+  })
+
+  it('un perfil legible responde profileUnreadable en falso', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.loadPatientProfile.mockResolvedValueOnce({ profile: mocks.mockProfile, unreadable: false })
+    mocks.getLatestStudySpec.mockResolvedValueOnce({ version: 1, status: 'approved', documentVersionId: 'doc-v1', spec: VALID_SPEC })
+    mocks.evaluateAndPersistScreening.mockResolvedValueOnce(mocks.mockEvaluation)
+
+    const res = await GET(new Request('http://localhost/api/screening'), makeParams())
+    expect(((await res.json()) as { profileUnreadable: boolean }).profileUnreadable).toBe(false)
+  })
+})
+

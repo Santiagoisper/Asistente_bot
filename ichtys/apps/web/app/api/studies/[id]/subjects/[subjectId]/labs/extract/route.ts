@@ -1,5 +1,6 @@
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
 import { LabReviewError, proposeLabOcrReview } from '../../../../../../../../lib/subjects/lab-review-service'
+import { profileWriteErrorResponse } from '../../../../../../../../lib/subjects/profile-write-errors'
 import { PhiConfigError } from '../../../../../../../../lib/subjects/phi-fields'
 import { labOcrExtractSchema } from '../../../../../../../../lib/subjects/schemas'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../../../lib/api/body-limit'
@@ -66,6 +67,8 @@ export async function POST(
       labsInProfile: result.profile.labs,
     })
   } catch (err) {
+    const profileError = profileWriteErrorResponse(err)
+    if (profileError) return profileError
     if (err instanceof LabReviewError && err.code === 'no_labs_extracted') {
       return Response.json({ error: 'no_labs_extracted' }, { status: 422 })
     }

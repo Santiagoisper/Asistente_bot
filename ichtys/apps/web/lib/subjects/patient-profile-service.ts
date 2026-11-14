@@ -15,7 +15,7 @@ import { insertAuditLog } from '../audit/audited-write'
 import type { AuditLogParams } from '../chat/persistence'
 import { labReviewMarker } from './lab-review-marker'
 import { llmFactsSchema, normalizeLlmFacts } from './llm-facts'
-import { decryptProfileJson, decryptStoredProfile, encryptProfileJson } from './phi-fields'
+import { decryptStoredProfile, encryptProfileJson } from './phi-fields'
 import { nextVersion, whereProfileUnchanged, type ProfileScope } from './profile-version'
 
 // El esquema vive en `llm-facts.ts`; se reexporta porque hay pruebas que miden su tamaño (A7).
@@ -95,11 +95,17 @@ Medicaciones: nombre genérico, dosis y frecuencia si aparecen.`,
   }
 }
 
-export async function loadPatientProfile(params: {
+/**
+ * El perfil del sujeto y si lo guardado se pudo leer. `unreadable` usa la misma prueba que
+ * la guarda de escritura: si lo guardado no valida (un dato mal formado, una versión que
+ * este código no conoce, algo que no es un objeto), el perfil devuelto es uno vacío y la
+ * marca lo dice. Sin la marca, la pantalla mostraba ese vacío como si no hubiera datos.
+ */
+export async function loadPatientProfileState(params: {
   orgId: string
   studyId: string
   subjectId: string
-}): Promise<PatientProfile> {
+}): Promise<{ profile: PatientProfile; unreadable: boolean }> {
   const row = await db.query.patientProfiles.findFirst({
     where: and(
       eq(patientProfiles.organizationId, params.orgId),
@@ -108,8 +114,13 @@ export async function loadPatientProfile(params: {
     ),
   })
 
-  if (!row) return parsePatientProfile({})
-  return parsePatientProfile(decryptProfileJson(row.profileEncrypted))
+  if (!row) return { profile: parsePatientProfile({}), unreadable: false }
+  const stored = patientProfileSchema.safeParse(decryptStoredProfile(row.profileEncrypted))
+  return stored.success ? { profile: stored.data, unreadable: false } : { profile: parsePatientProfile({}), unreadable: true }
+}
+
+export async function loadPatientProfile(params: { orgId: string; studyId: string; subjectId: string }): Promise<PatientProfile> {
+  return (await loadPatientProfileState(params)).profile
 }
 
 /** Otra persona estuvo escribiendo el mismo perfil y no se pudo aplicar el cambio. */
