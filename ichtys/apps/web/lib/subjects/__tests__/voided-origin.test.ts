@@ -122,6 +122,24 @@ describe('voidedOriginLines — lo que se le dice a la persona', () => {
     expect(voidedOriginTitle({ ...onlyOld, labNames: ['TSH'] })).toBe(VOIDED_ORIGIN_TITLE)
   })
 
+  /**
+   * Aceptar una propuesta también pisa la edad y la presión arterial del perfil con las de la
+   * evolución (`mergeProfileWithExtraction`), y esas tampoco guardan origen. Con una anulada,
+   * pueden ser de otra persona; la edad decide criterios de inclusión.
+   */
+  it('nombra la edad y la presión arterial junto con medicaciones y condiciones: también pudieron venir de esa evolución', () => {
+    const text = voidedOriginLines(accepted).join(' ')
+    expect(text).toContain('La edad, la presión arterial, las medicaciones y las condiciones no guardan de qué evolución vinieron')
+    const old = voidedOriginLines({ labNames: [], evolutionIds: [OLD], acceptedProposal: false, beforeLogging: true }).join(' ')
+    expect(old).toContain('puede haber dejado edad, presión arterial, medicaciones o condiciones')
+  })
+
+  it('dice que el valor anterior no quedó guardado: corregir es volver al documento fuente, no deshacer', () => {
+    const lines = voidedOriginLines(accepted)
+    expect(lines.find((line) => line.startsWith('Laboratorios'))).toContain('El valor anterior de cada uno no quedó guardado')
+    expect(lines.join(' ')).toContain('El valor anterior de la edad y de la presión arterial no quedó guardado')
+  })
+
   it('dice a quién avisar', () => {
     expect(voidedOriginLines(accepted).join(' ')).toContain('Avisá a quien coordina el estudio')
   })
