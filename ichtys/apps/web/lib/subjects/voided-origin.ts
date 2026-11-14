@@ -110,9 +110,9 @@ export function voidedOriginLines(notice: VoidedOriginNotice): string[] {
   // de ese origen en el perfil, así que algo entró.
   const stated = notice.acceptedProposal || !notice.beforeLogging
   return [
-    ...(notice.labNames.length > 0 ? [`Laboratorios que vinieron de esa evolución: ${notice.labNames.join(', ')}.`] : []),
+    ...(notice.labNames.length > 0 ? [`Laboratorios que vinieron de esa evolución: ${notice.labNames.join(', ')}. El valor anterior de cada uno no quedó guardado.`] : []),
     ...(stated
-      ? ['La edad, la presión arterial, las medicaciones y las condiciones no guardan de qué evolución vinieron: pueden ser de esa evolución, y acá no se puede saber cuáles.']
+      ? ['La edad, la presión arterial, las medicaciones y las condiciones no guardan de qué evolución vinieron: pueden ser de esa evolución, y acá no se puede saber cuáles. El valor anterior de la edad y de la presión arterial no quedó guardado.']
       : []),
     ...(notice.beforeLogging
       ? ['Hay una evolución anulada anterior a que el sistema registrara qué entraba al perfil: puede haber dejado edad, presión arterial, medicaciones o condiciones, y no se puede comprobar.']

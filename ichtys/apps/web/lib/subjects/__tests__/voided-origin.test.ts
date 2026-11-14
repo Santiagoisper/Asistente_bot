@@ -134,6 +134,12 @@ describe('voidedOriginLines — lo que se le dice a la persona', () => {
     expect(old).toContain('puede haber dejado edad, presión arterial, medicaciones o condiciones')
   })
 
+  it('dice que el valor anterior no quedó guardado: corregir es volver al documento fuente, no deshacer', () => {
+    const lines = voidedOriginLines(accepted)
+    expect(lines.find((line) => line.startsWith('Laboratorios'))).toContain('El valor anterior de cada uno no quedó guardado')
+    expect(lines.join(' ')).toContain('El valor anterior de la edad y de la presión arterial no quedó guardado')
+  })
+
   it('dice a quién avisar', () => {
     expect(voidedOriginLines(accepted).join(' ')).toContain('Avisá a quien coordina el estudio')
   })
