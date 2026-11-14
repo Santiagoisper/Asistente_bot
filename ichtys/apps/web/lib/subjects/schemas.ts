@@ -43,6 +43,20 @@ export const evolutionSourceSchema = z
   .strict()
 export type EvolutionSource = z.infer<typeof evolutionSourceSchema>
 
+/**
+ * Lo que manda quien declara que una evolución se registró en el sujeto equivocado (D24). El
+ * código del sujeto es el que la persona confirmó en pantalla, como en D23: el servidor lo
+ * compara con el sujeto de la ruta. Anular en el sujeto equivocado sería el mismo error dos
+ * veces. El motivo es una lista cerrada; se amplía acá y en `evolutionVoidReasons`, con su decisión.
+ */
+export const voidEvolutionInput = z
+  .object({
+    reason: z.enum(['wrong_subject']),
+    confirmedSubjectCode: z.string().trim().min(1).max(64),
+    note: z.string().trim().max(500).optional(),
+  })
+  .strict()
+
 export const createEvolutionSchema = z
   .object({
     content: z.string().min(1).max(50000),

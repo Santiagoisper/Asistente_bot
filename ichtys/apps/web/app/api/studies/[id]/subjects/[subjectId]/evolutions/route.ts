@@ -1,4 +1,4 @@
-import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
+import { AccessError, validateSubjectAccess, handleApiError } from '@ichtys/auth'
 import { clinicalEvolutions } from '@ichtys/db'
 import { auditedWrite } from '../../../../../../../lib/audit/audited-write'
 import { writeAuditLog } from '../../../../../../../lib/chat/persistence'
@@ -33,10 +33,33 @@ export async function GET(
     // La historia muestra también las anuladas, con su marca: una corrección no tapa lo escrito (D24).
     const rows = await listSubjectEvolutions({ orgId, studyId: study.id, subjectId: subject.id }, 'with-voided')
 
+    // El texto de una evolución anulada habla de otra persona (D24, pregunta 2, que sigue
+    // abierta para Calidad). Mientras no se decida más amplio, viaja solo a quien la escribió y
+    // a quien coordina el estudio. Se decide acá, en la ruta: lo que no corresponde no sale.
+    let coordinates: boolean | null = null
+    const canReadVoided = async (authorUserId: string): Promise<boolean> => {
+      if (authorUserId === userId) return true
+      if (coordinates === null) {
+        try {
+          await validateSubjectAccess(subjectId, routeStudyId, { require: 'access.manage_study' })
+          coordinates = true
+        } catch (err) {
+          if (!(err instanceof AccessError) || err.status !== 403) throw err
+          coordinates = false
+        }
+      }
+      return coordinates
+    }
+    const withheld = new Set<string>()
+    for (const row of rows) {
+      if (row.voided && !(await canReadVoided(row.authorUserId))) withheld.add(row.id)
+    }
+
     const evolutions = rows.map((row) => ({
       id: row.id,
       visitLabel: row.visitLabel,
-      content: decryptClinicalContent(row.contentEncrypted),
+      content: withheld.has(row.id) ? null : decryptClinicalContent(row.contentEncrypted),
+      ...(withheld.has(row.id) ? { contentWithheld: true } : {}),
       authorUserId: row.authorUserId,
       // Cuántas tomas tuvo el dictado (D22). Vacío si no se dictó o es anterior a la columna.
       dictationTakes: row.dictationTakes ?? null,

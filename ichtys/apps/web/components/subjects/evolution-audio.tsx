@@ -16,6 +16,8 @@ export interface EvolutionAudioInfo {
   durationSec: number
   expiresAt: string
   available: boolean
+  /** Se retiró de este sujeto y pasó a las grabaciones sin sujeto (D24). No es una vencida. */
+  withdrawn?: boolean
 }
 
 export function EvolutionAudio({ studyId, subjectId, audio, several = false }: { studyId: string; subjectId: string; audio: EvolutionAudioInfo; several?: boolean }) {
@@ -51,6 +53,13 @@ export function EvolutionAudio({ studyId, subjectId, audio, several = false }: {
   const expires = new Date(audio.expiresAt).toLocaleDateString('es-AR')
   // El número es el de la toma dictada (D22): «toma 3» es la tercera parte del texto.
   const label = audioLabel({ take: audio.take, several })
+  if (audio.withdrawn) {
+    return (
+      <p className="mt-3 border-t border-alphi-border pt-2 text-xs text-alphi-muted">
+        {label}. La grabación ({recordingClock(audio.durationSec)}) se retiró de este sujeto y pasó a las grabaciones sin sujeto.
+      </p>
+    )
+  }
   if (!audio.available || state === 'expired') {
     return <p className="mt-3 border-t border-alphi-border pt-2 text-xs text-alphi-muted">{label}. La grabación ({recordingClock(audio.durationSec)}) se borró al vencer el plazo de conservación ({expires}).</p>
   }
