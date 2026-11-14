@@ -1,11 +1,12 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 
 /**
- * Perfil guardado que ni siquiera llega a ser un objeto para validar: no descifra, no tiene
- * el formato del cifrado o, descifrado, no es JSON. Antes eso era un error 500 sin aviso.
- * Tiene que tratarse igual que un perfil que no valida: al leer, vacío con la marca; al
- * escribir, no se toca la fila. Lo que es del entorno (clave ausente o mal formada) no es un
- * problema de la fila y sigue saliendo como error.
+ * Perfil guardado que ni siquiera llega a ser un objeto para validar: no tiene el formato del
+ * cifrado o, descifrado, no es JSON. Antes eso era un error 500 sin aviso. Tiene que tratarse
+ * igual que un perfil que no valida: al leer, vacío con la marca; al escribir, no se toca la
+ * fila. Lo que es del entorno no es un problema de la fila y sigue saliendo como error: clave
+ * ausente, clave mal formada, y también un texto que no descifra, porque con la clave correcta
+ * eso casi no pasa y con la clave equivocada pasa en todas las filas a la vez.
  */
 const store = vi.hoisted(() => ({ row: null as null | { profileEncrypted: string; updatedAt: Date } }))
 
@@ -41,7 +42,6 @@ const setRow = (profileEncrypted: string) => {
 const CLINICAL_TEXT = 'HbA1c 7,4 % y metformina 850 mg'
 /** Cada caso: cómo queda la fila y qué motivo tiene que decir el registro. */
 const cases = [
-  ['cifrado con otra clave', () => setRow(encryptPhiField(JSON.stringify({ version: 1, conditions: ['Diabetes tipo 2'] }), OTHER_KEY)), 'decryption_failed'],
   ['un texto que no tiene el formato del cifrado', () => setRow(CLINICAL_TEXT), 'invalid_payload'],
   ['descifra, pero no es JSON', () => setRow(encryptClinicalContent(CLINICAL_TEXT)), 'not_json'],
 ] as const
@@ -63,7 +63,7 @@ afterEach(() => {
   logged.mockRestore()
 })
 
-describe('perfil guardado que no se puede descifrar o no es JSON', () => {
+describe('perfil guardado sin el formato del cifrado o que no es JSON', () => {
   it.each(cases)('%s — al leer: perfil vacío con la marca de ilegible, no un error', async (_label, arrange) => {
     arrange()
     const state = await loadPatientProfileState(scope)
@@ -116,6 +116,24 @@ describe('lo que es del entorno no se confunde con una fila rota', () => {
     await expect(loadPatientProfileState(scope)).rejects.toBeInstanceOf(PhiConfigError)
     await expect(updatePatientProfile(scope, keep, audit)).rejects.toBeInstanceOf(PhiConfigError)
     expect(logged).not.toHaveBeenCalled()
+  })
+
+  it('cifrado con otra clave: error de configuración al leer y al escribir, con registro y sin ningún dato', async () => {
+    for (const [operation, run] of [
+      ['read', () => loadPatientProfileState(scope)],
+      ['write', () => updatePatientProfile(scope, keep, audit)],
+    ] as const) {
+      logged.mockClear()
+      setRow(encryptPhiField(JSON.stringify({ version: 1, conditions: ['Diabetes tipo 2'] }), OTHER_KEY))
+      await expect(run()).rejects.toBeInstanceOf(PhiConfigError)
+      expect(logged.mock.calls).toEqual([
+        [
+          '[patient-profile] stored_profile_undecryptable',
+          { code: 'phi_decryption_failed', operation, orgId: 'org-1', studyId: 'study-1', subjectId: 'subject-1' },
+        ],
+      ])
+      expect(JSON.stringify(logged.mock.calls)).not.toContain('Diabetes')
+    }
   })
 
   it('con una clave mal formada: sale el error de configuración, no la marca de ilegible', async () => {
