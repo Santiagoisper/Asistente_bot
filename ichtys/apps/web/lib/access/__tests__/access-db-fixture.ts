@@ -64,6 +64,8 @@ export const fx = {
   memberFunctionRows: [] as Row[],
   membershipRows: [] as Row[],
   evolutionRows: [] as Row[],
+  /** Con qué criterio sobre las anuladas se pidieron los autores de evoluciones (D24). */
+  evolutionAuthorPolicies: [] as string[],
   clerkMembers: [] as ClerkMemberRow[],
   /** Registros de auditoría que llegaron por la transacción (insertAuditLog). */
   audits: [] as AuditCall[],
@@ -82,6 +84,7 @@ export function resetFixture(): void {
   fx.memberFunctionRows = []
   fx.membershipRows = []
   fx.evolutionRows = []
+  fx.evolutionAuthorPolicies = []
   fx.clerkMembers = [
     { role: 'org:admin', publicUserData: { userId: 'user-1', firstName: 'Ana', lastName: 'Admin', identifier: 'ana@centro.test' } },
     { role: 'org:principal_investigator', publicUserData: { userId: 'user-2', firstName: 'Beto', lastName: 'Médico', identifier: 'beto@centro.test' } },
@@ -127,6 +130,20 @@ const TABLE_STORE: Record<string, string> = {
 }
 
 /** Construye el módulo '@ichtys/db' de mentira sobre el real (`importOriginal`). */
+/**
+ * El lector único de evoluciones, sobre `fx.evolutionRows`. Las evoluciones ya no se leen con
+ * una consulta suelta (D24): quien las necesita llama al lector, y el fixture responde por él.
+ */
+export function evolutionReaderMock() {
+  return {
+    listEvolutionAuthors: async (orgId: string, policy: string): Promise<string[]> => {
+      fx.evolutionAuthorPolicies.push(policy)
+      const authors = fx.evolutionRows.filter((row) => row['organizationId'] === orgId).map((row) => row['authorUserId'] as string)
+      return [...new Set(authors)]
+    },
+  }
+}
+
 export function makeDbMock(actual: Record<string, unknown>): Record<string, unknown> {
   // Mapa columna real → nombre de propiedad TS en la fila de prueba.
   const columnKeys = new Map<unknown, string>()

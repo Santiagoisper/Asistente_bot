@@ -16,6 +16,11 @@ vi.mock('drizzle-orm', async (importOriginal) => {
   const operators = await import('../../../../../../lib/access/__tests__/access-operators')
   return { ...((await importOriginal()) as object), ...operators }
 })
+// Los autores de evoluciones salen del lector único (D24), no de una consulta suelta.
+vi.mock('../../../../../../lib/subjects/evolution-reader', async () => {
+  const { evolutionReaderMock } = await import('../../../../../../lib/access/__tests__/access-db-fixture')
+  return evolutionReaderMock()
+})
 vi.mock('@clerk/nextjs/server', async () => {
   const { clerkServerMock } = await import('../../../../../../lib/access/__tests__/access-db-fixture')
   return clerkServerMock()

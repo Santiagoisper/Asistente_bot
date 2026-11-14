@@ -19,6 +19,11 @@ vi.mock('drizzle-orm', async (importOriginal) => {
   const operators = await import('../../../../../lib/access/__tests__/access-operators')
   return { ...((await importOriginal()) as object), ...operators }
 })
+// Los autores de evoluciones salen del lector único (D24), no de una consulta suelta.
+vi.mock('../../../../../lib/subjects/evolution-reader', async () => {
+  const { evolutionReaderMock } = await import('../../../../../lib/access/__tests__/access-db-fixture')
+  return evolutionReaderMock()
+})
 vi.mock('@clerk/nextjs/server', async () => {
   const { clerkServerMock } = await import('../../../../../lib/access/__tests__/access-db-fixture')
   return clerkServerMock()
@@ -113,6 +118,11 @@ describe('GET /api/org/team — contenido', () => {
     fx.evolutionRows = []
     const body = await (await GET()).json()
     expect(body.people.every((p: { authorsWithoutInvestigator: boolean }) => !p.authorsWithoutInvestigator)).toBe(true)
+  })
+
+  it('quién escribió evoluciones se cuenta con las anuladas incluidas: haber escrito es un hecho (D24)', async () => {
+    await GET()
+    expect(fx.evolutionAuthorPolicies).toEqual(['with-voided'])
   })
 
   it('el tope de paginación de Clerk se informa, no se oculta', async () => {
