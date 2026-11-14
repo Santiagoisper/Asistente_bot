@@ -11,7 +11,9 @@ const mocks = vi.hoisted(() => {
       super(code)
     }
   }
-  return { AccessError: MockAccessError, ProfileProposalError: MockProposalError, validateSubjectAccess: vi.fn(), confirmProfileProposal: vi.fn(), rejectProfileProposal: vi.fn() }
+  class MockUnreadableError extends Error {}
+  class MockInvalidError extends Error {}
+  return { AccessError: MockAccessError, ProfileProposalError: MockProposalError, ProfileUnreadableError: MockUnreadableError, ProfileInvalidError: MockInvalidError, validateSubjectAccess: vi.fn(), confirmProfileProposal: vi.fn(), rejectProfileProposal: vi.fn() }
 })
 
 vi.mock('@ichtys/auth', () => ({
@@ -20,6 +22,8 @@ vi.mock('@ichtys/auth', () => ({
 }))
 vi.mock('../../../../../../../../../lib/subjects/patient-profile-service', () => ({
   ProfileProposalError: mocks.ProfileProposalError,
+  ProfileUnreadableError: mocks.ProfileUnreadableError,
+  ProfileInvalidError: mocks.ProfileInvalidError,
   confirmProfileProposal: mocks.confirmProfileProposal,
   rejectProfileProposal: mocks.rejectProfileProposal,
 }))
@@ -70,5 +74,22 @@ describe('propuestas para el perfil — aceptar y descartar', () => {
     const malformed = await reject(req(), ctx('no-es-un-id'))
     expect(malformed.status).toBe(409)
     expect(mocks.rejectProfileProposal).not.toHaveBeenCalled()
+  })
+
+  it('un perfil guardado que no se pudo leer: 422 con código propio, no el 409 de «ya resuelta»', async () => {
+    mocks.confirmProfileProposal.mockRejectedValueOnce(new mocks.ProfileUnreadableError())
+    mocks.rejectProfileProposal.mockRejectedValueOnce(new mocks.ProfileUnreadableError())
+    for (const handler of [confirm, reject]) {
+      const res = await handler(req(), ctx())
+      expect(res.status).toBe(422)
+      expect(await res.json()).toEqual({ error: 'profile_unreadable' })
+    }
+  })
+
+  it('un cambio que dejaba el perfil inválido: 422 con su código', async () => {
+    mocks.confirmProfileProposal.mockRejectedValueOnce(new mocks.ProfileInvalidError())
+    const res = await confirm(req(), ctx())
+    expect(res.status).toBe(422)
+    expect(await res.json()).toEqual({ error: 'profile_invalid' })
   })
 })
