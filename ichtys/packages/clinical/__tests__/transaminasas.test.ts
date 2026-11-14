@@ -108,7 +108,7 @@ describe('elegibilidad: transaminasas', () => {
     const bothHigh = profileWith([alt(200, 'hasta 41'), ast(130, 'hasta 40')])
     const normal = profileWith([alt(31, 'hasta 41'), ast(24, 'hasta 40')])
 
-    it.each(['ALT o AST mayor a 3 veces el limite superior normal.', 'ALT y/o AST mayor a 3 veces el limite superior normal.', 'ALT u AST mayor a 3 veces el limite superior normal.', 'ALT or AST > 3 x ULN.', 'ALT and/or AST > 3 x ULN.', 'ALT/AST > 3 x ULN.'])(
+    it.each(['ALT o AST mayor a 3 veces el limite superior normal.', 'ALT y/o AST mayor a 3 veces el limite superior normal.', 'ALT u AST mayor a 3 veces el limite superior normal.', 'ALT ó AST mayor a 3 veces el límite superior normal.', 'ALT y/ó AST mayor a 3 veces el límite superior normal.', 'ALT or AST > 3 x ULN.', 'ALT and/or AST > 3 x ULN.', 'ALT/AST > 3 x ULN.'])(
       'con «o» una sola la activa: %s',
       (text) => {
         expect(exclusion(oneHigh, text).status).toBe('fail')
