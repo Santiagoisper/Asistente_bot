@@ -435,7 +435,7 @@ MES 5+ — Escala (Etapa 4)
 - `ichtys/docs/SECURITY.md` — sincronizado con el código
 - Eliminados: `ichtys/nul`, `ichtys/_tmp_17_c209dabefab4679aaf7e81807b143936`
 
-> Nota: `AGENTS.md` y `ichtys/docs/pitch/ALPHI-SHAREHOLDER-REPORT-2026.html` ya estaban modificados antes de esta sesión (no los toqué).
+> Nota: `AGENTS.md` y el HTML del informe para accionistas ya estaban modificados antes de esta sesión (no los toqué). Ese informe se retiró del repo el 2026-11-13.
 
 ### B. Comandos operativos
 

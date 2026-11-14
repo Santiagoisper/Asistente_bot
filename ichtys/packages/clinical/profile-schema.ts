@@ -5,6 +5,12 @@ export const labObservationSchema = z.object({
   value: z.number(),
   unit: z.string().optional(),
   sourceEvolutionId: z.string().uuid().optional(),
+  /**
+   * El rango de referencia tal como lo imprime el laboratorio al lado del valor («hasta 40»,
+   * «10 - 40»). Llega solo de un informe que una persona confirmó. Hace falta para los
+   * criterios que se miden contra el límite normal de cada laboratorio (transaminasas).
+   */
+  referenceRange: z.string().max(120).optional(),
 })
 
 export const pendingLabReviewSchema = z.object({
@@ -97,7 +103,7 @@ export type CriterionStatus = z.infer<typeof criterionStatusSchema>
  * que el sistema sabe leer de una evolución o de un laboratorio: es lo que la guía de
  * dictado le pide al médico (D18).
  */
-export const missingDatumSchema = z.enum(['age', 'hba1c', 'egfr', 'weight-height', 'pancreatitis', 'pregnancy', 'lactation'])
+export const missingDatumSchema = z.enum(['age', 'hba1c', 'egfr', 'weight-height', 'transaminases', 'pancreatitis', 'pregnancy', 'lactation'])
 export type MissingDatum = z.infer<typeof missingDatumSchema>
 
 export const criterionAssessmentSchema = z.object({

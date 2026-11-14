@@ -364,7 +364,14 @@ export async function confirmLabReport(
   try {
     const numeric: LabObservation[] = rows
       .filter((row): row is LabReportRow & { value: number } => row.value !== null)
-      .map((row) => ({ name: row.analyte, value: row.value, ...(row.unit ? { unit: row.unit } : {}) }))
+      // El rango de referencia viaja con el valor: es el que imprime ese laboratorio, y hay
+      // criterios que se miden contra él («3 veces el límite superior normal»).
+      .map((row) => ({
+        name: row.analyte,
+        value: row.value,
+        ...(row.unit ? { unit: row.unit } : {}),
+        ...(row.referenceRange && row.referenceRange.trim().length > 0 ? { referenceRange: row.referenceRange.trim().slice(0, 120) } : {}),
+      }))
     if (numeric.length > 0) {
       await updatePatientProfile(
         params,
