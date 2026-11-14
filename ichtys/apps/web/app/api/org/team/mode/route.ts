@@ -84,6 +84,8 @@ export async function GET(): Promise<Response> {
       columnMode: context.accessColumnMode,
       openUntil,
       daysLeft,
+      // M20: el plazo venció y la organización sigue abierta. No cambia nada solo: la pantalla lo avisa.
+      deadlinePassed: context.access.mode === 'open' && openUntil !== null && openUntil.getTime() <= Date.now(),
       impact,
     })
   } catch (err) {

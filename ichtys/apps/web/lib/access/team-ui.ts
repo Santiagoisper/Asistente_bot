@@ -73,12 +73,15 @@ export const API_ERROR_TEXTS: Record<ExpiryProblem | 'not_a_member' | 'invalid_i
 /** Guía del cuadro de acceso a un estudio (M4, M18, M19). */
 export const ACCESS_EXPIRY_GUIDE = `El vencimiento es obligatorio para quien tiene la función Monitor y se le exige aunque tenga otras (M18). Para el resto es opcional, pero si se carga, se valida igual: ni en el pasado ni a más de ${MONITOR_MEMBERSHIP_MAX_DAYS} días (M19).`
 
-/** Estado del plazo del modo abierto (M5, M8). */
+/** Estado del plazo del modo abierto (M5, M20). */
 export const MODE_DEADLINE_TEXTS = {
   daysLeft: (days: number): string =>
-    `Plazo del modo abierto: quedan ${days} ${days === 1 ? 'día' : 'días'}. Al vencer, la organización pasa sola a modo estricto.`,
-  expired:
-    'El plazo del modo abierto venció: la organización ya se rige por el modo estricto y no puede volver al abierto.',
+    `Plazo del modo abierto: quedan ${days} ${days === 1 ? 'día' : 'días'}. Al vencer, la organización no cambia sola: esta pantalla lo avisa y el paso a modo estricto lo hace una persona.`,
+  /** Abierto con el plazo vencido (M20). */
+  overdue:
+    'El plazo del modo abierto venció. La organización sigue en modo abierto: cualquier integrante ve todos los estudios. Pasarla a modo estricto es una decisión de quien administra los accesos; mirá abajo a quién le cambia algo antes de confirmar.',
+  /** En estricto con el plazo vencido (M5). */
+  expired: 'El plazo del modo abierto venció: la organización está en modo estricto y no puede volver al abierto.',
 } as const
 
 /** Traducción de los rechazos del cambio de modo. */
@@ -102,7 +105,7 @@ export const MODE_CONFIRM_TEXTS = {
   },
   toOpen: {
     gains: 'Todo integrante de la organización vuelve a ver todos los estudios, como hoy: sirve para corregir una carga.',
-    risk: `Reabre TODA la organización hasta volver al modo estricto, y solo se puede antes del plazo (${ACCESS_OPEN_DEFAULT_DAYS} días); al vencer, el modo estricto rige para siempre.`,
+    risk: `Reabre TODA la organización hasta volver al modo estricto, y solo se puede antes del plazo (${ACCESS_OPEN_DEFAULT_DAYS} días); pasado el plazo, desde el modo estricto ya no se vuelve al abierto.`,
   },
 } as const
 

@@ -100,14 +100,35 @@ describe('ModePanel — lo que se ve', () => {
     expect(text).not.toContain(MODE_PANEL_LABELS.toOpenButton)
   })
 
-  it('plazo vencido: se dice, y no hay vuelta al modo abierto', async () => {
-    modePayload = { mode: 'enforced', columnMode: 'open', openUntil: isoIn(-3), daysLeft: -3, impact: null }
+  it('en estricto con el plazo vencido: se dice, y no hay vuelta al modo abierto', async () => {
+    modePayload = { mode: 'enforced', columnMode: 'enforced', openUntil: isoIn(-3), daysLeft: -3, deadlinePassed: false, impact: null }
     mount()
     await settled()
 
     const text = container.textContent ?? ''
     expect(text).toContain(MODE_DEADLINE_TEXTS.expired)
     expect(text).not.toContain(MODE_PANEL_LABELS.toOpenButton)
+  })
+
+  it('M20: abierto con el plazo vencido — avisa como alerta que sigue abierto y que el cambio lo hace una persona', async () => {
+    modePayload = { mode: 'open', columnMode: 'open', openUntil: isoIn(-3), daysLeft: -3, deadlinePassed: true, impact: [] }
+    mount()
+    await settled()
+
+    const alert = container.querySelector('[role="alert"]')
+    expect(alert?.textContent).toBe(MODE_DEADLINE_TEXTS.overdue)
+    const text = container.textContent ?? ''
+    expect(text).not.toContain('quedan -3')
+    expect(text).not.toContain(MODE_DEADLINE_TEXTS.expired)
+    // El botón para pasar a estricto sigue ahí: es la acción que el aviso pide decidir.
+    expect(() => button(MODE_PANEL_LABELS.toEnforcedButton)).not.toThrow()
+  })
+
+  it('M20: ningún texto del panel promete que el modo estricto se enciende solo', () => {
+    const all = [MODE_DEADLINE_TEXTS.daysLeft(10), MODE_DEADLINE_TEXTS.overdue, MODE_DEADLINE_TEXTS.expired, MODE_CONFIRM_TEXTS.toOpen.risk].join(' ')
+    expect(all).not.toMatch(/pasa sola|rige para siempre/)
+    expect(MODE_DEADLINE_TEXTS.daysLeft(10)).toContain('no cambia sola')
+    expect(MODE_DEADLINE_TEXTS.overdue).toContain('sigue en modo abierto')
   })
 })
 
