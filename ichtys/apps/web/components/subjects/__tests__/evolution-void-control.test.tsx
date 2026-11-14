@@ -65,6 +65,14 @@ describe('EvolutionVoidControl', () => {
     expect(onConfirm).not.toHaveBeenCalled()
   })
 
+  it('con otra declaración en curso la acción se ve deshabilitada: no ignora el toque en silencio', () => {
+    const { onOpen } = show({ busy: true })
+    const open = button('Se registró en el sujeto equivocado')!
+    expect(open.disabled).toBe(true)
+    click(open)
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+
   it('sobre una evolución ya anulada no se ofrece nada, ni abierto', () => {
     show({ voided: true, open: true })
     expect(buttons()).toHaveLength(0)

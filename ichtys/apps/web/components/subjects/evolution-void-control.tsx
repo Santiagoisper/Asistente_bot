@@ -49,7 +49,12 @@ export function EvolutionVoidControl(props: Props) {
     return (
       <div className="mt-2 space-y-2">
         {feedback ? <FeedbackLine feedback={feedback} /> : null}
-        <button type="button" onClick={props.onOpen} className="text-xs font-semibold text-alphi-muted underline underline-offset-2 hover:text-alphi-navy">
+        <button
+          type="button"
+          onClick={props.onOpen}
+          disabled={props.busy}
+          className="text-xs font-semibold text-alphi-muted underline underline-offset-2 hover:text-alphi-navy disabled:cursor-not-allowed disabled:opacity-40"
+        >
           Se registró en el sujeto equivocado
         </button>
       </div>
