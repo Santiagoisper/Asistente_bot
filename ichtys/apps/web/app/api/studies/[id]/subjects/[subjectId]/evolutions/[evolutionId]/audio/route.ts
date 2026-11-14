@@ -5,13 +5,13 @@ import { writeAuditLog } from '../../../../../../../../../lib/chat/persistence'
 import {
   DICTATION_AUDIO_MAX_BYTES,
   baseMime,
-  findEvolution,
   loadDictationAudio,
   purgeExpiredDictationAudios,
   storeDictationAudio,
 } from '../../../../../../../../../lib/dictation/audio-store'
 import { DICTATION_AUDIO_MAX_TAKES } from '../../../../../../../../../lib/dictation/protocol'
 import { parseTake } from '../../../../../../../../../lib/dictation/takes'
+import { findSubjectEvolution } from '../../../../../../../../../lib/subjects/evolution-reader'
 import { PhiConfigError } from '../../../../../../../../../lib/subjects/phi-fields'
 
 export const runtime = 'nodejs'
@@ -52,12 +52,11 @@ export async function POST(req: Request, { params }: Params): Promise<Response> 
       return Response.json({ error: 'audio_too_large', maxBytes: DICTATION_AUDIO_MAX_BYTES }, { status: 413 })
     }
 
-    const evolution = await findEvolution({
-      orgId: access.orgId,
-      studyId: access.study.id,
-      subjectId: access.subject.id,
-      evolutionId,
-    })
+    // Solo a una evolución vigente: a una anulada no se le cuelga una grabación (D24).
+    const evolution = await findSubjectEvolution(
+      { orgId: access.orgId, studyId: access.study.id, subjectId: access.subject.id, evolutionId },
+      'current',
+    )
     if (!evolution) return notFound()
     // La grabación la adjunta quien dictó: nadie le cuelga un audio a la evolución de otra persona.
     if (evolution.authorUserId !== access.userId) return new Response('Forbidden', { status: 403 })

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { and, clinicalEvolutions, db, dictationAudios, eq, isNotNull, lt } from '@ichtys/db'
+import { and, db, dictationAudios, eq, isNotNull, lt } from '@ichtys/db'
 import type { DbTransaction } from '../audit/audited-write'
 import { decryptClinicalContent, encryptClinicalContent } from '../subjects/phi-fields'
 import { DICTATION_AUDIO_MAX_BYTES, DICTATION_AUDIO_MAX_TAKES, DICTATION_AUDIO_RETENTION_DAYS } from './protocol'
@@ -21,28 +21,6 @@ export function baseMime(contentType: string | null): string | null {
 
 export function retentionDeadline(from: Date): Date {
   return new Date(from.getTime() + DICTATION_AUDIO_RETENTION_DAYS * 24 * 60 * 60 * 1000)
-}
-
-export interface EvolutionRef {
-  id: string
-  authorUserId: string
-}
-
-/** La evolución, solo si es de esta organización, este estudio y este sujeto. */
-export async function findEvolution(params: { orgId: string; studyId: string; subjectId: string; evolutionId: string }): Promise<EvolutionRef | null> {
-  const [row] = await db
-    .select({ id: clinicalEvolutions.id, authorUserId: clinicalEvolutions.authorUserId })
-    .from(clinicalEvolutions)
-    .where(
-      and(
-        eq(clinicalEvolutions.id, params.evolutionId),
-        eq(clinicalEvolutions.organizationId, params.orgId),
-        eq(clinicalEvolutions.studyId, params.studyId),
-        eq(clinicalEvolutions.subjectId, params.subjectId),
-      ),
-    )
-    .limit(1)
-  return row ?? null
 }
 
 export interface StoredAudioMeta {

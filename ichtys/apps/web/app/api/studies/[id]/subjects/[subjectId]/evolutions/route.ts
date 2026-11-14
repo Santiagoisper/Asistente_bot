@@ -1,5 +1,5 @@
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
-import { and, clinicalEvolutions, db, desc, eq } from '@ichtys/db'
+import { clinicalEvolutions } from '@ichtys/db'
 import { auditedWrite } from '../../../../../../../lib/audit/audited-write'
 import { writeAuditLog } from '../../../../../../../lib/chat/persistence'
 import {
@@ -9,6 +9,7 @@ import {
   PhiConfigError,
 } from '../../../../../../../lib/subjects/phi-fields'
 import { createEvolutionSchema } from '../../../../../../../lib/subjects/schemas'
+import { listSubjectEvolutions } from '../../../../../../../lib/subjects/evolution-reader'
 import { proposeProfileFromEvolution } from '../../../../../../../lib/subjects/patient-profile-service'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../../lib/api/body-limit'
 import { getOrCreateRequestId } from '../../../../../../../lib/observability/logger'
@@ -29,14 +30,8 @@ export async function GET(
   try {
     const { orgId, userId, study, subject } = await validateSubjectAccess(subjectId, routeStudyId)
 
-    const rows = await db.query.clinicalEvolutions.findMany({
-      where: and(
-        eq(clinicalEvolutions.subjectId, subject.id),
-        eq(clinicalEvolutions.organizationId, orgId),
-        eq(clinicalEvolutions.studyId, study.id),
-      ),
-      orderBy: [desc(clinicalEvolutions.createdAt)],
-    })
+    // La historia muestra también las anuladas, con su marca: una corrección no tapa lo escrito (D24).
+    const rows = await listSubjectEvolutions({ orgId, studyId: study.id, subjectId: subject.id }, 'with-voided')
 
     const evolutions = rows.map((row) => ({
       id: row.id,
@@ -45,6 +40,8 @@ export async function GET(
       authorUserId: row.authorUserId,
       // Cuántas tomas tuvo el dictado (D22). Vacío si no se dictó o es anterior a la columna.
       dictationTakes: row.dictationTakes ?? null,
+      // Registrada por error en este sujeto: quién no viaja a la pantalla, solo cuándo y por qué.
+      voided: row.voided ? { reason: row.voided.reason, declaredAt: row.voided.declaredAt.toISOString() } : null,
       createdAt: row.createdAt.toISOString(),
     }))
 

@@ -63,16 +63,13 @@ vi.mock('@ichtys/db', () => ({
   db: {
     // Una escritura por la conexión suelta queda fuera de la transacción.
     insert: mocks.looseInsert,
-    query: {
-      clinicalEvolutions: {
-        findMany: mocks.dbFindMany,
-      },
-    },
   },
   clinicalEvolutions: {},
-  and: vi.fn(),
-  desc: vi.fn(),
-  eq: vi.fn(),
+}))
+
+// Las evoluciones se leen por el lector único (D24): la ruta no consulta la tabla.
+vi.mock('../../../../../../../../lib/subjects/evolution-reader', () => ({
+  listSubjectEvolutions: mocks.dbFindMany,
 }))
 
 // La escritura y su auditoría van juntas (R3). Acá se simula el envoltorio: corre
@@ -629,5 +626,42 @@ describe('D22 — cuántas tomas tuvo el dictado queda guardado con la evolució
       ['evo-dictada', 2],
       ['evo-a-mano', null],
     ])
+  })
+})
+
+describe('D24 — la historia trae las evoluciones anuladas, con su marca', () => {
+  it('GET pide también las anuladas, acotado al sujeto de la ruta', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbFindMany.mockResolvedValueOnce([])
+
+    await GET(new Request('http://localhost/api/evolutions'), makeParams())
+
+    expect(mocks.dbFindMany).toHaveBeenCalledWith({ orgId: mocks.ORG_ID, studyId: mocks.STUDY_ID, subjectId: mocks.SUBJECT_ID }, 'with-voided')
+  })
+
+  it('una anulada sale con cuándo y por qué, sin decir quién la declaró; una vigente, sin marca', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbFindMany.mockResolvedValueOnce([
+      {
+        id: 'evo-anulada',
+        visitLabel: null,
+        contentEncrypted: 'enc:a',
+        authorUserId: mocks.USER_ID,
+        dictationTakes: 1,
+        createdAt: new Date('2026-11-14T12:00:00Z'),
+        voided: { reason: 'wrong_subject', declaredBy: 'user_que_declaro', declaredAt: new Date('2026-11-14T15:00:00Z') },
+      },
+      { id: 'evo-vigente', visitLabel: null, contentEncrypted: 'enc:b', authorUserId: mocks.USER_ID, dictationTakes: null, createdAt: new Date('2026-11-13T12:00:00Z'), voided: null },
+    ])
+
+    const res = await GET(new Request('http://localhost/api/evolutions'), makeParams())
+    const text = await res.text()
+    const body = JSON.parse(text) as { evolutions: Array<{ id: string; voided: unknown }> }
+
+    expect(body.evolutions.map((evolution) => [evolution.id, evolution.voided])).toEqual([
+      ['evo-anulada', { reason: 'wrong_subject', declaredAt: '2026-11-14T15:00:00.000Z' }],
+      ['evo-vigente', null],
+    ])
+    expect(text).not.toContain('user_que_declaro')
   })
 })

@@ -1,6 +1,5 @@
 import {
   and,
-  clinicalEvolutions,
   db,
   eq,
   isNull,
@@ -12,6 +11,7 @@ import {
 } from '@ichtys/db'
 import { parseMemberFunctions } from '@ichtys/auth/functions'
 import type { DbExecutor, DbTransaction } from '../audit/audited-write'
+import { listEvolutionAuthors } from '../subjects/evolution-reader'
 
 /**
  * Lecturas y escrituras de «Equipo y accesos» (docs/decisions/study-membership.md).
@@ -50,10 +50,8 @@ export async function loadTeamSnapshot(orgId: string): Promise<TeamSnapshot> {
       .from(studyMemberships)
       .where(and(eq(studyMemberships.organizationId, orgId), isNull(studyMemberships.revokedAt))),
     db.select({ id: studies.id, name: studies.name }).from(studies).where(eq(studies.organizationId, orgId)),
-    db
-      .selectDistinct({ userId: clinicalEvolutions.authorUserId })
-      .from(clinicalEvolutions)
-      .where(eq(clinicalEvolutions.organizationId, orgId)),
+    // Haber escrito una evolución es un hecho aunque después se anule: cuentan todas (D24).
+    listEvolutionAuthors(orgId, 'with-voided'),
   ])
 
   return {
@@ -61,7 +59,7 @@ export async function loadTeamSnapshot(orgId: string): Promise<TeamSnapshot> {
     functions: functionRows.filter((row) => parseMemberFunctions([row.functionKey]).known.length === 1),
     memberships: membershipRows,
     studies: studyRows,
-    evolutionAuthors: authorRows.map((row) => row.userId),
+    evolutionAuthors: authorRows,
   }
 }
 
