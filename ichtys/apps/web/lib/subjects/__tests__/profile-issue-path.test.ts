@@ -111,3 +111,52 @@ describe('ruta segura — formas de esquema que el perfil va a tener (C4) y las 
     expect(safeIssuePath(schema, ['pair', 0, 'name'])).toBe('pair[0].?')
   })
 })
+
+/**
+ * Pedido de Architect en el #152. Hoy el perfil no tiene objetos estrictos; si C4 suma uno,
+ * la clave sobrante puede ser un dato (el nombre de una condición escrito como campo). zod la
+ * informa en `issue.keys`, no en la ruta, y el registro operativo no copia `issue.keys`. Estas
+ * pruebas fijan las dos cosas con un esquema de prueba: si una versión de zod empieza a poner
+ * la clave en la ruta, o alguien suma `keys` al registro, se rompen.
+ */
+describe('clave sobrante en un objeto estricto — su nombre no llega a la ruta', () => {
+  const strictLab = z.object({ name: z.string(), value: z.number() }).strict()
+  const schema = z.object({ labs: z.array(strictLab), summary: z.object({ note: z.string() }).strict().optional() })
+  const issuesOf = (value: unknown) => {
+    const parsed = schema.safeParse(value)
+    if (parsed.success) throw new Error('el valor de la prueba tenía que no validar')
+    return parsed.error.issues
+  }
+
+  it('adentro de una lista: la ruta es la del objeto, y la clave queda solo en `issue.keys`', () => {
+    const issues = issuesOf({ labs: [{ name: 'HbA1c', value: 7.4, 'Diabetes tipo 2': 'sí' }] })
+    expect(issues).toHaveLength(1)
+    // La premisa: zod informa la clave sobrante por separado de la ruta.
+    expect(issues[0]).toMatchObject({ code: 'unrecognized_keys', keys: ['Diabetes tipo 2'], path: ['labs', 0] })
+    const text = safeIssuePath(schema, issues[0]!.path)
+    expect(text).toBe('labs[0]')
+    expect(text).not.toContain('Diabetes')
+  })
+
+  it('en un objeto opcional: lo mismo, con el nombre del campo declarado', () => {
+    const issues = issuesOf({ labs: [], summary: { note: 'ok', 'pancreatitis previa': true } })
+    expect(issues[0]).toMatchObject({ code: 'unrecognized_keys', keys: ['pancreatitis previa'] })
+    const text = safeIssuePath(schema, issues[0]!.path)
+    expect(text).toBe('summary')
+    expect(text).not.toContain('pancreatitis')
+  })
+
+  it('y si una versión de zod pusiera la clave sobrante en la ruta, se taparía igual', () => {
+    const text = safeIssuePath(schema, ['labs', 0, 'Diabetes tipo 2'])
+    expect(text).toBe('labs[0].?')
+    expect(text).not.toContain('Diabetes')
+  })
+
+  it('lo que el registro operativo escribe de un error así (ruta, código y cantidad) no nombra la clave', () => {
+    const issues = issuesOf({ labs: [{ name: 'HbA1c', value: 7.4, 'Diabetes tipo 2': 'sí' }] })
+    // Los mismos tres datos que arma `reportUnreadableProfile` a partir de los errores.
+    const logged = { path: safeIssuePath(schema, issues[0]!.path), issueCode: issues[0]!.code, issueCount: issues.length }
+    expect(logged).toEqual({ path: 'labs[0]', issueCode: 'unrecognized_keys', issueCount: 1 })
+    expect(JSON.stringify(logged)).not.toContain('Diabetes')
+  })
+})
