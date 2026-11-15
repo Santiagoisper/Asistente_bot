@@ -52,3 +52,27 @@ decide el texto que se muestra.
 
 Desde un componente cliente se importa `@ichtys/integrations/connector`, que no
 arrastra el firmado de tokens.
+
+## Contrato de entrega y destino simulado
+
+`delivery.ts` — qué se le manda a un sistema de destino y qué contesta. **Es una
+propuesta:** qué campos recibe el destino real y cómo confirma todavía no se
+conoce. Solo para el servidor.
+
+- `deliveryFingerprint(content)` — huella SHA-256 del contenido en forma
+  canónica: claves ordenadas, saltos de línea unificados, Unicode compuesto
+  (NFC). El mismo contenido da siempre la misma huella. Si la forma canónica
+  cambia, las huellas ya guardadas dejan de coincidir.
+- `buildDeliveryEnvelope` — el sobre: registro y versión, huella, quién revisó
+  (identificador de cuenta, nunca un nombre), cuándo, y solo códigos de estudio y
+  de sujeto. Sin una persona que revisó no hay sobre.
+- La clave de idempotencia es registro + versión: entregar dos veces no registra
+  dos veces; la misma clave con otro contenido se rechaza.
+- `toDeliveryRecord` — «registrada» solo si el destino confirmó **la misma
+  huella** que se envió.
+- `createSimulatedDestination()` — destino en memoria para ejercitar el circuito.
+  No hay ningún sistema real detrás, no guarda el contenido (solo clave y huella)
+  y se pierde al reiniciar. Siempre se nombra «(simulador)».
+
+Lo que no existe todavía: guardar las entregas en la base, la pantalla, y
+cualquier conector a un sistema real.
