@@ -1,6 +1,6 @@
 # Matriz de trazabilidad del OS: regla → prueba → evidencia
 
-**Versión:** 0.4 · **Fecha:** 2026-11-15 · **Estado:** borrador, sin revisión de Calidad. Tarea 48 del cronograma.
+**Versión:** 0.5 · **Fecha:** 2026-11-15 · **Estado:** borrador, sin revisión de Calidad. Tarea 48 del cronograma.
 
 Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, accesos), la carga de documentos y el asistente con sus citas, que la matriz de julio ([`RTM.md`](./RTM.md)) no cubre. Responde a la brecha de R2 anotada en la [línea de base](./REGULATORY-BASELINE.md).
 
@@ -53,7 +53,8 @@ Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, acces
 | Las evaluaciones de elegibilidad se guardan cifradas | `apps/web/lib/subjects/__tests__/screening-crypto.test.ts` | Base de prueba y producción, 14/11: filas en claro 28 → 0 y 5 → 0, medido con una consulta directa (línea de base, C3; PR #164 y #167) | Las copias anteriores al sellado en el historial de la base |
 | El sellado de lo anterior toca solo dos columnas y lo corre un operador | `apps/web/lib/subjects/__tests__/screening-seal.test.ts`, `apps/web/app/api/os/screening-seal/__tests__/route.test.ts` | Ídem | Más de una organización contra una base real |
 | Antes de enviar una evolución a un modelo se reemplazan documento, correo y un formato de teléfono | `packages/clinical/__tests__/phi-redact.test.ts` | Ninguna | **Los nombres propios no se quitan.** Otros formatos de documento y de teléfono |
-| Una grabación pasada de su vencimiento, o ya borrada, no se entrega y figura como vencida | `apps/web/lib/dictation/__tests__/audio-state.test.ts` | Base de prueba, 15/11: primer vencimiento el 13/12 ([nota](../decisions/borrado-de-grabaciones-verificacion.md)) | **Que el plazo sea de 30 días no tiene prueba propia.** Que el borrado ocurra de punta a punta |
+| El plazo de una grabación son 30 días: al guardarla, la fila lleva el vencimiento exacto de 30 días después, y hasta ese instante se escucha | `apps/web/lib/dictation/__tests__/retention-deadline.test.ts` | Base de prueba, 15/11: primer vencimiento el 13/12 ([nota](../decisions/borrado-de-grabaciones-verificacion.md)) | La base está simulada. El depósito sin sujeto copia el vencimiento (fila de más abajo); no lo calcula |
+| Una grabación pasada de su vencimiento, o ya borrada, no se entrega y figura como vencida | `apps/web/lib/dictation/__tests__/audio-state.test.ts` | Base de prueba, 15/11: primer vencimiento el 13/12 ([nota](../decisions/borrado-de-grabaciones-verificacion.md)) | Que el borrado ocurra de punta a punta |
 | Una grabación retirada del sujeto equivocado pasa a un depósito sin sujeto y conserva su plazo: la fecha de grabación y el vencimiento se copian; la que ya venció pasa sin contenido | `apps/web/lib/subjects/__tests__/evolution-void.test.ts`, `apps/web/app/api/dictation-audios/unassigned/__tests__/route.test.ts`, `apps/web/lib/dictation/__tests__/unassigned-list.test.ts` | Entorno de prueba, 14/11 (PR #181 y #183) | Una anulación que coincide con una subida en curso: solo con transacciones simuladas |
 | Las notas de un turno se guardan cifradas; quien no puede ver sujetos no recibe código, sujeto ni notas | `apps/web/lib/agenda/__tests__/agenda-service.test.ts` | Ninguna | — |
 | Un sujeto nuevo nace con el perfil cifrado | `apps/web/app/api/studies/[id]/subjects/__tests__/route.oq.test.ts` | Ninguna | La prueba mira que se llame al cifrado, no lo guardado |
@@ -81,7 +82,7 @@ Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, acces
 
 | Comportamiento | Prueba | Evidencia fuera de las pruebas | Sin cubrir |
 |---|---|---|---|
-| Ninguna pantalla presenta una acción como «firma» | **Ninguna** | Ninguna | Falta la guarda sobre el texto de la interfaz. El diseño de la firma está en [`firma-con-clave-personal.md`](../decisions/firma-con-clave-personal.md) |
+| En el texto de la aplicación no aparecen «firmar» en ninguna de sus formas, «rubricar», «suscribir», las frases de conformidad, «validación clínica», «signature» o «signed by», ni el ícono de firma, fuera de dos usos anotados con su motivo (contratos con proveedores «pendientes de firma» y el consentimiento en papel de los datos de demostración) | `apps/web/tests/leakage/no-apparent-signature.test.ts` | Ninguna | La guarda busca palabras: no ve una palabra partida en pedazos o armada desde un diccionario, otros íconos que se leen como firmar, ni una pantalla que dé a entender una firma sin nombrarla. Nadie recorrió las pantallas con ese ojo. El diseño de la firma está en [`firma-con-clave-personal.md`](../decisions/firma-con-clave-personal.md) |
 
 ## R10 y R11 — Hora del servidor; afirmar solo lo probado
 
