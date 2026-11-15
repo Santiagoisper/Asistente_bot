@@ -142,35 +142,6 @@ describe('proposeProfileFromEvolution — logging del error del proveedor', () =
     expect(logged).not.toContain('HbA1c')
   })
 
-  it('la propuesta guarda con qué proveedor y modelo se generó (R6)', async () => {
-    mocks.runWithLlmFallback.mockResolvedValue({
-      result: { ageYears: null, systolic: null, diastolic: null, labs: [], medications: [], conditions: [] },
-      provider: 'anthropic',
-      modelId: 'modelo-de-prueba-1',
-      usage: { inputTokens: 10, outputTokens: 5 },
-      keySource: 'platform',
-    })
-
-    await proposeProfileFromEvolution(PARAMS)
-
-    const written = (mocks.encryptProfileJson.mock.calls as unknown as unknown[][]).at(-1)?.[0] as { pendingEvolutionProposals: Array<Record<string, unknown>> }
-    expect(written.pendingEvolutionProposals[0]!.generatedBy).toEqual({ provider: 'anthropic', model: 'modelo-de-prueba-1' })
-    // El registro de auditoría no cambia: el modelo va con la propuesta, cifrado con el perfil.
-    expect(JSON.stringify(mocks.auditInsert.mock.calls)).not.toContain('modelo-de-prueba-1')
-  })
-
-  it('si el modelo no respondió, la propuesta dice que no intervino ninguno', async () => {
-    mocks.runWithLlmFallback.mockRejectedValue(new TypeError('x'))
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    try {
-      await proposeProfileFromEvolution(PARAMS)
-    } finally {
-      spy.mockRestore()
-    }
-    const written = (mocks.encryptProfileJson.mock.calls as unknown as unknown[][]).at(-1)?.[0] as { pendingEvolutionProposals: Array<Record<string, unknown>> }
-    expect(written.pendingEvolutionProposals[0]).toHaveProperty('generatedBy', null)
-  })
-
   it('la lectura de evoluciones con modelo va solo a Anthropic: sin respaldo en otro proveedor', async () => {
     // AI-GOVERNANCE.md registra un solo proveedor para esta función y R6 exige
     // evaluar antes de cambiarlo. Con preferencia explícita la cadena es de uno:

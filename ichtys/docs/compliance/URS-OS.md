@@ -34,8 +34,8 @@
 | OS-22 | Huella de cada archivo recibido, con quién lo subió y por qué camino entró (documentos, informes y recortes) | Propuesta de Architect, 13/11/2026 ([`huella-y-procedencia-de-archivos.md`](../decisions/huella-y-procedencia-de-archivos.md), paso 4). Pide una migración | — | No (línea de base, brecha C4). Los pasos 1 a 3 de esa nota, el origen y la fecha de muestra de cada valor, están en OS-14 y OS-15 |
 | OS-23 | El código de un sujeto es el del estudio: no un documento ni iniciales | Decisión, 15/11/2026: formato fijo, a propuesta de quien construye. La regla concreta (ni solo números ni solo letras) es una propuesta modificable | R5 | Sí, para sujetos nuevos |
 | OS-24 | El rótulo de visita de una evolución se elige de una lista | Decisión, 15/11/2026: lista cerrada. Qué lista (las visitas del protocolo, o una corta sin cronograma) es una propuesta modificable | R5 | Sí, para evoluciones nuevas |
-| OS-25 | El nombre de un turno de la agenda se guarda cifrado | Decisión, 15/11/2026 | R5 | Sí, para turnos nuevos (migración 0023) |
-| OS-26 | Cada respuesta y cada propuesta de la IA guarda con qué proveedor y modelo se generó | Regla R6. Decisión del 15/11/2026: delegada a quien construye, que eligió construirlo | R6 | Sí (migración 0023); falta la lectura de informes de laboratorio |
+| OS-25 | El nombre de un turno de la agenda se guarda cifrado | Decisión, 15/11/2026 | — | No: pide una migración |
+| OS-26 | Cada respuesta y cada propuesta de la IA guarda con qué proveedor y modelo se generó | Regla R6. Decisión del 15/11/2026: delegada a quien construye, que eligió construirlo | — | No: pide una migración |
 
 ## Lo que falta para que esto sea una especificación de requisitos
 

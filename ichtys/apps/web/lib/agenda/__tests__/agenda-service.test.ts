@@ -39,7 +39,7 @@ vi.mock('@ichtys/db', async (importOriginal) => {
 })
 
 import { db } from '@ichtys/db'
-import { AgendaError, createAgendaItem, listAgenda, UNREADABLE_TITLE, updateAgendaItem } from '../agenda-service'
+import { AgendaError, createAgendaItem, listAgenda, updateAgendaItem } from '../agenda-service'
 
 const BA = 'America/Argentina/Buenos_Aires'
 // El servicio escribe por el ejecutor que recibe (en producción, la transacción
@@ -68,18 +68,9 @@ describe('agenda — alta de un turno', () => {
   it('guarda el instante que corresponde a la hora del sitio y las notas cifradas', async () => {
     await createAgendaItem({ ...scope, input })
     const saved = store.items[0]!
-    expect(saved).toMatchObject({ organizationId: 'org-1', studyId: 'study-1', subjectId: 'subj-1', kind: 'visit', durationMinutes: 30, createdBy: 'user_1' })
+    expect(saved).toMatchObject({ organizationId: 'org-1', studyId: 'study-1', subjectId: 'subj-1', title: 'Visita 3', kind: 'visit', durationMinutes: 30, createdBy: 'user_1' })
     expect((saved.startsAt as Date).toISOString()).toBe('2026-11-16T12:30:00.000Z')
     expect(String(saved.notesEncrypted)).not.toContain('ayunas')
-  })
-
-  it('el nombre del turno se guarda cifrado y la columna en claro no se escribe', async () => {
-    await createAgendaItem({ ...scope, input: { ...input, title: 'Control de Juan Pérez' } })
-    const saved = store.items[0]!
-    expect(saved).not.toHaveProperty('title')
-    expect(typeof saved.titleEncrypted).toBe('string')
-    expect(String(saved.titleEncrypted)).not.toContain('Juan')
-    expect(JSON.stringify(saved)).not.toContain('Juan Pérez')
   })
 
   it('un sujeto que no es de ese estudio y esa organización no se agenda', async () => {
@@ -133,29 +124,9 @@ describe('agenda — listado', () => {
   })
 
   it('una nota que no se puede descifrar no tira la agenda', async () => {
-    store.items = [{ id: 'item-9', studyId: 'study-1', subjectId: null, title: 'Monitoreo', titleEncrypted: null, kind: 'monitoring', startsAt: new Date('2026-11-16T12:00:00Z'), durationMinutes: 60, status: 'scheduled', notesEncrypted: 'basura' }]
+    store.items = [{ id: 'item-9', studyId: 'study-1', subjectId: null, title: 'Monitoreo', kind: 'monitoring', startsAt: new Date('2026-11-16T12:00:00Z'), durationMinutes: 60, status: 'scheduled', notesEncrypted: 'basura' }]
     const [entry] = await listAgenda({ ...range, includeSubjects: true })
     expect(entry).toMatchObject({ title: 'Monitoreo', notes: null })
-  })
-
-  it('un turno anterior al cifrado, con el nombre en claro, se sigue leyendo', async () => {
-    store.items = [{ id: 'item-8', studyId: 'study-1', subjectId: null, title: 'Monitoreo', titleEncrypted: null, kind: 'monitoring', startsAt: new Date('2026-11-16T12:00:00Z'), durationMinutes: 60, status: 'scheduled', notesEncrypted: null }]
-    const [entry] = await listAgenda({ ...range, includeSubjects: true })
-    expect(entry).toMatchObject({ title: 'Monitoreo' })
-  })
-
-  it('si hay nombre cifrado, vale ese y no el que quedó en claro', async () => {
-    await createAgendaItem({ ...scope, input })
-    store.items[0]!.title = 'Nombre viejo'
-    const [entry] = await listAgenda({ ...range, includeSubjects: true })
-    expect(entry).toMatchObject({ title: 'Visita 3' })
-  })
-
-  it('un nombre que no se puede descifrar no tira la agenda ni muestra el texto cifrado', async () => {
-    store.items = [{ id: 'item-7', studyId: 'study-1', subjectId: null, title: null, titleEncrypted: 'basura', kind: 'monitoring', startsAt: new Date('2026-11-16T12:00:00Z'), durationMinutes: 60, status: 'scheduled', notesEncrypted: null }]
-    const [entry] = await listAgenda({ ...range, includeSubjects: true })
-    expect(entry).toMatchObject({ title: UNREADABLE_TITLE })
-    expect(entry!.title).not.toContain('basura')
   })
 
   it('sin turnos no consulta nada más', async () => {

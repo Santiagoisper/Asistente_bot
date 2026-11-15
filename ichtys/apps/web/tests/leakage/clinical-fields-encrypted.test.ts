@@ -62,7 +62,7 @@ const PLAIN: Record<string, string> = {
   'unassigned_dictation_audios.declared_by': 'identificador de quien declaró el error',
   'evolution_voids.reason': 'motivo de la anulación, de una lista cerrada; la nota libre va cifrada aparte',
   'evolution_voids.declared_by': 'identificador de quien declaró el error',
-  'agenda_items.title': 'TEXTO LIBRE EN CLARO, heredado: el nombre del turno va cifrado en title_encrypted desde el 15/11/2026 y el código ya no escribe acá. Quedan en claro los turnos anteriores hasta que se rellenen; después la columna se saca con otra migración',
+  'agenda_items.title': 'TEXTO LIBRE EN CLARO (hasta 80 caracteres): nombre operativo del turno. El esquema dice que no lleva datos del paciente, pero nada lo impide. Decisión pendiente: cifrarlo o limitarlo a una lista',
   'agenda_items.kind': 'tipo de turno, de una lista cerrada',
   'agenda_items.status': 'estado del turno, de una lista cerrada',
   'agenda_items.created_by': 'identificador de quien lo agendó',

@@ -6,9 +6,8 @@ import { subjects } from './subjects'
 
 /**
  * agenda_items — turnos del sitio: visitas de un sujeto, extracciones,
- * llamados, monitoreos. El nombre del turno ("Visita 3") es texto libre: se guarda cifrado en
- * `title_encrypted`, igual que las notas (decisión del 15/11/2026). `title` queda solo para leer
- * los turnos anteriores a esa decisión; el código ya no escribe ahí. El sujeto es
+ * llamados, monitoreos. `title` es el nombre operativo del turno ("Visita 3")
+ * y no lleva datos del paciente; las notas libres van cifradas. El sujeto es
  * opcional porque un monitoreo no es de un sujeto.
  */
 export const agendaItems = pgTable(
@@ -22,9 +21,7 @@ export const agendaItems = pgTable(
       .notNull()
       .references(() => studies.id, { onDelete: 'cascade' }),
     subjectId: uuid('subject_id').references(() => subjects.id, { onDelete: 'cascade' }),
-    /** Heredada: solo lectura de turnos anteriores al 15/11/2026. Nada escribe acá. */
-    title: text('title'),
-    titleEncrypted: text('title_encrypted'),
+    title: text('title').notNull(),
     kind: text('kind', { enum: agendaItemKind }).notNull().default('visit'),
     startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
     durationMinutes: integer('duration_minutes').notNull().default(30),

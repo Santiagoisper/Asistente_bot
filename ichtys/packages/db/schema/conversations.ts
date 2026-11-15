@@ -52,13 +52,6 @@ export const messages = pgTable(
      * Shape: MedicalAnnotation[] — see packages/rag/medical-annotator.ts.
      */
     annotations: jsonb('annotations'),
-    /**
-     * Con qué proveedor y modelo se generó la respuesta (regla R6). Null en los mensajes de la
-     * persona, en las respuestas sin llamada a un modelo (sin evidencia) y en las anteriores al
-     * 15/11/2026. No es contenido: es el nombre del modelo.
-     */
-    provider: text('provider'),
-    model: text('model'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({

@@ -98,12 +98,6 @@ export const pendingProfileProposalSchema = z.object({
     conditions: z.array(z.string()).default([]),
   }),
   fieldConfidence: profileFieldConfidenceSchema.default({}),
-  /**
-   * Con qué proveedor y modelo se generó la propuesta (regla R6). `null` cuando no intervino
-   * ningún modelo: la lectura salió solo de las reglas. Falta en las propuestas anteriores al
-   * 15/11/2026.
-   */
-  generatedBy: z.object({ provider: z.string().max(60), model: z.string().max(120) }).nullable().optional(),
 })
 export type PendingProfileProposal = z.infer<typeof pendingProfileProposalSchema>
 

@@ -10,7 +10,6 @@ import {
   persistUserMessage,
   writeAuditLog,
 } from '../../../lib/chat/persistence'
-import { answerModel } from '../../../lib/chat/answer-model'
 import {
   enforceSlidingWindowRateLimit,
   getChatRateLimitConfig,
@@ -225,7 +224,6 @@ export async function POST(req: Request): Promise<Response> {
       answer: result.answer,
       confidence: result.confidence,
       evidences: result.evidences,
-      generatedBy: answerModel(result.usageEvents),
       audit: {
         action: 'rag.answer.completed',
         orgId,
