@@ -477,5 +477,8 @@ Rules:
 - Key rotation requires a re-encryption job (see `docs/compliance/BACKUP-AND-DR.md` §6).
 - Production PHI is **blocked** until DPA/BAA tracker items are signed — see
   `docs/compliance/README.md` checklist.
+  - Estado al 15/11/2026: los acuerdos con Anthropic y OpenAI están pendientes de firma. Que hoy no hay
+    datos reales de pacientes en producción **lo afirmó Santiago el 15/11/2026**, según lo registró el
+    Foreman en la sala común del equipo (09:14 UTC); ningún agente lo verificó.
 
 Full compliance documentation: `docs/compliance/` (DPIA, HIPAA, ISMS, CSV plan).
