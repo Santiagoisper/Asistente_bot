@@ -14,8 +14,17 @@ export interface StoredBloodPressure {
   bloodPressureLabel?: string
 }
 
+/**
+ * «Llegaron los dos.» Es la única condición que decide si la presión de una evolución entra al
+ * perfil. La confianza de la presión usa la misma (`extract-merge.ts`), y lo que la propuesta le
+ * dice a la persona se compara con esto en una prueba (`proposal-display.test.ts`).
+ */
+export function isBloodPressurePair(incoming: { systolic?: number; diastolic?: number }): incoming is { systolic: number; diastolic: number } {
+  return incoming.systolic !== undefined && incoming.diastolic !== undefined
+}
+
 export function mergedBloodPressure(current: StoredBloodPressure | undefined, incoming: { systolic?: number; diastolic?: number }): StoredBloodPressure {
-  if (incoming.systolic !== undefined && incoming.diastolic !== undefined) {
+  if (isBloodPressurePair(incoming)) {
     return { systolic: incoming.systolic, diastolic: incoming.diastolic, bloodPressureLabel: `${incoming.systolic}/${incoming.diastolic}` }
   }
   const systolic = current?.systolic
