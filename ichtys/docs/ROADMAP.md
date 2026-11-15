@@ -33,11 +33,11 @@ Estimación: Etapa 0 **cerrada** salvo ítems opcionales (E3, T3-LCS, E2).
 
 ## Etapa 1 — Compliance Fase 0: gates bloqueantes (PRE-PHI)
 
-**✅ CERRADA 2026-07-04** — DPA/BAA, DPIA, HIPAA RA, PHI key, revisión interna.
+**Cerrada el 2026-07-04, salvo los acuerdos con procesadores** — DPIA, HIPAA RA, PHI key, revisión interna. Los acuerdos con Anthropic y OpenAI están pendientes de firma (corregido el 15/11/2026; ver [DPA-BAA-TRACKER](./compliance/DPA-BAA-TRACKER.md)).
 
 | # | Bloqueante | Carril |
 |---|---|---|
-| 8 | DPA/BAA firmados con procesadores (Neon, Vercel, Anthropic, Clerk) | Legal | ✅ |
+| 8 | DPA/BAA con procesadores (Neon, Vercel, Anthropic, Clerk) | Legal | ⏳ Anthropic y OpenAI pendientes de firma; el resto sin evidencia enlazada (15/11/2026) |
 | 9 | DPIA (GDPR) — revisión legal (si UE) | Legal | ✅ |
 | 10 | HIPAA Risk Assessment — revisión legal (si US) | Legal | ✅ |
 | 15 | `PHI_ENCRYPTION_KEY` en prod (Vercel) | ✅ Hecho (2026-07-04) |

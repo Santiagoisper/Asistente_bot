@@ -18,7 +18,7 @@ Demostrar que el sistema cumple URS en condiciones operativas representativas de
 
 | Prerequisito | Evidencia |
 |--------------|-----------|
-| Fase 0 legal cerrada | [README.md](./README.md), DPA-BAA tracker ✅ |
+| Fase 0 legal cerrada | **No cumplido:** los acuerdos con Anthropic y OpenAI están pendientes de firma ([DPA-BAA-TRACKER](./DPA-BAA-TRACKER.md), corregido el 15/11/2026) |
 | IQ schema + env | `pnpm iq:check` 11/11 |
 | OQ automatizado | `pnpm test:oq` 29/29 en CI |
 | IT DB | `pnpm test:integration` 4/4 |
