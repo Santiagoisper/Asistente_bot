@@ -68,6 +68,11 @@ export const messages = pgTable(
       'messages_model_only_on_assistant_check',
       sql`${t.role} = 'assistant' OR (${t.provider} IS NULL AND ${t.model} IS NULL)`,
     ),
+    /** Proveedor y modelo van juntos: o están los dos o no está ninguno. */
+    providerAndModelTogetherCheck: check(
+      'messages_provider_and_model_together_check',
+      sql`(${t.provider} IS NULL) = (${t.model} IS NULL)`,
+    ),
   }),
 )
 
