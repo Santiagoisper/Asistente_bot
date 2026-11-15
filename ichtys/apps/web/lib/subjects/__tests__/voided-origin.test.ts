@@ -128,7 +128,7 @@ describe('voidedOriginLines — lo que se le dice a la persona', () => {
 
   it('sin laboratorios de ese origen no inventa una lista', () => {
     const lines = voidedOriginLines({ ...accepted, labNames: [] })
-    expect(lines.join(' ')).not.toContain('Laboratorios que vinieron')
+    expect(lines.join(' ')).not.toContain('que vinieron de esa evolución:')
     expect(lines.join(' ')).toContain('no guardan de qué evolución vinieron')
   })
 

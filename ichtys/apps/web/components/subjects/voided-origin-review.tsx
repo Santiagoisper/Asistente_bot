@@ -79,7 +79,7 @@ export function VoidedOriginReviewForm(props: Props) {
 
       {hasLabs ? (
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-alphi-muted">Laboratorios de esa evolución: salen siempre</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-alphi-muted">Laboratorios y mediciones de esa evolución: salen siempre</p>
           <p className="mt-1 text-sm text-alphi-navy">{props.labNames.join(', ')}</p>
           <p className="mt-1 text-xs text-alphi-muted">El valor anterior de cada uno no quedó guardado: se vuelve a cargar desde el informe.</p>
         </div>
