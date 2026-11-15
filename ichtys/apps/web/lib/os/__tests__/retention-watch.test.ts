@@ -28,13 +28,13 @@ describe('retentionRunItem — cuándo avisa Inicio', () => {
     const item = retentionRunItem(new Date('2026-12-13T06:17:00.000Z'), NOW)
     expect(item).toMatchObject({ id: 'system:retention-run', kind: 'system', severity: 'high', since: '2026-12-13T06:17:00.000Z' })
     expect(item!.title).toBe('El borrado diario de grabaciones no está corriendo')
-    expect(item!.detail).toBe('Última corrida: 13/12/2026 06:17 UTC. Puede haber grabaciones vencidas sin borrar.')
+    expect(item!.detail).toBe('Última corrida: 13/12/2026 06:17 UTC. Puede haber grabaciones vencidas sin borrar. Avisá a quien administra la plataforma.')
   })
 
   it('sin ningún registro también avisa, y no inventa una fecha', () => {
     const item = retentionRunItem(null, NOW)
     expect(item).not.toBeNull()
-    expect(item!.detail).toBe('Sin registro de corridas. Puede haber grabaciones vencidas sin borrar.')
+    expect(item!.detail).toBe('Sin registro de corridas. Puede haber grabaciones vencidas sin borrar. Avisá a quien administra la plataforma.')
     expect(item!.since).toBeNull()
   })
 
@@ -42,6 +42,10 @@ describe('retentionRunItem — cuándo avisa Inicio', () => {
     for (const item of [retentionRunItem(null, NOW), retentionRunItem(hoursAgo(80), NOW)]) {
       expect(item!.detail).toContain('Puede haber grabaciones vencidas sin borrar')
     }
+  })
+
+  it('no lleva a ninguna pantalla: desde el centro no se arregla', () => {
+    expect(retentionRunItem(null, NOW)!.href).toBeNull()
   })
 
   it('un registro con fecha futura (reloj corrido) no dispara el aviso', () => {

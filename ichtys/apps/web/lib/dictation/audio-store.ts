@@ -1,3 +1,4 @@
+import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core'
 import { createHash } from 'node:crypto'
 import { validateDictatedSegments, type DictatedSegment } from '@ichtys/clinical'
 import { and, db, desc, dictationAudios, eq, inArray, isNotNull, isNull, lt, sql, unassignedDictationAudios } from '@ichtys/db'
@@ -250,11 +251,17 @@ export async function loadAudioSegments(params: AudioScope): Promise<LoadedSegme
 }
 
 /**
+ * Lo único que el borrado le pide a la base: actualizar. Así las pruebas le pasan un cliente que
+ * captura el SQL, sin forzar tipos, y la ruta le pasa la transacción.
+ */
+export type PurgeWriter = Pick<PgDatabase<PgQueryResultHKT, Record<string, unknown>>, 'update'>
+
+/**
  * Borra el contenido de las grabaciones vencidas (y sus tramos) y deja la constancia. Devuelve
  * cuáles, por organización. Una retirada al depósito no es una vencida: se saltea, y su
  * contenido vence en el depósito con la misma fecha (D24).
  */
-export async function purgeExpiredDictationAudios(tx: DbTransaction, now: Date): Promise<Array<{ id: string; organizationId: string; studyId: string }>> {
+export async function purgeExpiredDictationAudios(tx: PurgeWriter, now: Date): Promise<Array<{ id: string; organizationId: string; studyId: string }>> {
   return tx
     .update(dictationAudios)
     .set({ contentEncrypted: null, segmentsEncrypted: null, purgedAt: now })
@@ -263,7 +270,7 @@ export async function purgeExpiredDictationAudios(tx: DbTransaction, now: Date):
 }
 
 /** Lo mismo para el depósito de grabaciones sin sujeto: mismo plazo, misma regla (D24). */
-export async function purgeExpiredUnassignedAudios(tx: DbTransaction, now: Date): Promise<Array<{ id: string; organizationId: string; studyId: string }>> {
+export async function purgeExpiredUnassignedAudios(tx: PurgeWriter, now: Date): Promise<Array<{ id: string; organizationId: string; studyId: string }>> {
   return tx
     .update(unassignedDictationAudios)
     .set({ contentEncrypted: null, segmentsEncrypted: null, purgedAt: now })
