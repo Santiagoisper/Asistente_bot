@@ -20,7 +20,7 @@ import { ProfileSummary } from './profile-summary'
 import { VoidedOriginNoticeCard } from './voided-origin-notice'
 import { VoidedOriginReviewForm, type RetireChoice } from './voided-origin-review'
 import { labNamesFromEvolution, retireErrorMessage, storedBloodPressureText, voidedOriginNotice } from '../../lib/subjects/voided-origin'
-import { voidDoneMessage, voidErrorMessage, type VoidOutcome } from '../../lib/subjects/evolution-void-screen'
+import { SCREENING_NOT_READ, VOID_HISTORY_NOT_REREAD, voidDoneMessage, voidErrorMessage, type VoidOutcome } from '../../lib/subjects/evolution-void-screen'
 
 interface EvolutionItem {
   id: string
@@ -190,6 +190,19 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const [voiding, setVoiding] = useState<string | null>(null)
   const [voidBusy, setVoidBusy] = useState(false)
   const [voidFeedback, setVoidFeedback] = useState<(VoidFeedback & { evolutionId: string }) | null>(null)
+  /**
+   * Evoluciones que el servidor confirmó como registradas por error y que la historia en pantalla
+   * todavía no refleja: se vacía cuando la historia se vuelve a leer bien. Mientras tanto no se
+   * ofrece declararlas de nuevo.
+   */
+  const [voidsNotReread, setVoidsNotReread] = useState<string[]>([])
+  /**
+   * Evoluciones cuya propuesta pendiente el servidor dijo que retiró al anular. El perfil en
+   * pantalla puede seguir trayéndola hasta la próxima lectura que salga bien: no se ofrece.
+   */
+  const [proposalsRetired, setProposalsRetired] = useState<string[]>([])
+  /** El perfil y la elegibilidad en pantalla no son una lectura de ahora. Se dice, no se calla. */
+  const [screeningNotRead, setScreeningNotRead] = useState(false)
   // Cuándo se leyó la lista: con eso se sabe si una grabación todavía puede estar subiendo.
   const [listedAt, setListedAt] = useState(0)
   // Evoluciones cuyas grabaciones terminó de subir esta misma pantalla: de esas ya se sabe.
@@ -214,7 +227,11 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const loadScreening = useCallback(async () => {
     try {
       const res = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/screening`)
-      if (!res.ok) return
+      if (!res.ok) {
+        // No bloquea la página, pero lo que queda a la vista es lo anterior, o nada: se avisa.
+        setScreeningNotRead(true)
+        return
+      }
       const data = (await res.json()) as {
         profile: PatientProfileView
         assessments: ScreeningAssessment[]
@@ -232,8 +249,12 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       setProtocolDocumentId(data.protocolDocumentId ?? null)
       setProtocolVisits(data.visits ?? [])
       setProfileUnreadable(data.profileUnreadable === true)
+      // Lectura nueva: lo que trae es lo que hay, también si trae una propuesta de una anulada.
+      setProposalsRetired([])
+      setScreeningNotRead(false)
     } catch {
-      // screening es complementario — no bloquea la página
+      // screening es complementario: no bloquea la página, pero no se calla.
+      setScreeningNotRead(true)
     }
   }, [studyId, subjectId])
 
@@ -257,6 +278,8 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       // Hasta leer el listado de grabaciones no se sabe cuáles hay: mientras, no se afirma nada.
       setAudiosKnown(false)
       setEvolutions(data.evolutions)
+      // La historia es la de ahora: ya dice cuáles están anuladas.
+      setVoidsNotReread([])
       setListedAt(Date.now())
       // Qué evoluciones tienen grabación. Si esto falla, la lista se muestra igual.
       try {
@@ -437,6 +460,11 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         const outcome = (await res.json().catch(() => ({}))) as VoidOutcome
         feedback = { kind: 'done', text: voidDoneMessage(outcome) }
         setVoiding(null)
+        // Confirmado por el servidor. Hasta volver a leer, la copia en pantalla es de antes:
+        // no se ofrece declararla otra vez ni la propuesta que se retiró, y el perfil no es de ahora.
+        setVoidsNotReread((prev) => [...prev, evolutionId])
+        if (outcome.proposalRetired === true) setProposalsRetired((prev) => [...prev, evolutionId])
+        setScreeningNotRead(true)
       } else {
         feedback = { kind: 'error', text: voidErrorMessage(res.status, await errorCode(res)) }
       }
@@ -504,7 +532,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
     }
   }
 
-  const pendingProposals = profile?.pendingEvolutionProposals ?? []
+  const pendingProposals = (profile?.pendingEvolutionProposals ?? []).filter((proposal) => !proposalsRetired.includes(proposal.evolutionId))
   const voidedOrigin = voidedOriginNotice({
     labs: profile?.labs ?? [],
     voided: evolutions.filter((evo) => evo.voided).map((evo) => ({ id: evo.id, createdAt: evo.createdAt })),
@@ -755,6 +783,11 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         <p role="status" className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{audioNotice}</p>
       ) : null}
 
+      {/* Mientras se vuelve a leer después de una declaración no se afirma que falló. */}
+      {screeningNotRead && !voidBusy ? (
+        <p role="alert" className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{SCREENING_NOT_READ}</p>
+      ) : null}
+
       {error && (
         <p className="rounded-lg border border-alphi-rose/30 bg-alphi-rose/10 px-4 py-2 text-sm text-alphi-rose">{error}</p>
       )}
@@ -891,7 +924,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                   subjectCode={subjectCode}
                   evolutionLabel={`la evolución del ${new Date(evo.createdAt).toLocaleString('es-AR')}`}
                   voided={Boolean(evo.voided)}
-                  allowed={evo.canVoid === true}
+                  allowed={evo.canVoid === true && !voidsNotReread.includes(evo.id)}
                   open={voiding === evo.id}
                   busy={voidBusy}
                   feedback={voidFeedback?.evolutionId === evo.id ? voidFeedback : null}
@@ -904,6 +937,9 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                   onCancel={() => setVoiding(null)}
                   onConfirm={(confirmation) => void handleVoid(evo.id, confirmation)}
                 />
+                {voidsNotReread.includes(evo.id) && !voidBusy ? (
+                  <p role="alert" className="mt-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{VOID_HISTORY_NOT_REREAD}</p>
+                ) : null}
                 <EvolutionAudios
                   studyId={studyId}
                   subjectId={subjectId}
