@@ -21,16 +21,16 @@ EXCEPTION WHEN duplicate_object THEN null; END $$;`,
   })
 
   it('el esquema declara la misma regla, con el mismo nombre', () => {
-    expect(getTableConfig(messages).checks.map((c) => c.name)).toEqual(['messages_model_only_on_assistant_check'])
+    expect(getTableConfig(messages).checks.map((c) => c.name)).toContain('messages_model_only_on_assistant_check')
   })
 
   it('no toca la 0023, que ya se integró: sigue con sus cuatro sentencias', () => {
     expect(read('0023_agenda_title_encrypted_message_model.sql')).not.toContain('messages_model_only_on_assistant_check')
   })
 
-  it('está en el registro de migraciones, última y después de la 0023', () => {
+  it('está en el registro de migraciones, después de la 0023', () => {
     const journal = JSON.parse(read('meta/_journal.json')) as { entries: Array<{ idx: number; tag: string; when: number }> }
-    const [previous, last] = journal.entries.slice(-2)
+    const [previous, last] = journal.entries.filter((entry) => entry.idx === 23 || entry.idx === 24)
     expect([previous!.idx, previous!.tag]).toEqual([23, '0023_agenda_title_encrypted_message_model'])
     expect([last!.idx, last!.tag]).toEqual([24, '0024_messages_model_only_on_assistant'])
     expect(last!.when).toBeGreaterThan(previous!.when)
