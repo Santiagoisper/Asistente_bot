@@ -160,7 +160,10 @@ function canonicalLabUnit(unit: string | undefined): AnalyteUnit | 'other' | und
   if (unit === undefined || unit.trim() === '') return undefined
   const compact = unit.trim().toLowerCase().replace(/\s+/g, '')
   if (compact === '%' || compact === 'percent' || compact === 'ngsp') return '%'
-  if (compact.includes('mmol')) return 'mmol/mol'
+  // Solo `mmol/mol`, la unidad IFCC de la HbA1c. Antes alcanzaba con que dijera «mmol», y un
+  // «7,3 mmol/L» (glucosa) se habría convertido a % como si fuera HbA1c. Hoy las reglas numéricas
+  // solo miran HbA1c, filtrado e IMC; cuando miren otro analito, la unidad se resuelve por analito.
+  if (compact.includes('mmol/mol')) return 'mmol/mol'
   if (compact.includes('ml/min')) return 'mL/min'
   if (compact.includes('kg/m')) return 'kg/m2'
   return 'other'
