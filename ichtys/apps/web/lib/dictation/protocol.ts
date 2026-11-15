@@ -40,6 +40,7 @@ export const DICTATION_TAKES_COUNT_MAX = 99
 /**
  * Voz a 24 kbps: veinte minutos entran en el tope con margen. Es un pedido al navegador, no una
  * garantía: donde graba en mp4 (medido el 14/11/2026) sale a unos 187 kbps y el tope se alcanza
- * a los 2 minutos 50. Sin resolver (docs/decisions/consulta-dictada.md, D14).
+ * a los 2 minutos 50. Por eso el panel cuenta lo que pesa la toma y la detiene antes del tope
+ * (docs/decisions/consulta-dictada.md, D25; `recording.ts`).
  */
 export const DICTATION_RECORDING_BITS_PER_SECOND = 24_000
