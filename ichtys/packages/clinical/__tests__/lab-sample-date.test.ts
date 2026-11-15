@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { acceptableSampleDate, proposeSampleDate } from '../lab-sample-date'
+import { acceptableSampleDate, latestSampleDate, proposeSampleDate } from '../lab-sample-date'
 import { parseLabReportText } from '../lab-report-parser'
 import { parsePatientProfile } from '../profile-schema'
 import { assessScreening } from '../screening-engine'
@@ -135,5 +135,66 @@ describe('la elegibilidad no lee la fecha de la muestra', () => {
     expect(verdicts('2024-11-12')).toEqual(recent)
     expect(verdicts(null)).toEqual(recent)
     expect(verdicts(undefined)).toEqual(recent)
+  })
+})
+
+describe('latestSampleDate — el límite del calendario es el del validador', () => {
+  it('es el día siguiente al de hoy (UTC), también al cambiar de mes y de año', () => {
+    expect(latestSampleDate('2026-11-14')).toBe('2026-11-15')
+    expect(latestSampleDate('2026-11-30')).toBe('2026-12-01')
+    expect(latestSampleDate('2026-12-31')).toBe('2027-01-01')
+  })
+
+  it('lo último que ofrece el calendario se acepta, y un día más no', () => {
+    expect(acceptableSampleDate('2026-11-15', '2026-11-14')).toBe(true)
+    expect(acceptableSampleDate('2026-11-16', '2026-11-14')).toBe(false)
+  })
+
+  it('con un «hoy» que no es fecha, no hay límite que ofrecer', () => {
+    expect(latestSampleDate('ayer')).toBeNull()
+  })
+})
+
+describe('proposeSampleDate — rótulos sin la palabra «fecha» (informes del país)', () => {
+  it.each([
+    ['Toma de muestra: 24/09/2026'],
+    ['Extracción: 24/09/2026'],
+    ['Extraccion 24/09/2026 08:15'],
+    ['F. extracción: 24/09/2026'],
+    ['F. de extracción: 24/09/2026'],
+    ['Muestra: 24-09-2026'],
+  ])('%s → la propone', (line) => {
+    expect(proposeSampleDate([line])).toBe('2026-09-24')
+  })
+
+  it.each([
+    ['24/09/2026'],
+    ['F. nacimiento: 24/09/1960'],
+    ['F. emisión: 26/09/2026'],
+    ['F. 24/09/2026'],
+    ['Muestra: suero'],
+    ['Muestra recibida 25/09/2026'],
+    ['Recepción de muestra: 25/09/2026'],
+  ])('%s → no propone nada', (line) => {
+    expect(proposeSampleDate([line])).toBeNull()
+  })
+
+  it('el lector de informes conserva esos renglones y sigue tapando una fecha suelta o de nacimiento', () => {
+    const kept = (line: string) => parseLabReportText(['LABORATORIO X', 'Paciente: ENSAYO, INVENTADO', line, 'HEMOGRAMA', 'Glucosa 92 mg/dl 70 - 110'].join('\n')).transcription
+    expect(kept('Toma de muestra: 24/09/2026')).toContain('Toma de muestra: 24/09/2026')
+    expect(kept('F. extracción: 24/09/2026 08:15')).toContain('F. extracción: 24/09/2026 08:15')
+    expect(kept('F. nacimiento: 24/09/1960')).not.toContain('1960')
+    expect(kept('24/09/1960')).not.toContain('1960')
+  })
+})
+
+describe('proposeSampleDate — con la fecha de hoy no propone lo que no se podría confirmar', () => {
+  it('un año de dos cifras que da una fecha futura no se propone', () => {
+    expect(proposeSampleDate(['Fecha de extracción: 24/09/98'])).toBe('2098-09-24')
+    expect(proposeSampleDate(['Fecha de extracción: 24/09/98'], '2026-11-14')).toBeNull()
+  })
+
+  it('un año de dos cifras que da una fecha pasada sí', () => {
+    expect(proposeSampleDate(['Fecha de extracción: 24/09/26'], '2026-11-14')).toBe('2026-09-24')
   })
 })

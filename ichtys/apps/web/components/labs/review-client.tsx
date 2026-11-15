@@ -20,7 +20,7 @@ import {
   type ReviewRow,
   type ReviewPhase,
 } from '../../lib/labs/review-rows'
-import { initialSampleDateField, sampleDateDecision, sampleDateHelp } from '../../lib/labs/sample-date-field'
+import { initialSampleDateField, sampleDateDecision, sampleDateHelp, sampleDateMax } from '../../lib/labs/sample-date-field'
 
 const focusRing =
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-os-accent'
@@ -100,8 +100,8 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
   const [profileWarning, setProfileWarning] = useState(false)
   const [compared, setCompared] = useState(false)
   // La fecha de la muestra: el lector la propone y la persona la confirma, la cambia o declara que no figura (C4, D3).
-  const [sampleDate, setSampleDate] = useState(() => initialSampleDateField(content.transcription.split('\n')))
   const [today] = useState(() => new Date().toISOString().slice(0, 10))
+  const [sampleDate, setSampleDate] = useState(() => initialSampleDateField(content.transcription.split('\n'), today))
   const dateDecision = sampleDateDecision(sampleDate, today)
   /** La fecha con la que quedó guardado: la de recién, o la que trae un informe ya confirmado. Null: desconocida. */
   const [savedSampleDate, setSavedSampleDate] = useState<string | null>(content.sampleDate ?? null)
@@ -487,7 +487,7 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
                     <span className="font-semibold">Fecha de la muestra</span>
                     <input
                       type="date"
-                      max={today}
+                      max={sampleDateMax(today)}
                       value={sampleDate.unknown ? '' : sampleDate.value}
                       disabled={phase === 'saving' || sampleDate.unknown}
                       aria-describedby="fecha-muestra-ayuda"
