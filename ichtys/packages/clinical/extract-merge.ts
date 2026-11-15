@@ -171,6 +171,17 @@ export function mergeProfileWithExtraction(
     }
   }
 
+  // La presión es un par: medio par no entra ni pisa nada (blood-pressure.ts).
+  // La marca de confianza acompaña al par que entra de verdad: si esta
+  // extracción no trajo el par completo, su marca de presión no se aplica a la
+  // presión que sigue guardada. Así se confirma una propuesta, con la marca
+  // que quedó guardada junto a ella (post-#193, pedido de Architect).
+  const incomingBloodPressureComplete =
+    facts.systolic !== undefined && facts.diastolic !== undefined
+  const bloodPressureConfidence = incomingBloodPressureComplete
+    ? (fieldConfidence.bloodPressure ?? current.fieldConfidence?.bloodPressure)
+    : current.fieldConfidence?.bloodPressure
+
   return {
     version: 1,
     demographics: {
@@ -183,7 +194,7 @@ export function mergeProfileWithExtraction(
     conditions,
     fieldConfidence: {
       ageYears: fieldConfidence.ageYears ?? current.fieldConfidence?.ageYears,
-      bloodPressure: fieldConfidence.bloodPressure ?? current.fieldConfidence?.bloodPressure,
+      bloodPressure: bloodPressureConfidence,
       labs: { ...current.fieldConfidence?.labs, ...fieldConfidence.labs },
       medications: { ...current.fieldConfidence?.medications, ...fieldConfidence.medications },
       conditions: { ...current.fieldConfidence?.conditions, ...fieldConfidence.conditions },

@@ -67,3 +67,69 @@ describe('los dos caminos que suman una evolución al perfil usan la regla del p
     expect(mergeProfileWithFacts(profile(), facts({ systolic: 132, diastolic: 84 }), EVO).vitals).toEqual({ systolic: 132, diastolic: 84, bloodPressureLabel: '132/84' })
   })
 })
+
+/**
+ * La marca de confianza de la presión acompaña al par que entra de verdad. Al
+ * confirmar una propuesta, el servicio pasa la marca que quedó guardada junto
+ * con ella (patient-profile-service): si su medio par no entra, esa marca no
+ * puede quedarse aplicada a la presión anterior que sigue guardada.
+ */
+describe('la marca de confianza de la presión solo cambia si entró el par nuevo', () => {
+  const EVO = '11111111-1111-4111-8111-111111111111'
+  const profile = () =>
+    parsePatientProfile({
+      version: 1,
+      vitals: { systolic: 150, diastolic: 95, bloodPressureLabel: '150/95' },
+      fieldConfidence: { bloodPressure: 'high' },
+      labs: [],
+      medications: [],
+      conditions: [],
+    })
+  const facts = (over: { systolic?: number; diastolic?: number }) => ({ labs: [], medications: [], conditions: [], ...over })
+
+  it('una propuesta con solo la sistólica no cambia la marca de la presión guardada', () => {
+    const out = mergeProfileWithExtraction(
+      profile(),
+      { facts: facts({ systolic: 132 }), fieldConfidence: { bloodPressure: 'medium' } },
+      EVO,
+    )
+    expect(out.vitals).toEqual({ systolic: 150, diastolic: 95, bloodPressureLabel: '150/95' })
+    expect(out.fieldConfidence?.bloodPressure).toBe('high')
+  })
+
+  it('una propuesta con solo la diastólica tampoco', () => {
+    const out = mergeProfileWithExtraction(
+      profile(),
+      { facts: facts({ diastolic: 70 }), fieldConfidence: { bloodPressure: 'low' } },
+      EVO,
+    )
+    expect(out.vitals).toEqual({ systolic: 150, diastolic: 95, bloodPressureLabel: '150/95' })
+    expect(out.fieldConfidence?.bloodPressure).toBe('high')
+  })
+
+  it('sin presión nueva en la extracción, la marca guardada sigue', () => {
+    const out = mergeProfileWithExtraction(
+      profile(),
+      { facts: facts({}), fieldConfidence: { bloodPressure: 'medium' } },
+      EVO,
+    )
+    expect(out.vitals).toEqual({ systolic: 150, diastolic: 95, bloodPressureLabel: '150/95' })
+    expect(out.fieldConfidence?.bloodPressure).toBe('high')
+  })
+
+  it('con el par completo, la marca nueva sí se aplica', () => {
+    const out = mergeProfileWithExtraction(
+      profile(),
+      { facts: facts({ systolic: 132, diastolic: 84 }), fieldConfidence: { bloodPressure: 'medium' } },
+      EVO,
+    )
+    expect(out.vitals).toEqual({ systolic: 132, diastolic: 84, bloodPressureLabel: '132/84' })
+    expect(out.fieldConfidence?.bloodPressure).toBe('medium')
+  })
+
+  it('con el par completo y sin marca nueva, queda la marca guardada', () => {
+    const out = mergeProfileWithExtraction(profile(), { facts: facts({ systolic: 132, diastolic: 84 }), fieldConfidence: {} }, EVO)
+    expect(out.vitals).toEqual({ systolic: 132, diastolic: 84, bloodPressureLabel: '132/84' })
+    expect(out.fieldConfidence?.bloodPressure).toBe('high')
+  })
+})
