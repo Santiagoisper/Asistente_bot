@@ -1,5 +1,5 @@
 import type { ExtractedFacts } from './extract-facts'
-import { mergedBloodPressure } from './blood-pressure'
+import { isBloodPressurePair, mergedBloodPressure } from './blood-pressure'
 import { labFromEvolution } from './lab-source'
 import { upsertLab } from './lab-utils'
 import type { FieldConfidenceLevel, PatientProfile, ProfileFieldConfidence } from './profile-schema'
@@ -183,7 +183,10 @@ export function mergeProfileWithExtraction(
     conditions,
     fieldConfidence: {
       ageYears: fieldConfidence.ageYears ?? current.fieldConfidence?.ageYears,
-      bloodPressure: fieldConfidence.bloodPressure ?? current.fieldConfidence?.bloodPressure,
+      // La confianza sigue al par: si el par nuevo no entró, queda el anterior con su confianza.
+      bloodPressure: isBloodPressurePair(facts)
+        ? (fieldConfidence.bloodPressure ?? current.fieldConfidence?.bloodPressure)
+        : current.fieldConfidence?.bloodPressure,
       labs: { ...current.fieldConfidence?.labs, ...fieldConfidence.labs },
       medications: { ...current.fieldConfidence?.medications, ...fieldConfidence.medications },
       conditions: { ...current.fieldConfidence?.conditions, ...fieldConfidence.conditions },

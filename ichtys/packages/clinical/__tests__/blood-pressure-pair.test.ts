@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mergedBloodPressure } from '../blood-pressure'
+import { isBloodPressurePair, mergedBloodPressure } from '../blood-pressure'
 import { mergeProfileWithFacts } from '../extract-facts'
 import { mergeProfileWithExtraction } from '../extract-merge'
 import { parsePatientProfile } from '../profile-schema'
@@ -65,5 +65,54 @@ describe('los dos caminos que suman una evolución al perfil usan la regla del p
   it('con el par completo, los dos lo reemplazan', () => {
     expect(mergeProfileWithExtraction(profile(), { facts: facts({ systolic: 132, diastolic: 84 }), fieldConfidence: {} }, EVO).vitals).toEqual({ systolic: 132, diastolic: 84, bloodPressureLabel: '132/84' })
     expect(mergeProfileWithFacts(profile(), facts({ systolic: 132, diastolic: 84 }), EVO).vitals).toEqual({ systolic: 132, diastolic: 84, bloodPressureLabel: '132/84' })
+  })
+})
+
+/**
+ * Pedido de Architect en el #193: la confianza de la presión sigue al par. Si el par nuevo no
+ * entró, en el perfil queda el par anterior, y su confianza tiene que ser la anterior. La misma
+ * condición, «llegaron los dos», decide las dos cosas.
+ */
+describe('la confianza de la presión sigue al par', () => {
+  const EVO = '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d'
+  const profile = () =>
+    parsePatientProfile({
+      version: 1,
+      vitals: { systolic: 150, diastolic: 95, bloodPressureLabel: '150/95' },
+      labs: [],
+      medications: [],
+      conditions: [],
+      fieldConfidence: { bloodPressure: 'high' },
+    })
+  const facts = (over: { systolic?: number; diastolic?: number }) => ({ labs: [], medications: [], conditions: [], ...over })
+
+  it.each([
+    { name: 'solo la sistólica', bp: { systolic: 132 } },
+    { name: 'solo la diastólica', bp: { diastolic: 84 } },
+    { name: 'ninguna cifra', bp: {} },
+  ])('$name: queda el par anterior con su confianza, no con la del intento nuevo', ({ bp }) => {
+    const out = mergeProfileWithExtraction(profile(), { facts: facts(bp), fieldConfidence: { bloodPressure: 'low' } }, EVO)
+    expect(out.vitals).toEqual({ systolic: 150, diastolic: 95, bloodPressureLabel: '150/95' })
+    expect(out.fieldConfidence?.bloodPressure).toBe('high')
+  })
+
+  it('el par completo entra con su confianza', () => {
+    const out = mergeProfileWithExtraction(profile(), { facts: facts({ systolic: 132, diastolic: 84 }), fieldConfidence: { bloodPressure: 'low' } }, EVO)
+    expect(out.vitals).toEqual({ systolic: 132, diastolic: 84, bloodPressureLabel: '132/84' })
+    expect(out.fieldConfidence?.bloodPressure).toBe('low')
+  })
+
+  it('el par completo sin confianza informada conserva la anterior, como antes', () => {
+    const out = mergeProfileWithExtraction(profile(), { facts: facts({ systolic: 132, diastolic: 84 }), fieldConfidence: {} }, EVO)
+    expect(out.fieldConfidence?.bloodPressure).toBe('high')
+  })
+
+  it.each([
+    { bp: { systolic: 132, diastolic: 84 }, pair: true },
+    { bp: { systolic: 132 }, pair: false },
+    { bp: { diastolic: 84 }, pair: false },
+    { bp: {}, pair: false },
+  ])('isBloodPressurePair($bp) = $pair', ({ bp, pair }) => {
+    expect(isBloodPressurePair(bp)).toBe(pair)
   })
 })
