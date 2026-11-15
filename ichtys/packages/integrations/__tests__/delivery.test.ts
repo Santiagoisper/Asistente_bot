@@ -4,6 +4,7 @@ import {
   buildDeliveryEnvelope,
   createSimulatedDestination,
   deliveryFingerprint,
+  NonCanonicalContentError,
   toDeliveryRecord,
   type DeliveryEnvelope,
 } from '../delivery'
@@ -41,7 +42,87 @@ describe('huella de lo que se entrega', () => {
   })
 })
 
+/** Qué frenó la forma canónica: el motivo, qué encontró y dónde. Nunca el valor. */
+function refusal(content: unknown): { reason: string; found: string; path: string } | 'no frenó' {
+  try {
+    deliveryFingerprint(content)
+  } catch (error) {
+    if (error instanceof NonCanonicalContentError) return { reason: error.reason, found: error.found, path: error.path }
+    throw error
+  }
+  return 'no frenó'
+}
+
+describe('la forma canónica solo acepta JSON plano: lo demás frena, no se convierte', () => {
+  class Muestra {
+    constructor(readonly valor: number) {}
+  }
+  const holes: unknown[] = []
+  holes.length = 2
+  const circular: Record<string, unknown> = { nombre: 'a' }
+  circular.yo = circular
+
+  it.each([
+    ['una fecha', { tomadaEl: new Date('2026-01-01T00:00:00.000Z') }, { reason: 'unsupported_type', found: 'Date', path: '$.tomadaEl' }],
+    ['un Map', { m: new Map([['a', 1]]) }, { reason: 'unsupported_type', found: 'Map', path: '$.m' }],
+    ['un Set', { s: new Set([1]) }, { reason: 'unsupported_type', found: 'Set', path: '$.s' }],
+    ['una instancia de clase', { muestra: new Muestra(7.4) }, { reason: 'unsupported_type', found: 'Muestra', path: '$.muestra' }],
+    ['bytes', { bytes: new Uint8Array([1, 2]) }, { reason: 'unsupported_type', found: 'Uint8Array', path: '$.bytes' }],
+    ['NaN', { valor: Number.NaN }, { reason: 'non_finite_number', found: 'NaN', path: '$.valor' }],
+    ['infinito', { valor: Number.POSITIVE_INFINITY }, { reason: 'non_finite_number', found: 'Infinity', path: '$.valor' }],
+    ['menos infinito', { valor: Number.NEGATIVE_INFINITY }, { reason: 'non_finite_number', found: '-Infinity', path: '$.valor' }],
+    ['un bigint', { valor: 10n }, { reason: 'unsupported_type', found: 'bigint', path: '$.valor' }],
+    ['una función', { f: () => 1 }, { reason: 'unsupported_type', found: 'function', path: '$.f' }],
+    ['un símbolo', { s: Symbol('x') }, { reason: 'unsupported_type', found: 'symbol', path: '$.s' }],
+    ['un lugar sin valor en un arreglo', { filas: [1, undefined, 3] }, { reason: 'missing_value', found: 'undefined', path: '$.filas[1]' }],
+    ['un arreglo con huecos', { filas: holes }, { reason: 'missing_value', found: 'undefined', path: '$.filas[0]' }],
+    ['ningún contenido', undefined, { reason: 'missing_value', found: 'undefined', path: '$' }],
+    ['algo anidado', { filas: [{ ok: 1 }, { tomadaEl: new Date(0) }] }, { reason: 'unsupported_type', found: 'Date', path: '$.filas[1].tomadaEl' }],
+    ['una referencia a sí mismo', circular, { reason: 'circular_reference', found: 'Object', path: '$.yo' }],
+  ])('%s frena con su motivo', (_name, content, expected) => {
+    expect(refusal(content)).toEqual(expected)
+  })
+
+  it('dos claves que quedan iguales después de normalizar frenan, en cualquier orden', () => {
+    const expected = { reason: 'duplicate_key', found: 'string', path: '$.\u00e9' }
+    expect(refusal({ '\u00e9': 1, 'e\u0301': 2 })).toEqual(expected)
+    expect(refusal({ 'e\u0301': 2, '\u00e9': 1 })).toEqual(expected)
+  })
+
+  it('el mensaje del error no repite el contenido ni sus claves', () => {
+    try {
+      deliveryFingerprint({ 'clave-reservada': { 'otra-clave': new Date('2026-01-01T00:00:00.000Z') } })
+      throw new Error('tenía que frenar')
+    } catch (error) {
+      if (!(error instanceof NonCanonicalContentError)) throw error
+      expect(error.message).not.toMatch(/clave-reservada|otra-clave|2026/)
+      expect(error.message).toContain('Date')
+    }
+  })
+
+  it('las mismas fechas, pasadas como texto, dan huellas distintas', () => {
+    const a = deliveryFingerprint({ tomadaEl: new Date('2026-01-01T00:00:00.000Z').toISOString() })
+    const b = deliveryFingerprint({ tomadaEl: new Date('2030-12-31T00:00:00.000Z').toISOString() })
+    expect(a).not.toBe(b)
+  })
+
+  it('lo que es JSON plano sigue entrando: nulos, booleanos, ceros, arreglos y objetos sin prototipo', () => {
+    const bare: Record<string, unknown> = Object.create(null)
+    bare.a = 1
+    expect(deliveryFingerprint(bare)).toBe(deliveryFingerprint({ a: 1 }))
+    expect(deliveryFingerprint({ v: -0 })).toBe(deliveryFingerprint({ v: 0 }))
+    expect(refusal({ n: null, s: '', b: false, cero: 0, filas: [[], {}, [null]] })).toBe('no frenó')
+    const compartido = { a: 1 }
+    expect(refusal({ uno: compartido, dos: compartido })).toBe('no frenó')
+    expect(deliveryFingerprint(null)).not.toBe(deliveryFingerprint({}))
+  })
+})
+
 describe('sobre de entrega', () => {
+  it('con un contenido que no es JSON plano no hay sobre', () => {
+    expect(() => envelope({ content: { tomadaEl: new Date('2026-01-01T00:00:00.000Z') } })).toThrow(NonCanonicalContentError)
+  })
+
   it('lleva la huella del contenido, quién revisó y cuándo, y una clave que identifica registro y versión', () => {
     const built = envelope()
     expect(built.contentFingerprint).toBe(deliveryFingerprint(CONTENT))
@@ -103,6 +184,27 @@ describe('destino simulado', () => {
     expect(destination.inspect()).toHaveLength(0)
   })
 
+  it('un sobre cuyo contenido no es JSON plano se rechaza por eso, y no se registra', async () => {
+    const destination = createSimulatedDestination()
+    const handMade = { ...envelope(), content: { ...CONTENT, tomadaEl: new Date('2026-01-01T00:00:00.000Z') } }
+    expect(await destination.deliver(handMade)).toMatchObject({ ok: false, reason: 'non_canonical_content', retryable: false })
+    expect(destination.inspect()).toHaveLength(0)
+  })
+
+  it('dos contenidos que difieren solo en la fecha de la muestra: el segundo es un conflicto, no un reenvío', async () => {
+    const destination = createSimulatedDestination()
+    const first = envelope({ content: { ...CONTENT, tomadaEl: '2026-01-01T00:00:00.000Z' } })
+    const second = envelope({ content: { ...CONTENT, tomadaEl: '2030-12-31T00:00:00.000Z' } })
+    expect(second.idempotencyKey).toBe(first.idempotencyKey)
+    expect(second.contentFingerprint).not.toBe(first.contentFingerprint)
+    expect(await destination.deliver(first)).toMatchObject({ ok: true, duplicate: false })
+    const result = await destination.deliver(second)
+    expect(result).toMatchObject({ ok: false, reason: 'conflict', retryable: false })
+    expect(toDeliveryRecord(destination.descriptor, result)).toEqual({ connectorId: destination.descriptor.id, stage: 'failed', verified: false })
+    expect(destination.inspect()).toHaveLength(1)
+    expect(destination.inspect()[0]!.contentFingerprint).toBe(first.contentFingerprint)
+  })
+
   it('si el destino no responde, no queda nada registrado y se puede reintentar', async () => {
     const destination = createSimulatedDestination()
     destination.failNext('unreachable')
@@ -145,6 +247,12 @@ describe('qué se puede afirmar de una entrega', () => {
   it('el destino dice que registró otra cosa: no se da por registrada', () => {
     const record = toDeliveryRecord(descriptor, { ok: true, receiptId: 'r', duplicate: false }, { found: true, registered: true, contentFingerprint: 'otra' }, deliveryFingerprint(CONTENT))
     expect(record).toEqual({ connectorId: descriptor.id, stage: 'sent', verified: false })
+  })
+
+  it('un conector que no declara que puede comprobar no da «registrada», aunque le llegue una comprobación con la misma huella', () => {
+    const fp = deliveryFingerprint(CONTENT)
+    const sinComprobar = { ...descriptor, capabilities: ['deliver_proposal'] as const }
+    expect(toDeliveryRecord(sinComprobar, { ok: true, receiptId: 'r', duplicate: false }, { found: true, registered: true, contentFingerprint: fp }, fp)).toEqual({ connectorId: descriptor.id, stage: 'sent', verified: false })
   })
 
   it('el destino recibió pero todavía no registró: enviada', () => {

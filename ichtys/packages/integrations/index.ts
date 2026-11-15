@@ -48,6 +48,7 @@ export {
   buildDeliveryEnvelope,
   createSimulatedDestination,
   deliveryFingerprint,
+  NonCanonicalContentError,
   toDeliveryRecord,
   type DeliverableKind,
   type DeliverResult,
@@ -55,5 +56,6 @@ export {
   type DeliveryEnvelope,
   type DeliveryFailureReason,
   type DestinationConnector,
+  type NonCanonicalReason,
   type SimulatedDestination,
 } from './delivery'
