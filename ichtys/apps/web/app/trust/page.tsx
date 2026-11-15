@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { MarketingShell } from '../../components/marketing/marketing-shell'
+import { aiDataFlows, flowChoiceNote, SELECTABLE_PROVIDER_NAMES } from '../../lib/trust/ai-data-flows'
 
 export const metadata: Metadata = {
   title: 'Trust Center — Ichtys/ALPHI',
@@ -31,17 +32,17 @@ const SUBPROCESSORS = [
   },
   {
     name: 'Anthropic',
-    service: 'Inferencia LLM (extracción clínica, chat)',
+    service: 'Modelos de lenguaje',
     region: 'US',
-    phi: 'Texto pre-redactado en tránsito — sin retención en prompts',
-    baa: 'BAA enterprise / zero-retention API',
+    phi: 'Ver «Qué proveedor de IA recibe qué dato», más abajo',
+    baa: 'Acuerdo pendiente de firma',
   },
   {
     name: 'OpenAI',
-    service: 'Embeddings RAG',
+    service: 'Vectores de búsqueda de los documentos',
     region: 'US',
-    phi: 'Chunks de protocolo (sin evoluciones clínicas)',
-    baa: 'BAA API disponible',
+    phi: 'Fragmentos de los documentos del estudio y las preguntas que se escriben en el asistente. Es el proveedor por defecto; la instalación puede configurar Google o Groq en su lugar',
+    baa: 'Acuerdo pendiente de firma',
   },
   {
     name: 'Upstash',
@@ -120,8 +121,12 @@ export default function TrustPage() {
             <strong>En tránsito:</strong> TLS 1.2+ entre cliente, Vercel y proveedores.
           </li>
           <li>
-            <strong>Antes de LLM:</strong> pre-redacción de DNI, email y teléfono; no persistimos
-            prompts con contenido clínico.
+            <strong>Antes de enviar una evolución a un modelo:</strong> se reemplazan los números de
+            documento, los correos y los teléfonos. <strong>Los nombres propios no se quitan.</strong>
+          </li>
+          <li>
+            <strong>Dictado:</strong> la transcripción corre en el navegador de quien dicta; el audio
+            no va a ningún proveedor de IA.
           </li>
           <li>
             <strong>Importante:</strong> no ofrecemos E2EE cuando hay procesamiento por proveedores
@@ -187,6 +192,42 @@ export default function TrustPage() {
         </div>
       </section>
 
+      <section className="mb-8 rounded-lg border border-alphi-border bg-white p-6" data-testid="flujos-de-ia">
+        <h2 className="text-lg font-bold text-alphi-navy">Qué proveedor de IA recibe qué dato</h2>
+        <p className="mt-2 text-xs text-alphi-muted">
+          Esta tabla sale de la misma configuración que decide el destino en el sistema. Si un
+          proveedor no responde, la función falla: el dato no se envía a otro.
+        </p>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-alphi-border text-alphi-muted">
+                <th className="py-2 pr-3 font-semibold">Para qué</th>
+                <th className="py-2 pr-3 font-semibold">Qué se envía</th>
+                <th className="py-2 font-semibold">A quién</th>
+              </tr>
+            </thead>
+            <tbody>
+              {aiDataFlows().map((flow) => (
+                <tr key={flow.purpose} className="border-b border-alphi-border/60 align-top">
+                  <td className="py-3 pr-3 font-medium text-alphi-navy">{flow.use}</td>
+                  <td className="py-3 pr-3 text-alphi-navy/80">{flow.data}</td>
+                  <td className="py-3 text-alphi-navy/80">
+                    {flow.providers.join(', ')}
+                    <br />
+                    <span className="text-alphi-muted">{flowChoiceNote(flow)}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-3 text-xs text-alphi-muted">
+          Proveedores que una organización puede elegir para lo que no es fijo:{' '}
+          {SELECTABLE_PROVIDER_NAMES.join(', ')}.
+        </p>
+      </section>
+
       <section className="mb-8 rounded-lg border border-alphi-border bg-white p-6">
         <h2 className="text-lg font-bold text-alphi-navy">Gobernanza de IA</h2>
         <p className="mt-3 text-sm leading-relaxed text-alphi-navy/90">
@@ -205,7 +246,7 @@ export default function TrustPage() {
           </a>
         </p>
         <p className="mt-4 text-xs text-alphi-muted">
-          Última actualización: julio 2026 · Ver también{' '}
+          Última actualización: noviembre 2026 (la tabla de proveedores de IA) · Ver también{' '}
           <Link href="/privacy" className="text-alphi-teal hover:underline">
             Privacidad
           </Link>{' '}
