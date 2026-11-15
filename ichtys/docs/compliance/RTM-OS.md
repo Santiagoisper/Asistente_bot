@@ -1,6 +1,6 @@
 # Matriz de trazabilidad del OS: regla → prueba → evidencia
 
-**Versión:** 0.8 · **Fecha:** 2026-11-15 · **Estado:** borrador, sin revisión de Calidad. Tarea 48 del cronograma.
+**Versión:** 0.9 · **Fecha:** 2026-11-15 · **Estado:** borrador, sin revisión de Calidad. Tarea 48 del cronograma.
 
 Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, accesos), la carga de documentos y el asistente con sus citas, que la matriz de julio ([`RTM.md`](./RTM.md)) no cubre. Responde a la brecha de R2 anotada en la [línea de base](./REGULATORY-BASELINE.md).
 
@@ -97,6 +97,9 @@ Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, acces
 | Una fecha de muestra inválida la rechaza el servidor al confirmar | `apps/web/app/api/studies/[id]/subjects/[subjectId]/lab-reports/__tests__/routes.test.ts` | Ninguna | Que la hora usada sea la del servidor en UTC no tiene prueba propia |
 | Respaldo con restauración probada | **Ninguna** | Ninguna | Sin evidencia de una restauración (línea de base, sección 5) |
 | Un turno se guarda como instante a partir de la hora del sitio, y una fecha u hora inválida se rechaza en vez de inventar un instante | `apps/web/lib/agenda/__tests__/agenda-time.test.ts`, `apps/web/lib/agenda/__tests__/agenda-service.test.ts` | Ninguna | Un centro en otra zona horaria |
+| Una entrega a un sistema de destino se da por «registrada» solo si el conector declara que puede comprobar y el destino confirma la misma huella que se envió; si confirma otra, si recibió y todavía no registró, o si el conector no comprueba, queda en «enviada». El destino de las pruebas se declara simulador y así se nombra en lo que se muestra | `packages/integrations/__tests__/delivery.test.ts` | Ninguna | Nada contra un sistema real: el destino es un simulador en memoria, y qué recibe y cómo confirma el destino real no se conoce. Ninguna ruta ni pantalla usa todavía este contrato, y las entregas no se guardan |
+| La huella de lo que se entrega no cambia con el orden de las claves, los saltos de línea ni la forma Unicode, y un contenido que no es JSON plano (una fecha sin pasar a texto, un `Map`, un `Set`, una instancia de clase, `NaN`, infinito, un `bigint`, un lugar sin valor en un arreglo, dos claves que quedan iguales después de normalizar) frena con su motivo en vez de convertirse: no se arma el sobre y el simulador lo rechaza | `packages/integrations/__tests__/delivery.test.ts` | Ninguna | La forma canónica no es la del RFC 8785: que un tercero recalcule la misma huella no está probado. La huella del registro de auditoría usa otra forma canónica, sin estas comprobaciones |
+| Entregar dos veces el mismo registro y la misma versión no registra dos veces y devuelve el mismo comprobante; la misma clave con otro contenido se rechaza como conflicto y lo registrado no cambia; si el destino no responde no queda nada y se puede reintentar | `packages/integrations/__tests__/delivery.test.ts` | Ninguna | Solo contra el simulador: cómo responde un destino real a un reenvío no se conoce |
 
 ## Lo que esta matriz todavía no cubre
 

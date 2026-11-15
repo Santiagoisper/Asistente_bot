@@ -44,3 +44,18 @@ export {
   type DeliveryView,
   type ReviewState,
 } from './connector'
+export {
+  buildDeliveryEnvelope,
+  createSimulatedDestination,
+  deliveryFingerprint,
+  NonCanonicalContentError,
+  toDeliveryRecord,
+  type DeliverableKind,
+  type DeliverResult,
+  type DeliveryCheck,
+  type DeliveryEnvelope,
+  type DeliveryFailureReason,
+  type DestinationConnector,
+  type NonCanonicalReason,
+  type SimulatedDestination,
+} from './delivery'
