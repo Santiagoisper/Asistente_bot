@@ -380,6 +380,17 @@ describe('C5 — la elegibilidad exige un protocolo aprobado', () => {
     expect((body.visits as unknown[]).length).toBe(1)
   })
 
+  it('el borrador nuevo no trae visitas y lo último útil es una versión reemplazada: no entrega las de la reemplazada', async () => {
+    arrange()
+    const partial = draft(3, { identification: VALID_SPEC.identification, inclusionCriteria: [], exclusionCriteria: [], endpoints: [], visits: [] })
+    store({ approved: null, latest: { ...draft(2), status: 'superseded' }, attempt: partial })
+    const body = await get()
+    expect(body.specPendingApproval).toBe(true)
+    expect(body.pendingSpecVersion).toBe(3)
+    expect(body.visits).toBeUndefined()
+    expect(body.visitsFromDraft).toBeUndefined()
+  })
+
   it('no hay nada extraído: no dice que algo espera aprobación ni entrega visitas', async () => {
     arrange()
     store({ approved: null, latest: null })
