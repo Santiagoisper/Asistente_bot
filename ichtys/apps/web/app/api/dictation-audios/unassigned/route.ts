@@ -2,6 +2,7 @@ import { AccessError, handleApiError, validatePhiStudyAccess } from '@ichtys/aut
 import { resolveOrgAccessContext } from '../../../../lib/access/org-context'
 import { coordinatesStudy } from '../../../../lib/access/permissions'
 import {
+  UNASSIGNED_AUDIO_LIST_MAX,
   listUnassignedAudioStudiesByAuthor,
   listUnassignedAudioStudiesOfOrg,
   listUnassignedAudiosByAuthor,
@@ -56,7 +57,9 @@ export async function GET(): Promise<Response> {
     const studyIds = [...studyNames.keys()]
     const listed =
       studyIds.length === 0 ? [] : coordinates ? await listUnassignedAudiosOfOrg({ orgId, studyIds }) : await listUnassignedAudiosByAuthor({ orgId, userId, studyIds })
-    const visible = listed.filter((row) => studyNames.has(row.studyId) && (coordinates || row.createdBy === userId))
+    // La consulta pide una de más que el tope: si vino, hay más de las que se muestran.
+    const truncated = listed.length > UNASSIGNED_AUDIO_LIST_MAX
+    const visible = listed.slice(0, UNASSIGNED_AUDIO_LIST_MAX).filter((row) => studyNames.has(row.studyId) && (coordinates || row.createdBy === userId))
 
     const audios = visible.map((row) => ({
       id: row.id,
@@ -72,7 +75,7 @@ export async function GET(): Promise<Response> {
       // `false`: la grabó otra persona y quien mira la ve porque coordina el estudio.
       own: row.createdBy === userId,
     }))
-    return Response.json({ audios })
+    return Response.json({ audios, truncated })
   } catch (err) {
     return handleApiError(err)
   }

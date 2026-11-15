@@ -81,7 +81,7 @@ describe('la lista de quien coordina: las de la organización, solo de los estud
       },
     ])
     expect(argsOf('orderBy')).toEqual([{ desc: 'deposito.declaredAt' }])
-    expect(argsOf('limit')).toEqual([UNASSIGNED_AUDIO_LIST_MAX])
+    expect(argsOf('limit')).toEqual([UNASSIGNED_AUDIO_LIST_MAX + 1])
   })
 
   it('sin ningún estudio permitido no hay nada que listar, y no se consulta la base', async () => {
@@ -106,7 +106,7 @@ describe('la lista de quien grabó: las suyas, solo de los estudios a los que en
       },
     ])
     expect(argsOf('orderBy')).toEqual([{ desc: 'deposito.declaredAt' }])
-    expect(argsOf('limit')).toEqual([UNASSIGNED_AUDIO_LIST_MAX])
+    expect(argsOf('limit')).toEqual([UNASSIGNED_AUDIO_LIST_MAX + 1])
   })
 
   it('sin ningún estudio permitido no hay nada que listar, y no se consulta la base', async () => {
