@@ -11,7 +11,7 @@
 | ID | Requisito | Respaldo | Matriz | Construido |
 |---|---|---|---|---|
 | OS-01 | Lo que la IA extrae de una evolución queda como propuesta; entra al perfil cuando una persona la acepta | Decisión, 12/11/2026 (línea de base, C2) | R6 | Sí |
-| OS-02 | La elegibilidad y el asistente usan solo el protocolo extraído que una persona aprobó | Decisión, 12/11/2026 (línea de base, C5) | R6 | Sí |
+| OS-02 | La elegibilidad y el asistente usan solo el protocolo extraído que una persona aprobó | Decisión del 12/11/2026: avisar, y exigir la aprobación cuando exista la pantalla de equipo. La exigencia se adelantó en el código el 14/11 y se integró con confirmación expresa el 15/11/2026 (PR #195; línea de base, C5) | R6 | Sí |
 | OS-03 | Con el protocolo en borrador, la guía de dictado igual aparece y avisa que viene de un protocolo sin aprobar | Decisión, 12/11/2026 ([`consulta-dictada.md`](../decisions/consulta-dictada.md), D18) | R6 | Sí; sin fila propia en la matriz |
 | OS-04 | Cada clase de dato va a un solo proveedor de IA; si no responde, la función falla | Decisión, 12/11/2026 (línea de base, brecha documental 9) | R6 | Sí |
 | OS-05 | El dictado se transcribe en el equipo de quien dicta: el audio no va a ningún proveedor | Decisión, 12/11/2026 (D1) | Sin fila | Sí. **Sin prueba citada en la matriz** |
