@@ -1,6 +1,6 @@
 # Matriz de trazabilidad del OS: regla → prueba → evidencia
 
-**Versión:** 0.4 · **Fecha:** 2026-11-15 · **Estado:** borrador, sin revisión de Calidad. Tarea 48 del cronograma; faltan los requisitos de usuario y el índice de cumplimiento.
+**Versión:** 0.4 · **Fecha:** 2026-11-15 · **Estado:** borrador, sin revisión de Calidad. Tarea 48 del cronograma.
 
 Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, accesos), la carga de documentos y el asistente con sus citas, que la matriz de julio ([`RTM.md`](./RTM.md)) no cubre. Responde a la brecha de R2 anotada en la [línea de base](./REGULATORY-BASELINE.md).
 
@@ -93,8 +93,8 @@ Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, acces
 
 ## Lo que esta matriz todavía no cubre
 
-- **R1, R2, R8 y R9** son reglas de proceso y de proveedores: se sostienen con documentos y registros, no con pruebas del código. Van en el índice de cumplimiento, que no está escrito.
+- **R1, R2, R8 y R9** son reglas de proceso y de proveedores: se sostienen con documentos y registros, no con pruebas del código. Van en el [índice de cumplimiento](./COMPLIANCE-INDEX-OS.md).
 - De la ingesta de documentos (lectura del PDF, partición, vectores, extracción del protocolo) solo está volcado el acceso y el depósito. La exactitud de lo extraído no tiene fila: se sostiene con la aprobación de una persona (R6, fila del protocolo aprobado).
 - El modelo y la versión por respuesta (R6) no tienen fila: falta abrir la prueba que lo fije, si existe.
-- Los requisitos de usuario del OS (lo que sería la actualización de [`URS.md`](./URS.md)) no están escritos. Esta matriz parte de las reglas de la línea de base, no de requisitos de usuario aprobados.
+- Los requisitos de usuario del OS están en [`URS-OS.md`](./URS-OS.md) como borrador que nadie aprobó. Esta matriz parte de las reglas de la línea de base, no de requisitos de usuario aprobados.
 - Ninguna fila pasó por Calidad.
