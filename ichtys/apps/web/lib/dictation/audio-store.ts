@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { validateDictatedSegments, type DictatedSegment } from '@ichtys/clinical'
-import { and, db, desc, dictationAudios, eq, isNotNull, isNull, lt, sql, unassignedDictationAudios } from '@ichtys/db'
+import { and, db, desc, dictationAudios, eq, inArray, isNotNull, isNull, lt, sql, unassignedDictationAudios } from '@ichtys/db'
 import type { DbTransaction } from '../audit/audited-write'
 import { decryptClinicalContent, encryptClinicalContent } from '../subjects/phi-fields'
 import { audioState } from './audio-state'
@@ -305,25 +305,67 @@ const UNASSIGNED_META = {
 /** Tope de la lista: una persona no acumula tantas, y la respuesta no crece sin límite. */
 export const UNASSIGNED_AUDIO_LIST_MAX = 200
 
-/** Las grabaciones sin sujeto que grabó esta persona en esta organización, las más recientes primero. Sin contenido. */
-export async function listUnassignedAudiosByAuthor(params: { orgId: string; userId: string }): Promise<UnassignedAudioMeta[]> {
+/*
+ * La lista se arma en dos pasos, y el orden importa. Primero, en qué estudios hay grabaciones
+ * sin sujeto (cada estudio una vez, sin tope); la ruta comprueba a cuáles entra la persona.
+ * Después, las grabaciones **de esos estudios**, con el tope.
+ *
+ * El filtro por estudio va en la consulta, antes del tope. Cuando lo hacía la ruta, después,
+ * las grabaciones de estudios a los que la persona no entra ocupaban el cupo: con 200 más
+ * recientes en otro estudio, la lista salía vacía habiendo alguna (hallazgo de revisión del
+ * #183). Por eso `studyIds` es obligatorio: no hay forma de pedir la lista sin decir de qué
+ * estudios.
+ */
+
+/** Los estudios de esta organización en los que esta persona grabó algo que quedó sin sujeto. Cada uno una vez. */
+export async function listUnassignedAudioStudiesByAuthor(params: { orgId: string; userId: string }): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ studyId: unassignedDictationAudios.studyId })
+    .from(unassignedDictationAudios)
+    .where(and(eq(unassignedDictationAudios.organizationId, params.orgId), eq(unassignedDictationAudios.createdBy, params.userId)))
+  return rows.map((row) => row.studyId)
+}
+
+/** Los estudios de esta organización con alguna grabación sin sujeto. Cada uno una vez. Para quien coordina. */
+export async function listUnassignedAudioStudiesOfOrg(params: { orgId: string }): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ studyId: unassignedDictationAudios.studyId })
+    .from(unassignedDictationAudios)
+    .where(eq(unassignedDictationAudios.organizationId, params.orgId))
+  return rows.map((row) => row.studyId)
+}
+
+/**
+ * Las grabaciones sin sujeto que grabó esta persona en esta organización, de los estudios que
+ * se pasan, las más recientes primero. Sin contenido.
+ */
+export async function listUnassignedAudiosByAuthor(params: { orgId: string; userId: string; studyIds: string[] }): Promise<UnassignedAudioMeta[]> {
+  if (params.studyIds.length === 0) return []
   return db
     .select(UNASSIGNED_META)
     .from(unassignedDictationAudios)
-    .where(and(eq(unassignedDictationAudios.organizationId, params.orgId), eq(unassignedDictationAudios.createdBy, params.userId)))
+    .where(
+      and(
+        eq(unassignedDictationAudios.organizationId, params.orgId),
+        eq(unassignedDictationAudios.createdBy, params.userId),
+        inArray(unassignedDictationAudios.studyId, params.studyIds),
+      ),
+    )
     .orderBy(desc(unassignedDictationAudios.declaredAt))
     .limit(UNASSIGNED_AUDIO_LIST_MAX)
 }
 
 /**
- * Las grabaciones sin sujeto de la organización, las más recientes primero. Sin contenido. Para
- * quien coordina; a qué estudios entra lo filtra la ruta.
+ * Las grabaciones sin sujeto de la organización, de los estudios que se pasan, las más
+ * recientes primero. Sin contenido. Para quien coordina; a qué estudios entra lo comprueba la
+ * ruta antes de pedirlas.
  */
-export async function listUnassignedAudiosOfOrg(params: { orgId: string }): Promise<UnassignedAudioMeta[]> {
+export async function listUnassignedAudiosOfOrg(params: { orgId: string; studyIds: string[] }): Promise<UnassignedAudioMeta[]> {
+  if (params.studyIds.length === 0) return []
   return db
     .select(UNASSIGNED_META)
     .from(unassignedDictationAudios)
-    .where(eq(unassignedDictationAudios.organizationId, params.orgId))
+    .where(and(eq(unassignedDictationAudios.organizationId, params.orgId), inArray(unassignedDictationAudios.studyId, params.studyIds)))
     .orderBy(desc(unassignedDictationAudios.declaredAt))
     .limit(UNASSIGNED_AUDIO_LIST_MAX)
 }
