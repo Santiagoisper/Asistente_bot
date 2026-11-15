@@ -191,7 +191,8 @@ async function PriorityList({ ctx }: { ctx: OsContext }) {
         <>
           <span className="min-w-0">
             <span className="block text-sm font-semibold text-os-ink">{item.title}</span>
-            <span className="block truncate text-sm text-os-subtle">{item.detail}</span>
+            {/* Un aviso del sistema se lee entero: cortado no dice qué pasa. */}
+            <span className={`block text-sm text-os-subtle ${item.kind === 'system' ? '' : 'truncate'}`}>{item.detail}</span>
           </span>
           <span className="flex shrink-0 items-center gap-2">
             {item.since ? <span className="text-xs text-os-subtle">{sinceLabel(new Date(item.since), now)}</span> : null}
