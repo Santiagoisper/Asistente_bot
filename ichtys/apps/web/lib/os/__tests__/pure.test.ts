@@ -85,6 +85,12 @@ describe('atención prioritaria', () => {
     expect(sorted.map((entry) => entry.id)).toEqual(['alta-vieja', 'alta-nueva', 'alta-sin-fecha', 'media-vieja', 'baja'])
   })
 
+  it('un aviso del sistema va arriba de todo, aunque no tenga fecha', () => {
+    const system: PriorityItem = { ...item('sistema', 'high', null), kind: 'system' }
+    const sorted = sortPriorityItems([item('alta-vieja', 'high', '2026-11-02T00:00:00Z'), system, item('alta-nueva', 'high', '2026-11-09T00:00:00Z')])
+    expect(sorted.map((entry) => entry.id)).toEqual(['sistema', 'alta-vieja', 'alta-nueva'])
+  })
+
   it('no modifica la lista original', () => {
     const original = [item('b', 'low', null), item('a', 'high', null)]
     sortPriorityItems(original)

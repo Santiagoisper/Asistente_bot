@@ -17,15 +17,21 @@ const SEVERITY_RANK: Record<PrioritySeverity, number> = { high: 0, medium: 1, lo
 /**
  * Orden de "Atención prioritaria": primero lo más grave; a igual gravedad,
  * lo que espera hace más tiempo. Lo que no tiene fecha va al final de su grupo.
+ * Los avisos del sistema van antes que todo lo demás.
  */
 export function sortPriorityItems(items: PriorityItem[]): PriorityItem[] {
   const time = (item: PriorityItem) => {
     const parsed = item.since ? Date.parse(item.since) : Number.NaN
     return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed
   }
+  // Los avisos del sistema van arriba de todo: son pocos y, si quedan abajo, la lista los corta.
+  const system = (item: PriorityItem) => (item.kind === 'system' ? 0 : 1)
   return [...items].sort(
     (a, b) =>
-      SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || time(a) - time(b) || a.id.localeCompare(b.id),
+      system(a) - system(b) ||
+      SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] ||
+      time(a) - time(b) ||
+      a.id.localeCompare(b.id),
   )
 }
 
