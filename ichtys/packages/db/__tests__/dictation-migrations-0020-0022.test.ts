@@ -37,7 +37,7 @@ describe('migraciones 0020 a 0022 — todas aditivas', () => {
 
   it('están en el registro de migraciones, en orden, después de la 0019', () => {
     const journal = JSON.parse(read('meta/_journal.json')) as { entries: Array<{ idx: number; tag: string; when: number }> }
-    const tail = journal.entries.filter((entry) => entry.idx >= 19 && entry.idx <= 22)
+    const tail = journal.entries.slice(-4)
     expect(tail.map((entry) => [entry.idx, entry.tag])).toEqual([
       [19, '0019_dictation_audio_takes'],
       [20, '0020_evolution_dictation_takes'],

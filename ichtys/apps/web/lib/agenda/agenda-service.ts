@@ -57,8 +57,7 @@ export async function createAgendaItem(params: { executor: DbExecutor; orgId: st
       organizationId: params.orgId,
       studyId: params.studyId,
       subjectId: input.subjectId,
-      // El nombre del turno es texto libre: va cifrado. La columna en claro ya no se escribe.
-      titleEncrypted: encryptClinicalContent(input.title),
+      title: input.title,
       kind: input.kind,
       startsAt: zonedToUtc(input.day, input.time, params.timeZone),
       durationMinutes: input.durationMinutes,
@@ -96,24 +95,6 @@ function safeNotes(encrypted: string | null): string | null {
     // Una nota que no se puede descifrar no tiene que tirar toda la agenda.
     return null
   }
-}
-
-/** Lo que se muestra cuando el nombre de un turno no se puede leer. */
-export const UNREADABLE_TITLE = 'Turno'
-
-/**
- * El nombre del turno. Va cifrado desde el 15/11/2026; los turnos anteriores lo tienen en claro en
- * la columna heredada. Un nombre que no se puede descifrar no tiene que tirar toda la agenda.
- */
-function readTitle(row: { titleEncrypted: string | null; title: string | null }): string {
-  if (row.titleEncrypted !== null) {
-    try {
-      return decryptClinicalContent(row.titleEncrypted)
-    } catch {
-      return UNREADABLE_TITLE
-    }
-  }
-  return row.title ?? UNREADABLE_TITLE
 }
 
 /** Turnos entre dos instantes, ordenados por hora. */
@@ -156,7 +137,7 @@ export async function listAgenda(params: { orgId: string; scope: StudyScope; fro
     studyLabel: studyLabel.get(row.studyId) ?? 'Estudio',
     subjectId: params.includeSubjects ? row.subjectId : null,
     subjectCode: row.subjectId === null ? null : (subjectCode.get(row.subjectId) ?? null),
-    title: readTitle(row),
+    title: row.title,
     kind: row.kind,
     startsAt: row.startsAt,
     durationMinutes: row.durationMinutes,

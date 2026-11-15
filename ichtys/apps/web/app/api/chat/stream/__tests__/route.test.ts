@@ -194,35 +194,6 @@ describe('POST /api/chat/stream — R3: el registro viaja dentro de la escritura
     expect(mocks.writeAuditLog).not.toHaveBeenCalled()
   })
 
-  it('sin llamada a un modelo, la respuesta se guarda sin proveedor ni modelo (R6)', async () => {
-    const res = await POST(streamRequest())
-    await res.text()
-
-    expect(mocks.persistAssistantMessageAndCitations.mock.calls[0]![0]).toMatchObject({ generatedBy: null })
-  })
-
-  it('la respuesta se guarda con el proveedor y el modelo de la llamada que la escribió (R6)', async () => {
-    mocks.answerEngineStream.mockImplementationOnce(async function* () {
-      yield {
-        type: 'done',
-        confidence: 'high',
-        evidences: [],
-        fullAnswer: 'respuesta ficticia',
-        usageEvents: [
-          { kind: 'chat_answer', provider: 'anthropic', model: 'modelo-de-prueba-1', inputTokens: 1, outputTokens: 1, keySource: 'platform' },
-          { kind: 'chat_eval', provider: 'google', model: 'modelo-evaluador', inputTokens: 1, outputTokens: 1, keySource: 'platform' },
-        ],
-      }
-    })
-
-    const res = await POST(streamRequest())
-    await res.text()
-
-    expect(mocks.persistAssistantMessageAndCitations.mock.calls[0]![0]).toMatchObject({
-      generatedBy: { provider: 'anthropic', model: 'modelo-de-prueba-1' },
-    })
-  })
-
   it('si no se puede guardar el pedido con su registro, no se abre el stream', async () => {
     mocks.persistUserMessage.mockRejectedValueOnce(new Error('audit unavailable'))
 
