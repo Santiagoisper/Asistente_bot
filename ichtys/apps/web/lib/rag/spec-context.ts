@@ -242,12 +242,9 @@ export async function getSpecContextChunks(params: {
   if (intents.length === 0) return { chunks: [], specFound: false }
 
   try {
-    // C5: el asistente solo recibe el protocolo extraído que una persona aprobó. Sin aprobado,
-    // responde con los fragmentos del documento, que son la fuente; el borrador no entra.
     const specRow = await getLatestStudySpec({
       orgId: params.orgId,
       studyId: params.studyId,
-      approvedOnly: true,
     })
 
     if (!specRow) return { chunks: [], specFound: false }

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { matchProtocolVisit, mergeDictationAddition, NOT_MENTIONED, studyDictationPrompts, type ProtocolVisit } from '@ichtys/clinical'
 import { bloodPressureProposalLabel } from '../../lib/subjects/proposal-display'
-import { newerDraftNotice, specPendingApprovalNotice, unapprovedSpecNotice } from '../../lib/subjects/spec-notice'
+import { unapprovedSpecNotice } from '../../lib/subjects/spec-notice'
 import { DictationPanel, type DictationRecording, type DictationSource } from './dictation-panel'
 import { DictationGuide } from './dictation-guide'
 import { ProfileUnreadableNotice } from './profile-unreadable-notice'
@@ -165,9 +165,6 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const [protocolDocumentId, setProtocolDocumentId] = useState<string | null>(null)
   const [specAvailable, setSpecAvailable] = useState(false)
   const [specNotice, setSpecNotice] = useState<string | null>(null)
-  // C5: sin protocolo aprobado no hay evaluación; con aprobado y un borrador más nuevo, se dice cuál se usa.
-  const [specPendingNotice, setSpecPendingNotice] = useState<string | null>(null)
-  const [newerDraft, setNewerDraftNotice] = useState<string | null>(null)
   /** Las visitas del cronograma del protocolo, con sus procedimientos. */
   const [protocolVisits, setProtocolVisits] = useState<ProtocolVisit[]>([])
   /** Lo guardado de este sujeto no se pudo leer: la ficha lo dice en vez de mostrar un perfil vacío. */
@@ -241,8 +238,6 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         specAvailable: boolean
         specStatus?: string | null
         specVersion?: number | null
-        specPendingApproval?: boolean
-        pendingSpecVersion?: number | null
         protocolDocumentId?: string | null
         visits?: ProtocolVisit[]
         profileUnreadable?: boolean
@@ -251,9 +246,6 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       setAssessments(data.assessments)
       setSpecAvailable(data.specAvailable)
       setSpecNotice(data.specAvailable ? unapprovedSpecNotice(data.specStatus, data.specVersion) : null)
-      const pending = data.specPendingApproval === true
-      setSpecPendingNotice(pending && !data.specAvailable ? specPendingApprovalNotice(data.pendingSpecVersion) : null)
-      setNewerDraftNotice(pending && data.specAvailable ? newerDraftNotice(data.specVersion, data.pendingSpecVersion) : null)
       setProtocolDocumentId(data.protocolDocumentId ?? null)
       setProtocolVisits(data.visits ?? [])
       setProfileUnreadable(data.profileUnreadable === true)
@@ -875,22 +867,9 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
             Screening (orientativo)
           </h3>
           {!specAvailable ? (
-            specPendingNotice ? (
-              <div
-                role="note"
-                data-testid="protocolo-sin-aprobar"
-                className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
-              >
-                <p className="font-medium">{specPendingNotice}</p>
-                <a href={`/studies/${studyId}/spec`} className="mt-2 inline-block font-semibold underline">
-                  Ir al protocolo extraído
-                </a>
-              </div>
-            ) : (
             <p className="text-sm text-alphi-muted">
               Extraé y aprobá el study spec del protocolo para evaluar criterios automáticamente.
             </p>
-            )
           ) : (
             <>
             {/* El aviso va primero y siempre: un borrador sin revisar también puede haber omitido todos los criterios. */}
@@ -900,12 +879,6 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                 className="mb-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900"
               >
                 {specNotice}
-              </p>
-            ) : null}
-            {newerDraft ? (
-              <p role="note" data-testid="borrador-mas-nuevo" className="mb-3 rounded border border-alphi-border bg-white px-3 py-2 text-xs text-alphi-muted">
-                {newerDraft}{' '}
-                <a href={`/studies/${studyId}/spec`} className="font-semibold underline">Ver el protocolo extraído</a>
               </p>
             ) : null}
             {assessments.length === 0 ? (

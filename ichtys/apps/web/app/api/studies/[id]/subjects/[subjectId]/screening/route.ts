@@ -6,7 +6,6 @@ import { evaluateAndPersistScreening } from '../../../../../../../lib/subjects/s
 import { PhiConfigError } from '../../../../../../../lib/subjects/phi-fields'
 import { guideVisits } from '../../../../../../../lib/subjects/guide-visits'
 import { profileForResponse } from '../../../../../../../lib/subjects/profile-response'
-import { pendingSpecApproval, SPEC_PENDING_APPROVAL_MESSAGE } from '../../../../../../../lib/subjects/spec-notice'
 
 export const runtime = 'nodejs'
 
@@ -26,11 +25,7 @@ export async function GET(
       subjectId: subject.id,
     })
 
-    // C5: la elegibilidad solo se evalúa contra un protocolo extraído que una persona aprobó.
-    // Un borrador no se evalúa, no deja instantánea y tampoco aporta el cronograma de visitas.
-    const specRow = await getLatestStudySpec({ orgId, studyId: study.id, approvedOnly: true })
-    const latestRow = await getLatestStudySpec({ orgId, studyId: study.id, approvedOnly: false })
-    const pending = pendingSpecApproval(specRow, latestRow)
+    const specRow = await getLatestStudySpec({ orgId, studyId: study.id, approvedOnly: false })
     if (!specRow) {
       return Response.json({
         subjectCode: subject.subjectCode,
@@ -40,9 +35,7 @@ export async function GET(
         specAvailable: false,
         profileUnreadable,
         protocolDocumentId: null,
-        specPendingApproval: pending.pending,
-        pendingSpecVersion: pending.version,
-        message: pending.pending ? SPEC_PENDING_APPROVAL_MESSAGE : 'No hay study spec extraído para este estudio.',
+        message: 'No hay study spec extraído para este estudio.',
       })
     }
 
@@ -113,9 +106,6 @@ export async function GET(
       profileUnreadable: false,
       specVersion: evaluation.specVersion,
       specStatus: specRow.status,
-      // Hay una versión más nueva sin aprobar: la evaluación sigue saliendo de la aprobada, y se dice.
-      specPendingApproval: pending.pending,
-      pendingSpecVersion: pending.version,
       protocolDocumentId: evaluation.protocolDocumentId,
       // El cronograma del protocolo, para que la guía muestre los procedimientos de la visita (D21).
       visits: guideVisits(parsedSpec.data),
