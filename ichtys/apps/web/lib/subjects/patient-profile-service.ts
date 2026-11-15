@@ -380,7 +380,9 @@ export async function proposeProfileFromEvolution(
         proposal,
       ],
     }),
-    () => proposalAudit(params, 'profile.proposal.create', { automated: true, humanConfirmed: false, factCount }),
+    // El modelo también va al registro de auditoría: la propuesta se borra del perfil al aceptarla,
+    // descartarla o retirarla, y el registro es lo que queda (R6). Es un nombre, no contenido clínico.
+    () => proposalAudit(params, 'profile.proposal.create', { automated: true, humanConfirmed: false, factCount, generatedBy: proposal.generatedBy ?? null }),
   )
   return { factCount }
 }
