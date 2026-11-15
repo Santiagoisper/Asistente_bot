@@ -2,6 +2,7 @@ import { AccessError, handleApiError, validatePhiStudyAccess } from '@ichtys/aut
 import { resolveOrgAccessContext } from '../../../../lib/access/org-context'
 import { coordinatesStudy } from '../../../../lib/access/permissions'
 import {
+  UNASSIGNED_AUDIO_LIST_MAX,
   listUnassignedAudioStudiesByAuthor,
   listUnassignedAudioStudiesOfOrg,
   listUnassignedAudiosByAuthor,
@@ -56,7 +57,12 @@ export async function GET(): Promise<Response> {
     const studyIds = [...studyNames.keys()]
     const listed =
       studyIds.length === 0 ? [] : coordinates ? await listUnassignedAudiosOfOrg({ orgId, studyIds }) : await listUnassignedAudiosByAuthor({ orgId, userId, studyIds })
-    const visible = listed.filter((row) => studyNames.has(row.studyId) && (coordinates || row.createdBy === userId))
+    // Primero lo que esta persona puede ver; después el tope. La consulta pide una de más: si
+    // después de filtrar siguen sobrando, hay grabaciones que no se muestran, y se dice. Contar
+    // antes de filtrar avisaría «hay más» por una fila que de todos modos no se iba a mostrar.
+    const allowed = listed.filter((row) => studyNames.has(row.studyId) && (coordinates || row.createdBy === userId))
+    const truncated = allowed.length > UNASSIGNED_AUDIO_LIST_MAX
+    const visible = allowed.slice(0, UNASSIGNED_AUDIO_LIST_MAX)
 
     const audios = visible.map((row) => ({
       id: row.id,
@@ -72,7 +78,7 @@ export async function GET(): Promise<Response> {
       // `false`: la grabó otra persona y quien mira la ve porque coordina el estudio.
       own: row.createdBy === userId,
     }))
-    return Response.json({ audios })
+    return Response.json({ audios, truncated })
   } catch (err) {
     return handleApiError(err)
   }
