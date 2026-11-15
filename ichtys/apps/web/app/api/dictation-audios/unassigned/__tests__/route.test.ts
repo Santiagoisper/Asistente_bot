@@ -138,6 +138,15 @@ describe('GET — mis grabaciones sin sujeto', () => {
     expect(body!.truncated).toBe(false)
   })
 
+  it('si el depósito devolviera una ajena junto a las 200 que sí puede ver, no dice que hay más: no se omitió ninguna', async () => {
+    const mine = Array.from({ length: CAP }, (_, i) => row({ id: `dep-${i}` }))
+    mocks.list.mockResolvedValue([row({ id: 'ajena', createdBy: 'user_other' }), ...mine])
+    const { body } = await list()
+    expect(body!.audios).toHaveLength(CAP)
+    expect(body!.audios.map((a) => a.id)).not.toContain('ajena')
+    expect(body!.truncated).toBe(false)
+  })
+
   it('una vencida o ya borrada queda como constancia, sin poder escucharse', async () => {
     deposit = [row({ id: 'vencida', expiresAt: new Date('2026-11-14T21:59:59Z') }), row({ id: 'borrada', purgedAt: new Date('2026-11-12T00:00:00Z') })]
     const { body } = await list()
