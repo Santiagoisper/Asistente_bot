@@ -46,7 +46,7 @@ const mocks = vi.hoisted(() => {
     decryptClinicalContent: vi.fn((enc: string) => enc.replace(/^enc:/, '')),
     detectPossiblePii: vi.fn().mockReturnValue([]),
     proposeProfileFromEvolution: vi.fn().mockResolvedValue({ factCount: 2 }),
-    loadStudyVisitNames: vi.fn().mockResolvedValue(['V1', 'Visita 2']),
+    loadStudyVisitLabels: vi.fn().mockResolvedValue(['V1', 'Visita 2']),
     dbInsertReturning: vi.fn(),
     dbFindMany: vi.fn(),
     looseInsert: vi.fn(),
@@ -106,7 +106,7 @@ vi.mock('../../../../../../../../lib/subjects/patient-profile-service', () => ({
 
 // Las visitas del protocolo se simulan; la regla de qué rótulo vale es la real.
 vi.mock('../../../../../../../../lib/subjects/study-visit-names', () => ({
-  loadStudyVisitNames: mocks.loadStudyVisitNames,
+  loadStudyVisitLabels: mocks.loadStudyVisitLabels,
 }))
 
 import { GET, POST } from '../route'
@@ -226,18 +226,18 @@ describe('rótulo de visita: de una lista, no texto libre', () => {
     const res = await post(label)
 
     expect(res.status).toBe(201)
-    expect(mocks.loadStudyVisitNames).toHaveBeenCalledWith({ orgId: mocks.ORG_ID, studyId: mocks.STUDY_ID })
+    expect(mocks.loadStudyVisitLabels).toHaveBeenCalledWith({ orgId: mocks.ORG_ID, studyId: mocks.STUDY_ID })
   })
 
   it('sin rótulo no se consultan las visitas del protocolo', async () => {
     mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
     mocks.dbInsertReturning.mockResolvedValueOnce([{ id: mocks.EVOLUTION_ID, visitLabel: null, createdAt: new Date('2026-11-15T12:00:00Z') }])
-    mocks.loadStudyVisitNames.mockClear()
+    mocks.loadStudyVisitLabels.mockClear()
 
     const res = await post('   ')
 
     expect(res.status).toBe(201)
-    expect(mocks.loadStudyVisitNames).not.toHaveBeenCalled()
+    expect(mocks.loadStudyVisitLabels).not.toHaveBeenCalled()
   })
 })
 

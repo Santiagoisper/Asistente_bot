@@ -3,10 +3,10 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { matchProtocolVisit, mergeDictationAddition, NOT_MENTIONED, studyDictationPrompts, type ProtocolVisit } from '@ichtys/clinical'
+import { mergeDictationAddition, NOT_MENTIONED, studyDictationPrompts, type ProtocolVisit } from '@ichtys/clinical'
 import { bloodPressureProposalLabel } from '../../lib/subjects/proposal-display'
 import { newerDraftNotice, specPendingApprovalNotice, unapprovedSpecNotice } from '../../lib/subjects/spec-notice'
-import { visitOptions } from '../../lib/subjects/visit-labels'
+import { visitForLabel, visitOptions } from '../../lib/subjects/visit-labels'
 import { DictationPanel, type DictationRecording, type DictationSource } from './dictation-panel'
 import { DictationGuide } from './dictation-guide'
 import { ProfileUnreadableNotice } from './profile-unreadable-notice'
@@ -227,8 +227,8 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
 
   /** Qué más decir en este estudio para este sujeto: sale de los criterios a revisar. */
   const studyPrompts = useMemo(() => studyDictationPrompts(assessments), [assessments])
-  /** La visita del cronograma que coincide con lo escrito en «¿Qué visita es?». Si no señala una sola, ninguna. */
-  const protocolVisit = useMemo(() => matchProtocolVisit(visitLabel, protocolVisits), [visitLabel, protocolVisits])
+  /** La visita del cronograma elegida en «¿Qué visita es?». Ninguna para «Sin indicar» y «No programada». */
+  const protocolVisit = useMemo(() => visitForLabel(visitLabel, protocolVisits), [visitLabel, protocolVisits])
   /** El rótulo se elige de una lista: se guarda en claro y no puede ser texto libre. */
   const visitChoices = useMemo(() => visitOptions(protocolVisits), [protocolVisits])
 
