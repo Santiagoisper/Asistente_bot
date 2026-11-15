@@ -60,7 +60,7 @@ Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, acces
 | Un documento subido va a un depósito privado, nunca público; sin credencial del depósito la subida falla en vez de escribir en otro lado | `apps/web/app/api/documents/upload/__tests__/blob-storage.test.ts` | Ninguna | La configuración del depósito en producción |
 | La respuesta de citas no expone vectores, organización ni el fragmento completo | `apps/web/app/api/citations/[messageId]/__tests__/route.test.ts` | Ninguna | — |
 | El mensaje crudo del proveedor no sale: en la subida, de la respuesta; en la ingesta, del registro técnico; en el asistente, de ninguno de los dos | `apps/web/app/api/documents/upload/__tests__/route.test.ts`, `apps/web/app/api/ingestion/run/__tests__/route.test.ts`, `apps/web/app/api/chat/stream/__tests__/route.test.ts` | Ninguna | — |
-| Ninguna ruta responde con el perfil sin pasar por la función de salida, que quita lo retirado y quién lo retiró | `apps/web/lib/subjects/__tests__/profile-response.test.ts` | Ninguna (PR #177) | — |
+| La función de salida del perfil quita lo retirado y quién lo retiró, y ninguna ruta pone el perfil tal cual en su respuesta: una guarda busca las formas conocidas de hacerlo | `apps/web/lib/subjects/__tests__/profile-response.test.ts` | Ninguna (PR #177) | La guarda reconoce formas de escribirlo, no todas: no ve un perfil devuelto con otro nombre de variable o armado fuera de la llamada |
 
 ## R6 — IA bajo supervisión humana
 
