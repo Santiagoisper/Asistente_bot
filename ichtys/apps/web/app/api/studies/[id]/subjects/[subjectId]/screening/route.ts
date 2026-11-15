@@ -1,6 +1,6 @@
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
 import { studySpecSchema } from '@ichtys/ingestion/study-spec'
-import { getLatestSpecAttempt, getLatestStudySpec } from '@ichtys/ingestion/spec-store'
+import { getLatestStudySpec } from '@ichtys/ingestion/spec-store'
 import { loadPatientProfileState } from '../../../../../../../lib/subjects/patient-profile-service'
 import { evaluateAndPersistScreening } from '../../../../../../../lib/subjects/screening-service'
 import { PhiConfigError } from '../../../../../../../lib/subjects/phi-fields'
@@ -9,23 +9,6 @@ import { profileForResponse } from '../../../../../../../lib/subjects/profile-re
 import { pendingSpecApproval, SPEC_PENDING_APPROVAL_MESSAGE } from '../../../../../../../lib/subjects/spec-notice'
 
 export const runtime = 'nodejs'
-
-type SpecRow = NonNullable<Awaited<ReturnType<typeof getLatestSpecAttempt>>>
-
-/** El último intento, si es una extracción que alguien puede revisar: no un fallo ni algo ilegible. */
-function usableAttempt(row: SpecRow | null | undefined): SpecRow | null {
-  if (!row) return null
-  const parsed = studySpecSchema.safeParse(row.spec)
-  return parsed.success && !parsed.data.extractionFailed ? row : null
-}
-
-/** El cronograma del último borrador útil, para la guía de dictado. `null` si no hay un borrador que leer. */
-async function draftGuideVisits(scope: { orgId: string; studyId: string }) {
-  const row = await getLatestStudySpec({ ...scope, approvedOnly: false })
-  if (!row || row.status !== 'draft') return null
-  const parsed = studySpecSchema.safeParse(row.spec)
-  return parsed.success ? guideVisits(parsed.data) : null
-}
 
 /** GET — screening determinista vs spec del protocolo (Fase 2.5). */
 export async function GET(
@@ -46,14 +29,9 @@ export async function GET(
     // C5: la elegibilidad solo se evalúa contra un protocolo extraído que una persona aprobó.
     // Un borrador no se evalúa, no deja instantánea y tampoco aporta el cronograma de visitas.
     const specRow = await getLatestStudySpec({ orgId, studyId: study.id, approvedOnly: true })
-    // Para el aviso se mira el último intento, no «el último útil»: un borrador nuevo que solo
-    // trae la identificación también espera aprobación. Una extracción fallida no espera nada.
-    const pending = pendingSpecApproval(specRow, usableAttempt(await getLatestSpecAttempt({ orgId, studyId: study.id })))
+    const latestRow = await getLatestStudySpec({ orgId, studyId: study.id, approvedOnly: false })
+    const pending = pendingSpecApproval(specRow, latestRow)
     if (!specRow) {
-      // Decisión de Santiago del 12/11/2026: la guía de dictado aparece con el protocolo en
-      // borrador, y lo avisa. El cronograma del borrador sale solo para eso, marcado; la
-      // evaluación no se hace.
-      const draftVisits = pending.pending ? await draftGuideVisits({ orgId, studyId: study.id }) : null
       return Response.json({
         subjectCode: subject.subjectCode,
         profile: profileForResponse(profile),
@@ -64,7 +42,6 @@ export async function GET(
         protocolDocumentId: null,
         specPendingApproval: pending.pending,
         pendingSpecVersion: pending.version,
-        ...(draftVisits ? { visits: draftVisits, visitsFromDraft: true } : {}),
         message: pending.pending ? SPEC_PENDING_APPROVAL_MESSAGE : 'No hay study spec extraído para este estudio.',
       })
     }
@@ -95,9 +72,6 @@ export async function GET(
         profileUnreadable: true,
         specVersion: specRow.version,
         specStatus: specRow.status,
-        // El estado del perfil no cambia qué protocolo espera aprobación.
-        specPendingApproval: pending.pending,
-        pendingSpecVersion: pending.version,
         protocolDocumentId: null,
         visits: guideVisits(parsedSpec.data),
       })

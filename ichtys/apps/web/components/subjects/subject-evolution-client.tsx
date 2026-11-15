@@ -168,8 +168,6 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   // C5: sin protocolo aprobado no hay evaluación; con aprobado y un borrador más nuevo, se dice cuál se usa.
   const [specPendingNotice, setSpecPendingNotice] = useState<string | null>(null)
   const [newerDraft, setNewerDraftNotice] = useState<string | null>(null)
-  // Sin protocolo aprobado, la guía muestra igual los procedimientos de la visita y avisa que salen de un borrador.
-  const [visitsFromDraft, setVisitsFromDraft] = useState(false)
   /** Las visitas del cronograma del protocolo, con sus procedimientos. */
   const [protocolVisits, setProtocolVisits] = useState<ProtocolVisit[]>([])
   /** Lo guardado de este sujeto no se pudo leer: la ficha lo dice en vez de mostrar un perfil vacío. */
@@ -247,7 +245,6 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         pendingSpecVersion?: number | null
         protocolDocumentId?: string | null
         visits?: ProtocolVisit[]
-        visitsFromDraft?: boolean
         profileUnreadable?: boolean
       }
       setProfile(data.profile)
@@ -259,7 +256,6 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       setNewerDraftNotice(pending && data.specAvailable ? newerDraftNotice(data.specVersion, data.pendingSpecVersion) : null)
       setProtocolDocumentId(data.protocolDocumentId ?? null)
       setProtocolVisits(data.visits ?? [])
-      setVisitsFromDraft(data.visitsFromDraft === true)
       setProfileUnreadable(data.profileUnreadable === true)
       // Lectura nueva: lo que trae es lo que hay, también si trae una propuesta de una anulada.
       setProposalsRetired([])
@@ -674,7 +670,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         </div>
         <DictationGuide
           studyPrompts={studyPrompts}
-          unapprovedProtocol={specNotice !== null || visitsFromDraft}
+          unapprovedProtocol={specNotice !== null}
           visit={protocolVisit}
           visitsAvailable={protocolVisits.length > 0}
         />
