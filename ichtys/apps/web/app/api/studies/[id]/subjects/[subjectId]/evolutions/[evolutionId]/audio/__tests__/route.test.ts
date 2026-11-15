@@ -293,3 +293,24 @@ describe('límite de pedidos — grabaciones', () => {
     expect(mocks.writeAuditLog).not.toHaveBeenCalled()
   })
 })
+
+/** La misma clase del hallazgo del #178: el identificador de la ruta, en su forma canónica. */
+describe('el identificador de la evolución llega en minúsculas a la consulta y al registro', () => {
+  const CANONICAL = 'a3f1c2d4-5b6e-4f70-8a9b-0c1d2e3f4a5b'
+  const upper = { params: Promise.resolve({ id: STUDY, subjectId: SUBJECT, evolutionId: CANONICAL.toUpperCase() }) }
+
+  it('escuchar', async () => {
+    mocks.loadDictationAudio.mockResolvedValue({ state: 'ok', id: 'audio-1', mime: 'audio/webm', bytes: new Uint8Array([9]) })
+    const res = await GET(new Request('http://test/audio'), upper)
+    expect(res.status).toBe(200)
+    expect(mocks.loadDictationAudio).toHaveBeenCalledWith(expect.objectContaining({ evolutionId: CANONICAL }))
+    expect(mocks.writeAuditLog).toHaveBeenCalledWith(expect.objectContaining({ metadata: expect.objectContaining({ evolutionId: CANONICAL }) }))
+  })
+
+  it('guardar', async () => {
+    mocks.findEvolution.mockResolvedValue({ id: CANONICAL, authorUserId: 'user_author' })
+    const res = await POST(upload(), upper)
+    expect(res.status).toBe(201)
+    expect(mocks.findEvolution).toHaveBeenCalledWith(expect.objectContaining({ evolutionId: CANONICAL }), 'current')
+  })
+})

@@ -13,6 +13,7 @@ import { DICTATION_AUDIO_MAX_TAKES } from '../../../../../../../../../lib/dictat
 import { parseTake } from '../../../../../../../../../lib/dictation/takes'
 import { findSubjectEvolution, lockSubjectEvolution } from '../../../../../../../../../lib/subjects/evolution-reader'
 import { PhiConfigError } from '../../../../../../../../../lib/subjects/phi-fields'
+import { parseRouteUuid } from '../../../../../../../../../lib/api/route-uuid'
 
 export const runtime = 'nodejs'
 
@@ -21,7 +22,6 @@ type Params = { params: Promise<{ id: string; subjectId: string; evolutionId: st
 /** La evolución se anuló (o dejó de estar) entre la primera mirada y el guardado. */
 class EvolutionNoLongerCurrentError extends Error {}
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 /** Lo mismo que para una evolución que no existe: no se confirma nada a quien no corresponde. */
 const notFound = () => new Response('Not Found', { status: 404 })
 
@@ -34,10 +34,11 @@ const notFound = () => new Response('Not Found', { status: 404 })
 const AUDIO_ENDPOINT = '/api/studies/[id]/subjects/[subjectId]/evolutions/[evolutionId]/audio'
 
 export async function POST(req: Request, { params }: Params): Promise<Response> {
-  const { id: routeStudyId, subjectId, evolutionId } = await params
+  const { id: routeStudyId, subjectId, evolutionId: rawEvolutionId } = await params
+  const evolutionId = parseRouteUuid(rawEvolutionId)
   try {
     const access = await validateSubjectAccess(subjectId, routeStudyId, { require: 'clinical.author' })
-    if (!UUID.test(evolutionId)) return notFound()
+    if (!evolutionId) return notFound()
     // Límite de pedidos, antes de leer el cuerpo: una grabación son hasta 4 MB.
     const limited = await clinicalRateLimit('audio_write', { orgId: access.orgId, userId: access.userId, studyId: access.study.id, req, endpoint: AUDIO_ENDPOINT })
     if (limited) return limited
@@ -136,10 +137,11 @@ export async function POST(req: Request, { params }: Params): Promise<Response> 
 
 /** GET — entrega la grabación a quien puede ver los datos clínicos del sujeto. Queda registrado quién la escuchó. */
 export async function GET(req: Request, { params }: Params): Promise<Response> {
-  const { id: routeStudyId, subjectId, evolutionId } = await params
+  const { id: routeStudyId, subjectId, evolutionId: rawEvolutionId } = await params
+  const evolutionId = parseRouteUuid(rawEvolutionId)
   try {
     const access = await validateSubjectAccess(subjectId, routeStudyId)
-    if (!UUID.test(evolutionId)) return notFound()
+    if (!evolutionId) return notFound()
     // Límite de pedidos, antes de descifrar y de registrar la escucha.
     const limited = await clinicalRateLimit('audio_listen', { orgId: access.orgId, userId: access.userId, studyId: access.study.id, req, endpoint: AUDIO_ENDPOINT })
     if (limited) return limited
