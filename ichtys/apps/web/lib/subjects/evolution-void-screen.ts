@@ -42,3 +42,14 @@ export function voidDoneMessage(outcome: VoidOutcome): string {
   parts.push('El perfil no se corrigió solo: si de esa evolución ya se había aceptado algo, la ficha lo avisa para que lo revises.')
   return parts.join(' ')
 }
+
+/**
+ * En la tarjeta de una evolución que el servidor confirmó como registrada por error y que la
+ * historia en pantalla todavía muestra como estaba: la relectura no salió.
+ */
+export const VOID_HISTORY_NOT_REREAD =
+  'La historia no se volvió a leer después de la declaración: esta evolución se ve como estaba antes. Recargá la página.'
+
+/** El perfil y la elegibilidad en pantalla no son una lectura de ahora: falló, o no se llegó a pedir. */
+export const SCREENING_NOT_READ =
+  'No se pudo leer el perfil ni la elegibilidad de este sujeto: lo que se ve acá puede no estar al día. Recargá la página.'
