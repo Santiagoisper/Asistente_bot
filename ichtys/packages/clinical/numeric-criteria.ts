@@ -50,16 +50,61 @@ export function ngspToIfccMmol(percent: number): number {
   return (percent - NGSP_FROM_IFCC_INTERCEPT) / NGSP_FROM_IFCC_SLOPE
 }
 
+// Aclaramiento de creatinina: la palabra, lo que puede venir en el medio («renal», «estimado») y el
+// enlace hasta «creatinina». El lector de informes usa las mismas tres piezas: una sola lista para
+// el motor y para el lector.
+const CLEARANCE_NOUN = '(?:aclaramiento|aclaramento|clearance|clairance|depuraci[oó]n|depura[cç][aã]o)'
+const CLEARANCE_QUALIFIER = '(?:\\s+(?:renal|estimad[oa]|calculad[oa]|medid[oa])){0,2}'
+const CLEARANCE_LINK = '\\s+(?:d[ea]\\s+|of\\s+)?(?:la\\s+)?'
+
 /**
  * El aclaramiento de creatinina (medido, o estimado con Cockcroft-Gault) es otra medida que el
  * filtrado glomerular estimado: no se ajusta por superficie corporal y los protocolos lo piden con
  * nombre propio. El motor no lo compara. Sirve para no confundirlo con el filtrado estimado.
+ *
+ * Ante la duda, frena: un nombre de más deja el criterio «a revisar», uno de menos lo compara con
+ * la medida equivocada. Por eso toma errores de tipeo («Cockroft») y siglas («CrCl», «Cl Cr», «CCr»).
+ * «CL» se cierra con una clase de letras y no con `\b`, que no sirve antes de una vocal acentuada.
  */
-const CREATININE_CLEARANCE =
-  /cockcroft|\bCrCl\b|\bClCr\b|(?:aclaramiento|clearance|depuraci[oó]n)\s+(?:de\s+)?(?:la\s+)?creatinina|creatinine\s+clearance/i
+const CREATININE_CLEARANCE = new RegExp(
+  [
+    'cockc?rof',
+    '\\be?CrCl\\b',
+    '\\bCl\\s*[-.]?\\s*Cr\\b',
+    '\\bCr\\s*[-.]?\\s*Cl\\b',
+    '\\bCCr\\b',
+    'creatinin\\w*\\s+(?:clearance|CL(?![a-záéíóúñ]))',
+    `${CLEARANCE_NOUN}${CLEARANCE_QUALIFIER}${CLEARANCE_LINK}cr[eé]atinin`,
+    'aclaramiento\\s+creatin[ií]nico',
+    'kreatinin-?clearance',
+  ].join('|'),
+  'i',
+)
 
 export function mentionsCreatinineClearance(text: string): boolean {
   return CREATININE_CLEARANCE.test(text)
+}
+
+const ENDS_NAMING_A_CLEARANCE = new RegExp(`${CLEARANCE_NOUN}${CLEARANCE_QUALIFIER}${CLEARANCE_LINK}$`, 'i')
+
+/**
+ * Para el lector de informes: lo que viene justo antes de la palabra «creatinina» la vuelve un
+ * aclaramiento («Aclaramiento renal de » + creatinina). Mira solo el final del texto, así un
+ * aclaramiento escrito antes en el mismo renglón no tapa a la creatinina que sigue.
+ */
+export function precedesCreatinineAsClearance(textBefore: string): boolean {
+  return ENDS_NAMING_A_CLEARANCE.test(textBefore)
+}
+
+/**
+ * El filtrado glomerular medido (con iohexol, iotalamato o inulina) tampoco es el estimado: es otro
+ * estudio y da otro número. El motor no lo compara.
+ */
+const MEASURED_GFR =
+  /\bmGFR\b|(?:\bTFG|\bGFR|filtrado\s+glomerular|filtraci[oó]n\s+glomerular)\s+medid[oa]|measured\s+(?:GFR|glomerular)|iohexol|iotalamato|iothalamate|\binulin/i
+
+export function mentionsMeasuredGfr(text: string): boolean {
+  return MEASURED_GFR.test(text)
 }
 
 export type GfrFormula = 'CKD-EPI' | 'MDRD' | 'cistatina'

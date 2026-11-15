@@ -1,5 +1,6 @@
 import { extractFactsFromEvolution } from './extract-facts'
 import { parseDecimal, upsertLab } from './lab-utils'
+import { mentionsCreatinineClearance, mentionsMeasuredGfr, precedesCreatinineAsClearance } from './numeric-criteria'
 import type { LabObservation } from './profile-schema'
 import { redactPhiForLlm } from './phi-redact'
 
@@ -17,11 +18,22 @@ export function redactLabHeaderPii(text: string): { text: string; redactedCount:
   return { text: result, redactedCount }
 }
 
-/** Cada patrón termina en el número (grupo 1). La unidad se lee aparte, de lo que sigue. */
+/** El renglón del texto que contiene la posición dada. */
+function lineAt(text: string, index: number): string {
+  const start = text.lastIndexOf('\n', index - 1) + 1
+  const end = text.indexOf('\n', index)
+  return text.slice(start, end === -1 ? text.length : end)
+}
+
+/**
+ * Cada patrón termina en el número (grupo 1). La unidad se lee aparte, de lo que sigue.
+ * `skip` descarta una coincidencia que es otra medida; se sigue buscando en el resto del texto.
+ */
 const LAB_LINE_PATTERNS: Array<{
   pattern: RegExp
   name: string
   unit?: string
+  skip?: (text: string, index: number) => boolean
 }> = [
   { pattern: /hemoglobina\s+glicosilada\s*:?\s*(\d+[.,]\d+)/i, name: 'HbA1c', unit: '%' },
   // «Hemoglobina glicosilada (HbA1c): 7,8 %»: el paréntesis que cierra queda antes de los dos puntos.
@@ -33,17 +45,25 @@ const LAB_LINE_PATTERNS: Array<{
     name: 'Glucosa',
     unit: 'mg/dL',
   },
-  // «Clearance de creatinina: 85» es otra medida: no se propone como creatinina.
+  // «Clearance de creatinina: 85» es otra medida: no se propone como creatinina. Qué cuenta como
+  // aclaramiento lo dice la misma lista que usa el motor de elegibilidad.
   {
-    pattern: /(?<!(?:aclaramiento|clearance|depuraci[oó]n)\s+(?:de\s+)?(?:la\s+)?)creatinina\s*:?\s*(\d+[.,]?\d*)/i,
+    pattern: /creatinina\s*:?\s*(\d+[.,]?\d*)/i,
     name: 'Creatinina',
     unit: 'mg/dL',
+    skip: (text, index) => precedesCreatinineAsClearance(text.slice(0, index)),
   },
-  // «TFG (Cockcroft-Gault): 78» no coincide (el paréntesis corta) y no se propone como filtrado estimado.
+  // «TFG (Cockcroft-Gault): 78» no coincide (el paréntesis corta). «TFG: 78 mL/min (Cockcroft-Gault)»
+  // sí coincide: si el renglón nombra un aclaramiento o un filtrado medido, no se propone como
+  // filtrado estimado.
   {
     pattern: /(?:eGFR|TFG|filtrado\s+glomerular)\s*:?\s*(\d+[.,]?\d*)/i,
     name: 'eGFR',
     unit: 'mL/min',
+    skip: (text, index) => {
+      const line = lineAt(text, index)
+      return mentionsCreatinineClearance(line) || mentionsMeasuredGfr(line)
+    },
   },
 ]
 
@@ -81,11 +101,14 @@ export function parseLabOcrText(rawText: string): LabOcrParseResult {
     labs = upsertLab(labs, lab)
   }
 
-  for (const { pattern, name, unit } of LAB_LINE_PATTERNS) {
-    const match = redacted.match(pattern)
-    if (match?.[1]) {
-      const afterNumber = redacted.slice((match.index ?? 0) + match[0].length)
+  for (const { pattern, name, unit, skip } of LAB_LINE_PATTERNS) {
+    // La primera coincidencia que no sea otra medida.
+    const everywhere = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`)
+    for (const match of redacted.matchAll(everywhere)) {
+      if (!match[1] || skip?.(redacted, match.index)) continue
+      const afterNumber = redacted.slice(match.index + match[0].length)
       labs = upsertLab(labs, { name, value: parseDecimal(match[1]), unit: unitFor(afterNumber, unit) })
+      break
     }
   }
 
