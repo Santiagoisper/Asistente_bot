@@ -1,6 +1,6 @@
 # Confirmación con clave personal como firma electrónica: nota de diseño
 
-Fecha: 15/11/2026. Tarea 46 del cronograma. **Estado: propuesta, sin construir, sin revisión de Calidad ni de Legales.** Nada de esto afirma conformidad con ninguna norma.
+Fecha: 15/11/2026. Tarea 46 del cronograma. **Estado: propuesta, sin construir, sin revisión de Calidad ni de Legales. Decisiones 1 a 5 tomadas; la 6 abierta.** Nada de esto afirma conformidad con ninguna norma.
 
 Marcas: **[H]** hecho leído en la fuente citada · **[I]** interpretación de quien escribe · **[O]** opinión o propuesta · **[P]** pendiente de verificar.
 
@@ -97,13 +97,18 @@ La regla vigente es R7 de la línea de base: ninguna pantalla presenta una acci�
 
 ## Decisiones para Santiago
 
-**Respuesta del 15/11/2026, 06:04:** quien dirige el producto aceptó lo propuesto en las tres primeras («sí, así»). Las decisiones 4, 5 y 6 siguen abiertas.
+**Respuesta del 15/11/2026, 06:04:** quien dirige el producto aceptó lo propuesto en las tres primeras («sí, así»).
+
+**Decisiones 4 y 5, tomadas el 15/11/2026 por quien construye, por delegación expresa de quien dirige el producto (06:43 y 06:49 de ese día).** Son reversibles y él las ve en su lista. La 6 no se decide acá: es de Calidad y Legales.
 
 | Decisión | Queda así |
 |---|---|
 | 1 | Se llama **«confirmación de envío»**, no firma, mientras la firma clínica que vale sea la del profesional en la historia clínica. Se construye con los mismos controles |
 | 2 | **Por registro**, con sesión de firma. No por tanda |
-| 3 | **Camino A** (reautenticar en el proveedor de identidad) si lo permite para todas las formas de ingreso; **B** (clave propia, con migración) si no. Falta comprobar cuál permite el proveedor: es un hecho a verificar, no una decisión |
+| 3 | **Camino A** (reautenticar en el proveedor de identidad) si lo permite para todas las formas de ingreso; **B** (clave propia, con migración) si no. Ver «Lo que se comprobó del proveedor de identidad» |
+| 4 | **Quien administra la organización** verifica la identidad de la persona antes de darle la capacidad de confirmar. Dar y quitar esa capacidad queda en el registro de auditoría, con quién la dio. La constancia de cómo verificó (documento, en persona) es del centro, fuera del sistema |
+| 5 | **Comprobación propia, que vale en los dos modos.** No se apoya en el validador de siempre, que en modo abierto no restringe a nadie. Motivo: el modo estricto no está encendido en ninguna organización, y una confirmación que solo existiera ahí no existiría para nadie |
+| 6 | **Sin decidir.** A quién le toca la carta a la FDA es pregunta para Calidad y Legales |
 
 Lo que estas respuestas no deciden: si la premisa de la 1 es cierta en cada centro (qué firma vale en su historia clínica), que es pregunta para el centro y para Calidad.
 
@@ -114,12 +119,33 @@ Lo que estas respuestas no deciden: si la premisa de la 1 es cierta en cada cent
 5. **¿La firma existe solo en modo estricto**, o se construye con una comprobación propia que valga también en modo abierto?
 6. **¿A quién le toca la carta a la FDA** en los estudios que la requieran? Es pregunta para Calidad y Legales.
 
+## Lo que se comprobó del proveedor de identidad (15/11/2026)
+
+Leído en la documentación pública del proveedor, sin probarlo en ninguna instancia:
+
+- [H] Ofrece **reverificación**: el servidor pregunta si la persona verificó sus credenciales dentro de una ventana de tiempo y, si no, responde con un error que el navegador convierte en un pedido de verificación. La versión instalada (`@clerk/nextjs` 7.x) la trae.
+- [H] Hay niveles fijos. Uno pide el primer factor dentro de los últimos 10 minutos; otro, primer y segundo factor dentro de los últimos 10 minutos; otros dos usan ventanas más largas.
+- [I] **Encaja con la sesión de confirmación, pero no es idéntica a lo que propone esta nota.** La nota dice «la primera pide los dos componentes, las siguientes uno». El proveedor no pide un componente por cada confirmación: deja pasar todas las que caigan dentro de la ventana y vuelve a pedir al vencer. Para Part 11 §11.200(a)(1)(i) eso es más flojo que «un componente cada vez». Si se quiere un componente por registro, hace falta el camino B o algo propio encima del A.
+- [P] **Sin comprobar:** que quien entra con una cuenta de terceros (sin clave propia en el proveedor) pueda reverificar, y con qué. Que funcione en el plan contratado. Y la instancia de producción sigue siendo una de desarrollo (tarea 23): ahí no se puede dar por bueno nada.
+
+**Consecuencia para la decisión 3:** el camino A existe. No se elige todavía entre A y B: falta probar la reverificación con una cuenta real de cada forma de ingreso, y decidir si la ventana de tiempo alcanza o se pide un componente por registro.
+
+## Qué falta para poder construirla
+
+En orden, y ninguno depende de quien construye:
+
+1. **El contrato de entregas a la historia clínica (tarea 47).** La confirmación se guarda en la misma transacción que la entrega; sin entrega no hay qué confirmar. Ese contrato espera las respuestas de quienes tienen el código de la historia clínica del centro.
+2. **La instancia de producción del proveedor de identidad (tarea 23).**
+3. **La prueba de reverificación** con cuentas reales, que cierra la decisión 3.
+
+Lo que sí existe ya y se va a reusar: la huella del contenido en forma canónica (`apps/web/lib/audit/fingerprint.ts`). Le falta unificar saltos de línea y normalizar Unicode en el texto, que esta nota pide; se agrega al construir.
+
 ## Lo que no se leyó o no se pudo comprobar
 
 - Las fuentes se leyeron con una herramienta que extrae y resume el texto; no se cotejó cada frase contra el original. Antes de citar esta nota hacia afuera, alguien tiene que leer las secciones marcadas.
 - De la guía de la EMA no se leyeron completos los anexos 1, 2 y 3.
 - No se leyeron: los anexos de la Disposición ANMAT 7516/2025, ICH E6(R3), la ley 26.529, el reglamento europeo de identificación electrónica, ni el borrador del Anexo 22.
-- Qué permite el proveedor de identidad en reautenticación: sin comprobar.
+- Qué permite el proveedor de identidad en reautenticación: leído en su documentación el 15/11/2026, sin probar (ver arriba).
 - Qué firma hoy la historia clínica del centro y con qué método: sin comprobar (figura entre los pedidos a ese equipo, tarea 45).
 
 ## Fuentes
@@ -128,3 +154,4 @@ Lo que estas respuestas no deciden: si la premisa de la 1 es cierta en cada cent
 - FDA, guía de octubre de 2024: https://fda.gov/media/166215/download
 - EMA/INS/GCP/112288/2023: https://www.ema.europa.eu/en/documents/regulatory-procedural-guideline/guideline-computerised-systems-electronic-data-clinical-trials_en.pdf
 - Ley 25.506, texto actualizado: https://www.argentina.gob.ar/normativa/nacional/ley-25506-70749/texto
+- Proveedor de identidad, reverificación: https://clerk.com/docs/guides/secure/reverification
