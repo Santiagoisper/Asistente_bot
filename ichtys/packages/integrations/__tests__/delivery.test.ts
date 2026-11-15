@@ -149,6 +149,6 @@ describe('qué se puede afirmar de una entrega', () => {
 
   it('el destino recibió pero todavía no registró: enviada', () => {
     const fp = deliveryFingerprint(CONTENT)
-    expect(toDeliveryRecord(descriptor, { ok: true, receiptId: 'r', duplicate: false }, { found: true, registered: false }, fp).stage).toBe('sent')
+    expect(toDeliveryRecord(descriptor, { ok: true, receiptId: 'r', duplicate: false }, { found: true, registered: false, contentFingerprint: fp }, fp).stage).toBe('sent')
   })
 })
