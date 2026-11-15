@@ -42,3 +42,29 @@ export function voidDoneMessage(outcome: VoidOutcome): string {
   parts.push('El perfil no se corrigió solo: si de esa evolución ya se había aceptado algo, la ficha lo avisa para que lo revises.')
   return parts.join(' ')
 }
+
+/** La respuesta prueba que la evolución quedó declarada: salió bien, o ya figuraba. */
+export function declaredByResponse(ok: boolean, code: string): boolean {
+  return ok || code === 'already_voided'
+}
+
+/** Junto a una evolución que se declaró y que la historia, sin poder releerse, sigue trayendo como vigente. */
+export const VOID_UNREFRESHED_NOTICE =
+  'Se declaró registrada por error en este sujeto. La historia no se pudo volver a leer: recargá la página para verla al día.'
+
+/** Cuando la elegibilidad no se pudo volver a leer después de un cambio. */
+export const SCREENING_STALE_NOTICE = 'No se pudo volver a leer el perfil y la elegibilidad. Lo que ves puede no estar al día: recargá la página antes de usarlo.'
+
+/**
+ * La lista de la historia con lo que esta pantalla ya sabe que se declaró. Si la relectura
+ * falló, la copia anterior trae la evolución como vigente: se deja de ofrecer la acción y se
+ * marca, para decirlo. Cuando la relectura llega, manda lo que dice el servidor.
+ */
+export function afterDeclaredVoid<T extends { id: string; voided?: unknown; canVoid?: boolean }>(evolutions: readonly T[], declared: ReadonlySet<string>): Array<T & { voidUnrefreshed?: true }> {
+  return evolutions.map((evolution) => (declared.has(evolution.id) && !evolution.voided ? { ...evolution, canVoid: false, voidUnrefreshed: true as const } : evolution))
+}
+
+/** Una propuesta de una evolución declarada por error ya no se puede aceptar: no se ofrece. */
+export function proposalsStillOffered<P extends { evolutionId: string }>(proposals: readonly P[], declared: ReadonlySet<string>): P[] {
+  return proposals.filter((proposal) => !declared.has(proposal.evolutionId))
+}
