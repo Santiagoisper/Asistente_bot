@@ -1,6 +1,7 @@
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
 import { studySpecSchema } from '@ichtys/ingestion/study-spec'
 import { getLatestSpecAttempt, getLatestStudySpec } from '@ichtys/ingestion/spec-store'
+import { writeAuditLog } from '../../../../../../../lib/chat/persistence'
 import { loadPatientProfileState } from '../../../../../../../lib/subjects/patient-profile-service'
 import { evaluateAndPersistScreening } from '../../../../../../../lib/subjects/screening-service'
 import { PhiConfigError } from '../../../../../../../lib/subjects/phi-fields'
@@ -11,6 +12,9 @@ import { pendingSpecApproval, SPEC_PENDING_APPROVAL_MESSAGE } from '../../../../
 export const runtime = 'nodejs'
 
 type SpecRow = NonNullable<Awaited<ReturnType<typeof getLatestSpecAttempt>>>
+
+/** Por qué una consulta entregó el perfil sin evaluar la elegibilidad. Va al registro: nunca lleva un dato del sujeto. */
+type NotEvaluatedReason = 'no_spec' | 'spec_pending_approval' | 'invalid_spec' | 'profile_unreadable'
 
 /** El último intento, si es una extracción que alguien puede revisar: no un fallo ni algo ilegible. */
 function usableAttempt(row: SpecRow | null | undefined): SpecRow | null {
@@ -43,6 +47,20 @@ export async function GET(
       subjectId: subject.id,
     })
 
+    // Toda respuesta de esta ruta lleva el perfil del sujeto, y la ficha lo lee solo por acá. Con
+    // evaluación, el registro lo escribe el servicio. Sin evaluación lo escribe la ruta, antes de
+    // entregar: si no se puede escribir, el perfil no sale (igual que `profile.view`).
+    const recordReadWithoutEvaluation = (reason: NotEvaluatedReason) =>
+      writeAuditLog({
+        action: 'screening.view',
+        orgId,
+        studyId: study.id,
+        userId,
+        resourceType: 'subject',
+        resourceId: subject.id,
+        metadata: { evaluated: false, reason },
+      })
+
     // C5: la elegibilidad solo se evalúa contra un protocolo extraído que una persona aprobó.
     // Un borrador no se evalúa, no deja instantánea y tampoco aporta el cronograma de visitas.
     const specRow = await getLatestStudySpec({ orgId, studyId: study.id, approvedOnly: true })
@@ -54,6 +72,7 @@ export async function GET(
       // borrador, y lo avisa. El cronograma del borrador sale solo para eso, marcado; la
       // evaluación no se hace.
       const draftVisits = pending.pending ? await draftGuideVisits({ orgId, studyId: study.id }) : null
+      await recordReadWithoutEvaluation(pending.pending ? 'spec_pending_approval' : 'no_spec')
       return Response.json({
         subjectCode: subject.subjectCode,
         profile: profileForResponse(profile),
@@ -71,6 +90,7 @@ export async function GET(
 
     const parsedSpec = studySpecSchema.safeParse(specRow.spec)
     if (!parsedSpec.success) {
+      await recordReadWithoutEvaluation('invalid_spec')
       return Response.json({
         subjectCode: subject.subjectCode,
         profile: profileForResponse(profile),
@@ -86,6 +106,7 @@ export async function GET(
     // Un perfil que no se pudo leer llega acá vacío. Evaluarlo daría todo «a revisar» y
     // dejaría guardada esa evaluación como si fuera la del sujeto: no se evalúa ni se guarda.
     if (profileUnreadable) {
+      await recordReadWithoutEvaluation('profile_unreadable')
       return Response.json({
         subjectCode: subject.subjectCode,
         profile: profileForResponse(profile),

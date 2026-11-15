@@ -452,3 +452,119 @@ describe('C5 — la elegibilidad exige un protocolo aprobado', () => {
     expect(mocks.evaluateAndPersistScreening).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * Hallazgo de revisión del #195: cuando la ruta no evalúa, igual entrega el perfil del sujeto,
+ * y la ficha lee el perfil solo por acá. Esa lectura tiene que dejar su registro, como lo deja
+ * `profile.view`. Antes del #195 un estudio con solo borrador pasaba por la evaluación y dejaba
+ * `screening.view`; desde C5 esa rama no evalúa.
+ */
+describe('toda consulta que entrega el perfil deja un registro de acceso', () => {
+  afterEach(() => {
+    mocks.getLatestStudySpec.mockReset()
+    mocks.getLatestSpecAttempt.mockReset()
+    mocks.writeAuditLog.mockReset()
+    mocks.writeAuditLog.mockResolvedValue(undefined)
+  })
+  // Identificador con letras y dato del perfil reconocible: el registro no puede traer ninguno de los dos valores clínicos.
+  const draft = (version: number) => ({ version, status: 'draft', documentVersionId: `doc-v${version}`, spec: VALID_SPEC })
+  const approved = (version: number, spec: unknown = VALID_SPEC) => ({ version, status: 'approved', documentVersionId: `doc-v${version}`, spec })
+  const store = (rows: { approved: unknown; latest: unknown }) => {
+    mocks.getLatestStudySpec.mockImplementation(async (params: { approvedOnly?: boolean }) => (params.approvedOnly ? rows.approved : rows.latest))
+    mocks.getLatestSpecAttempt.mockImplementation(async () => rows.latest)
+  }
+  const arrange = (unreadable = false) => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.loadPatientProfile.mockResolvedValueOnce({ profile: mocks.mockProfile, unreadable })
+  }
+  const call = () => GET(new Request('http://localhost/api/screening'), makeParams())
+
+  const NOT_EVALUATED = [
+    { name: 'solo hay un borrador', reason: 'spec_pending_approval', unreadable: false, rows: { approved: null, latest: draft(2) } },
+    { name: 'no hay ningún protocolo extraído', reason: 'no_spec', unreadable: false, rows: { approved: null, latest: null } },
+    { name: 'el protocolo aprobado no valida', reason: 'invalid_spec', unreadable: false, rows: { approved: approved(1, { nada: true }), latest: approved(1, { nada: true }) } },
+    { name: 'el perfil no se pudo leer', reason: 'profile_unreadable', unreadable: true, rows: { approved: approved(1), latest: approved(1) } },
+  ] as const
+
+  it.each(NOT_EVALUATED)('$name: no evalúa y deja un registro, uno solo, con el motivo «$reason»', async ({ reason, unreadable, rows }) => {
+    arrange(unreadable)
+    store(rows)
+
+    const res = await call()
+
+    expect(res.status).toBe(200)
+    expect(((await res.json()) as { profile: unknown }).profile).toBeDefined()
+    expect(mocks.evaluateAndPersistScreening).not.toHaveBeenCalled()
+    expect(mocks.writeAuditLog).toHaveBeenCalledTimes(1)
+    expect(mocks.writeAuditLog.mock.calls[0]![0]).toEqual({
+      action: 'screening.view',
+      orgId: mocks.ORG_ID,
+      studyId: mocks.STUDY_ID,
+      userId: mocks.USER_ID,
+      resourceType: 'subject',
+      resourceId: mocks.SUBJECT_ID,
+      metadata: { evaluated: false, reason },
+    })
+  })
+
+  it.each(NOT_EVALUATED)('$name: el registro no lleva ningún dato del sujeto', async ({ unreadable, rows }) => {
+    arrange(unreadable)
+    store(rows)
+
+    await call()
+
+    const written = JSON.stringify(mocks.writeAuditLog.mock.calls)
+    expect(written).not.toContain('HbA1c')
+    expect(written).not.toContain('MOCK-001')
+  })
+
+  it.each(NOT_EVALUATED)('$name: si el registro no se puede escribir, el perfil no se entrega', async ({ unreadable, rows }) => {
+    arrange(unreadable)
+    store(rows)
+    mocks.writeAuditLog.mockRejectedValueOnce(new Error('sin base'))
+
+    const res = await call()
+
+    expect(res.status).toBe(500)
+    expect(await res.text()).not.toContain('HbA1c')
+  })
+
+  it('con evaluación, el registro lo escribe el servicio y la ruta no suma otro', async () => {
+    arrange()
+    store({ approved: approved(1), latest: approved(1) })
+    mocks.evaluateAndPersistScreening.mockResolvedValueOnce(mocks.mockEvaluation)
+
+    const res = await call()
+
+    expect(res.status).toBe(200)
+    expect(mocks.evaluateAndPersistScreening).toHaveBeenCalledTimes(1)
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { name: 'sin sesión', status: 401 as const },
+    { name: 'sin acceso al sujeto', status: 404 as const },
+  ])('$name: no se entrega nada y no se registra una lectura que no ocurrió', async ({ status }) => {
+    mocks.validateSubjectAccess.mockRejectedValueOnce(new mocks.AccessError('x', status))
+
+    const res = await call()
+
+    expect(res.status).toBe(status)
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+    expect(mocks.evaluateAndPersistScreening).not.toHaveBeenCalled()
+  })
+
+  it('guardián: cada respuesta que lleva el perfil y no pasó por la evaluación escribe antes su registro', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { fileURLToPath } = await import('node:url')
+    const source = readFileSync(fileURLToPath(new URL('../route.ts', import.meta.url)), 'utf8')
+    const responsesWithProfile = source.split('profile: profileForResponse(profile)').length - 1
+    const recordedWithoutEvaluation = source.split('await recordReadWithoutEvaluation(').length - 1
+    const evaluated = source.split('await evaluateAndPersistScreening(').length - 1
+
+    expect(evaluated).toBe(1)
+    expect(responsesWithProfile).toBeGreaterThan(1)
+    // Una rama nueva que entregue el perfil sin evaluar y sin registro rompe esta cuenta.
+    expect(recordedWithoutEvaluation + evaluated).toBe(responsesWithProfile)
+  })
+})
