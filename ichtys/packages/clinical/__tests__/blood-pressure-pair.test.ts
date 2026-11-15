@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { mergedBloodPressure } from '../blood-pressure'
+import { mergeProfileWithFacts } from '../extract-facts'
+import { mergeProfileWithExtraction } from '../extract-merge'
+import { parsePatientProfile } from '../profile-schema'
 
 /**
  * La presión arterial es un par. Antes cada número se tomaba por separado: una evolución que
@@ -40,5 +43,27 @@ describe('mergedBloodPressure', () => {
   it('un perfil anterior que ya tenía medio par (guardado antes de esta regla) se conserva tal cual: no se inventa ni se borra', () => {
     const half = { systolic: 140, diastolic: undefined, bloodPressureLabel: '140/90' }
     expect(mergedBloodPressure(half, {})).toEqual(half)
+  })
+})
+
+describe('los dos caminos que suman una evolución al perfil usan la regla del par', () => {
+  const EVO = '11111111-1111-4111-8111-111111111111'
+  const profile = () =>
+    parsePatientProfile({ version: 1, vitals: { systolic: 150, diastolic: 95, bloodPressureLabel: '150/95' }, labs: [], medications: [], conditions: [] })
+  const facts = (over: { systolic?: number; diastolic?: number }) => ({ labs: [], medications: [], conditions: [], ...over })
+
+  it('aceptar una propuesta con solo la sistólica no mezcla el par', () => {
+    const out = mergeProfileWithExtraction(profile(), { facts: facts({ systolic: 132 }), fieldConfidence: {} }, EVO)
+    expect(out.vitals).toEqual({ systolic: 150, diastolic: 95, bloodPressureLabel: '150/95' })
+  })
+
+  it('el camino por reglas, con solo la diastólica, tampoco', () => {
+    const out = mergeProfileWithFacts(profile(), facts({ diastolic: 70 }), EVO)
+    expect(out.vitals).toEqual({ systolic: 150, diastolic: 95, bloodPressureLabel: '150/95' })
+  })
+
+  it('con el par completo, los dos lo reemplazan', () => {
+    expect(mergeProfileWithExtraction(profile(), { facts: facts({ systolic: 132, diastolic: 84 }), fieldConfidence: {} }, EVO).vitals).toEqual({ systolic: 132, diastolic: 84, bloodPressureLabel: '132/84' })
+    expect(mergeProfileWithFacts(profile(), facts({ systolic: 132, diastolic: 84 }), EVO).vitals).toEqual({ systolic: 132, diastolic: 84, bloodPressureLabel: '132/84' })
   })
 })
