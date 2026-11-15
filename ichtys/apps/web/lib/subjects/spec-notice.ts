@@ -9,6 +9,12 @@
  * Decisión de Santiago del 2026-11-12: avisar ahora; exigir la aprobación
  * cuando exista la pantalla de equipo, para no frenar estudios que hoy solo
  * tienen borrador.
+ *
+ * Desde que existe la pantalla de equipo, la aprobación se exige: la
+ * elegibilidad y el asistente leen solo el último protocolo **aprobado**. Lo
+ * de abajo sobre «sin aprobar» queda como segunda barrera (si un borrador
+ * llegara igual a la pantalla o a una cita, se marca) y para decir que hay
+ * un borrador esperando.
  */
 
 /** Cualquier estado que no sea exactamente `approved` cuenta como sin aprobar. */
@@ -61,4 +67,46 @@ export function withUnapprovedSpecNotice(
   }
   const appended = `\n\n${UNAPPROVED_SPEC_ANSWER_NOTICE}`
   return { answer: `${answer}${appended}`, appended }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// La aprobación se exige (C5)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface SpecRowLike {
+  version: number
+  status: string
+}
+
+/**
+ * ¿Hay un protocolo extraído esperando aprobación? `approved` es el último aprobado (o nada) y
+ * `latest` el último extraído, aprobado o no. Sin aprobado, cualquier borrador cuenta; con
+ * aprobado, solo un borrador de versión más nueva.
+ */
+export function pendingSpecApproval(
+  approved: SpecRowLike | null | undefined,
+  latest: SpecRowLike | null | undefined,
+): { pending: boolean; version: number | null } {
+  if (!latest || latest.status !== 'draft') return { pending: false, version: null }
+  if (approved && latest.version <= approved.version) return { pending: false, version: null }
+  return { pending: true, version: latest.version }
+}
+
+export const SPEC_PENDING_APPROVAL_MESSAGE =
+  'El protocolo extraído por la IA todavía no fue aprobado. La elegibilidad no se evalúa hasta que una persona lo apruebe.'
+
+/** Lo que dice la pantalla de elegibilidad cuando no hay protocolo aprobado y sí un borrador. */
+export function specPendingApprovalNotice(version: number | null | undefined): string {
+  const which = typeof version === 'number' ? ` (versión ${version})` : ''
+  return (
+    `La elegibilidad no se evalúa todavía: la IA extrajo el protocolo${which} y nadie lo aprobó. ` +
+    'Revisalo y aprobalo en la pestaña Spec del estudio; lo aprueba quien administra el estudio.'
+  )
+}
+
+/** Con protocolo aprobado y una versión más nueva sin aprobar. */
+export function newerDraftNotice(approvedVersion: number | null | undefined, draftVersion: number | null | undefined): string {
+  const used = typeof approvedVersion === 'number' ? `la versión ${approvedVersion}, aprobada` : 'la última versión aprobada'
+  const draft = typeof draftVersion === 'number' ? ` (la ${draftVersion})` : ''
+  return `Esta evaluación usa ${used}. Hay una versión más nueva${draft}, extraída y sin aprobar: no se usa hasta que alguien la apruebe.`
 }
