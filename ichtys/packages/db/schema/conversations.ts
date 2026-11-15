@@ -1,5 +1,5 @@
-import { pgTable, uuid, text, integer, real, timestamp, index, uniqueIndex, jsonb } from 'drizzle-orm/pg-core'
-import { relations } from 'drizzle-orm'
+import { pgTable, uuid, text, integer, real, timestamp, index, uniqueIndex, jsonb, check } from 'drizzle-orm/pg-core'
+import { relations, sql } from 'drizzle-orm'
 import { organizations } from './organizations'
 import { studies } from './studies'
 import { chunks } from './chunks'
@@ -63,6 +63,11 @@ export const messages = pgTable(
   },
   (t) => ({
     conversationIdx: index('messages_conversation_idx').on(t.conversationId),
+    /** Un mensaje de la persona no tiene modelo: lo exige la base, no solo el código. */
+    modelOnlyOnAssistantCheck: check(
+      'messages_model_only_on_assistant_check',
+      sql`${t.role} = 'assistant' OR (${t.provider} IS NULL AND ${t.model} IS NULL)`,
+    ),
   }),
 )
 

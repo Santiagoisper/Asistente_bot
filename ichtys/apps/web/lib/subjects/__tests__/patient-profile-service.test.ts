@@ -159,6 +159,24 @@ describe('proposeProfileFromEvolution — logging del error del proveedor', () =
     expect(JSON.stringify(mocks.auditInsert.mock.calls)).not.toContain('modelo-de-prueba-1')
   })
 
+  it('la propuesta anota el modelo que el proveedor dijo que respondió, no el que se pidió (R6)', async () => {
+    mocks.runWithLlmFallback.mockImplementation(async (_opts: unknown, runner: (model: never, provider: string, report: (u: { inputTokens: number; outputTokens: number }) => void, signal: never) => Promise<unknown>) => {
+      const result = await runner({} as never, 'anthropic', () => {}, undefined as never)
+      return { result, provider: 'anthropic', modelId: 'modelo-pedido', usage: { inputTokens: 1, outputTokens: 1 }, keySource: 'platform' }
+    })
+    const { generateObject } = await import('ai')
+    vi.mocked(generateObject).mockResolvedValueOnce({
+      object: { ageYears: null, labs: [], medications: [], conditions: [] },
+      usage: { inputTokens: 1, outputTokens: 1 },
+      response: { modelId: 'modelo-que-respondio-20260101' },
+    } as never)
+
+    await proposeProfileFromEvolution(PARAMS)
+
+    const written = (mocks.encryptProfileJson.mock.calls as unknown as unknown[][]).at(-1)?.[0] as { pendingEvolutionProposals: Array<Record<string, unknown>> }
+    expect(written.pendingEvolutionProposals[0]!.generatedBy).toEqual({ provider: 'anthropic', model: 'modelo-que-respondio-20260101' })
+  })
+
   it('si el modelo no respondió, la propuesta dice que no intervino ninguno', async () => {
     mocks.runWithLlmFallback.mockRejectedValue(new TypeError('x'))
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -254,6 +272,10 @@ describe('proposeProfileFromEvolution — medición de consumo (A7)', () => {
     } as never)
 
     await proposeProfileFromEvolution(PARAMS)
+
+    // Sin modelo informado por el proveedor, la propuesta anota el que se pidió.
+    const written = (mocks.encryptProfileJson.mock.calls as unknown as unknown[][]).at(-1)?.[0] as { pendingEvolutionProposals: Array<Record<string, unknown>> }
+    expect(written.pendingEvolutionProposals[0]!.generatedBy).toEqual({ provider: 'anthropic', model: 'claude-sonnet-4-6' })
 
     expect(mocks.recordUsage).toHaveBeenCalledTimes(1)
     expect(mocks.recordUsage).toHaveBeenCalledWith(

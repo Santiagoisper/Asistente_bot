@@ -51,6 +51,7 @@ async function extractFactsWithLlm(
   const orgApiKeys = await getOrgLlmApiKeys(orgId).catch(() => null)
 
   try {
+    let responseModel: string | null = null
     const { result, provider, modelId, usage, keySource } = await runWithLlmFallback(
       // Solo Anthropic, sin respaldo en otro proveedor: es el único registrado
       // para esta función en AI-GOVERNANCE.md, y cambiarlo es un cambio
@@ -74,6 +75,8 @@ Medicaciones: nombre genérico, dosis y frecuencia si aparecen.`,
           maxOutputTokens: 1024,
         })
         reportUsage({ inputTokens: response.usage?.inputTokens ?? 0, outputTokens: response.usage?.outputTokens ?? 0 })
+        // El modelo que el proveedor dijo que respondió: es lo que vale como evidencia (R6).
+        responseModel = response.response?.modelId || null
         return response.object
       },
     )
@@ -90,7 +93,7 @@ Medicaciones: nombre genérico, dosis y frecuencia si aparecen.`,
       keySource: keySource === 'none' ? 'platform' : keySource,
     })
 
-    return { extraction: normalizeLlmFacts(result), generatedBy: { provider, model: modelId } }
+    return { extraction: normalizeLlmFacts(result), generatedBy: { provider, model: responseModel || modelId } }
   } catch (err) {
     console.error('[clinical-extract] LLM extraction failed:', summarizeLlmError(err))
     return null
