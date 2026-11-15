@@ -17,6 +17,7 @@ const input = (over: Partial<Parameters<typeof buildDeliveryEnvelope>[0]> = {}) 
   reviewedBy: 'user_ficticio',
   reviewedAt: new Date('2026-11-15T18:00:00.000Z'),
   context: { studyCode: 'E2E-FICT-001', subjectCode: 'E2E-001' },
+  origin: { organizationId: 'org_ficticia', environment: 'prueba' },
   ...over,
 })
 const envelope = (over = {}): DeliveryEnvelope => buildDeliveryEnvelope(input(over))
@@ -28,7 +29,8 @@ describe('huella de lo que se entrega', () => {
     expect(deliveryFingerprint({ ...CONTENT, nota: 'Ayunas de 8 h.\r\nSin incidencias.' })).toBe(base)
     const composed = deliveryFingerprint({ texto: 'evolución' })
     expect(deliveryFingerprint({ texto: 'evolución' })).toBe(composed)
-    expect(base).toMatch(/^[0-9a-f]{64}$/)
+    // La huella dice con qué versión de la forma canónica se calculó: sin eso, mañana nadie sabe cómo recalcularla.
+    expect(base).toMatch(/^h1:[0-9a-f]{64}$/)
   })
 
   it('un carácter distinto da otra huella', () => {
@@ -126,13 +128,25 @@ describe('sobre de entrega', () => {
   it('lleva la huella del contenido, quién revisó y cuándo, y una clave que identifica registro y versión', () => {
     const built = envelope()
     expect(built.contentFingerprint).toBe(deliveryFingerprint(CONTENT))
-    expect(built.idempotencyKey).toBe('lab_report:rec-1:v3')
+    expect(built.idempotencyKey).toBe('org_ficticia/prueba/lab_report:rec-1:v3')
     expect(built.reviewedBy).toBe('user_ficticio')
     expect(built.reviewedAt).toBe('2026-11-15T18:00:00.000Z')
   })
 
   it('otra versión del mismo registro es otra entrega', () => {
-    expect(envelope({ record: { kind: 'lab_report', id: 'rec-1', version: 4 } }).idempotencyKey).toBe('lab_report:rec-1:v4')
+    expect(envelope({ record: { kind: 'lab_report', id: 'rec-1', version: 4 } }).idempotencyKey).toBe('org_ficticia/prueba/lab_report:rec-1:v4')
+  })
+
+  it('el mismo registro desde otro entorno u otra organización es otra entrega: no chocan en un destino compartido', () => {
+    const base = envelope().idempotencyKey
+    expect(envelope({ origin: { organizationId: 'org_ficticia', environment: 'produccion' } }).idempotencyKey).not.toBe(base)
+    expect(envelope({ origin: { organizationId: 'org_otra', environment: 'prueba' } }).idempotencyKey).not.toBe(base)
+  })
+
+  it('sin origen completo no hay sobre, y el origen no puede traer el separador', () => {
+    expect(() => envelope({ origin: { organizationId: '', environment: 'prueba' } })).toThrow(/origen/)
+    expect(() => envelope({ origin: { organizationId: 'org_ficticia', environment: ' ' } })).toThrow(/origen/)
+    expect(() => envelope({ origin: { organizationId: 'org/ficticia', environment: 'prueba' } })).toThrow(/origen/)
   })
 
   it('sin una persona que lo haya revisado no hay sobre', () => {

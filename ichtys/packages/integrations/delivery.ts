@@ -130,17 +130,26 @@ function canonicalize(value: unknown, path: string, ancestors: readonly object[]
 }
 
 /**
- * Huella SHA-256 (hexadecimal) del contenido en forma canónica. Se calcula sobre el texto en claro.
- * Si el contenido no es JSON plano no hay huella: lanza `NonCanonicalContentError`.
+ * Versión de la forma canónica. Va delante de cada huella (`h1:…`): una huella guardada tiene que
+ * decir cómo se calculó, o mañana nadie puede recalcularla. Si la forma canónica cambia, este
+ * número sube y las huellas viejas se siguen pudiendo comprobar con la regla vieja.
+ */
+export const DELIVERY_FINGERPRINT_VERSION = 1
+
+/**
+ * Huella del contenido en forma canónica: `h<versión>:` y el SHA-256 en hexadecimal. Se calcula
+ * sobre el texto en claro. Si el contenido no es JSON plano no hay huella: lanza
+ * `NonCanonicalContentError`.
  */
 export function deliveryFingerprint(content: unknown): string {
-  return createHash('sha256').update(canonicalize(content, '$', []), 'utf8').digest('hex')
+  const digest = createHash('sha256').update(canonicalize(content, '$', []), 'utf8').digest('hex')
+  return `h${DELIVERY_FINGERPRINT_VERSION}:${digest}`
 }
 
 export type DeliverableKind = 'lab_report' | 'evolution'
 
 export interface DeliveryEnvelope {
-  /** Mismo registro y misma versión → misma clave. Entregar dos veces no registra dos veces. */
+  /** Mismo origen, mismo registro y misma versión → misma clave. Entregar dos veces no registra dos veces. */
   idempotencyKey: string
   record: { kind: DeliverableKind; id: string; version: number }
   /** Huella del contenido exacto que una persona revisó. */
@@ -168,11 +177,21 @@ export function buildDeliveryEnvelope(input: {
   reviewedBy: string
   reviewedAt: Date
   context: DeliveryEnvelope['context']
+  /**
+   * De dónde sale la entrega. Entra en la clave de idempotencia para que dos organizaciones, o el
+   * entorno de prueba y el de producción, no choquen si alguna vez comparten un destino.
+   */
+  origin: { organizationId: string; environment: string }
 }): DeliveryEnvelope {
   const reviewedBy = input.reviewedBy.trim()
   if (!reviewedBy) throw new Error('No se arma una entrega sin la persona que la revisó')
+  const organizationId = input.origin.organizationId.trim()
+  const environment = input.origin.environment.trim()
+  if (!organizationId || !environment || organizationId.includes('/') || environment.includes('/')) {
+    throw new Error('No se arma una entrega sin su origen: organización y entorno, sin barras')
+  }
   return {
-    idempotencyKey: `${input.record.kind}:${input.record.id}:v${input.record.version}`,
+    idempotencyKey: `${organizationId}/${environment}/${input.record.kind}:${input.record.id}:v${input.record.version}`,
     record: input.record,
     contentFingerprint: deliveryFingerprint(input.content),
     content: input.content,

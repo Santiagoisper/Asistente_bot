@@ -45,6 +45,7 @@ export {
   type ReviewState,
 } from './connector'
 export {
+  DELIVERY_FINGERPRINT_VERSION,
   buildDeliveryEnvelope,
   createSimulatedDestination,
   deliveryFingerprint,

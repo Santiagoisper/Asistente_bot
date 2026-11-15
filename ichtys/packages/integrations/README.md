@@ -81,7 +81,9 @@ conoce. Solo para el servidor.
   (`content`), que es el informe o la evolución: dato de salud de una persona
   identificada por código. Es dato **seudonimizado, no anónimo**, y así hay que
   tratarlo el día que el sobre salga hacia un destino real.
-- La clave de idempotencia es registro + versión: entregar dos veces no registra
+- La huella lleva delante la versión de la forma canónica (`h1:…`), para que una
+  huella guardada diga cómo se calculó.
+- La clave de idempotencia es origen (organización y entorno) + registro + versión: entregar dos veces no registra
   dos veces. **Una versión no se edita nunca:** si el registro se corrige, sube
   la versión. La misma clave con otra huella es siempre un error (`conflict`),
   nunca un reenvío.
