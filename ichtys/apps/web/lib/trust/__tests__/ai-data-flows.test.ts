@@ -112,7 +112,7 @@ describe('los vectores de búsqueda eligen proveedor por otro camino', () => {
   it('van a OpenAI por defecto, y la instalación puede configurar Google o Groq', () => {
     expect(config).toContain("export type EmbeddingProvider = 'groq' | 'openai' | 'google'")
     // Sin ninguna clave configurada, el selector devuelve OpenAI.
-    expect(config).toMatch(/if \(process\.env\.GROQ_API_KEY\?\.trim\(\)\) return 'groq'\n  return 'openai'/)
+    expect(config).toMatch(/if \(process\.env\.GROQ_API_KEY\?\.trim\(\)\) return 'groq'\n {2}return 'openai'/)
     expect(SEARCH_VECTOR_FLOW.providers).toEqual(['OpenAI'])
     expect([...SEARCH_VECTOR_ALTERNATIVES].sort()).toEqual(['Google', 'Groq'])
   })
