@@ -310,7 +310,7 @@ export interface SatelliteAlerts {
 export async function listPriorityItems(
   orgId: string,
   scope: StudyScope,
-  opts: { includeSubjects: boolean; satellites?: SatelliteAlerts[] },
+  opts: { includeSubjects: boolean; satellites?: SatelliteAlerts[]; system?: PriorityItem[] },
 ): Promise<PriorityItem[]> {
   const [labs, reports, ingestions, specs] = await Promise.all([
     opts.includeSubjects ? listPendingLabReviews(orgId, scope, PRIORITY_FETCH_LIMIT) : Promise.resolve([]),
@@ -320,6 +320,8 @@ export async function listPriorityItems(
   ])
 
   const items: PriorityItem[] = [
+    // Avisos del sistema (por ejemplo, la tarea de borrado que no corre): los arma quien llama.
+    ...(opts.system ?? []),
     ...labs.map((row): PriorityItem => ({
       id: `lab:${row.subjectId}`,
       kind: 'lab',
