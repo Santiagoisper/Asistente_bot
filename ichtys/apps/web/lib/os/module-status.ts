@@ -31,7 +31,7 @@ const COPY: Record<ModuleStatus, StatusCopy> = {
   installation_not_ready: {
     label: 'Falta la clave del OS',
     tone: 'warn',
-    hint: 'La dirección del sistema está cargada, pero esta instalación todavía no tiene la clave con la que el OS firma los pedidos. Avisá a quien administra la plataforma.',
+    hint: 'La dirección del sistema está cargada, pero esta instalación todavía no tiene la clave con la que el OS autentica los pedidos. Avisá a quien administra la plataforma.',
   },
   unreachable: {
     label: 'Sin respuesta',
