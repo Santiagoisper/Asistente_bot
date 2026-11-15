@@ -24,6 +24,7 @@ import { formatCounter, statusCopy } from '../../../lib/os/module-status'
 import { isExternalHref } from '../../../lib/os/priority'
 import { loadOrgTimeZone } from '../../../lib/os/org-settings'
 import { loadModuleSummary } from '../../../lib/os/summaries'
+import { lastRetentionRun, retentionRunItem } from '../../../lib/os/retention-watch'
 
 export const dynamic = 'force-dynamic'
 
@@ -175,7 +176,13 @@ async function PriorityList({ ctx }: { ctx: OsContext }) {
         alerts: (await loadModuleSummary(module, ctx.userId, ctx.orgId)).summary?.alerts ?? [],
       })),
     )
-    const items = await listPriorityItems(ctx.orgId, ctx.studyScope, { includeSubjects: ctx.canSeeSubjects, satellites })
+    // Solo para quien administra el centro: si la tarea diaria de borrado de grabaciones no corre.
+    const retention = ctx.canAdministerOrg ? retentionRunItem(await lastRetentionRun(), now) : null
+    const items = await listPriorityItems(ctx.orgId, ctx.studyScope, {
+      includeSubjects: ctx.canSeeSubjects,
+      satellites,
+      system: retention ? [retention] : [],
+    })
     const visible = items.slice(0, PRIORITY_VISIBLE)
     const rest = items.slice(PRIORITY_VISIBLE)
 

@@ -2,7 +2,7 @@ export type PrioritySeverity = 'high' | 'medium' | 'low'
 
 export interface PriorityItem {
   id: string
-  kind: 'lab' | 'ingestion' | 'spec' | 'satellite'
+  kind: 'lab' | 'ingestion' | 'spec' | 'satellite' | 'system'
   severity: PrioritySeverity
   title: string
   detail: string

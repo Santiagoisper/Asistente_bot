@@ -67,7 +67,8 @@ describe('GET /api/cron/purge-dictation-audio', () => {
     const res = await GET(request('secreto-de-prueba'))
 
     expect(await res.json()).toEqual({ ok: true, purged: 1, purgedUnassigned: 2 })
-    expect(mocks.insertAuditLog.mock.calls.map(([, entry]) => [entry.action, entry.resourceType, entry.resourceId, entry.orgId, entry.userId])).toEqual([
+    // Los registros de cada borrado; el de la corrida se prueba más abajo.
+    expect(mocks.insertAuditLog.mock.calls.filter(([, entry]) => entry.action === 'evolution.audio.purge').map(([, entry]) => [entry.action, entry.resourceType, entry.resourceId, entry.orgId, entry.userId])).toEqual([
       ['evolution.audio.purge', 'dictation_audio', 'audio-1', 'org-1', 'system:retention'],
       ['evolution.audio.purge', 'unassigned_dictation_audio', 'deposito-1', 'org-1', 'system:retention'],
       ['evolution.audio.purge', 'unassigned_dictation_audio', 'deposito-2', 'org-2', 'system:retention'],
@@ -80,5 +81,45 @@ describe('GET /api/cron/purge-dictation-audio', () => {
     const res = await GET(request('secreto-de-prueba'))
     expect(res.status).toBe(500)
     expect(await res.json()).toEqual({ ok: false, error: 'purge_failed' })
+  })
+
+  const runRecords = () => mocks.insertAuditLog.mock.calls.map(([, entry]) => entry).filter((entry) => entry.action === 'retention.run')
+
+  it('cada corrida autorizada deja su registro, aunque no haya borrado nada', async () => {
+    const res = await GET(request('secreto-de-prueba'))
+    expect(res.status).toBe(200)
+    expect(runRecords()).toEqual([
+      { action: 'retention.run', userId: 'system:retention', resourceType: 'retention_run', metadata: { purged: 0, purgedUnassigned: 0 } },
+    ])
+  })
+
+  it('el registro de la corrida dice cuántas borró de cada tabla y no es de ninguna organización', async () => {
+    mocks.purgeSubjects.mockResolvedValueOnce([
+      { id: 'a1', organizationId: 'org-1', studyId: 'study-1' },
+      { id: 'a2', organizationId: 'org-1', studyId: 'study-1' },
+    ])
+    mocks.purgeUnassigned.mockResolvedValueOnce([{ id: 'u1', organizationId: 'org-1', studyId: 'study-1' }])
+    await GET(request('secreto-de-prueba'))
+    const [record] = runRecords()
+    expect(record.metadata).toEqual({ purged: 2, purgedUnassigned: 1 })
+    expect(record.orgId).toBeUndefined()
+  })
+
+  it('el registro de la corrida va en la misma transacción que el borrado', async () => {
+    await GET(request('secreto-de-prueba'))
+    expect(mocks.transactions).toBe(1)
+    expect(mocks.insertAuditLog.mock.calls.at(-1)![0]).toEqual({ tx: true })
+  })
+
+  it('un pedido sin el secreto, o con otro, no deja registro de corrida', async () => {
+    expect((await GET(request())).status).toBe(401)
+    expect((await GET(request('otro-secreto'))).status).toBe(401)
+    expect(runRecords()).toEqual([])
+  })
+
+  it('si el borrado falla, la corrida no queda registrada como hecha', async () => {
+    mocks.purgeUnassigned.mockRejectedValueOnce(new Error('falló'))
+    expect((await GET(request('secreto-de-prueba'))).status).toBe(500)
+    expect(runRecords()).toEqual([])
   })
 })

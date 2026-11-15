@@ -85,6 +85,9 @@ export const auditAction = [
   'evolution.audio.store',
   'evolution.audio.listen',
   'evolution.audio.purge',
+  // Cada corrida de la tarea diaria de borrado, borre algo o no: sin este registro, una tarea
+  // que deja de correr no se nota. Texto libre en la base: sin migración.
+  'retention.run',
   // D24: evolución registrada en el sujeto equivocado. Texto libre en la base: sin migración.
   'evolution.void',
   'evolution.audio.withdraw',
