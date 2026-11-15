@@ -20,7 +20,7 @@ import {
   type ReviewRow,
   type ReviewPhase,
 } from '../../lib/labs/review-rows'
-import { initialSampleDateField, sampleDateDecision, sampleDateHelp } from '../../lib/labs/sample-date-field'
+import { initialSampleDateField, sampleDateDecision, sampleDateHelp, sampleDateMax } from '../../lib/labs/sample-date-field'
 
 const focusRing =
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-os-accent'
@@ -487,7 +487,7 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
                     <span className="font-semibold">Fecha de la muestra</span>
                     <input
                       type="date"
-                      max={today}
+                      max={sampleDateMax(today)}
                       value={sampleDate.unknown ? '' : sampleDate.value}
                       disabled={phase === 'saving' || sampleDate.unknown}
                       aria-describedby="fecha-muestra-ayuda"

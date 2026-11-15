@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { initialSampleDateField, sampleDateDecision, sampleDateHelp } from '../sample-date-field'
+import { initialSampleDateField, sampleDateDecision, sampleDateHelp, sampleDateMax } from '../sample-date-field'
 
 /**
  * El campo «Fecha de la muestra» de la pantalla de revisión (C4, D3). El lector propone, la
@@ -61,5 +61,13 @@ describe('sampleDateHelp — lo que se lee debajo del campo', () => {
 
   it('desconocida: dice qué queda guardado', () => {
     expect(sampleDateHelp({ value: '', unknown: true, proposed: null })).toBe('Los valores quedan guardados con fecha de muestra desconocida.')
+  })
+})
+
+describe('sampleDateMax — el calendario no ofrece menos que lo que el campo acepta', () => {
+  it('la última fecha del calendario se puede confirmar, y la siguiente no', () => {
+    expect(sampleDateMax(today)).toBe('2026-11-15')
+    expect(sampleDateDecision({ value: '2026-11-15', unknown: false, proposed: null }, today)).toEqual({ ok: true, sampleDate: '2026-11-15' })
+    expect(sampleDateDecision({ value: '2026-11-16', unknown: false, proposed: null }, today)).toEqual({ ok: false, reason: 'invalid' })
   })
 })

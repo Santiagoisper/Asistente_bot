@@ -3,7 +3,7 @@
  * docs/decisions/huella-y-procedencia-de-archivos.md). El lector propone; la persona confirma,
  * escribe otra o declara que el informe no la trae. Sin dependencias de pantalla: se prueba solo.
  */
-import { acceptableSampleDate, proposeSampleDate } from '@ichtys/clinical'
+import { acceptableSampleDate, latestSampleDate, proposeSampleDate } from '@ichtys/clinical'
 
 export interface SampleDateField {
   /** Lo que hay en el campo: `YYYY-MM-DD` o vacío. */
@@ -36,4 +36,9 @@ export function sampleDateHelp(field: SampleDateField): string {
   if (field.proposed && field.value === '') return `La borraste. En el informe se leyó ${spanish(field.proposed)}.`
   if (field.proposed) return `La escribiste vos. En el informe se leyó ${spanish(field.proposed)}.`
   return 'No se encontró en el informe. Es la fecha de extracción o toma de la muestra, no la de emisión.'
+}
+
+/** El `max` del calendario: el mismo límite que usa `sampleDateDecision`, no uno más corto. */
+export function sampleDateMax(today: string): string | undefined {
+  return latestSampleDate(today) ?? undefined
 }

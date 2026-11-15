@@ -47,8 +47,18 @@ export function acceptableSampleDate(value: string, today: string): boolean {
   if (!match) return false
   const iso = isoDate(Number(match[3]), Number(match[2]), Number(match[1]))
   if (iso !== value || Number(match[1]) < 1900) return false
+  const latest = latestSampleDate(today)
+  return latest !== null && value <= latest
+}
+
+/**
+ * La última fecha de muestra que se acepta: el día siguiente a `today` (día UTC). Es el mismo
+ * límite para el validador y para el calendario de la pantalla: si el calendario ofreciera menos,
+ * quien está en una zona horaria adelantada no podría elegir la fecha de hoy.
+ */
+export function latestSampleDate(today: string): string | null {
   const limit = new Date(`${today}T00:00:00Z`)
-  if (Number.isNaN(limit.getTime())) return false
+  if (Number.isNaN(limit.getTime())) return null
   limit.setUTCDate(limit.getUTCDate() + 1)
-  return value <= limit.toISOString().slice(0, 10)
+  return limit.toISOString().slice(0, 10)
 }

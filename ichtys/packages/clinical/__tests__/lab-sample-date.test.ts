@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { acceptableSampleDate, proposeSampleDate } from '../lab-sample-date'
+import { acceptableSampleDate, latestSampleDate, proposeSampleDate } from '../lab-sample-date'
 import { parseLabReportText } from '../lab-report-parser'
 import { parsePatientProfile } from '../profile-schema'
 import { assessScreening } from '../screening-engine'
@@ -135,5 +135,22 @@ describe('la elegibilidad no lee la fecha de la muestra', () => {
     expect(verdicts('2024-11-12')).toEqual(recent)
     expect(verdicts(null)).toEqual(recent)
     expect(verdicts(undefined)).toEqual(recent)
+  })
+})
+
+describe('latestSampleDate — el límite del calendario es el del validador', () => {
+  it('es el día siguiente al de hoy (UTC), también al cambiar de mes y de año', () => {
+    expect(latestSampleDate('2026-11-14')).toBe('2026-11-15')
+    expect(latestSampleDate('2026-11-30')).toBe('2026-12-01')
+    expect(latestSampleDate('2026-12-31')).toBe('2027-01-01')
+  })
+
+  it('lo último que ofrece el calendario se acepta, y un día más no', () => {
+    expect(acceptableSampleDate('2026-11-15', '2026-11-14')).toBe(true)
+    expect(acceptableSampleDate('2026-11-16', '2026-11-14')).toBe(false)
+  })
+
+  it('con un «hoy» que no es fecha, no hay límite que ofrecer', () => {
+    expect(latestSampleDate('ayer')).toBeNull()
   })
 })
