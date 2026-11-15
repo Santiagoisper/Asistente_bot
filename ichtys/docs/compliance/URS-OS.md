@@ -17,7 +17,7 @@
 | OS-05 | El dictado se transcribe en el equipo de quien dicta: el audio no va a ningún proveedor | Decisión, 12/11/2026 (D1) | Sin fila | Sí. **Sin prueba citada en la matriz** |
 | OS-06 | La grabación se guarda cifrada, atada a su evolución, y se borra a los 30 días; queda la constancia | Decisión, 12/11 y 14/11/2026 (D14) | R3, R5 | Sí. El plazo de 30 días no tiene prueba propia |
 | OS-07 | Antes de grabar, la pantalla nombra al sujeto y pide confirmarlo | Decisión, 14/11/2026 (D23) | Sin fila | Sí. Tiene prueba (`apps/web/components/subjects/__tests__/recording-notice.test.tsx`: nombra al sujeto en el texto y en el botón, y «No es este sujeto» no graba), todavía sin fila en la matriz |
-| OS-08 | Una grabación hecha en el sujeto equivocado se retira a un depósito sin sujeto y se avisa a quien la hizo | Decisión, 14/11/2026 ([`grabacion-en-sujeto-equivocado.md`](../decisions/grabacion-en-sujeto-equivocado.md)) | R3, R5 | Sí |
+| OS-08 | Una grabación hecha en el sujeto equivocado se retira a un depósito sin sujeto, y quien la hizo la ve en su inicio, en «Grabaciones sin sujeto». La decisión dice «se avisa al médico»: lo construido es esa lista, no un aviso enviado; no hay un sistema de avisos entre personas | Decisión, 14/11/2026 ([`grabacion-en-sujeto-equivocado.md`](../decisions/grabacion-en-sujeto-equivocado.md)) | R3, R5 | Sí |
 | OS-09 | Quién puede declarar ese error en una evolución ajena: la coordinación del centro o más | Propuesta, por delegación del 14/11/2026 (mismo documento) | R4 | Sí |
 | OS-10 | Lo que la evolución anulada dejó en el perfil lo retira una persona; lo retirado se conserva con quién y cuándo | Propuesta (mismo documento) | R6 | Sí |
 | OS-11 | No hay firma, ni envío a la historia clínica del centro | Decisión, 12/11/2026 (D9) | R7 | Sí. Sin prueba |
@@ -31,7 +31,7 @@
 | OS-19 | El asistente responde con citas del documento y dice que no hay evidencia cuando no la hay | Regla R6. Diseño: [`answer-engine-v1.md`](../decisions/answer-engine-v1.md) | R6 | Sí |
 | OS-20 | Si el borrado de grabaciones vencidas no corrió, quien administra lo ve en el inicio | Decisión, 15/11/2026 (construir el aviso) | Sin fila | **No integrado:** espera confirmación |
 | OS-21 | Firma con clave personal | Diseño en [`firma-con-clave-personal.md`](../decisions/firma-con-clave-personal.md); **seis decisiones pendientes** | — | No |
-| OS-22 | Huella y procedencia de cada archivo guardado | Propuesta de Architect, 13/11/2026 | — | No (línea de base, brecha C4) |
+| OS-22 | Huella de cada archivo recibido, con quién lo subió y por qué camino entró (documentos, informes y recortes) | Propuesta de Architect, 13/11/2026 ([`huella-y-procedencia-de-archivos.md`](../decisions/huella-y-procedencia-de-archivos.md), paso 4). Pide una migración | — | No (línea de base, brecha C4). Los pasos 1 a 3 de esa nota, el origen y la fecha de muestra de cada valor, están en OS-14 y OS-15 |
 
 ## Lo que falta para que esto sea una especificación de requisitos
 
