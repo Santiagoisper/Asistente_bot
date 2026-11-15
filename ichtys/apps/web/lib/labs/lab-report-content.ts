@@ -42,6 +42,11 @@ export const labConfirmSchema = z
     rows: z.array(labRowInputSchema).min(1).max(MAX_LAB_ROWS),
     /** Informe leído de una imagen: quien confirma declara que comparó los valores con la imagen. */
     comparedWithImage: z.boolean().optional(),
+    /**
+     * Fecha de la muestra que confirma la persona, YYYY-MM-DD, o null si la deja como
+     * desconocida (C4, D3). Ausente (una pantalla anterior): se guarda como desconocida.
+     */
+    sampleDate: z.string().date().nullable().optional(),
   })
   .strict()
 

@@ -180,7 +180,8 @@ describe('Carga de laboratorios — PDF digital de punta a punta', () => {
   it('confirma: estado, catálogo y perfil del sujeto quedan actualizados', async () => {
     const report = await loadLabReport({ ...scope, reportId })
     const decided = report.content.rows.map(toReviewRow).map((row) => (row.analyte === 'Leucocitos' ? { ...row, reading: 7300 } : row))
-    const result = await confirmLabReport({ ...scope, reportId, userId: 'user_2', rows: toConfirmPayload(decided)!, audit })
+    // La persona confirma también la fecha de la muestra (C4, prueba 5).
+    const result = await confirmLabReport({ ...scope, reportId, userId: 'user_2', rows: toConfirmPayload(decided)!, sampleDate: '2026-09-24', audit })
     expect(result).toEqual({
       rowCount: 4,
       newAnalytes: 3,
@@ -198,14 +199,17 @@ describe('Carga de laboratorios — PDF digital de punta a punta', () => {
     expect(store.analytes.filter((entry) => entry.normalizedKey !== 'glucosa').every((entry) => entry.organizationId === 'org-1')).toBe(true)
     // Al perfil van solo los valores con número; el cualitativo queda en el informe.
     // Cada uno lleva el rango de referencia que imprimió ese laboratorio, tal cual, y de qué
-    // informe salió (C4, D1).
+    // informe salió (C4, D1) y la fecha de la muestra que la persona confirmó, exacta (D2 a D4).
     const source = { kind: 'lab_report', reportId }
+    const sampleDate = '2026-09-24'
     expect(store.persisted[0]?.labs).toEqual([
-      { name: 'Hemoglobina', value: 13.5, unit: 'g/dL', referenceRange: '12,0 - 16,0', source },
-      { name: 'Leucocitos', value: 7300, unit: '/mm3', referenceRange: '4.000 - 10.000', source },
-      { name: 'Glucosa', value: 92, unit: 'mg/dl', referenceRange: '70 - 110', source },
+      { name: 'Hemoglobina', value: 13.5, unit: 'g/dL', referenceRange: '12,0 - 16,0', source, sampleDate },
+      { name: 'Leucocitos', value: 7300, unit: '/mm3', referenceRange: '4.000 - 10.000', source, sampleDate },
+      { name: 'Glucosa', value: 92, unit: 'mg/dl', referenceRange: '70 - 110', source, sampleDate },
     ])
     const confirmed = await loadLabReport({ ...scope, reportId })
+    // Y queda en el informe guardado.
+    expect(confirmed.content.sampleDate).toBe('2026-09-24')
     expect(confirmed.content.rows.every((row) => row.status === 'read' && row.reviewReason === null)).toBe(true)
   })
 

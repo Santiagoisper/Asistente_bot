@@ -291,6 +291,8 @@ export async function confirmLabReport(
     userId: string
     rows: LabRowInput[]
     comparedWithImage?: boolean
+    /** Fecha de la muestra confirmada por la persona; null o ausente: desconocida (C4, D2 y D3). */
+    sampleDate?: string | null
     audit: (facts: { rowCount: number; newAnalytes: number; imagesPurged: number; review: ReviewOutcome; secondsSinceUpload: number }) => AuditLogParams
   },
 ): Promise<ConfirmedLabReport> {
@@ -304,7 +306,9 @@ export async function confirmLabReport(
   const known = await knownAnalyteKeys(params.orgId, [...keyOf.keys()])
   const rows = finalizeRows(params.rows, report.content.transcription.split('\n'), known)
   const keepEvidence = evidenceRetention() === 'keep'
-  const content: LabReportContent = labReportContentSchema.parse({ ...report.content, rows, ...(keepEvidence ? {} : { imagePages: 0 }) })
+  // Nunca la fecha de carga ni una propuesta sin confirmar: lo que la persona mandó, o desconocida.
+  const sampleDate = params.sampleDate ?? null
+  const content: LabReportContent = labReportContentSchema.parse({ ...report.content, rows, sampleDate, ...(keepEvidence ? {} : { imagePages: 0 }) })
 
   const fresh = [...keyOf.entries()].filter(([key]) => !known.has(key))
   // Medición para el piloto: qué parte de la lectura se aceptó tal cual y
@@ -364,7 +368,7 @@ export async function confirmLabReport(
   let profileUpdated = true
   try {
     // Cada valor guarda de qué informe salió (C4, D1). El origen lo pone este camino.
-    const numeric: LabObservation[] = reportRowsToProfileLabs(rows, params.reportId)
+    const numeric: LabObservation[] = reportRowsToProfileLabs(rows, params.reportId, sampleDate)
     if (numeric.length > 0) {
       await updatePatientProfile(
         params,

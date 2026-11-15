@@ -4,19 +4,28 @@ import type { LabObservation } from './profile-schema'
  * De dónde salió un valor de laboratorio, en los caminos que confirman valores a mano
  * (docs/decisions/huella-y-procedencia-de-archivos.md, D1). El origen lo pone el camino, no
  * quien manda los datos: un valor que llega con un origen ajeno lo pierde y recibe el del
- * camino por el que entró. La fecha de la muestra todavía no se escribe (paso 3 de C4).
+ * camino por el que entró. La fecha de la muestra también la pone el camino: solo un informe
+ * confirmado la aporta (D2 y D3), y un valor que llega con una fecha ajena la pierde.
  */
 type IncomingLab = Pick<LabObservation, 'name' | 'value'> & Partial<LabObservation>
 
 /** El valor sin ningún origen que traiga de antes. */
-function withoutOrigin(lab: IncomingLab): Omit<IncomingLab, 'source' | 'sourceEvolutionId'> {
-  const { source: _source, sourceEvolutionId: _sourceEvolutionId, ...rest } = lab
+function withoutOrigin(lab: IncomingLab): Omit<IncomingLab, 'source' | 'sourceEvolutionId' | 'sampleDate'> {
+  const { source: _source, sourceEvolutionId: _sourceEvolutionId, sampleDate: _sampleDate, ...rest } = lab
   return rest
 }
 
-/** Valores de un informe de laboratorio que una persona confirmó. */
-export function labsFromLabReport(labs: readonly IncomingLab[], reportId: string): LabObservation[] {
-  return labs.map((lab) => ({ ...withoutOrigin(lab), source: { kind: 'lab_report', reportId } }))
+/**
+ * Valores de un informe de laboratorio que una persona confirmó. `sampleDate` es la fecha de la
+ * muestra que esa persona confirmó para el informe entero (D4), o `null` si la dejó como
+ * desconocida: nunca la fecha de carga ni la de emisión (D2). Sin ese argumento no se escribe.
+ */
+export function labsFromLabReport(labs: readonly IncomingLab[], reportId: string, sampleDate?: string | null): LabObservation[] {
+  return labs.map((lab) => ({
+    ...withoutOrigin(lab),
+    source: { kind: 'lab_report', reportId },
+    ...(sampleDate === undefined ? {} : { sampleDate }),
+  }))
 }
 
 /**
