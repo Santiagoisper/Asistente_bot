@@ -17,6 +17,7 @@ import {
   persistAssistantMessageAndCitations,
   persistUserMessage,
 } from '../../../../lib/chat/persistence'
+import { answerModel } from '../../../../lib/chat/answer-model'
 import {
   enforceSlidingWindowRateLimit,
   getChatRateLimitConfig,
@@ -374,6 +375,7 @@ export async function POST(req: Request): Promise<Response> {
           confidence: finalConfidence,
           evidences: persistableEvidences,
           annotations: annotations.length > 0 ? annotations : undefined,
+          generatedBy: answerModel(engineUsageEvents),
           audit: {
             action: 'rag.answer.completed',
             orgId,

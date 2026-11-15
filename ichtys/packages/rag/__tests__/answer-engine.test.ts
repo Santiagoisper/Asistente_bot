@@ -285,6 +285,22 @@ describe('answerEngine — responses with evidence', () => {
     expect(answerEvent?.inputTokens).toBe(11)
     expect(answerEvent?.inputTokens).toBeGreaterThan(0)
     expect(answerEvent?.outputTokens).toBe(13)
+    // El proveedor de esta prueba no informó qué modelo respondió: queda vacío, no inventado.
+    expect(answerEvent?.responseModel).toBeNull()
+  })
+
+  it('el evento de la respuesta lleva el modelo que el proveedor dijo que respondió, sin tocar el pedido (R6)', async () => {
+    mocks.generateObject.mockResolvedValueOnce({
+      ...makeLLMResponse({ confidence: 'high', citationIndices: [1] }),
+      response: { modelId: 'modelo-que-respondio-20260101' },
+    })
+
+    const result = await answerEngine(makeInput([makeChunk({ similarityScore: 0.92 })]))
+
+    const answerEvent = result.usageEvents?.find((e) => e.kind === 'chat_answer')
+    expect(answerEvent?.responseModel).toBe('modelo-que-respondio-20260101')
+    // El nombre pedido no cambia: con él se calcula el costo.
+    expect(answerEvent?.model).not.toBe('modelo-que-respondio-20260101')
   })
 
   it('returns medium confidence with evidences', async () => {
@@ -887,6 +903,27 @@ describe('extractCitationIndicesFromAnswer', () => {
 // ---------------------------------------------------------------------------
 
 describe('answerEngineStream', () => {
+  it('el evento de la respuesta lleva el modelo que el proveedor dijo que respondió (R6)', async () => {
+    async function* fakeStream() {
+      yield 'Plazo de 24 horas [1]'
+    }
+    mocks.streamText.mockReturnValue({
+      textStream: fakeStream(),
+      text: Promise.resolve('Plazo de 24 horas [1]'),
+      usage: Promise.resolve({ inputTokens: 3, outputTokens: 4 }),
+      response: Promise.resolve({ modelId: 'modelo-que-respondio-20260101' }),
+    })
+    mocks.generateObject.mockResolvedValueOnce({ object: { confidence: 'high' } })
+
+    const events: Array<Record<string, unknown>> = []
+    for await (const event of answerEngineStream(makeInput([makeChunk({ similarityScore: 0.92 })]))) events.push(event)
+
+    const done = events.at(-1) as { usageEvents?: Array<{ kind: string; model: string; responseModel?: string | null }> }
+    const answerEvent = done.usageEvents?.find((e) => e.kind === 'chat_answer')
+    expect(answerEvent?.responseModel).toBe('modelo-que-respondio-20260101')
+    expect(answerEvent?.model).not.toBe('modelo-que-respondio-20260101')
+  })
+
   it('conserva índices originales desordenados y descarta referencias inválidas', async () => {
     async function* fakeStream() {
       yield 'Primero [7], después [3] y [99].'
