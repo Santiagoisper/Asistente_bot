@@ -35,7 +35,11 @@ function makePlayer(durationSec = 120) {
   const played: Array<{ offsetSec: number; durationSec: number }> = []
   let end: (() => void) | null = null
   const stop = vi.fn()
+  const order: string[] = []
   const player: SegmentPlayer = {
+    prime: vi.fn(() => {
+      order.push('prime')
+    }),
     decode: vi.fn(async () => ({
       durationSec,
       play: (offsetSec: number, length: number, onEnd: () => void) => {
@@ -45,7 +49,7 @@ function makePlayer(durationSec = 120) {
       },
     })),
   }
-  return { player, played, stop, finish: () => act(() => end?.()) }
+  return { player, played, stop, order, finish: () => act(() => end?.()) }
 }
 
 async function show(props: Partial<React.ComponentProps<typeof DictatedSegments>> = {}) {
@@ -121,6 +125,25 @@ describe('DictatedSegments', () => {
     await click(buttons()[1]!)
     expect(loadAudio).toHaveBeenCalledTimes(1)
     expect(played).toEqual([{ offsetSec: 65, durationSec: 3 }])
+  })
+
+  it('habilita el audio dentro del clic, antes de esperar la grabación (Safari y iPad no dejan sonar lo que se habilita después)', async () => {
+    const { player, order } = makePlayer()
+    const loadAudio = vi.fn(async () => {
+      order.push('loadAudio')
+      return new Blob(['x'])
+    })
+    await show({ player, loadAudio })
+    await open()
+    // Sin esperar nada después del clic: tiene que haber pasado ya, en el mismo gesto.
+    act(() => {
+      buttons()[0]!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(order[0]).toBe('prime')
+    await flush()
+    expect(order).toEqual(['prime', 'loadAudio'])
+    await click(buttons()[1]!)
+    expect(player.prime).toHaveBeenCalledTimes(2)
   })
 
   it('la grabación se pide y se decodifica una sola vez aunque se escuchen varios tramos', async () => {

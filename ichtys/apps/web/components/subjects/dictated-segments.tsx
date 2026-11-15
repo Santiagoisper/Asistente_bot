@@ -19,7 +19,22 @@ export interface DecodedAudio {
 }
 
 export interface SegmentPlayer {
+  /**
+   * Se llama al principio del clic, antes de cualquier espera. Safari y el iPad solo dejan sonar
+   * lo que se habilitó dentro del gesto de la persona: después de esperar la grabación ya es tarde.
+   */
+  prime: () => void
   decode: (blob: Blob) => Promise<DecodedAudio>
+}
+
+/**
+ * Una sola salida de audio para toda la pantalla: Safari limita cuántas puede haber abiertas, y
+ * una por toma escuchada llegaba a ese límite en una historia con varias evoluciones dictadas.
+ */
+let sharedContext: AudioContext | null = null
+function audioContext(): AudioContext {
+  sharedContext ??= new AudioContext()
+  return sharedContext
 }
 
 /**
@@ -27,8 +42,11 @@ export interface SegmentPlayer {
  * a un punto no es confiable. Se decodifica la toma y se reproduce ese pedazo de las muestras.
  */
 const browserPlayer: SegmentPlayer = {
+  prime() {
+    void audioContext().resume()
+  },
   async decode(blob) {
-    const context = new AudioContext()
+    const context = audioContext()
     const buffer = await context.decodeAudioData(await blob.arrayBuffer())
     return {
       durationSec: buffer.duration,
@@ -103,6 +121,8 @@ export function DictatedSegments({
     setPlaying(null)
     setBusy(index)
     try {
+      // Antes de cualquier espera: dentro del gesto de la persona.
+      player.prime()
       decodedRef.current ??= await player.decode(await loadAudio())
       const decoded = decodedRef.current
       const where = segmentPlayback(segment, decoded.durationSec)
