@@ -12,7 +12,7 @@ import {
 import { createEvolutionSchema } from '../../../../../../../lib/subjects/schemas'
 import { listSubjectEvolutions } from '../../../../../../../lib/subjects/evolution-reader'
 import { isAllowedVisitLabel } from '../../../../../../../lib/subjects/visit-labels'
-import { loadStudyVisitNames } from '../../../../../../../lib/subjects/study-visit-names'
+import { loadStudyVisitLabels } from '../../../../../../../lib/subjects/study-visit-names'
 import { proposeProfileFromEvolution } from '../../../../../../../lib/subjects/patient-profile-service'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../../lib/api/body-limit'
 import { getOrCreateRequestId } from '../../../../../../../lib/observability/logger'
@@ -134,7 +134,7 @@ export async function POST(
 
     // El rótulo de visita va en claro: tiene que ser uno de la lista, no texto libre.
     const visitLabel = parsed.data.visitLabel?.trim() || null
-    if (visitLabel !== null && !isAllowedVisitLabel(visitLabel, await loadStudyVisitNames({ orgId, studyId: study.id }))) {
+    if (visitLabel !== null && !isAllowedVisitLabel(visitLabel, await loadStudyVisitLabels({ orgId, studyId: study.id }))) {
       return Response.json({ error: 'invalid_visit_label' }, { status: 400 })
     }
 

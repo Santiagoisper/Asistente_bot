@@ -9,8 +9,8 @@ vi.mock('@ichtys/ingestion/study-spec', () => ({
   },
 }))
 
-import { loadStudyVisitNames } from '../study-visit-names'
-import { GENERIC_VISIT_LABELS, isAllowedVisitLabel, UNSCHEDULED_VISIT, visitOptions } from '../visit-labels'
+import { loadStudyVisitLabels } from '../study-visit-names'
+import { GENERIC_VISIT_LABELS, isAllowedVisitLabel, protocolVisitLabels, UNSCHEDULED_VISIT, visitForLabel, visitOptions } from '../visit-labels'
 
 const SCOPE = { orgId: 'org-1', studyId: 'study-1' }
 const visit = (name: string, label: string | null = null) => ({ name, label })
@@ -32,6 +32,43 @@ describe('opciones de visita que ve quien escribe', () => {
   it('no repite una visita ni ofrece una sin nombre o demasiado larga', () => {
     const options = visitOptions([visit('V1'), visit(' V1 '), visit('  '), visit('x'.repeat(101)), visit(UNSCHEDULED_VISIT)])
     expect(options.map((option) => option.value)).toEqual(['V1', UNSCHEDULED_VISIT])
+  })
+})
+
+describe('un protocolo que repite el nombre de una visita', () => {
+  const visits = [
+    { name: 'Selección', label: null, procedures: ['consentimiento'] },
+    { name: 'Control', label: 'Semana 4', procedures: ['laboratorio'] },
+    { name: 'Control', label: 'Semana 8', procedures: ['electrocardiograma'] },
+  ]
+
+  it('se ven las dos, cada una con su etiqueta de tiempo, y la que no se repite queda con su nombre', () => {
+    expect(visitOptions(visits)).toEqual([
+      { value: 'Selección', text: 'Selección' },
+      { value: 'Control · Semana 4', text: 'Control · Semana 4' },
+      { value: 'Control · Semana 8', text: 'Control · Semana 8' },
+      { value: UNSCHEDULED_VISIT, text: UNSCHEDULED_VISIT },
+    ])
+  })
+
+  it('la guía recibe la visita elegida, no la otra del mismo nombre', () => {
+    expect(visitForLabel('Control · Semana 8', visits)?.procedures).toEqual(['electrocardiograma'])
+    expect(visitForLabel('Control · Semana 4', visits)?.procedures).toEqual(['laboratorio'])
+    expect(visitForLabel('Selección', visits)?.procedures).toEqual(['consentimiento'])
+  })
+
+  it('el nombre solo, que no dice cuál de las dos, no es un rótulo: ni en la guía ni en el servidor', () => {
+    expect(visitForLabel('Control', visits)).toBeNull()
+    expect(isAllowedVisitLabel('Control', protocolVisitLabels(visits))).toBe(false)
+    expect(isAllowedVisitLabel('Control · Semana 8', protocolVisitLabels(visits))).toBe(true)
+  })
+
+  it('«Sin indicar», «No programada» y la lista corta no tienen visita en el cronograma', () => {
+    for (const label of ['', UNSCHEDULED_VISIT, 'Basal']) expect(visitForLabel(label, visits)).toBeNull()
+  })
+
+  it('dos visitas que no se distinguen ni por la etiqueta quedan como una', () => {
+    expect(protocolVisitLabels([visit('V1', 'Semana 1'), visit('V1', 'Semana 1'), visit('V2'), visit('V2')])).toEqual(['V1 · Semana 1', 'V2'])
   })
 })
 
@@ -58,13 +95,13 @@ describe('visitas del estudio para el servidor', () => {
       approvedOnly ? { spec: { visits: [visit('V1'), visit('V2')] } } : { spec: { visits: [visit('V2'), visit('V3')] } },
     )
 
-    expect(await loadStudyVisitNames(SCOPE)).toEqual(['V1', 'V2', 'V3'])
+    expect(await loadStudyVisitLabels(SCOPE)).toEqual(['V1', 'V2', 'V3'])
     expect(store.getLatestStudySpec).toHaveBeenCalledWith({ ...SCOPE, approvedOnly: true })
     expect(store.getLatestStudySpec).toHaveBeenCalledWith({ ...SCOPE, approvedOnly: false })
   })
 
   it('sin protocolo, o con uno ilegible, no hay visitas: queda la lista corta', async () => {
     store.getLatestStudySpec.mockResolvedValueOnce(null).mockResolvedValueOnce({ spec: { roto: true } })
-    expect(await loadStudyVisitNames(SCOPE)).toEqual([])
+    expect(await loadStudyVisitLabels(SCOPE)).toEqual([])
   })
 })
