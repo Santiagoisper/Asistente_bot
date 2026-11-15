@@ -25,7 +25,7 @@ Fecha: 15/11/2026. Tarea 40 del cronograma. Complementa D14, D22 y D24 de [`cons
 
 - **(1) Producción, sin tocar datos:** en los registros del despliegue de producción, buscar los pedidos a `/api/cron/purge-dictation-audio`. Tiene que haber uno por día con respuesta 200. Un 401 significa que el secreto no está o no coincide. Lo puede mirar quien tenga acceso al panel del proveedor; no muestra contenido clínico.
 - **(2) De punta a punta, en el entorno de prueba,** con una grabación inventada: adelantarle el vencimiento en la base de prueba, llamar a la ruta con el secreto de ese entorno y comprobar que el contenido quedó vacío, que la fecha de borrado está y que hay un registro. Requiere a alguien que tenga el secreto; el secreto no se copia a notas ni a conversaciones.
-- **(1) tiene plazo:** hasta el 11/12/2026 no vence ninguna grabación en ninguna base (la función se integró el 12/11). Después de esa fecha, una tarea que no corre empieza a incumplir lo que el aviso le dice a quien dicta.
+- **(1) tiene plazo:** la ruta de borrado entró al repositorio el 13/11/2026, así que ninguna grabación puede vencer antes del 13/12/2026 (en la base de prueba se leyó esa fecha; la de producción se deduce, no se miró). Después de esa fecha, una tarea que no corre empieza a incumplir lo que el aviso le dice a quien dicta.
 
 ## Pendiente de decisión
 
