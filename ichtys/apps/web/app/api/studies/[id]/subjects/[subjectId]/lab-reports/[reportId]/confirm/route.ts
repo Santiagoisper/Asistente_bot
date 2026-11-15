@@ -2,9 +2,10 @@ import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../../../../lib/api/body-limit'
 import { isOsEnabled } from '../../../../../../../../../lib/flags'
 import { labConfirmSchema } from '../../../../../../../../../lib/labs/lab-report-content'
-import { isUuid, labReportErrorResponse } from '../../../../../../../../../lib/labs/lab-report-http'
+import { labReportErrorResponse } from '../../../../../../../../../lib/labs/lab-report-http'
 import { confirmLabReport } from '../../../../../../../../../lib/labs/lab-report-service'
 import { PhiConfigError } from '../../../../../../../../../lib/subjects/phi-fields'
+import { parseRouteUuid } from '../../../../../../../../../lib/api/route-uuid'
 
 export const runtime = 'nodejs'
 
@@ -17,7 +18,8 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string; subjectId: string; reportId: string }> },
 ): Promise<Response> {
-  const { id: studyId, subjectId, reportId } = await params
+  const { id: studyId, subjectId, reportId: rawReportId } = await params
+  const reportId = parseRouteUuid(rawReportId)
   if (!isOsEnabled()) return new Response('Not Found', { status: 404 })
 
   let access: Awaited<ReturnType<typeof validateSubjectAccess>>
@@ -26,7 +28,7 @@ export async function POST(
   } catch (err) {
     return handleApiError(err)
   }
-  if (!isUuid(reportId)) return Response.json({ error: 'not_found' }, { status: 404 })
+  if (!reportId) return Response.json({ error: 'not_found' }, { status: 404 })
 
   let body: unknown
   try {
