@@ -6,7 +6,9 @@
  * cuando alguien toca «Escuchar», y cada pedido queda registrado.
  */
 import { useEffect, useRef, useState } from 'react'
+import type { DictatedSegment } from '@ichtys/clinical'
 import { audioLabel, evolutionTakesNotice } from '../../lib/dictation/takes'
+import { DictatedSegments } from './dictated-segments'
 import { recordingClock } from './record-button'
 
 export interface EvolutionAudioInfo {
@@ -18,12 +20,17 @@ export interface EvolutionAudioInfo {
   available: boolean
   /** Se retiró de este sujeto y pasó a las grabaciones sin sujeto (D24). No es una vencida. */
   withdrawn?: boolean
+  /** Tiene guardados los tramos de lo dictado (docs/decisions/enlace-frase-audio.md). */
+  hasSegments?: boolean
 }
 
 export function EvolutionAudio({ studyId, subjectId, audio, several = false }: { studyId: string; subjectId: string; audio: EvolutionAudioInfo; several?: boolean }) {
   const [url, setUrl] = useState<string | null>(null)
   const [state, setState] = useState<'idle' | 'loading' | 'error' | 'expired' | 'unplayable'>('idle')
   const urlRef = useRef<string | null>(null)
+  /** La grabación ya pedida: escuchar un tramo no la pide (ni la registra) otra vez. */
+  const blobRef = useRef<Blob | null>(null)
+  const base = `/api/studies/${studyId}/subjects/${subjectId}/evolutions/${audio.evolutionId}/audio`
 
   useEffect(
     () => () => {
@@ -32,16 +39,41 @@ export function EvolutionAudio({ studyId, subjectId, audio, several = false }: {
     [],
   )
 
+  /** `null`: venció o se retiró mientras la pantalla estaba abierta. */
+  async function fetchRecording(): Promise<Blob | null> {
+    if (blobRef.current) return blobRef.current
+    const res = await fetch(`${base}?take=${audio.take}`)
+    if (res.status === 410) return null
+    if (!res.ok) throw new Error('audio_failed')
+    blobRef.current = await res.blob()
+    return blobRef.current
+  }
+
+  async function loadSegments(): Promise<DictatedSegment[]> {
+    const res = await fetch(`${base}/segments?take=${audio.take}`)
+    if (res.status === 410) setState('expired')
+    if (!res.ok) throw new Error('segments_failed')
+    return ((await res.json()) as { segments: DictatedSegment[] }).segments
+  }
+
+  async function loadAudioForSegment(): Promise<Blob> {
+    const blob = await fetchRecording()
+    if (!blob) {
+      setState('expired')
+      throw new Error('audio_expired')
+    }
+    return blob
+  }
+
   async function listen() {
     setState('loading')
     try {
-      const res = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/evolutions/${audio.evolutionId}/audio?take=${audio.take}`)
-      if (res.status === 410) {
+      const blob = await fetchRecording()
+      if (!blob) {
         setState('expired')
         return
       }
-      if (!res.ok) throw new Error('audio_failed')
-      const objectUrl = URL.createObjectURL(await res.blob())
+      const objectUrl = URL.createObjectURL(blob)
       urlRef.current = objectUrl
       setUrl(objectUrl)
       setState('idle')
@@ -86,6 +118,7 @@ export function EvolutionAudio({ studyId, subjectId, audio, several = false }: {
       {state === 'unplayable' ? (
         <span role="alert" className="text-red-700">Este equipo no puede reproducir esta grabación. Probá en otro navegador o en otro equipo: la grabación está guardada.</span>
       ) : null}
+      {audio.hasSegments ? <DictatedSegments loadSegments={loadSegments} loadAudio={loadAudioForSegment} /> : null}
     </div>
   )
 }

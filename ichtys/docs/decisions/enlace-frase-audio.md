@@ -1,6 +1,6 @@
 # De lo escrito a lo dicho: escuchar el tramo de una frase (nota de diseño)
 
-**Estado:** propuesta. Nada de esto está construido. Santiago dijo que sí a tenerlo (14/11/2026 10:08); el cómo es propuesta de Claude.
+**Estado:** la primera versión está construida (14/11/2026) y espera la confirmación de Santiago para integrarse: agrega dos nombres a la lista de acciones del registro, que vive en `packages/db`. La segunda versión sigue siendo propuesta. Santiago dijo que sí a tenerlo (14/11/2026 10:08); el cómo es propuesta de Claude.
 
 Viene del estudio de Heidi y Abridge (documento del proyecto `claude/estudio-grabaciones-heidi-abridge.md`). Lo que distingue a Abridge es poder ir de una frase de la nota a su pasaje en la transcripción y de ahí al audio. A nosotros nos sirve más que a ellos: nuestra transcripción corre en el equipo del médico con un modelo chico, y el riesgo es que oiga mal. La forma más directa de comprobarlo es escuchar ese pedazo.
 
@@ -54,11 +54,24 @@ Desde una frase de la evolución, proponer el tramo que más se le parece. Con u
 - Que otra organización no los pueda leer.
 - Con micrófono, por una persona: que el botón de un tramo reproduzca ese pedazo y no otro. Es lo único que una prueba automática no cubre.
 
+## Lo que quedó construido (primera versión)
+
+- **Quién arma los tramos:** el navegador, al transcribir. El transcriptor devuelve lo que escribió para cada tramo y la pantalla le pone el tiempo (`dictatedSegments`, en `packages/clinical/dictation/segments.ts`). Si los textos no corresponden uno a uno con los tramos, no hay lista: no se adivina cuál es cuál.
+- **Cuándo viajan:** después de guardar la grabación de esa toma, en un pedido aparte (`PUT …/evolutions/[evolutionId]/audio/segments?take=N`). Solo quien escribió la evolución, y una sola vez por toma. Si no se guardan, la grabación queda igual y la pantalla no ofrece la lista.
+- **El servidor no confía:** `validateDictatedSegments` comprueba contra la duración de la grabación **guardada**, no contra lo que diga el pedido. Lo guardado se vuelve a comprobar al leer.
+- **Quién los lee:** quien puede escuchar la grabación (`GET` en la misma ruta). Decisión de Claude por el mensaje de Santiago del 14/11 19:30: escuchar un tramo es escuchar la grabación, y una lista que viera menos gente que la grabación no protegería nada. Si Santiago prefiere que la vea solo quien verifica, se cambia en la ruta.
+- **Registro:** `evolution.audio.segments.store` y `evolution.audio.segments.read`, con la cantidad de tramos y sin el texto. Reproducir un tramo pide la grabación, que deja su propio `evolution.audio.listen`. La lista plegada no pide nada.
+- **Vencimiento y D24:** el borrado por vencimiento ya vaciaba la columna, y el retiro al depósito ya se la lleva (migraciones 0021 y 0022). Los tramos de una grabación vencida o retirada no se entregan.
+- **En pantalla:** «Lo dictado, tramo por tramo», plegado, junto a cada grabación que los tiene. Cada tramo con su minuto, su texto, la marca «Posible repetición del transcriptor» (D10) y un botón que reproduce ese pedazo decodificando la toma.
+
+- **Safari y iPad (planteo de Architect):** el audio se habilita al principio del clic, antes de esperar la grabación, y hay una sola salida de audio para toda la pantalla. Safari solo deja sonar lo que se habilita dentro del gesto de la persona y limita cuántas salidas puede haber abiertas. Hecho por lectura del comportamiento documentado del navegador; **sin probar en un iPad**.
+
 ## Lo que tiene que decidir Santiago
 
-1. **Si alcanza con la primera versión** para la demo y la auditoría.
-2. **La migración** de la columna nueva.
-3. Si la lista de tramos la ve todo el que puede escuchar la grabación, o solo quien verifica (monitor, coordinación).
+1. **Si alcanza con la primera versión** para la demo y la auditoría. Construida; la segunda no se empieza sin que lo diga.
+2. **La migración** de la columna nueva: aplicada (0022).
+3. Si la lista de tramos la ve todo el que puede escuchar la grabación, o solo quien verifica (monitor, coordinación). Quedó lo primero; se puede cambiar.
+4. **Confirmar la integración**: el cambio toca `packages/db/schema/enums.ts` (dos nombres de acción, sin migración).
 
 ## Sin verificar
 
