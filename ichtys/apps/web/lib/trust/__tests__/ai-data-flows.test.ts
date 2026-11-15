@@ -50,6 +50,14 @@ describe('cambio controlado: sumar un proveedor obliga a mirar la página', () =
   })
 })
 
+describe('cambio controlado: qué clases tienen el destino fijo', () => {
+  it('hoy son fijas las tres que llevan datos de sujetos', () => {
+    // Si esto falla es porque cambió PATIENT_DATA_PURPOSES: la página pasaría a decir otra cosa
+    // sobre qué puede elegir una organización. Revisar la página antes de tocar esta prueba.
+    expect(aiDataFlows().filter((flow) => flow.fixed).map((flow) => flow.purpose)).toEqual(['clinical-extract', 'lab-read', 'lab-read-control'])
+  })
+})
+
 describe('los proveedores que se pueden elegir son los que ofrece la pantalla de ajustes', () => {
   it('la lista de la página coincide con las opciones de ajustes', () => {
     const offered = PROVIDER_OPTIONS.map((option) => option.value).filter((value) => value !== 'auto')
