@@ -115,6 +115,25 @@ describe('UnassignedAudiosPanel', () => {
     expect(button('Escuchar')).toBeDefined()
   })
 
+  it('si la lista llegó al tope, dice que se muestran las más recientes y que hay más: no deja creer que son todas', async () => {
+    await show('page', json({ audios: [item(), item({ id: 'dep-2' })], truncated: true }))
+    expect(container.querySelector('[role="status"]')!.textContent).toBe('Se muestran las 2 que se retiraron más recientemente. Hay más: las anteriores no aparecen en esta lista.')
+  })
+
+  it('en Inicio también lo dice', async () => {
+    await show('inicio', json({ audios: [item()], truncated: true }))
+    expect(text()).toContain('Hay más')
+  })
+
+  it('si la lista está completa no dice nada de eso (también con una respuesta anterior, sin el dato)', async () => {
+    await show('page', json({ audios: [item()], truncated: false }))
+    expect(text()).not.toContain('Hay más')
+    act(() => root.unmount())
+    root = createRoot(container)
+    await show('page', json({ audios: [item()] }))
+    expect(text()).not.toContain('Hay más')
+  })
+
   it('dice qué son y que siguen siendo datos clínicos', async () => {
     await show('page', json({ audios: [item()] }))
     expect(text()).toContain('se registró ahí por error')

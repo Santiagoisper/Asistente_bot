@@ -1,10 +1,12 @@
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
+import { acceptableSampleDate } from '@ichtys/clinical'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../../../../lib/api/body-limit'
 import { isOsEnabled } from '../../../../../../../../../lib/flags'
 import { labConfirmSchema } from '../../../../../../../../../lib/labs/lab-report-content'
-import { isUuid, labReportErrorResponse } from '../../../../../../../../../lib/labs/lab-report-http'
+import { labReportErrorResponse } from '../../../../../../../../../lib/labs/lab-report-http'
 import { confirmLabReport } from '../../../../../../../../../lib/labs/lab-report-service'
 import { PhiConfigError } from '../../../../../../../../../lib/subjects/phi-fields'
+import { parseRouteUuid } from '../../../../../../../../../lib/api/route-uuid'
 
 export const runtime = 'nodejs'
 
@@ -17,7 +19,8 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string; subjectId: string; reportId: string }> },
 ): Promise<Response> {
-  const { id: studyId, subjectId, reportId } = await params
+  const { id: studyId, subjectId, reportId: rawReportId } = await params
+  const reportId = parseRouteUuid(rawReportId)
   if (!isOsEnabled()) return new Response('Not Found', { status: 404 })
 
   let access: Awaited<ReturnType<typeof validateSubjectAccess>>
@@ -26,7 +29,7 @@ export async function POST(
   } catch (err) {
     return handleApiError(err)
   }
-  if (!isUuid(reportId)) return Response.json({ error: 'not_found' }, { status: 404 })
+  if (!reportId) return Response.json({ error: 'not_found' }, { status: 404 })
 
   let body: unknown
   try {
@@ -37,6 +40,11 @@ export async function POST(
   }
   const parsed = labConfirmSchema.safeParse(body)
   if (!parsed.success) return Response.json({ error: 'invalid_rows' }, { status: 400 })
+  // La fecha de la muestra la confirma una persona (C4, D3): una futura o imposible no se guarda.
+  const sampleDate = parsed.data.sampleDate ?? null
+  if (sampleDate !== null && !acceptableSampleDate(sampleDate, new Date().toISOString().slice(0, 10))) {
+    return Response.json({ error: 'invalid_sample_date' }, { status: 400 })
+  }
 
   try {
     const result = await confirmLabReport({
@@ -47,6 +55,7 @@ export async function POST(
       userId: access.userId,
       rows: parsed.data.rows,
       comparedWithImage: parsed.data.comparedWithImage,
+      sampleDate,
       // Se escribe dentro de la transacción que confirma el informe (R3). Si el
       // perfil del sujeto se pudo actualizar después no es parte de este
       // registro: eso ocurre ya confirmado y se le informa a quien confirma.
@@ -60,6 +69,8 @@ export async function POST(
         metadata: {
           subjectId,
           comparedWithImage: parsed.data.comparedWithImage === true,
+          // Si la persona confirmó una fecha de muestra o la dejó como desconocida. Sin la fecha.
+          sampleDateKnown: sampleDate !== null,
           rowCount: facts.rowCount,
           newAnalytes: facts.newAnalytes,
           imagesPurged: facts.imagesPurged,

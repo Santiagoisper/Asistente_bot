@@ -302,7 +302,10 @@ const UNASSIGNED_META = {
   declaredAt: unassignedDictationAudios.declaredAt,
 }
 
-/** Tope de la lista: una persona no acumula tantas, y la respuesta no crece sin límite. */
+/**
+ * Tope de la lista: una persona no acumula tantas, y la respuesta no crece sin límite. Las
+ * consultas piden una de más: así la ruta sabe si quedaron grabaciones afuera y lo dice.
+ */
 export const UNASSIGNED_AUDIO_LIST_MAX = 200
 
 /*
@@ -352,7 +355,7 @@ export async function listUnassignedAudiosByAuthor(params: { orgId: string; user
       ),
     )
     .orderBy(desc(unassignedDictationAudios.declaredAt))
-    .limit(UNASSIGNED_AUDIO_LIST_MAX)
+    .limit(UNASSIGNED_AUDIO_LIST_MAX + 1)
 }
 
 /**
@@ -367,7 +370,7 @@ export async function listUnassignedAudiosOfOrg(params: { orgId: string; studyId
     .from(unassignedDictationAudios)
     .where(and(eq(unassignedDictationAudios.organizationId, params.orgId), inArray(unassignedDictationAudios.studyId, params.studyIds)))
     .orderBy(desc(unassignedDictationAudios.declaredAt))
-    .limit(UNASSIGNED_AUDIO_LIST_MAX)
+    .limit(UNASSIGNED_AUDIO_LIST_MAX + 1)
 }
 
 /** Una grabación sin sujeto de esta organización, sin contenido. Quién puede escucharla lo decide la ruta. */

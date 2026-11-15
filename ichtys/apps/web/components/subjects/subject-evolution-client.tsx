@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { matchProtocolVisit, mergeDictationAddition, NOT_MENTIONED, studyDictationPrompts, type ProtocolVisit } from '@ichtys/clinical'
 import { bloodPressureProposalLabel } from '../../lib/subjects/proposal-display'
-import { unapprovedSpecNotice } from '../../lib/subjects/spec-notice'
+import { newerDraftNotice, specPendingApprovalNotice, unapprovedSpecNotice } from '../../lib/subjects/spec-notice'
 import { DictationPanel, type DictationRecording, type DictationSource } from './dictation-panel'
 import { DictationGuide } from './dictation-guide'
 import { ProfileUnreadableNotice } from './profile-unreadable-notice'
@@ -20,7 +20,7 @@ import { ProfileSummary } from './profile-summary'
 import { VoidedOriginNoticeCard } from './voided-origin-notice'
 import { VoidedOriginReviewForm, type RetireChoice } from './voided-origin-review'
 import { labNamesFromEvolution, retireErrorMessage, storedBloodPressureText, voidedOriginNotice } from '../../lib/subjects/voided-origin'
-import { voidDoneMessage, voidErrorMessage, type VoidOutcome } from '../../lib/subjects/evolution-void-screen'
+import { SCREENING_NOT_READ, VOID_HISTORY_NOT_REREAD, voidDoneMessage, voidErrorMessage, type VoidOutcome } from '../../lib/subjects/evolution-void-screen'
 
 interface EvolutionItem {
   id: string
@@ -165,6 +165,11 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const [protocolDocumentId, setProtocolDocumentId] = useState<string | null>(null)
   const [specAvailable, setSpecAvailable] = useState(false)
   const [specNotice, setSpecNotice] = useState<string | null>(null)
+  // C5: sin protocolo aprobado no hay evaluación; con aprobado y un borrador más nuevo, se dice cuál se usa.
+  const [specPendingNotice, setSpecPendingNotice] = useState<string | null>(null)
+  const [newerDraft, setNewerDraftNotice] = useState<string | null>(null)
+  // Sin protocolo aprobado, la guía muestra igual los procedimientos de la visita y avisa que salen de un borrador.
+  const [visitsFromDraft, setVisitsFromDraft] = useState(false)
   /** Las visitas del cronograma del protocolo, con sus procedimientos. */
   const [protocolVisits, setProtocolVisits] = useState<ProtocolVisit[]>([])
   /** Lo guardado de este sujeto no se pudo leer: la ficha lo dice en vez de mostrar un perfil vacío. */
@@ -190,6 +195,19 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const [voiding, setVoiding] = useState<string | null>(null)
   const [voidBusy, setVoidBusy] = useState(false)
   const [voidFeedback, setVoidFeedback] = useState<(VoidFeedback & { evolutionId: string }) | null>(null)
+  /**
+   * Evoluciones que el servidor confirmó como registradas por error y que la historia en pantalla
+   * todavía no refleja: se vacía cuando la historia se vuelve a leer bien. Mientras tanto no se
+   * ofrece declararlas de nuevo.
+   */
+  const [voidsNotReread, setVoidsNotReread] = useState<string[]>([])
+  /**
+   * Evoluciones cuya propuesta pendiente el servidor dijo que retiró al anular. El perfil en
+   * pantalla puede seguir trayéndola hasta la próxima lectura que salga bien: no se ofrece.
+   */
+  const [proposalsRetired, setProposalsRetired] = useState<string[]>([])
+  /** El perfil y la elegibilidad en pantalla no son una lectura de ahora. Se dice, no se calla. */
+  const [screeningNotRead, setScreeningNotRead] = useState(false)
   // Cuándo se leyó la lista: con eso se sabe si una grabación todavía puede estar subiendo.
   const [listedAt, setListedAt] = useState(0)
   // Evoluciones cuyas grabaciones terminó de subir esta misma pantalla: de esas ya se sabe.
@@ -214,26 +232,41 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const loadScreening = useCallback(async () => {
     try {
       const res = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/screening`)
-      if (!res.ok) return
+      if (!res.ok) {
+        // No bloquea la página, pero lo que queda a la vista es lo anterior, o nada: se avisa.
+        setScreeningNotRead(true)
+        return
+      }
       const data = (await res.json()) as {
         profile: PatientProfileView
         assessments: ScreeningAssessment[]
         specAvailable: boolean
         specStatus?: string | null
         specVersion?: number | null
+        specPendingApproval?: boolean
+        pendingSpecVersion?: number | null
         protocolDocumentId?: string | null
         visits?: ProtocolVisit[]
+        visitsFromDraft?: boolean
         profileUnreadable?: boolean
       }
       setProfile(data.profile)
       setAssessments(data.assessments)
       setSpecAvailable(data.specAvailable)
       setSpecNotice(data.specAvailable ? unapprovedSpecNotice(data.specStatus, data.specVersion) : null)
+      const pending = data.specPendingApproval === true
+      setSpecPendingNotice(pending && !data.specAvailable ? specPendingApprovalNotice(data.pendingSpecVersion) : null)
+      setNewerDraftNotice(pending && data.specAvailable ? newerDraftNotice(data.specVersion, data.pendingSpecVersion) : null)
       setProtocolDocumentId(data.protocolDocumentId ?? null)
       setProtocolVisits(data.visits ?? [])
+      setVisitsFromDraft(data.visitsFromDraft === true)
       setProfileUnreadable(data.profileUnreadable === true)
+      // Lectura nueva: lo que trae es lo que hay, también si trae una propuesta de una anulada.
+      setProposalsRetired([])
+      setScreeningNotRead(false)
     } catch {
-      // screening es complementario — no bloquea la página
+      // screening es complementario: no bloquea la página, pero no se calla.
+      setScreeningNotRead(true)
     }
   }, [studyId, subjectId])
 
@@ -257,6 +290,8 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       // Hasta leer el listado de grabaciones no se sabe cuáles hay: mientras, no se afirma nada.
       setAudiosKnown(false)
       setEvolutions(data.evolutions)
+      // La historia es la de ahora: ya dice cuáles están anuladas.
+      setVoidsNotReread([])
       setListedAt(Date.now())
       // Qué evoluciones tienen grabación. Si esto falla, la lista se muestra igual.
       try {
@@ -437,8 +472,20 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         const outcome = (await res.json().catch(() => ({}))) as VoidOutcome
         feedback = { kind: 'done', text: voidDoneMessage(outcome) }
         setVoiding(null)
+        // Confirmado por el servidor. Hasta volver a leer, la copia en pantalla es de antes:
+        // no se ofrece declararla otra vez ni la propuesta que se retiró, y el perfil no es de ahora.
+        setVoidsNotReread((prev) => [...prev, evolutionId])
+        if (outcome.proposalRetired === true) setProposalsRetired((prev) => [...prev, evolutionId])
+        setScreeningNotRead(true)
       } else {
-        feedback = { kind: 'error', text: voidErrorMessage(res.status, await errorCode(res)) }
+        const code = await errorCode(res)
+        feedback = { kind: 'error', text: voidErrorMessage(res.status, code) }
+        // «Ya figuraba»: el servidor prueba que está declarada, aunque no por este pedido. Hasta
+        // volver a leer la historia tampoco se ofrece de nuevo. De la propuesta no dijo nada.
+        if (code === 'already_voided') {
+          setVoiding(null)
+          setVoidsNotReread((prev) => [...prev, evolutionId])
+        }
       }
     } catch {
       feedback = { kind: 'error', text: voidErrorMessage(0, 'request_failed') }
@@ -504,7 +551,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
     }
   }
 
-  const pendingProposals = profile?.pendingEvolutionProposals ?? []
+  const pendingProposals = (profile?.pendingEvolutionProposals ?? []).filter((proposal) => !proposalsRetired.includes(proposal.evolutionId))
   const voidedOrigin = voidedOriginNotice({
     labs: profile?.labs ?? [],
     voided: evolutions.filter((evo) => evo.voided).map((evo) => ({ id: evo.id, createdAt: evo.createdAt })),
@@ -627,7 +674,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         </div>
         <DictationGuide
           studyPrompts={studyPrompts}
-          unapprovedProtocol={specNotice !== null}
+          unapprovedProtocol={specNotice !== null || visitsFromDraft}
           visit={protocolVisit}
           visitsAvailable={protocolVisits.length > 0}
         />
@@ -755,6 +802,11 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         <p role="status" className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{audioNotice}</p>
       ) : null}
 
+      {/* Mientras se vuelve a leer después de una declaración no se afirma que falló. */}
+      {screeningNotRead && !voidBusy ? (
+        <p role="alert" className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{SCREENING_NOT_READ}</p>
+      ) : null}
+
       {error && (
         <p className="rounded-lg border border-alphi-rose/30 bg-alphi-rose/10 px-4 py-2 text-sm text-alphi-rose">{error}</p>
       )}
@@ -827,9 +879,22 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
             Screening (orientativo)
           </h3>
           {!specAvailable ? (
+            specPendingNotice ? (
+              <div
+                role="note"
+                data-testid="protocolo-sin-aprobar"
+                className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+              >
+                <p className="font-medium">{specPendingNotice}</p>
+                <a href={`/studies/${studyId}/spec`} className="mt-2 inline-block font-semibold underline">
+                  Ir al protocolo extraído
+                </a>
+              </div>
+            ) : (
             <p className="text-sm text-alphi-muted">
               Extraé y aprobá el study spec del protocolo para evaluar criterios automáticamente.
             </p>
+            )
           ) : (
             <>
             {/* El aviso va primero y siempre: un borrador sin revisar también puede haber omitido todos los criterios. */}
@@ -839,6 +904,12 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                 className="mb-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900"
               >
                 {specNotice}
+              </p>
+            ) : null}
+            {newerDraft ? (
+              <p role="note" data-testid="borrador-mas-nuevo" className="mb-3 rounded border border-alphi-border bg-white px-3 py-2 text-xs text-alphi-muted">
+                {newerDraft}{' '}
+                <a href={`/studies/${studyId}/spec`} className="font-semibold underline">Ver el protocolo extraído</a>
               </p>
             ) : null}
             {assessments.length === 0 ? (
@@ -891,7 +962,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                   subjectCode={subjectCode}
                   evolutionLabel={`la evolución del ${new Date(evo.createdAt).toLocaleString('es-AR')}`}
                   voided={Boolean(evo.voided)}
-                  allowed={evo.canVoid === true}
+                  allowed={evo.canVoid === true && !voidsNotReread.includes(evo.id)}
                   open={voiding === evo.id}
                   busy={voidBusy}
                   feedback={voidFeedback?.evolutionId === evo.id ? voidFeedback : null}
@@ -904,6 +975,9 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                   onCancel={() => setVoiding(null)}
                   onConfirm={(confirmation) => void handleVoid(evo.id, confirmation)}
                 />
+                {voidsNotReread.includes(evo.id) && !voidBusy ? (
+                  <p role="alert" className="mt-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{VOID_HISTORY_NOT_REREAD}</p>
+                ) : null}
                 <EvolutionAudios
                   studyId={studyId}
                   subjectId={subjectId}

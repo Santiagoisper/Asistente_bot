@@ -286,9 +286,10 @@ describe('Foto o escaneo — dos lecturas independientes', () => {
     // Cada valor guarda de qué informe salió (C4, D1).
     const source = { kind: 'lab_report', reportId: created.reportId }
     expect(store.persisted[0]?.labs).toEqual([
-      { name: 'Hemoglobina', value: 18.5, unit: 'g/dL', source },
-      { name: 'Glucosa', value: 92, unit: 'mg/dL', source },
-      { name: 'Creatinina', value: 0.9, unit: 'mg/dL', source },
+      // Confirmado sin fecha de muestra: queda desconocida, nunca la fecha de carga (C4, prueba 6).
+      { name: 'Hemoglobina', value: 18.5, unit: 'g/dL', source, sampleDate: null },
+      { name: 'Glucosa', value: 92, unit: 'mg/dL', source, sampleDate: null },
+      { name: 'Creatinina', value: 0.9, unit: 'mg/dL', source, sampleDate: null },
     ])
     // Confirmado: por defecto la evidencia se conserva y se puede volver a ver.
     expect(store.images).toHaveLength(2)

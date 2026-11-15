@@ -2,8 +2,9 @@ import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
 import { isOsEnabled } from '../../../../../../../../../../lib/flags'
 import { loadLabReportImage } from '../../../../../../../../../../lib/labs/lab-image-report'
 import { MAX_LAB_IMAGES } from '../../../../../../../../../../lib/labs/lab-report-content'
-import { isUuid, labReportErrorResponse } from '../../../../../../../../../../lib/labs/lab-report-http'
+import { labReportErrorResponse } from '../../../../../../../../../../lib/labs/lab-report-http'
 import { PhiConfigError } from '../../../../../../../../../../lib/subjects/phi-fields'
+import { parseRouteUuid } from '../../../../../../../../../../lib/api/route-uuid'
 
 export const runtime = 'nodejs'
 
@@ -16,7 +17,8 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string; subjectId: string; reportId: string; page: string }> },
 ): Promise<Response> {
-  const { id: studyId, subjectId, reportId, page } = await params
+  const { id: studyId, subjectId, reportId: rawReportId, page } = await params
+  const reportId = parseRouteUuid(rawReportId)
   if (!isOsEnabled()) return new Response('Not Found', { status: 404 })
 
   let access: Awaited<ReturnType<typeof validateSubjectAccess>>
@@ -26,7 +28,7 @@ export async function GET(
     return handleApiError(err)
   }
   const pageNumber = Number(page)
-  if (!isUuid(reportId) || !Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > MAX_LAB_IMAGES) {
+  if (!reportId || !Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > MAX_LAB_IMAGES) {
     return Response.json({ error: 'not_found' }, { status: 404 })
   }
 

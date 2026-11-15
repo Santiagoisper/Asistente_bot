@@ -4,10 +4,10 @@ import { profileWriteErrorResponse } from '../../../../../../../../../../lib/sub
 import { PhiConfigError } from '../../../../../../../../../../lib/subjects/phi-fields'
 import { findSubjectEvolution } from '../../../../../../../../../../lib/subjects/evolution-reader'
 import { profileForResponse } from '../../../../../../../../../../lib/subjects/profile-response'
+import { parseRouteUuid } from '../../../../../../../../../../lib/api/route-uuid'
 
 export const runtime = 'nodejs'
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 /**
  * POST — una persona acepta lo que se extrajo de una evolución: recién ahí pasa al perfil del sujeto (R6).
@@ -24,11 +24,12 @@ export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string; subjectId: string; evolutionId: string }> },
 ): Promise<Response> {
-  const { id: routeStudyId, subjectId, evolutionId } = await params
+  const { id: routeStudyId, subjectId, evolutionId: rawEvolutionId } = await params
+  const evolutionId = parseRouteUuid(rawEvolutionId)
 
   try {
     const { orgId, userId, study, subject } = await validateSubjectAccess(subjectId, routeStudyId, { require: 'clinical.author' })
-    if (!UUID.test(evolutionId)) return Response.json({ error: 'no_pending_proposal' }, { status: 409 })
+    if (!evolutionId) return Response.json({ error: 'no_pending_proposal' }, { status: 409 })
 
     const evolution = await findSubjectEvolution({ orgId, studyId: study.id, subjectId: subject.id, evolutionId }, 'with-voided')
     if (!evolution) return Response.json({ error: 'no_pending_proposal' }, { status: 409 })

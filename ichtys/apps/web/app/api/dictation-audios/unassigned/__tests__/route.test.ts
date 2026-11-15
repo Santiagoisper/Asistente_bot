@@ -27,6 +27,7 @@ vi.mock('@ichtys/auth', () => ({
 }))
 vi.mock('../../../../../lib/access/org-context', () => ({ resolveOrgAccessContext: mocks.orgContext }))
 vi.mock('../../../../../lib/dictation/audio-store', () => ({
+  UNASSIGNED_AUDIO_LIST_MAX: 200,
   listUnassignedAudiosByAuthor: mocks.list,
   listUnassignedAudiosOfOrg: mocks.listOrg,
   listUnassignedAudioStudiesByAuthor: mocks.studies,
@@ -60,7 +61,7 @@ const ctx = (access: Record<string, unknown> = {}) => ({ orgId: 'org-1', userId:
 
 async function list() {
   const res = await GET()
-  return { res, body: res.status === 200 ? ((await res.json()) as { audios: Array<Record<string, unknown>> }) : null }
+  return { res, body: res.status === 200 ? ((await res.json()) as { audios: Array<Record<string, unknown>>; truncated: boolean }) : null }
 }
 
 beforeEach(() => {
@@ -76,8 +77,8 @@ beforeEach(() => {
   mocks.studiesOrg.mockReset().mockImplementation(async () => [...new Set(deposit.map((r) => r.studyId))])
   mocks.list
     .mockReset()
-    .mockImplementation(async ({ userId, studyIds }: { userId: string; studyIds?: string[] }) => deposit.filter((r) => r.createdBy === userId && inStudies(r, studyIds)).slice(0, CAP))
-  mocks.listOrg.mockReset().mockImplementation(async ({ studyIds }: { studyIds?: string[] }) => deposit.filter((r) => inStudies(r, studyIds)).slice(0, CAP))
+    .mockImplementation(async ({ userId, studyIds }: { userId: string; studyIds?: string[] }) => deposit.filter((r) => r.createdBy === userId && inStudies(r, studyIds)).slice(0, CAP + 1))
+  mocks.listOrg.mockReset().mockImplementation(async ({ studyIds }: { studyIds?: string[] }) => deposit.filter((r) => inStudies(r, studyIds)).slice(0, CAP + 1))
 })
 
 describe('GET — mis grabaciones sin sujeto', () => {
@@ -106,6 +107,44 @@ describe('GET — mis grabaciones sin sujeto', () => {
         own: true,
       },
     ])
+  })
+
+  it('con el tope justo no dice que hay más', async () => {
+    deposit = Array.from({ length: CAP }, (_, i) => row({ id: `dep-${i}` }))
+    const { body } = await list()
+    expect(body!.audios).toHaveLength(CAP)
+    expect(body!.truncated).toBe(false)
+  })
+
+  it('con una más que el tope entrega las del tope, las más recientes, y dice que hay más', async () => {
+    deposit = Array.from({ length: CAP + 1 }, (_, i) => row({ id: `dep-${i}` }))
+    const { body } = await list()
+    expect(body!.audios).toHaveLength(CAP)
+    expect(body!.audios[0]!.id).toBe('dep-0')
+    expect(body!.audios.at(-1)!.id).toBe(`dep-${CAP - 1}`)
+    expect(body!.truncated).toBe(true)
+  })
+
+  it('sin grabaciones tampoco dice que hay más', async () => {
+    deposit = []
+    expect((await list()).body).toEqual({ audios: [], truncated: false })
+  })
+
+  it('lo que no se le muestra por no ser suyo o de su estudio no cuenta como «hay más» si el depósito no pasó del tope', async () => {
+    deposit = [row(), row({ id: 'dep-2' })]
+    mocks.list.mockResolvedValue([row(), row({ id: 'ajena', createdBy: 'user_other' })])
+    const { body } = await list()
+    expect(body!.audios.map((a) => a.id)).toEqual(['dep-1'])
+    expect(body!.truncated).toBe(false)
+  })
+
+  it('si el depósito devolviera una ajena junto a las 200 que sí puede ver, no dice que hay más: no se omitió ninguna', async () => {
+    const mine = Array.from({ length: CAP }, (_, i) => row({ id: `dep-${i}` }))
+    mocks.list.mockResolvedValue([row({ id: 'ajena', createdBy: 'user_other' }), ...mine])
+    const { body } = await list()
+    expect(body!.audios).toHaveLength(CAP)
+    expect(body!.audios.map((a) => a.id)).not.toContain('ajena')
+    expect(body!.truncated).toBe(false)
   })
 
   it('una vencida o ya borrada queda como constancia, sin poder escucharse', async () => {

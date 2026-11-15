@@ -20,6 +20,16 @@ describe('camino 1 — informe de laboratorio confirmado', () => {
     ])
   })
 
+  it('con la fecha de la muestra confirmada, cada valor la lleva exacta; con null, queda desconocida', () => {
+    expect(labsFromLabReport([{ name: 'HbA1c', value: 7.9 }], REPORT, '2026-09-24')).toEqual([{ name: 'HbA1c', value: 7.9, source: { kind: 'lab_report', reportId: REPORT }, sampleDate: '2026-09-24' }])
+    expect(labsFromLabReport([{ name: 'HbA1c', value: 7.9 }], REPORT, null)).toEqual([{ name: 'HbA1c', value: 7.9, source: { kind: 'lab_report', reportId: REPORT }, sampleDate: null }])
+  })
+
+  it('una fecha que venga en el valor no vale: la pone el camino', () => {
+    expect(labsFromLabReport([{ name: 'HbA1c', value: 7.9, sampleDate: '2020-01-01' }], REPORT, null)[0]!.sampleDate).toBeNull()
+    expect(labsFromLabReport([{ name: 'HbA1c', value: 7.9, sampleDate: '2020-01-01' }], REPORT)[0]).not.toHaveProperty('sampleDate')
+  })
+
   it('no arrastra un origen ajeno que venga en el valor', () => {
     const labs = labsFromLabReport([{ name: 'HbA1c', value: 7.9, sourceEvolutionId: EVOLUTION, source: { kind: 'evolution', evolutionId: EVOLUTION } }], REPORT)
     expect(labs).toEqual([{ name: 'HbA1c', value: 7.9, source: { kind: 'lab_report', reportId: REPORT } }])
