@@ -114,6 +114,9 @@ Cada prueba asierta el valor exacto, nunca «no es otra cosa» (L27).
 ## Paso 3, construido (14/11/2026)
 
 - **Quién propone:** `proposeSampleDate` (`packages/clinical/lab-sample-date.ts`) lee la transcripción guardada del informe. Solo un renglón de extracción, toma o muestra, con o sin hora. Emisión, informe, recepción, ingreso, validación y un «Fecha:» a secas no proponen nada. Dos fechas de muestra distintas: no elige. No se guarda la propuesta: se calcula al abrir la revisión, así el contenido del informe no suma campos.
+- **Rótulos:** con «Fecha de…», sin la palabra («Toma de muestra: …», «Extracción: …») o abreviado («F. extracción: …»). Una fecha suelta, «F. nacimiento» o «Recepción de muestra» no proponen nada y el lector las sigue tapando.
+- **No propone lo que no se podría confirmar:** «24/09/98» leído como 2098 no arranca en el campo.
+- **El calendario y el validador comparten el límite** (`latestSampleDate`): hasta el día siguiente al de hoy en UTC.
 - **La trampa de la hora, cerrada:** el lector de informes ahora conserva el renglón de fecha también cuando trae hora; antes se tapaba con el resto del encabezado y la fecha se perdía.
 - **Quién confirma:** en la pantalla de revisión, junto al botón de confirmar, el campo «Fecha de la muestra» arranca con lo leído. La persona lo deja, escribe otra o marca «El informe no trae la fecha de la muestra». Vacío y sin marcar no se puede confirmar: «desconocida» se declara, no pasa por defecto.
 - **Qué se guarda:** la fecha confirmada (o `null`) en el informe y en cada valor que ese informe suma al perfil. Nunca la fecha de carga. El servidor rechaza una fecha futura o imposible (`invalid_sample_date`). El registro anota si hubo fecha, sin la fecha.

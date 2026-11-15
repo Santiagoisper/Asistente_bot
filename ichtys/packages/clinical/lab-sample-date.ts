@@ -4,13 +4,14 @@
  *
  * El lector **propone**; la confirma una persona. Solo propone desde un renglón que diga
  * extracción, toma o muestra. Emisión, informe, recepción, ingreso y validación son otras
- * fechas, y un «Fecha:» a secas no dice cuál es. Nunca se completa con la fecha de carga: una
+ * fechas, y un «Fecha:» a secas no dice cuál es. El rótulo puede venir sin la palabra «fecha»
+ * («Toma de muestra: …», «Extracción: …») o abreviado («F. extracción: …»). Nunca se completa con la fecha de carga: una
  * fecha inventada haría pasar por vigente un valor viejo.
  *
  * Puro y sin dependencias: lo usan el navegador y el servidor.
  */
 const SAMPLE_DATE_LINE =
-  /^\s*fecha\s*(?:y\s+hora\s+)?(?:de\s+)?(?:la\s+)?(?:extracci[oó]n|toma(?:\s+de\s+(?:la\s+)?muestra)?|muestra)\s*[:.]?\s*(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})(?:\s+\d{1,2}[:.]\d{2}(?::\d{2})?(?:\s*hs?\.?)?)?\s*$/i
+  /^\s*(?:fecha\s*(?:y\s+hora\s+)?|f\.\s*)?(?:de\s+)?(?:la\s+)?(?:extracci[oó]n|toma(?:\s+de\s+(?:la\s+)?muestra)?|muestra)\s*[:.]?\s*(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})(?:\s+\d{1,2}[:.]\d{2}(?::\d{2})?(?:\s*hs?\.?)?)?\s*$/i
 
 const pad = (value: number): string => String(value).padStart(2, '0')
 
@@ -24,15 +25,17 @@ function isoDate(day: number, month: number, year: number): string | null {
 
 /**
  * La fecha de muestra que traen los renglones del informe, o `null`. Si hay dos distintas no
- * elige: no propone ninguna y la persona la escribe.
+ * elige: no propone ninguna y la persona la escribe. Con `today` (`YYYY-MM-DD`) descarta las
+ * que no se podrían confirmar (futuras o anteriores a 1900).
  */
-export function proposeSampleDate(lines: readonly string[]): string | null {
+export function proposeSampleDate(lines: readonly string[], today?: string): string | null {
   const found = new Set<string>()
   for (const line of lines) {
     const match = SAMPLE_DATE_LINE.exec(line)
     if (!match) continue
     const iso = isoDate(Number(match[1]), Number(match[2]), Number(match[3]))
-    if (iso) found.add(iso)
+    // Con `today`, no se propone lo que después no se podría confirmar: «24/09/98» leído como 2098.
+    if (iso && (today === undefined || acceptableSampleDate(iso, today))) found.add(iso)
   }
   return found.size === 1 ? [...found][0]! : null
 }

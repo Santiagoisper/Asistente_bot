@@ -14,8 +14,8 @@ export interface SampleDateField {
   proposed: string | null
 }
 
-export function initialSampleDateField(transcriptionLines: readonly string[]): SampleDateField {
-  const proposed = proposeSampleDate(transcriptionLines)
+export function initialSampleDateField(transcriptionLines: readonly string[], today?: string): SampleDateField {
+  const proposed = proposeSampleDate(transcriptionLines, today)
   return { value: proposed ?? '', unknown: false, proposed }
 }
 

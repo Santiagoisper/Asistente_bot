@@ -71,3 +71,9 @@ describe('sampleDateMax — el calendario no ofrece menos que lo que el campo ac
     expect(sampleDateDecision({ value: '2026-11-16', unknown: false, proposed: null }, today)).toEqual({ ok: false, reason: 'invalid' })
   })
 })
+
+describe('initialSampleDateField — con la fecha de hoy', () => {
+  it('una fecha leída que cae en el futuro no arranca en el campo', () => {
+    expect(initialSampleDateField(['Fecha de extracción: 24/09/98'], today)).toEqual({ value: '', unknown: false, proposed: null })
+  })
+})

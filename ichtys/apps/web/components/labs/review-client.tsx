@@ -100,8 +100,8 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
   const [profileWarning, setProfileWarning] = useState(false)
   const [compared, setCompared] = useState(false)
   // La fecha de la muestra: el lector la propone y la persona la confirma, la cambia o declara que no figura (C4, D3).
-  const [sampleDate, setSampleDate] = useState(() => initialSampleDateField(content.transcription.split('\n')))
   const [today] = useState(() => new Date().toISOString().slice(0, 10))
+  const [sampleDate, setSampleDate] = useState(() => initialSampleDateField(content.transcription.split('\n'), today))
   const dateDecision = sampleDateDecision(sampleDate, today)
   /** La fecha con la que quedó guardado: la de recién, o la que trae un informe ya confirmado. Null: desconocida. */
   const [savedSampleDate, setSavedSampleDate] = useState<string | null>(content.sampleDate ?? null)

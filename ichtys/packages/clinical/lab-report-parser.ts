@@ -157,6 +157,14 @@ const IDENTIFYING_LINE =
 const KEPT_HEADER_DATE =
   /^\s*fecha\s*(y\s+hora\s+)?(de\s+)?(la\s+)?(extracci[oó]n|toma(\s+de\s+(la\s+)?muestra)?|muestra|informe|emisi[oó]n|recepci[oó]n|ingreso|validaci[oó]n)?\s*[:.]?\s*\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}(\s+\d{1,2}[:.]\d{2}(:\d{2})?(\s*hs?\.?)?)?\s*$/i
 
+/**
+ * El mismo renglón sin la palabra «fecha» o con «F.»: «Toma de muestra: 24/09/2026»,
+ * «F. extracción: 24/09/2026». Acá el rótulo de muestra es obligatorio: una fecha suelta o un
+ * «F. nacimiento» se siguen tapando.
+ */
+const KEPT_SAMPLE_DATE =
+  /^\s*(f\.\s*)?(de\s+)?(la\s+)?(extracci[oó]n|toma(\s+de\s+(la\s+)?muestra)?|muestra)\s*[:.]?\s*\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}(\s+\d{1,2}[:.]\d{2}(:\d{2})?(\s*hs?\.?)?)?\s*$/i
+
 const EMAIL = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
 const VALUE_TOKEN = /^\d(?:[\d.,]*\d)?$/
 const OMITTED = '[omitido]'
@@ -449,7 +457,7 @@ export function parseLabReportText(rawText: string): ParsedLabReport {
   for (const line of source.slice(0, headerEnd)) {
     const trimmed = line.trim()
     if (trimmed.length === 0) continue
-    if (KEPT_HEADER_DATE.test(trimmed)) {
+    if (KEPT_HEADER_DATE.test(trimmed) || KEPT_SAMPLE_DATE.test(trimmed)) {
       keptHeader.push(trimmed)
     } else {
       droppedHeader.add(normalizeAnalyteKey(trimmed))
