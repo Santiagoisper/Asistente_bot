@@ -47,10 +47,11 @@ async function extractFactsWithLlm(
   orgId: string,
   studyId: string,
   redactedContent: string,
-): Promise<ReturnType<typeof extractFactsFromEvolution> | null> {
+): Promise<{ extraction: ReturnType<typeof extractFactsFromEvolution>; generatedBy: { provider: string; model: string } } | null> {
   const orgApiKeys = await getOrgLlmApiKeys(orgId).catch(() => null)
 
   try {
+    let responseModel: string | null = null
     const { result, provider, modelId, usage, keySource } = await runWithLlmFallback(
       // Solo Anthropic, sin respaldo en otro proveedor: es el único registrado
       // para esta función en AI-GOVERNANCE.md, y cambiarlo es un cambio
@@ -74,6 +75,8 @@ Medicaciones: nombre genérico, dosis y frecuencia si aparecen.`,
           maxOutputTokens: 1024,
         })
         reportUsage({ inputTokens: response.usage?.inputTokens ?? 0, outputTokens: response.usage?.outputTokens ?? 0 })
+        // El modelo que el proveedor dijo que respondió: es lo que vale como evidencia (R6).
+        responseModel = response.response?.modelId || null
         return response.object
       },
     )
@@ -90,7 +93,7 @@ Medicaciones: nombre genérico, dosis y frecuencia si aparecen.`,
       keySource: keySource === 'none' ? 'platform' : keySource,
     })
 
-    return normalizeLlmFacts(result)
+    return { extraction: normalizeLlmFacts(result), generatedBy: { provider, model: responseModel || modelId } }
   } catch (err) {
     console.error('[clinical-extract] LLM extraction failed:', summarizeLlmError(err))
     return null
@@ -354,14 +357,16 @@ export async function proposeProfileFromEvolution(
   // La extracción (que puede llamar a un modelo) se hace una sola vez, fuera del reintento.
   const heuristic = extractFactsFromEvolution(params.evolutionContent, params.evolutionId)
   const { text: redacted } = redactPhiForLlm(params.evolutionContent)
-  const llmFacts = await extractFactsWithLlm(params.orgId, params.studyId, redacted)
-  const merged = mergeExtractions(heuristic, llmFacts)
+  const llm = await extractFactsWithLlm(params.orgId, params.studyId, redacted)
+  const merged = mergeExtractions(heuristic, llm?.extraction ?? null)
   const proposal: PendingProfileProposal = {
     requiresHumanReview: true,
     evolutionId: params.evolutionId,
     extractedAt: new Date().toISOString(),
     facts: merged.facts,
     fieldConfidence: merged.fieldConfidence,
+    // R6: con qué modelo se generó. `null` si el modelo no respondió y quedaron solo las reglas.
+    generatedBy: llm?.generatedBy ?? null,
   }
   const factCount = proposalFactCount(proposal.facts)
   if (factCount === 0) return { factCount }
@@ -375,7 +380,9 @@ export async function proposeProfileFromEvolution(
         proposal,
       ],
     }),
-    () => proposalAudit(params, 'profile.proposal.create', { automated: true, humanConfirmed: false, factCount }),
+    // El modelo también va al registro de auditoría: la propuesta se borra del perfil al aceptarla,
+    // descartarla o retirarla, y el registro es lo que queda (R6). Es un nombre, no contenido clínico.
+    () => proposalAudit(params, 'profile.proposal.create', { automated: true, humanConfirmed: false, factCount, generatedBy: proposal.generatedBy ?? null }),
   )
   return { factCount }
 }

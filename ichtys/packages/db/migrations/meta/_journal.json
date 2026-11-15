@@ -162,6 +162,20 @@
       "when": 1794672120000,
       "tag": "0022_dictation_audio_segments",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794736800000,
+      "tag": "0023_agenda_title_encrypted_message_model",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794736860000,
+      "tag": "0024_messages_model_only_on_assistant",
+      "breakpoints": true
     }
   ]
 }

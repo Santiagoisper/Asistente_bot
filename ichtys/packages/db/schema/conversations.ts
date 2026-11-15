@@ -1,5 +1,5 @@
-import { pgTable, uuid, text, integer, real, timestamp, index, uniqueIndex, jsonb } from 'drizzle-orm/pg-core'
-import { relations } from 'drizzle-orm'
+import { pgTable, uuid, text, integer, real, timestamp, index, uniqueIndex, jsonb, check } from 'drizzle-orm/pg-core'
+import { relations, sql } from 'drizzle-orm'
 import { organizations } from './organizations'
 import { studies } from './studies'
 import { chunks } from './chunks'
@@ -52,10 +52,22 @@ export const messages = pgTable(
      * Shape: MedicalAnnotation[] — see packages/rag/medical-annotator.ts.
      */
     annotations: jsonb('annotations'),
+    /**
+     * Con qué proveedor y modelo se generó la respuesta (regla R6). Null en los mensajes de la
+     * persona, en las respuestas sin llamada a un modelo (sin evidencia) y en las anteriores al
+     * 15/11/2026. No es contenido: es el nombre del modelo.
+     */
+    provider: text('provider'),
+    model: text('model'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
     conversationIdx: index('messages_conversation_idx').on(t.conversationId),
+    /** Un mensaje de la persona no tiene modelo: lo exige la base, no solo el código. */
+    modelOnlyOnAssistantCheck: check(
+      'messages_model_only_on_assistant_check',
+      sql`${t.role} = 'assistant' OR (${t.provider} IS NULL AND ${t.model} IS NULL)`,
+    ),
   }),
 )
 
