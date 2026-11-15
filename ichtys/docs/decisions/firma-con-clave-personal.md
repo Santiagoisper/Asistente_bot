@@ -97,6 +97,16 @@ La regla vigente es R7 de la línea de base: ninguna pantalla presenta una acci�
 
 ## Decisiones para Santiago
 
+**Respuesta del 15/11/2026, 06:04:** quien dirige el producto aceptó lo propuesto en las tres primeras («sí, así»). Las decisiones 4, 5 y 6 siguen abiertas.
+
+| Decisión | Queda así |
+|---|---|
+| 1 | Se llama **«confirmación de envío»**, no firma, mientras la firma clínica que vale sea la del profesional en la historia clínica. Se construye con los mismos controles |
+| 2 | **Por registro**, con sesión de firma. No por tanda |
+| 3 | **Camino A** (reautenticar en el proveedor de identidad) si lo permite para todas las formas de ingreso; **B** (clave propia, con migración) si no. Falta comprobar cuál permite el proveedor: es un hecho a verificar, no una decisión |
+
+Lo que estas respuestas no deciden: si la premisa de la 1 es cierta en cada centro (qué firma vale en su historia clínica), que es pregunta para el centro y para Calidad.
+
 1. **¿Firma o confirmación?** Si la firma que vale es la del profesional en la historia clínica, lo de Alphi se llama «confirmación de envío» y se construye con los mismos controles, sin el nombre.
 2. **¿Por registro o por tanda?** Propuesta: por registro, con sesión de firma.
 3. **¿Camino A o B?** A si el proveedor de identidad lo permite para todas las formas de ingreso; B si no. B pide migración.

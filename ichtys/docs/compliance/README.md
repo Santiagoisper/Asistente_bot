@@ -28,7 +28,7 @@ Establecer la base **antes de procesar PHI** (Protected Health Information / dat
 | 5 | Retención y purga | [DATA-RETENTION-POLICY.md](./DATA-RETENTION-POLICY.md) | ✅ Documentado | Sí |
 | 6 | Notificación de brechas | [BREACH-NOTIFICATION-PROCEDURE.md](./BREACH-NOTIFICATION-PROCEDURE.md) | ✅ Documentado | Sí |
 | 7 | Backup y DR | [BACKUP-AND-DR.md](./BACKUP-AND-DR.md) | ✅ Documentado | Sí |
-| 8 | DPA / BAA con procesadores | [DPA-BAA-TRACKER.md](./DPA-BAA-TRACKER.md) | ✅ Firmado 2026-07-04 | **Sí** |
+| 8 | DPA / BAA con procesadores | [DPA-BAA-TRACKER.md](./DPA-BAA-TRACKER.md) | ⏳ Anthropic y OpenAI pendientes de firma (corregido el 15/11/2026); el resto, sin evidencia enlazada | **Sí** |
 | 9 | DPIA (GDPR) | [DPIA.md](./DPIA.md) | ✅ Aprobado 2026-07-04 | **Sí** (UE) |
 | 10 | HIPAA Risk Assessment | [HIPAA-RISK-ASSESSMENT.md](./HIPAA-RISK-ASSESSMENT.md) | ✅ Aprobado 2026-07-04 | **Sí** (US) |
 | 11 | Plan validación CSV | [CSV-VALIDATION-PLAN.md](./CSV-VALIDATION-PLAN.md) | ✅ Marco definido | Sí (pre-Fase 1 prod) |
@@ -49,7 +49,7 @@ Establecer la base **antes de procesar PHI** (Protected Health Information / dat
 | EMA Annex 11 | CSV-VALIDATION-PLAN, BACKUP-AND-DR | Validación formal pendiente |
 | ICH E6 GCP | PHI-HANDLING, PSEUDONYMIZATION, AI-GOVERNANCE | Operacional |
 | GDPR | DPIA, DATA-RETENTION, BREACH-NOTIFICATION, DPA-BAA | DPIA aprobado 2026-07-04 |
-| HIPAA | HIPAA-RISK-ASSESSMENT, BAA tracker | BAA firmados 2026-07-04 |
+| HIPAA | HIPAA-RISK-ASSESSMENT, BAA tracker | BAA de Anthropic y OpenAI pendientes de firma (corregido el 15/11/2026) |
 | ISO 27001 | ISMS-OVERVIEW, ACCESS-CONTROL, BACKUP-AND-DR | ISMS lite (no certificado) |
 | ISO 27701 | DPIA, DATA-RETENTION, PSEUDONYMIZATION | Extensión pendiente |
 | ISO 42001 | AI-GOVERNANCE | Lite (no certificado) |
