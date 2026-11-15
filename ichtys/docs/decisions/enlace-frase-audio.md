@@ -64,6 +64,8 @@ Desde una frase de la evolución, proponer el tramo que más se le parece. Con u
 - **Vencimiento y D24:** el borrado por vencimiento ya vaciaba la columna, y el retiro al depósito ya se la lleva (migraciones 0021 y 0022). Los tramos de una grabación vencida o retirada no se entregan.
 - **En pantalla:** «Lo dictado, tramo por tramo», plegado, junto a cada grabación que los tiene. Cada tramo con su minuto, su texto, la marca «Posible repetición del transcriptor» (D10) y un botón que reproduce ese pedazo decodificando la toma.
 
+- **Safari y iPad (planteo de Architect):** el audio se habilita al principio del clic, antes de esperar la grabación, y hay una sola salida de audio para toda la pantalla. Safari solo deja sonar lo que se habilita dentro del gesto de la persona y limita cuántas salidas puede haber abiertas. Hecho por lectura del comportamiento documentado del navegador; **sin probar en un iPad**.
+
 ## Lo que tiene que decidir Santiago
 
 1. **Si alcanza con la primera versión** para la demo y la auditoría. Construida; la segunda no se empieza sin que lo diga.
