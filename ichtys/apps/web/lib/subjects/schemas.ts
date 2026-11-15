@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { MAX_LAB_ITEMS, MAX_LAB_NAME_CHARS, MAX_LAB_UNIT_CHARS } from '../api/limits'
 import { DICTATION_TAKES_COUNT_MAX } from '../dictation/protocol'
+import { subjectCodeFormatProblem } from './subject-code'
 
 export const createSubjectSchema = z
   .object({
@@ -8,7 +9,9 @@ export const createSubjectSchema = z
       .string()
       .min(2)
       .max(32)
-      .regex(/^[A-Za-z0-9-]+$/, 'Solo letras, números y guiones'),
+      .regex(/^[A-Za-z0-9-]+$/, 'Solo letras, números y guiones')
+      // Ni un documento ni iniciales: ver lib/subjects/subject-code.ts.
+      .refine((code) => subjectCodeFormatProblem(code) === null, { message: 'subject_code_format' }),
   })
   .strict()
 
