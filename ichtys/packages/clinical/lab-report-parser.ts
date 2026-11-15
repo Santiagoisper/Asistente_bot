@@ -153,8 +153,9 @@ const IDENTIFYING_LINE =
   /^\s*(h\.?\s?c\.?\s*(?:n[°ºro.]*\s*)?[:#\d]|tel\.|(paciente|nombre|apellido|d\.?\s?n\.?\s?i\.?|documento|cuil|cuit|historia\s+cl[ií]nica|afiliado|credencial|obra\s+social|domicilio|direcci[oó]n|tel[eé]fono|e-?mail|correo|fecha\s+de\s+nac|nacimiento|edad|sexo)(?![\p{L}\d]))/iu
 
 /** Fecha operativa del informe: es lo único del encabezado que se conserva. */
+/** Con o sin hora: un renglón «Fecha de extracción: 24/09/2026 08:02» se tapaba entero y la fecha de la muestra se perdía (C4). */
 const KEPT_HEADER_DATE =
-  /^\s*fecha\s*(de\s+)?(la\s+)?(extracci[oó]n|toma|muestra|informe|emisi[oó]n|recepci[oó]n|ingreso|validaci[oó]n)?\s*[:.]?\s*\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}\s*$/i
+  /^\s*fecha\s*(y\s+hora\s+)?(de\s+)?(la\s+)?(extracci[oó]n|toma(\s+de\s+(la\s+)?muestra)?|muestra|informe|emisi[oó]n|recepci[oó]n|ingreso|validaci[oó]n)?\s*[:.]?\s*\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}(\s+\d{1,2}[:.]\d{2}(:\d{2})?(\s*hs?\.?)?)?\s*$/i
 
 const EMAIL = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
 const VALUE_TOKEN = /^\d(?:[\d.,]*\d)?$/
