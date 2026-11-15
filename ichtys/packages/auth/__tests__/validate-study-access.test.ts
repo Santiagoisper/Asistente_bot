@@ -397,6 +397,8 @@ function createTenantFixture(): TenantFixture {
       content: crypto.randomUUID(),
       confidence: 'high',
       annotations: null,
+      provider: null,
+      model: null,
       createdAt,
     },
     citation: {

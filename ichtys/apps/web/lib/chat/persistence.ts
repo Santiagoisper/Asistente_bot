@@ -168,6 +168,8 @@ export async function persistAssistantMessageAndCitations(params: {
   confidence: AnswerConfidence
   evidences: Evidence[]
   annotations?: MedicalAnnotation[]
+  /** Con qué proveedor y modelo se generó (R6). `null` si no hubo llamada a un modelo. */
+  generatedBy: { provider: string; model: string } | null
   /** Registro de la respuesta. Se escribe en la misma transacción que el mensaje y sus citas. */
   audit: AuditLogParams
 }): Promise<string> {
@@ -183,6 +185,8 @@ export async function persistAssistantMessageAndCitations(params: {
         content: params.answer,
         confidence: params.confidence,
         annotations: params.annotations && params.annotations.length > 0 ? params.annotations : null,
+        provider: params.generatedBy?.provider ?? null,
+        model: params.generatedBy?.model ?? null,
       })
       .returning({ id: messages.id })
 
