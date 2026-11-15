@@ -15,9 +15,24 @@ Fecha: 15/11/2026. Tarea 40 del cronograma. Complementa D14, D22 y D24 de [`cons
 - **Qué muestra la pantalla** de una grabación vencida o borrada (pruebas que ya existían, `audio-state`).
 - **Base de prueba, lectura del 15/11:** 10 grabaciones de sujetos y 2 del depósito; ninguna vencida, ninguna borrada, ningún registro de borrado. El primer vencimiento es el 13/12/2026.
 
+## Producción, mirado el 15/11/2026 (con el sí de Santiago)
+
+Solo cantidades de pedidos a la ruta por código de respuesta, en el proyecto de despliegue; sin contenido.
+
+- 13/11: un pedido con respuesta 200.
+- 14/11: uno con 200 y uno con 401.
+- La consulta no separó producción de las vistas previas. Un 200 exige el secreto correcto, y la tarea programada corre solo en producción: **se deduce** que la tarea corre una vez por día y pasa el secreto. El 401 es un pedido sin el secreto; no se sabe de quién.
+
+## El aviso de «no corrió» (15/11/2026)
+
+- Cada corrida autorizada deja un registro `retention.run` con cuántas grabaciones borró de cada tabla, en la misma transacción que el borrado y aunque no haya borrado nada. Un pedido sin el secreto, o una corrida que falla, no deja registro.
+- Inicio le muestra a quien administra el centro, con prioridad alta, «El borrado diario de grabaciones no está corriendo» cuando el último registro tiene más de 36 horas o no hay ninguno. Dice cuándo fue la última corrida y que *puede* haber grabaciones vencidas sin borrar; no afirma que las haya.
+- En un entorno donde la tarea no corre (el de prueba), el aviso queda a la vista siempre. Es cierto: ahí nada se borra solo.
+- Después de desplegar esto por primera vez, el aviso aparece hasta la primera corrida (06:17 UTC).
+
 ## Sin comprobar
 
-1. **Que la tarea corra en producción y pase el secreto.** Es el riesgo principal: si el secreto falta o no coincide, la tarea responde 401 todos los días, nadie se entera y nada se borra. No se miró producción.
+1. **Que la tarea siga corriendo.** El 13 y el 14/11 respondió 200 (ver arriba). Si el secreto se pierde o cambia, responde 401 y nada se borra; desde el 15/11 eso se ve en Inicio al día siguiente.
 2. **Que una grabación vencida de verdad desaparezca**, de punta a punta, contra una base real. Las pruebas miran el SQL que sale; no una base que lo ejecute.
 3. **El entorno de prueba no corre la tarea.** Las tareas programadas del proveedor corren solo en el despliegue de producción. Las grabaciones de la base de prueba (inventadas) no se van a borrar solas.
 
@@ -30,4 +45,5 @@ Fecha: 15/11/2026. Tarea 40 del cronograma. Complementa D14, D22 y D24 de [`cons
 ## Pendiente de decisión
 
 - Si el entorno de prueba debe tener su propia corrida (hoy sus grabaciones no vencen nunca en la práctica).
-- Un aviso cuando la tarea no corrió o respondió error: hoy una falla es silenciosa.
+- El aviso llega solo a quien abre Inicio con función de administrar el centro. Un aviso que salga a buscar a alguien (correo, mensaje) no existe.
+- La campana de pendientes no cuenta este aviso.
