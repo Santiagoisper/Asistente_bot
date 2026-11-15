@@ -128,7 +128,7 @@ describe('proposeProfileFromEvolution — logging del error del proveedor', () =
       userId: 'user_author',
       resourceType: 'subject',
       resourceId: PARAMS.subjectId,
-      metadata: { source: 'evolution_extraction', evolutionId: PARAMS.evolutionId, automated: true, humanConfirmed: false, factCount: 1 },
+      metadata: { source: 'evolution_extraction', evolutionId: PARAMS.evolutionId, automated: true, humanConfirmed: false, factCount: 1, generatedBy: null },
     })
     expect(JSON.stringify(mocks.auditInsert.mock.calls)).not.toContain('HbA1c')
 
@@ -155,8 +155,9 @@ describe('proposeProfileFromEvolution — logging del error del proveedor', () =
 
     const written = (mocks.encryptProfileJson.mock.calls as unknown as unknown[][]).at(-1)?.[0] as { pendingEvolutionProposals: Array<Record<string, unknown>> }
     expect(written.pendingEvolutionProposals[0]!.generatedBy).toEqual({ provider: 'anthropic', model: 'modelo-de-prueba-1' })
-    // El registro de auditoría no cambia: el modelo va con la propuesta, cifrado con el perfil.
-    expect(JSON.stringify(mocks.auditInsert.mock.calls)).not.toContain('modelo-de-prueba-1')
+    // La propuesta se borra al resolverla: el registro de auditoría de su creación es lo que queda.
+    const audited = JSON.stringify(mocks.auditInsert.mock.calls)
+    expect(audited).toContain('"generatedBy":{"provider":"anthropic","model":"modelo-de-prueba-1"}')
   })
 
   it('la propuesta anota el modelo que el proveedor dijo que respondió, no el que se pidió (R6)', async () => {

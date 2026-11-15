@@ -8,7 +8,6 @@ import { messages } from '../schema/conversations'
 /**
  * 0023: el nombre del turno pasa a guardarse cifrado (R5) y cada respuesta del asistente
  * guarda con qué proveedor y modelo se generó (R6).
- * Suma además una regla: un mensaje de la persona no tiene modelo.
  * No es solo aditiva: le saca la obligatoriedad a la columna en claro del nombre del turno,
  * porque el código nuevo deja de escribirla. Ninguna fila existente cambia.
  */
@@ -21,15 +20,12 @@ const column = (table: Parameters<typeof getTableConfig>[0], name: string) =>
   getTableConfig(table).columns.find((c) => c.name === name)
 
 describe('migración 0023 — nombre del turno cifrado y modelo por respuesta', () => {
-  it('son exactamente estas cinco sentencias: tres columnas nuevas, una que deja de ser obligatoria y una regla', () => {
+  it('son exactamente estas cuatro sentencias: tres columnas nuevas y una que deja de ser obligatoria', () => {
     expect(statements).toEqual([
       'ALTER TABLE "agenda_items" ADD COLUMN IF NOT EXISTS "title_encrypted" text;',
       'ALTER TABLE "agenda_items" ALTER COLUMN "title" DROP NOT NULL;',
       'ALTER TABLE "messages" ADD COLUMN IF NOT EXISTS "provider" text;',
       'ALTER TABLE "messages" ADD COLUMN IF NOT EXISTS "model" text;',
-      `DO $$ BEGIN
- ALTER TABLE "messages" ADD CONSTRAINT "messages_model_only_on_assistant_check" CHECK ("role" = 'assistant' OR ("provider" IS NULL AND "model" IS NULL));
-EXCEPTION WHEN duplicate_object THEN null; END $$;`,
     ])
   })
 
@@ -43,18 +39,13 @@ EXCEPTION WHEN duplicate_object THEN null; END $$;`,
     expect(column(messages, 'model')?.notNull).toBe(false)
   })
 
-  it('la base exige que un mensaje de la persona no tenga modelo, y la regla se puede aplicar dos veces', () => {
-    expect(getTableConfig(messages).checks.map((c) => c.name)).toEqual(['messages_model_only_on_assistant_check'])
-    expect(statements.at(-1)).toMatch(/^DO \$\$ BEGIN[\s\S]*EXCEPTION WHEN duplicate_object THEN null; END \$\$;$/)
-  })
-
   it('la columna en claro del nombre del turno sigue existiendo, ya sin ser obligatoria', () => {
     expect(column(agendaItems, 'title')?.notNull).toBe(false)
   })
 
-  it('está en el registro de migraciones, última y después de la 0022', () => {
+  it('está en el registro de migraciones, después de la 0022', () => {
     const journal = JSON.parse(read('meta/_journal.json')) as { entries: Array<{ idx: number; tag: string; when: number }> }
-    const [previous, last] = journal.entries.slice(-2)
+    const [previous, last] = journal.entries.filter((entry) => entry.idx === 22 || entry.idx === 23)
     expect([previous!.idx, previous!.tag]).toEqual([22, '0022_dictation_audio_segments'])
     expect([last!.idx, last!.tag]).toEqual([23, '0023_agenda_title_encrypted_message_model'])
     expect(last!.when).toBeGreaterThan(previous!.when)
