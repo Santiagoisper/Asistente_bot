@@ -1,4 +1,5 @@
 import { MAX_LAB_PDF_BYTES } from './lab-report-content'
+import { SUBJECT_CODE_EXAMPLE, SUBJECT_CODE_MESSAGES, subjectCodeFormatProblem } from '../subjects/subject-code'
 
 /**
  * Lógica de la pantalla "Cargar estudio de laboratorio", separada del
@@ -40,19 +41,16 @@ export function subjectCountLabel(count: number): string {
   return count === 1 ? '1 sujeto' : `${count} sujetos`
 }
 
-/** Mismo criterio que el servidor: 2 a 32 caracteres, letras, números y guiones. */
+/** Mismo criterio que el servidor (lib/subjects/subject-code.ts): el código del estudio, no un documento ni iniciales. */
 export function subjectCodeProblem(code: string): string | null {
-  const value = code.trim()
-  if (value.length === 0) return 'Escribí el código del sujeto.'
-  if (value.length < 2 || value.length > 32) return 'El código tiene entre 2 y 32 caracteres.'
-  if (!/^[A-Za-z0-9-]+$/.test(value)) return 'Usá solo letras, números y guiones.'
-  return null
+  const problem = subjectCodeFormatProblem(code)
+  return problem ? SUBJECT_CODE_MESSAGES[problem] : null
 }
 
 /** Mensaje para una respuesta fallida al crear el sujeto. */
 export function createSubjectError(status: number, code: unknown): string {
   if (status === 409 || code === 'subject_code_exists') return 'Ya hay un sujeto con ese código en este estudio.'
-  if (status === 400) return 'Usá solo letras, números y guiones (2 a 32 caracteres).'
+  if (status === 400) return `Usá el código del estudio, por ejemplo ${SUBJECT_CODE_EXAMPLE}: letras, números y guiones, con al menos un número, y no solo números.`
   if (status === 401 || status === 403) return 'Tu rol no puede crear sujetos en este estudio.'
   if (status === 503) return 'El cifrado de datos clínicos no está configurado. Avisá a quien administra el sistema.'
   return 'No se pudo crear el sujeto. Probá de nuevo.'

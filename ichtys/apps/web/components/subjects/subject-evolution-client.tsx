@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { matchProtocolVisit, mergeDictationAddition, NOT_MENTIONED, studyDictationPrompts, type ProtocolVisit } from '@ichtys/clinical'
 import { bloodPressureProposalLabel } from '../../lib/subjects/proposal-display'
 import { newerDraftNotice, specPendingApprovalNotice, unapprovedSpecNotice } from '../../lib/subjects/spec-notice'
+import { visitOptions } from '../../lib/subjects/visit-labels'
 import { DictationPanel, type DictationRecording, type DictationSource } from './dictation-panel'
 import { DictationGuide } from './dictation-guide'
 import { ProfileUnreadableNotice } from './profile-unreadable-notice'
@@ -228,6 +229,8 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const studyPrompts = useMemo(() => studyDictationPrompts(assessments), [assessments])
   /** La visita del cronograma que coincide con lo escrito en «¿Qué visita es?». Si no señala una sola, ninguna. */
   const protocolVisit = useMemo(() => matchProtocolVisit(visitLabel, protocolVisits), [visitLabel, protocolVisits])
+  /** El rótulo se elige de una lista: se guarda en claro y no puede ser texto libre. */
+  const visitChoices = useMemo(() => visitOptions(protocolVisits), [protocolVisits])
 
   const loadScreening = useCallback(async () => {
     try {
@@ -362,6 +365,11 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       }
       if (res.status === 503) {
         setError('Esta instalación no tiene configurado el cifrado de datos clínicos. No se guardó nada. Avisá a quien administra la plataforma.')
+        return
+      }
+      if (res.status === 400 && data.error === 'invalid_visit_label') {
+        setError('La visita elegida ya no está en la lista de este estudio. No se guardó nada. Elegila de nuevo y guardá.')
+        setVisitLabel('')
         return
       }
       if (res.status === 409 && data.error === 'subject_mismatch') {
@@ -645,25 +653,21 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
             <label htmlFor="visitLabel" className="alphi-label mb-1 block">
               ¿Qué visita es? (opcional)
             </label>
-            <input
+            <select
               id="visitLabel"
-              type="text"
               value={visitLabel}
               onChange={(e) => setVisitLabel(e.target.value)}
-              placeholder="Selección, Visita 2, Basal…"
-              list={protocolVisits.length > 0 ? 'protocol-visits' : undefined}
               className="w-64 max-w-full rounded-lg border border-alphi-border bg-white px-3 py-2 text-sm"
-            />
-            {protocolVisits.length > 0 ? (
-              <datalist id="protocol-visits">
-                {protocolVisits.map((visit, index) => (
-                  <option key={`${index}-${visit.name}`} value={visit.name}>
-                    {visit.label ?? ''}
-                  </option>
-                ))}
-              </datalist>
-            ) : null}
+            >
+              <option value="">Sin indicar</option>
+              {visitChoices.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.text}
+                </option>
+              ))}
+            </select>
             <p className="mt-1 max-w-sm text-xs text-alphi-muted">
+              {protocolVisits.length > 0 ? 'Son las visitas del cronograma del protocolo.' : 'Este estudio todavía no tiene cronograma extraído: es una lista corta.'}{' '}
               Sirve para encontrarla después: aparece junto a la fecha en el historial. No forma parte del texto clínico.
             </p>
           </div>
