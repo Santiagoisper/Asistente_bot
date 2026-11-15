@@ -7,6 +7,8 @@ import {
   parseAgeBounds,
   parseAnalyteBounds,
   textMentionsAnalyte,
+  gfrFormulas,
+  mentionsCreatinineClearance,
 } from './numeric-criteria'
 import { assessTransaminaseCriterion } from './transaminases'
 import { clearingPhrases, deniesTerm, HISTORY_TERMS, isBareNegation, type HistoryTerm } from './stated-history'
@@ -26,7 +28,10 @@ export interface ScreeningInput {
 const ANALYTE_LABEL: Record<LabAnalyte, string> = { HbA1c: 'HbA1c', eGFR: 'eGFR', BMI: 'IMC' }
 
 function findAnalyteLab(profile: PatientProfile, analyte: LabAnalyte): (LabObservation & { derived?: string }) | undefined {
-  const direct = profile.labs.find((lab) => textMentionsAnalyte(lab.name, analyte))
+  // Un aclaramiento de creatinina cargado como «TFG (Cockcroft-Gault)» no es el filtrado estimado.
+  const direct = profile.labs.find(
+    (lab) => textMentionsAnalyte(lab.name, analyte) && !(analyte === 'eGFR' && mentionsCreatinineClearance(lab.name)),
+  )
   if (direct || analyte !== 'BMI') return direct
   // Sin IMC registrado, se calcula con el peso y la talla del perfil, y el motivo lo dice.
   const weight = profile.labs.find((lab) => /^peso\b/i.test(lab.name) && (lab.unit ?? 'kg') === 'kg')
@@ -63,6 +68,17 @@ function assessAnalyteCriterion(
     sourcePages: criterion.sourcePages,
   }
 
+  // El criterio nombra el aclaramiento de creatinina: el motor no lo compara, y compararlo con el
+  // filtrado estimado daría verde o rojo con la medida equivocada.
+  if (analyte === 'eGFR' && mentionsCreatinineClearance(criterion.text)) {
+    return {
+      ...base,
+      status: 'unknown',
+      reason:
+        'El criterio nombra el aclaramiento de creatinina (por ejemplo, Cockcroft-Gault). El sistema solo compara el filtrado glomerular estimado y no los trata como la misma medida: verificar a mano.',
+    }
+  }
+
   if (!lab) {
     return {
       ...base,
@@ -88,24 +104,43 @@ function assessAnalyteCriterion(
     return { ...base, status: 'unknown', reason: aligned.unknown }
   }
 
+  // Fórmula del filtrado estimado: si el criterio pide una y el laboratorio dice otra, no se compara.
+  let formulaNote = ''
+  if (analyte === 'eGFR') {
+    const asked = gfrFormulas(criterion.text)
+    const reported = gfrFormulas(lab.name)
+    if (asked.length > 0 && reported.length > 0 && !reported.some((formula) => asked.includes(formula))) {
+      return {
+        ...base,
+        status: 'unknown',
+        reason: `El criterio pide el filtrado estimado con ${asked.join(' o ')} y el laboratorio registrado dice ${reported.join(' y ')}: no se comparan. Verificar a mano.`,
+      }
+    }
+    if (asked.length > 0 && reported.length === 0) {
+      formulaNote = ` El criterio pide ${asked.join(' o ')} y el laboratorio registrado no dice con qué fórmula se estimó.`
+    }
+  }
+
   const satisfies = compareWithBounds(aligned.value, bounds)
   const described = describeBoundComparison(analyte, aligned.value, bounds, satisfies).replace(/^BMI\b/, 'IMC')
   const citation = lab.derived ? `${described} (${lab.derived})` : described
+  // Las frases terminan con o sin punto según el caso: la nota se suma como oración aparte.
+  const withNote = (text: string) => (formulaNote ? `${text.replace(/\.$/, '')}.${formulaNote}` : text)
 
   if (kind === 'inclusion') {
     return {
       ...base,
       status: satisfies ? 'pass' : 'fail',
-      reason: satisfies ? citation : `${citation} no se cumple`,
+      reason: withNote(satisfies ? citation : `${citation} no se cumple`),
     }
   }
 
   return {
     ...base,
     status: satisfies ? 'fail' : 'pass',
-    reason: satisfies
-      ? `${citation}: activaría este criterio de exclusión.`
-      : `${citation} no activa este criterio de exclusión.`,
+    reason: withNote(
+      satisfies ? `${citation}: activaría este criterio de exclusión.` : `${citation} no activa este criterio de exclusión.`,
+    ),
   }
 }
 

@@ -33,7 +33,13 @@ const LAB_LINE_PATTERNS: Array<{
     name: 'Glucosa',
     unit: 'mg/dL',
   },
-  { pattern: /creatinina\s*:?\s*(\d+[.,]?\d*)/i, name: 'Creatinina', unit: 'mg/dL' },
+  // «Clearance de creatinina: 85» es otra medida: no se propone como creatinina.
+  {
+    pattern: /(?<!(?:aclaramiento|clearance|depuraci[oó]n)\s+(?:de\s+)?(?:la\s+)?)creatinina\s*:?\s*(\d+[.,]?\d*)/i,
+    name: 'Creatinina',
+    unit: 'mg/dL',
+  },
+  // «TFG (Cockcroft-Gault): 78» no coincide (el paréntesis corta) y no se propone como filtrado estimado.
   {
     pattern: /(?:eGFR|TFG|filtrado\s+glomerular)\s*:?\s*(\d+[.,]?\d*)/i,
     name: 'eGFR',

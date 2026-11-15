@@ -50,6 +50,31 @@ export function ngspToIfccMmol(percent: number): number {
   return (percent - NGSP_FROM_IFCC_INTERCEPT) / NGSP_FROM_IFCC_SLOPE
 }
 
+/**
+ * El aclaramiento de creatinina (medido, o estimado con Cockcroft-Gault) es otra medida que el
+ * filtrado glomerular estimado: no se ajusta por superficie corporal y los protocolos lo piden con
+ * nombre propio. El motor no lo compara. Sirve para no confundirlo con el filtrado estimado.
+ */
+const CREATININE_CLEARANCE =
+  /cockcroft|\bCrCl\b|\bClCr\b|(?:aclaramiento|clearance|depuraci[oó]n)\s+(?:de\s+)?(?:la\s+)?creatinina|creatinine\s+clearance/i
+
+export function mentionsCreatinineClearance(text: string): boolean {
+  return CREATININE_CLEARANCE.test(text)
+}
+
+export type GfrFormula = 'CKD-EPI' | 'MDRD' | 'cistatina'
+
+const GFR_FORMULAS: ReadonlyArray<[GfrFormula, RegExp]> = [
+  ['CKD-EPI', /CKD[\s-]?EPI/i],
+  ['MDRD', /\bMDRD\b/i],
+  ['cistatina', /cistatina|cystatin/i],
+]
+
+/** Fórmulas del filtrado estimado que nombra un texto, en orden fijo. Vacío si no nombra ninguna. */
+export function gfrFormulas(text: string): GfrFormula[] {
+  return GFR_FORMULAS.filter(([, pattern]) => pattern.test(text)).map(([formula]) => formula)
+}
+
 export function textMentionsAnalyte(text: string, analyte: AnalyteId): boolean {
   return ANALYTE_ALIASES[analyte].test(text)
 }
