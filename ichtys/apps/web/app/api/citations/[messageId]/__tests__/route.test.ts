@@ -179,6 +179,8 @@ describe('GET /api/citations/[messageId] — happy path', () => {
 // ---------------------------------------------------------------------------
 
 describe('GET /api/citations/[messageId] — auth chain validation', () => {
+  // R4: un rechazo por permiso no se distingue de «no existe». Los dos caminos responden lo mismo,
+  // byte por byte: la cita de otra organización, y la conversación de otra persona.
   it('returns 404 when message not found (wrong org)', async () => {
     mocks.validateMessageAccess.mockRejectedValueOnce(
       new mocks.AccessError('Message not found or access denied', 404),
@@ -186,7 +188,7 @@ describe('GET /api/citations/[messageId] — auth chain validation', () => {
 
     const res = await GET(makeRequest(mocks.MSG_ID), makeRouteCtx())
 
-    expect([403, 404]).toContain(res.status)
+    expect(res.status).toBe(404)
     expect(mocks.conversationsFindFirst).not.toHaveBeenCalled()
     expect(mocks.getMessageCitations).not.toHaveBeenCalled()
   })
@@ -197,8 +199,21 @@ describe('GET /api/citations/[messageId] — auth chain validation', () => {
 
     const res = await GET(makeRequest(mocks.MSG_ID), makeRouteCtx())
 
-    expect([403, 404]).toContain(res.status)
+    expect(res.status).toBe(404)
     expect(mocks.getMessageCitations).not.toHaveBeenCalled()
+  })
+
+  it('el mensaje de otra organización y la conversación de otra persona reciben la misma respuesta', async () => {
+    mocks.validateMessageAccess.mockRejectedValueOnce(new mocks.AccessError('Message not found or access denied', 404))
+    const missing = await GET(makeRequest(mocks.MSG_ID), makeRouteCtx())
+
+    mocks.validateMessageAccess.mockResolvedValueOnce(makeMessageAccessCtx())
+    mocks.conversationsFindFirst.mockResolvedValueOnce(null)
+    const notMine = await GET(makeRequest(mocks.MSG_ID), makeRouteCtx())
+
+    expect(notMine.status).toBe(missing.status)
+    expect(await notMine.text()).toBe(await missing.text())
+    expect(notMine.headers.get('content-type')).toBe(missing.headers.get('content-type'))
   })
 
   it('validates conversation ownership using userId from auth context', async () => {

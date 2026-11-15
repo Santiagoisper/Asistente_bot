@@ -1,6 +1,6 @@
 # Matriz de trazabilidad del OS: regla → prueba → evidencia
 
-**Versión:** 0.5 · **Fecha:** 2026-11-15 · **Estado:** borrador, sin revisión de Calidad. Tarea 48 del cronograma.
+**Versión:** 0.6 · **Fecha:** 2026-11-15 · **Estado:** borrador, sin revisión de Calidad. Tarea 48 del cronograma.
 
 Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, accesos), la carga de documentos y el asistente con sus citas, que la matriz de julio ([`RTM.md`](./RTM.md)) no cubre. Responde a la brecha de R2 anotada en la [línea de base](./REGULATORY-BASELINE.md).
 
@@ -42,14 +42,15 @@ Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, acces
 | Subir un documento: quien no gestiona documentos recibe 403 antes de que se lea el archivo; en modo estricto decide la función, no el rol histórico | `apps/web/app/api/documents/upload/__tests__/route.test.ts` | Ninguna | El modo estricto encendido en un entorno |
 | El asistente busca solo en fragmentos de la organización y el estudio de quien pregunta | `packages/rag/tests/leakage/retriever-leakage.test.ts` | Ninguna | La prueba mira el filtro de la consulta y datos simulados, no dos organizaciones en una base |
 | La organización sale de la sesión: un pedido al asistente que la trae en el cuerpo o en la dirección se rechaza | `apps/web/app/api/chat/__tests__/route.test.ts`, `apps/web/lib/rag/__tests__/answer-orchestrator.test.ts` | Ninguna | — |
-| Las citas de una respuesta solo las ve quien hizo la conversación: para otra persona u otra organización la ruta rechaza (la prueba acepta 403 o 404) y no lee las citas | `apps/web/app/api/citations/[messageId]/__tests__/route.test.ts` | Ninguna | R4 pide que el rechazo no se distinga de «no existe»; la prueba admite 403, así que eso no queda fijado |
+| Las citas de una respuesta solo las ve quien hizo la conversación: para un mensaje de otra organización y para la conversación de otra persona la ruta responde el mismo 404, con el mismo cuerpo, y no lee las citas | `apps/web/app/api/citations/[messageId]/__tests__/route.test.ts` | Ninguna | Los tiempos de respuesta de los dos caminos no se comparan |
 | Las evoluciones se leen por un solo lugar: ningún archivo fuera del lector consulta la tabla | `apps/web/lib/subjects/__tests__/evolution-reader-guard.test.ts` | Ninguna (PR #171) | La guarda mira el código, no que el lector filtre bien en cada caso |
 
 ## R5 — Datos personales: cifrado, minimización, retención
 
 | Comportamiento | Prueba | Evidencia fuera de las pruebas | Sin cubrir |
 |---|---|---|---|
-| El cifrado de campo cifra y descifra de ida y vuelta | `packages/crypto/__tests__/phi-crypto.test.ts` | Ninguna | Que cada campo clínico pase por ese cifrado al guardarse: no hay una prueba que lo recorra tabla por tabla. Custodia y rotación de la clave |
+| El cifrado de campo cifra y descifra de ida y vuelta | `packages/crypto/__tests__/phi-crypto.test.ts` | Ninguna | Custodia y rotación de la clave |
+| En las tablas con contenido de un sujeto, y en la de sujetos, cada columna que no es un identificador, una fecha con hora o un sí/no es una columna cifrada o está anotada con el motivo por el que va en claro; una columna nueva, de cualquier tipo, rompe la prueba | `apps/web/tests/leakage/clinical-fields-encrypted.test.ts` | Ninguna | **Tres columnas de texto libre van en claro: el código del sujeto, el nombre del turno de la agenda y el rótulo de visita de una evolución.** Nada impide escribir ahí un dato personal; es una decisión pendiente. La guarda mira el nombre de la columna, no lo que se escribe. Las fechas con hora quedan exentas: una fecha clínica nueva pasaría sin anotarse. No mira las preguntas al asistente, el texto de los documentos ni el detalle libre del registro de auditoría |
 | Las evaluaciones de elegibilidad se guardan cifradas | `apps/web/lib/subjects/__tests__/screening-crypto.test.ts` | Base de prueba y producción, 14/11: filas en claro 28 → 0 y 5 → 0, medido con una consulta directa (línea de base, C3; PR #164 y #167) | Las copias anteriores al sellado en el historial de la base |
 | El sellado de lo anterior toca solo dos columnas y lo corre un operador | `apps/web/lib/subjects/__tests__/screening-seal.test.ts`, `apps/web/app/api/os/screening-seal/__tests__/route.test.ts` | Ídem | Más de una organización contra una base real |
 | Antes de enviar una evolución a un modelo se reemplazan documento, correo y un formato de teléfono | `packages/clinical/__tests__/phi-redact.test.ts` | Ninguna | **Los nombres propios no se quitan.** Otros formatos de documento y de teléfono |
@@ -77,6 +78,7 @@ Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, acces
 | El asistente no da una respuesta útil sin evidencia: sin fragmentos suficientes, o con citas que no existen, responde que no hay evidencia | `packages/rag/__tests__/answer-engine.test.ts` | Ninguna | La calidad de las respuestas con protocolos reales: esta matriz no cita ninguna evaluación |
 | Las citas salen de los fragmentos recibidos: documento, versión y páginas no se inventan | `packages/rag/__tests__/answer-engine.test.ts` | Ninguna | Que la cita sostenga lo que la respuesta afirma |
 | Lo que una evolución anulada dejó en el perfil lo retira una persona: los laboratorios de ese origen salen todos, el resto solo si la persona lo eligió; lo retirado se conserva con quién y cuándo, y «no había nada» se declara y tiene que ser cierto | `apps/web/lib/subjects/__tests__/voided-origin-retire.test.ts` | Ninguna (PR #178 y #179) | Producción |
+| Cada llamada a un modelo deja un registro de uso con proveedor, modelo, organización, estudio y persona | `apps/web/lib/rag/__tests__/answer-orchestrator.test.ts` | Ninguna | **El registro no está atado a la respuesta ni a la propuesta que produjo:** para saber con qué modelo se generó una respuesta dada hay que cruzar por hora. R6 pide modelo y versión por respuesta; eso hoy no se guarda. La prueba citada cubre el asistente; las otras llamadas tienen las suyas |
 
 ## R7 — Sin firma aparente
 
@@ -96,6 +98,5 @@ Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, acces
 
 - **R1, R2, R8 y R9** son reglas de proceso y de proveedores: se sostienen con documentos y registros, no con pruebas del código. Van en el [índice de cumplimiento](./COMPLIANCE-INDEX-OS.md).
 - De la ingesta de documentos (lectura del PDF, partición, vectores, extracción del protocolo) solo está volcado el acceso y el depósito. La exactitud de lo extraído no tiene fila: se sostiene con la aprobación de una persona (R6, fila del protocolo aprobado).
-- El modelo y la versión por respuesta (R6) no tienen fila: falta abrir la prueba que lo fije, si existe.
 - Los requisitos de usuario del OS están en [`URS-OS.md`](./URS-OS.md) como borrador que nadie aprobó. Esta matriz parte de las reglas de la línea de base, no de requisitos de usuario aprobados.
 - Ninguna fila pasó por Calidad.
