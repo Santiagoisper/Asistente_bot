@@ -77,7 +77,7 @@ Cada cambio se revisa contra estas reglas. La columna de la derecha dice de dón
 
 **Reglas que hoy son objetivo y todavía no se pueden sostener con evidencia.** Un PR las responde «objetivo: falta la base» hasta que se cierren las brechas de §6, en vez de marcar una casilla que no puede probar:
 
-- **R2:** la matriz de trazabilidad es de julio de 2026 y no cubre el OS ni el acceso por estudio. Hoy vale la prueba automática; la fila en la matriz, no.
+- **R2:** desde el 15/11/2026 hay una matriz del OS ([`RTM-OS.md`](./RTM-OS.md)), en borrador y sin revisión de Calidad. Un cambio nuevo suma su fila ahí. Los requisitos de los que parte no están aprobados: sigue siendo objetivo.
 - **R3:** sostenida en la aplicación para las escrituras que hoy se auditan; quedan los casos de C1 (ver §5 y §6).
 - **R5, retención:** existe [`DATA-RETENTION-POLICY.md`](./DATA-RETENTION-POLICY.md), sin verificar que el sistema la ejecute.
 - **R9:** el registro de proveedores ([`DPA-BAA-TRACKER.md`](./DPA-BAA-TRACKER.md)) no enlaza evidencia de los acuerdos.
@@ -127,7 +127,7 @@ Cada cambio se revisa contra estas reglas. La columna de la derecha dice de dón
 1. Ningún documento del repositorio cita la **Disposición ANMAT 7516/2025** ni la **Ley 25.326**. La base normativa argentina falta.
 2. El `README.md` de esta carpeta trata a la ISO 27701 como «extensión»; desde 2025 es independiente.
 3. `ACCESS-CONTROL-POLICY.md`: reescrita como **borrador** sobre el acceso por función y por estudio; pendiente de revisión por Calidad, Seguridad y los responsables del centro. Falta el inventario de claves con dueño y rotación.
-4. La matriz de trazabilidad, la URS y la FRS son de julio de 2026 y no cubren el OS ni el acceso por estudio.
+4. La matriz de trazabilidad, la URS y la FRS son de julio de 2026 y no cubren el OS ni el acceso por estudio. *Avance del 15/11/2026, sin cerrar:* hay una matriz del OS ([`RTM-OS.md`](./RTM-OS.md)), un borrador de requisitos que nadie aprobó ([`URS-OS.md`](./URS-OS.md)) y un índice por regla ([`COMPLIANCE-INDEX-OS.md`](./COMPLIANCE-INDEX-OS.md)). Ninguno pasó por Calidad y la FRS sigue sin cubrir el OS.
 5. El `README.md` da por firmados o aprobados acuerdos con proveedores, DPIA y evaluación HIPAA. **[P]**: no hay evidencia enlazada. Figura como responsable una organización que ya no lo es.
 6. La revisión trimestral prevista para el 2026-09-30 no consta.
 7. `AI-GOVERNANCE.md` sigue en su versión de junio y no coincide con el código. El inventario nuevo, [`AI-SYSTEMS-INVENTORY.md`](./AI-SYSTEMS-INVENTORY.md), es un **borrador** hecho desde el código; faltan la ficha de impacto por sistema y los modelos efectivos en producción.
