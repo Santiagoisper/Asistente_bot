@@ -42,7 +42,7 @@ Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, acces
 | Subir un documento: quien no gestiona documentos recibe 403 antes de que se lea el archivo; en modo estricto decide la función, no el rol histórico | `apps/web/app/api/documents/upload/__tests__/route.test.ts` | Ninguna | El modo estricto encendido en un entorno |
 | El asistente busca solo en fragmentos de la organización y el estudio de quien pregunta | `packages/rag/tests/leakage/retriever-leakage.test.ts` | Ninguna | La prueba mira el filtro de la consulta y datos simulados, no dos organizaciones en una base |
 | La organización sale de la sesión: un pedido al asistente que la trae en el cuerpo o en la dirección se rechaza | `apps/web/app/api/chat/__tests__/route.test.ts`, `apps/web/lib/rag/__tests__/answer-orchestrator.test.ts` | Ninguna | — |
-| Las citas de una respuesta solo las ve quien hizo la conversación; para otra persona u otra organización, 404 | `apps/web/app/api/citations/[messageId]/__tests__/route.test.ts` | Ninguna | — |
+| Las citas de una respuesta solo las ve quien hizo la conversación: para otra persona u otra organización la ruta rechaza (la prueba acepta 403 o 404) y no lee las citas | `apps/web/app/api/citations/[messageId]/__tests__/route.test.ts` | Ninguna | R4 pide que el rechazo no se distinga de «no existe»; la prueba admite 403, así que eso no queda fijado |
 
 ## R5 — Datos personales: cifrado, minimización, retención
 
@@ -58,7 +58,7 @@ Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, acces
 | Un sujeto nuevo nace con el perfil cifrado | `apps/web/app/api/studies/[id]/subjects/__tests__/route.oq.test.ts` | Ninguna | La prueba mira que se llame al cifrado, no lo guardado |
 | Un documento subido va a un depósito privado, nunca público; sin credencial del depósito la subida falla en vez de escribir en otro lado | `apps/web/app/api/documents/upload/__tests__/blob-storage.test.ts` | Ninguna | La configuración del depósito en producción |
 | La respuesta de citas no expone vectores, organización ni el fragmento completo | `apps/web/app/api/citations/[messageId]/__tests__/route.test.ts` | Ninguna | — |
-| Los errores de subida, ingesta y asistente no dejan el mensaje crudo del proveedor en el registro técnico ni en la respuesta | `apps/web/app/api/documents/upload/__tests__/route.test.ts`, `apps/web/app/api/ingestion/run/__tests__/route.test.ts`, `apps/web/app/api/chat/stream/__tests__/route.test.ts` | Ninguna | — |
+| El mensaje crudo del proveedor no sale: en la subida, de la respuesta; en la ingesta, del registro técnico; en el asistente, de ninguno de los dos | `apps/web/app/api/documents/upload/__tests__/route.test.ts`, `apps/web/app/api/ingestion/run/__tests__/route.test.ts`, `apps/web/app/api/chat/stream/__tests__/route.test.ts` | Ninguna | — |
 
 ## R6 — IA bajo supervisión humana
 
