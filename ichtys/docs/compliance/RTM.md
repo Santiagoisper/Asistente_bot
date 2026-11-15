@@ -78,7 +78,7 @@
 | TC | Descripción | Estado |
 |----|-------------|--------|
 | IQ schema | Tablas Fase 1 + rag_config | ✅ `pnpm iq:check` |
-| IQ completo | MFA roles, DPA/BAA | ✅ Legal 2026-07-04 |
+| IQ completo | MFA roles, DPA/BAA | ⏳ Los acuerdos con Anthropic y OpenAI están pendientes de firma (corregido el 15/11/2026) |
 | PQ piloto | UAT CINME 5 usuarios | 🟡 Protocolo [PQ.md](./PQ.md) |
 | VSR firmado | Post-PQ | 🟡 [VSR.md](./VSR.md) |
 

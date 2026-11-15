@@ -39,6 +39,8 @@
 
 ## Lo que falta para que esto sea una especificación de requisitos
 
+**Decidido el 15/11/2026:** los lee la persona de Alpha CR que cargue los informes del piloto de laboratorios, y los aprueba quien dirige el producto. Esa persona todavía no está elegida (tarea 36 del cronograma), así que la lectura no empezó. Cuando haya alguien de Calidad, una segunda lectura.
+
 1. Que lo lean quienes usan el sistema en un centro (investigación, coordinación, regulatorio) y digan qué falta: esta lista sale de lo construido, y lo que nadie pidió construir no aparece.
 2. Aprobación con nombre y fecha.
 3. Criterio de aceptación por requisito. Hoy el criterio es la fila de la matriz; OS-05 y OS-07 no tienen fila y OS-03 no tiene una propia.
