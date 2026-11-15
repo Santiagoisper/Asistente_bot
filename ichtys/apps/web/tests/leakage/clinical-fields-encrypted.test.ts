@@ -22,6 +22,9 @@ import * as schema from '@ichtys/db/schema'
  * - No mira `audit_logs.metadata`, que es una estructura libre. Hoy guarda motivos de lista cerrada,
  *   nombres de archivo y cantidades; nada impide que un servicio nuevo escriba ahí el texto de una nota.
  *   Que el registro no lleve contenido clínico lo prueban las pruebas de cada ruta, no esta.
+ * - Las fechas con hora quedan exentas. Hoy son todas operativas (inicio de un turno, vencimiento,
+ *   cuándo se declaró o se revisó algo). Una fecha con hora clínica nueva, como la de una toma de
+ *   muestra, pasaría sin anotarse.
  * - Importa solo el esquema, sin cliente: no necesita una base.
  */
 const EXTRA_TABLES = ['subjects', 'lab_report_images', 'unassigned_dictation_audios']
