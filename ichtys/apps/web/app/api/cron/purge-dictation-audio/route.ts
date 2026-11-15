@@ -15,7 +15,8 @@ function secretMatches(received: string, expected: string): boolean {
 /**
  * Tarea diaria: borra el contenido de las grabaciones vencidas y deja constancia
  * (docs/decisions/consulta-dictada.md, D14). Auth: `Authorization: Bearer ${CRON_SECRET}`.
- * El borrado y su registro van en una transacción (R3).
+ * El borrado y su registro van en una transacción (R3). Cada corrida autorizada deja además
+ * un registro `retention.run`; un pedido sin el secreto no deja nada.
  */
 export async function GET(req: Request): Promise<Response> {
   const auth = req.headers.get('authorization') ?? ''
@@ -50,6 +51,14 @@ export async function GET(req: Request): Promise<Response> {
           metadata: { reason: 'expired' },
         })
       }
+      // La corrida deja su propio registro, aunque no haya borrado nada: es lo que mira Inicio
+      // para avisar cuando la tarea deja de correr. Va en la misma transacción que el borrado.
+      await insertAuditLog(tx, {
+        action: 'retention.run',
+        userId: 'system:retention',
+        resourceType: 'retention_run',
+        metadata: { purged: rows.length, purgedUnassigned: unassigned.length },
+      })
       return { subjects: rows.length, unassigned: unassigned.length }
     })
     return Response.json({ ok: true, purged: purged.subjects, purgedUnassigned: purged.unassigned })
