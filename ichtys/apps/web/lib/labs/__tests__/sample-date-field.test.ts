@@ -51,6 +51,10 @@ describe('sampleDateHelp — lo que se lee debajo del campo', () => {
     expect(sampleDateHelp({ value: '2026-09-23', unknown: false, proposed: '2026-09-24' })).toBe('La escribiste vos. En el informe se leyó 24/09/2026.')
   })
 
+  it('la persona la borró: no dice que la escribió, y recuerda lo leído', () => {
+    expect(sampleDateHelp({ value: '', unknown: false, proposed: '2026-09-24' })).toBe('La borraste. En el informe se leyó 24/09/2026.')
+  })
+
   it('sin propuesta: dice que no se encontró y qué fecha es', () => {
     expect(sampleDateHelp({ value: '', unknown: false, proposed: null })).toBe('No se encontró en el informe. Es la fecha de extracción o toma de la muestra, no la de emisión.')
   })

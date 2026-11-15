@@ -33,6 +33,7 @@ const spanish = (iso: string): string => iso.split('-').reverse().join('/')
 export function sampleDateHelp(field: SampleDateField): string {
   if (field.unknown) return 'Los valores quedan guardados con fecha de muestra desconocida.'
   if (field.proposed && field.value === field.proposed) return 'Leída del informe. Comprobala contra el informe antes de confirmar.'
+  if (field.proposed && field.value === '') return `La borraste. En el informe se leyó ${spanish(field.proposed)}.`
   if (field.proposed) return `La escribiste vos. En el informe se leyó ${spanish(field.proposed)}.`
   return 'No se encontró en el informe. Es la fecha de extracción o toma de la muestra, no la de emisión.'
 }
