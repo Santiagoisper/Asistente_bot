@@ -46,6 +46,7 @@ const mocks = vi.hoisted(() => {
     decryptClinicalContent: vi.fn((enc: string) => enc.replace(/^enc:/, '')),
     detectPossiblePii: vi.fn().mockReturnValue([]),
     proposeProfileFromEvolution: vi.fn().mockResolvedValue({ factCount: 2 }),
+    loadStudyVisitLabels: vi.fn().mockResolvedValue(['V1', 'Visita 2']),
     dbInsertReturning: vi.fn(),
     dbFindMany: vi.fn(),
     looseInsert: vi.fn(),
@@ -101,6 +102,11 @@ vi.mock('../../../../../../../../lib/subjects/phi-fields', () => ({
 
 vi.mock('../../../../../../../../lib/subjects/patient-profile-service', () => ({
   proposeProfileFromEvolution: mocks.proposeProfileFromEvolution,
+}))
+
+// Las visitas del protocolo se simulan; la regla de qué rótulo vale es la real.
+vi.mock('../../../../../../../../lib/subjects/study-visit-names', () => ({
+  loadStudyVisitLabels: mocks.loadStudyVisitLabels,
 }))
 
 import { GET, POST } from '../route'
@@ -186,6 +192,52 @@ describe('OQ-002 — evolución cross-org / sujeto ajeno', () => {
 
     expect(res.status).toBe(404)
     expect(mocks.dbInsertReturning).not.toHaveBeenCalled()
+  })
+})
+
+describe('rótulo de visita: de una lista, no texto libre', () => {
+  function post(visitLabel: unknown) {
+    return POST(
+      new Request('http://localhost/api/evolutions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: CLINICAL_TEXT, visitLabel }),
+      }),
+      makeParams(),
+    )
+  }
+
+  it.each(['Control de Juan Pérez', 'DNI 30123456', 'V9', 'v1'])('un rótulo fuera de la lista se rechaza y no se guarda nada: %s', async (label) => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+
+    const res = await post(label)
+
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ error: 'invalid_visit_label' })
+    expect(mocks.dbInsertReturning).not.toHaveBeenCalled()
+    expect(mocks.encryptClinicalContent).not.toHaveBeenCalled()
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled()
+  })
+
+  it.each(['Visita 2', 'No programada', 'Selección'])('una visita del protocolo o de la lista corta se guarda: %s', async (label) => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbInsertReturning.mockResolvedValueOnce([{ id: mocks.EVOLUTION_ID, visitLabel: label, createdAt: new Date('2026-11-15T12:00:00Z') }])
+
+    const res = await post(label)
+
+    expect(res.status).toBe(201)
+    expect(mocks.loadStudyVisitLabels).toHaveBeenCalledWith({ orgId: mocks.ORG_ID, studyId: mocks.STUDY_ID })
+  })
+
+  it('sin rótulo no se consultan las visitas del protocolo', async () => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.dbInsertReturning.mockResolvedValueOnce([{ id: mocks.EVOLUTION_ID, visitLabel: null, createdAt: new Date('2026-11-15T12:00:00Z') }])
+    mocks.loadStudyVisitLabels.mockClear()
+
+    const res = await post('   ')
+
+    expect(res.status).toBe(201)
+    expect(mocks.loadStudyVisitLabels).not.toHaveBeenCalled()
   })
 })
 

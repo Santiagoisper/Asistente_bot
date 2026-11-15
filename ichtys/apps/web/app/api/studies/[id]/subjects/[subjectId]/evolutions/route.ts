@@ -11,6 +11,8 @@ import {
 } from '../../../../../../../lib/subjects/phi-fields'
 import { createEvolutionSchema } from '../../../../../../../lib/subjects/schemas'
 import { listSubjectEvolutions } from '../../../../../../../lib/subjects/evolution-reader'
+import { isAllowedVisitLabel } from '../../../../../../../lib/subjects/visit-labels'
+import { loadStudyVisitLabels } from '../../../../../../../lib/subjects/study-visit-names'
 import { proposeProfileFromEvolution } from '../../../../../../../lib/subjects/patient-profile-service'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../../lib/api/body-limit'
 import { getOrCreateRequestId } from '../../../../../../../lib/observability/logger'
@@ -130,6 +132,12 @@ export async function POST(
       ? { ...sourceWithoutCode, ...(confirmedSubjectCode !== undefined ? { subjectConfirmed: true } : {}) }
       : null
 
+    // El rótulo de visita va en claro: tiene que ser uno de la lista, no texto libre.
+    const visitLabel = parsed.data.visitLabel?.trim() || null
+    if (visitLabel !== null && !isAllowedVisitLabel(visitLabel, await loadStudyVisitLabels({ orgId, studyId: study.id }))) {
+      return Response.json({ error: 'invalid_visit_label' }, { status: 400 })
+    }
+
     const piiWarnings = detectPossiblePii(parsed.data.content)
     const contentEncrypted = encryptClinicalContent(parsed.data.content)
 
@@ -144,7 +152,7 @@ export async function POST(
             studyId: study.id,
             subjectId: subject.id,
             authorUserId: userId,
-            visitLabel: parsed.data.visitLabel?.trim() || null,
+            visitLabel,
             contentEncrypted,
             // Se escribe una sola vez, acá (D22). No es contenido clínico: es un número.
             dictationTakes: parsed.data.source?.takes ?? null,

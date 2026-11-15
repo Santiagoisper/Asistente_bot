@@ -31,7 +31,7 @@ const EXTRA_TABLES = ['subjects', 'lab_report_images', 'unassigned_dictation_aud
 
 /** Columnas en claro, con su motivo. `tabla.columna` → por qué. */
 const PLAIN: Record<string, string> = {
-  'subjects.subject_code': 'TEXTO LIBRE EN CLARO (hasta 32 letras, números y guiones): código del sujeto. El esquema lo define como código operativo sin datos personales, pero nada impide que un centro cargue iniciales o un documento, y se muestra en el inicio, en laboratorios y en la exportación. Decisión pendiente: restringir el formato',
+  'subjects.subject_code': 'código del estudio, con formato restringido al alta (lib/subjects/subject-code.ts): ni solo números ni solo letras. No frena iniciales seguidas de un número; los sujetos anteriores a la regla conservan su código',
   'subjects.status': 'estado del sujeto, de una lista cerrada',
   'clinical_evolutions.dictation_takes': 'cantidad de tomas dictadas',
   'screening_assessments.study_spec_version': 'número de versión del protocolo extraído',
@@ -45,7 +45,7 @@ const PLAIN: Record<string, string> = {
   'unassigned_dictation_audios.duration_sec': 'duración de la grabación',
   'agenda_items.duration_minutes': 'duración del turno',
   'clinical_evolutions.author_user_id': 'identificador de quien escribió, no dato del sujeto',
-  'clinical_evolutions.visit_label': 'TEXTO LIBRE EN CLARO (hasta 100 caracteres): nombre de la visita. Nada impide escribir ahí un dato del sujeto. Decisión pendiente: cifrarlo o limitarlo a una lista',
+  'clinical_evolutions.visit_label': 'rótulo de una lista: las visitas del protocolo o una lista corta; el servidor lo comprueba al guardar (lib/subjects/visit-labels.ts). Las evoluciones anteriores a la regla conservan lo que se escribió',
   'screening_assessments.assessments': 'estructura que guarda un sobre cifrado; lo prueban screening-crypto y screening-seal',
   'screening_assessments.summary': 'estructura que guarda un sobre cifrado; lo prueban screening-crypto y screening-seal',
   'lab_reports.status': 'estado del informe, de una lista cerrada',
@@ -110,6 +110,6 @@ describe('leakage — datos de salud cifrados campo por campo (R5)', () => {
 
   it('el texto libre en claro es exactamente el que está marcado como decisión pendiente', () => {
     const pending = Object.entries(PLAIN).filter(([, why]) => why.startsWith('TEXTO LIBRE EN CLARO')).map(([column]) => column)
-    expect(pending.sort()).toEqual(['agenda_items.title', 'clinical_evolutions.visit_label', 'subjects.subject_code'])
+    expect(pending.sort()).toEqual(['agenda_items.title'])
   })
 })

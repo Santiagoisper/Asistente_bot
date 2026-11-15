@@ -29,13 +29,17 @@
 | OS-17 | Los datos clínicos se guardan cifrados campo por campo, incluidas las notas de la agenda y el resultado de elegibilidad | Regla R5 | R5 | Sí; sin prueba que recorra cada campo |
 | OS-18 | La agenda muestra los turnos en la hora del centro, y quien no puede ver sujetos no ve a quién corresponde cada turno | Regla R4 y R10. **Sin decisión registrada** | R4, R5, R10 | Sí |
 | OS-19 | El asistente responde con citas del documento y dice que no hay evidencia cuando no la hay | Regla R6. Diseño: [`answer-engine-v1.md`](../decisions/answer-engine-v1.md) | R6 | Sí |
-| OS-20 | Si el borrado de grabaciones vencidas no corrió, quien administra lo ve en el inicio | Decisión, 15/11/2026 (construir el aviso) | Sin fila | **No integrado:** espera confirmación |
+| OS-20 | Si el borrado de grabaciones vencidas no corrió, quien administra lo ve en el inicio | Decisión, 15/11/2026 (construir el aviso e integrarlo) | R3 | Sí (PR #200) |
 | OS-21 | Firma con clave personal | Diseño en [`firma-con-clave-personal.md`](../decisions/firma-con-clave-personal.md); **seis decisiones pendientes** | — | No |
 | OS-22 | Huella de cada archivo recibido, con quién lo subió y por qué camino entró (documentos, informes y recortes) | Propuesta de Architect, 13/11/2026 ([`huella-y-procedencia-de-archivos.md`](../decisions/huella-y-procedencia-de-archivos.md), paso 4). Pide una migración | — | No (línea de base, brecha C4). Los pasos 1 a 3 de esa nota, el origen y la fecha de muestra de cada valor, están en OS-14 y OS-15 |
+| OS-23 | El código de un sujeto es el del estudio: no un documento ni iniciales | Decisión, 15/11/2026: formato fijo, a propuesta de quien construye. La regla concreta (ni solo números ni solo letras) es una propuesta modificable | R5 | Sí, para sujetos nuevos |
+| OS-24 | El rótulo de visita de una evolución se elige de una lista | Decisión, 15/11/2026: lista cerrada. Qué lista (las visitas del protocolo, o una corta sin cronograma) es una propuesta modificable | R5 | Sí, para evoluciones nuevas |
+| OS-25 | El nombre de un turno de la agenda se guarda cifrado | Decisión, 15/11/2026 | — | No: pide una migración |
+| OS-26 | Cada respuesta y cada propuesta de la IA guarda con qué proveedor y modelo se generó | Regla R6. Decisión del 15/11/2026: delegada a quien construye, que eligió construirlo | — | No: pide una migración |
 
 ## Lo que falta para que esto sea una especificación de requisitos
 
 1. Que lo lean quienes usan el sistema en un centro (investigación, coordinación, regulatorio) y digan qué falta: esta lista sale de lo construido, y lo que nadie pidió construir no aparece.
 2. Aprobación con nombre y fecha.
-3. Criterio de aceptación por requisito. Hoy el criterio es la fila de la matriz; OS-05, OS-07 y OS-20 no tienen fila y OS-03 no tiene una propia.
+3. Criterio de aceptación por requisito. Hoy el criterio es la fila de la matriz; OS-05 y OS-07 no tienen fila y OS-03 no tiene una propia.
 4. Prioridad. No se asignó ninguna.
