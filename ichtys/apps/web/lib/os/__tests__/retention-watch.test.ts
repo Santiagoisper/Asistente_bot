@@ -28,13 +28,13 @@ describe('retentionRunItem — cuándo avisa Inicio', () => {
     const item = retentionRunItem(new Date('2026-12-13T06:17:00.000Z'), NOW)
     expect(item).toMatchObject({ id: 'system:retention-run', kind: 'system', severity: 'high', since: '2026-12-13T06:17:00.000Z' })
     expect(item!.title).toBe('El borrado diario de grabaciones no está corriendo')
-    expect(item!.detail).toContain('Última corrida registrada: 13/12/2026 06:17 UTC')
+    expect(item!.detail).toBe('Última corrida: 13/12/2026 06:17 UTC. Puede haber grabaciones vencidas sin borrar.')
   })
 
   it('sin ningún registro también avisa, y no inventa una fecha', () => {
     const item = retentionRunItem(null, NOW)
     expect(item).not.toBeNull()
-    expect(item!.detail).toContain('No hay registro de ninguna corrida')
+    expect(item!.detail).toBe('Sin registro de corridas. Puede haber grabaciones vencidas sin borrar.')
     expect(item!.since).toBeNull()
   })
 

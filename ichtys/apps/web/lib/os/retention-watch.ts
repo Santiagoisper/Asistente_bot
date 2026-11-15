@@ -41,9 +41,10 @@ export function retentionRunItem(lastRunAt: Date | null, now: Date): PriorityIte
     kind: 'system',
     severity: 'high',
     title: 'El borrado diario de grabaciones no está corriendo',
+    // Corto: la lista de Inicio muestra el detalle en un renglón.
     detail: lastRunAt
-      ? `Última corrida registrada: ${dateTime(lastRunAt)}. Puede haber grabaciones vencidas sin borrar. Hay que revisar la tarea programada y su secreto en el proveedor de despliegue.`
-      : 'No hay registro de ninguna corrida. Puede haber grabaciones vencidas sin borrar. Hay que revisar la tarea programada y su secreto en el proveedor de despliegue.',
+      ? `Última corrida: ${dateTime(lastRunAt)}. Puede haber grabaciones vencidas sin borrar.`
+      : 'Sin registro de corridas. Puede haber grabaciones vencidas sin borrar.',
     href: '/settings',
     since: lastRunAt ? lastRunAt.toISOString() : null,
   }
