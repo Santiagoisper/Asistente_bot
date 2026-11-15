@@ -206,7 +206,9 @@ async function PriorityList({ ctx }: { ctx: OsContext }) {
         'flex min-h-11 items-center justify-between gap-3 rounded-xl px-3 py-2 hover:bg-os-ground focus-visible:outline focus-visible:outline-2 focus-visible:outline-os-accent'
       return (
         <li key={item.id}>
-          {isExternalHref(item.href) ? (
+          {item.href === null ? (
+            <div className="flex min-h-11 items-center justify-between gap-3 rounded-xl px-3 py-2">{body}</div>
+          ) : isExternalHref(item.href) ? (
             <a href={item.href} target="_blank" rel="noopener noreferrer" className={className}>
               {body}
             </a>

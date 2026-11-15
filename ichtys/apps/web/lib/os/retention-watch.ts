@@ -7,11 +7,15 @@ import type { PriorityItem } from './priority'
  *
  * La tarea corre una vez por día. Si el secreto falta o no coincide, responde 401 y no borra
  * nada, sin que nadie se entere. Por eso cada corrida deja un registro (`retention.run`) y
- * Inicio avisa, a quien administra el centro, cuando ese registro falta o es viejo.
+ * Inicio avisa, a quien administra el centro, cuando ese registro falta o es viejo. No lo puede
+ * arreglar desde el centro: el aviso le dice a quién avisar y no lleva a ninguna pantalla.
  */
 
 /** Un día y medio: una corrida salteada ya se avisa; un atraso de horas, no. */
 export const RETENTION_RUN_MAX_AGE_HOURS = 36
+
+/** La tarea y su secreto son de la plataforma: quien administra un centro no los puede tocar. */
+const WHO_FIXES_IT = 'Avisá a quien administra la plataforma.'
 
 type Reader = Pick<typeof db, 'select'>
 
@@ -43,9 +47,10 @@ export function retentionRunItem(lastRunAt: Date | null, now: Date): PriorityIte
     title: 'El borrado diario de grabaciones no está corriendo',
     // Corto: la lista de Inicio muestra el detalle en un renglón.
     detail: lastRunAt
-      ? `Última corrida: ${dateTime(lastRunAt)}. Puede haber grabaciones vencidas sin borrar.`
-      : 'Sin registro de corridas. Puede haber grabaciones vencidas sin borrar.',
-    href: '/settings',
+      ? `Última corrida: ${dateTime(lastRunAt)}. Puede haber grabaciones vencidas sin borrar. ${WHO_FIXES_IT}`
+      : `Sin registro de corridas. Puede haber grabaciones vencidas sin borrar. ${WHO_FIXES_IT}`,
+    // No se resuelve desde ninguna pantalla del centro: sin enlace.
+    href: null,
     since: lastRunAt ? lastRunAt.toISOString() : null,
   }
 }

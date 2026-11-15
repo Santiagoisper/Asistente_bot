@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { drizzle } from 'drizzle-orm/pg-proxy'
-import type { DbTransaction } from '../../audit/audited-write'
 import { purgeExpiredDictationAudios, purgeExpiredUnassignedAudios } from '../audio-store'
 
 /**
@@ -22,7 +21,7 @@ function capture(rows: unknown[][] = []) {
   const tx = drizzle(async (sql, params) => {
     sent.push({ sql, params })
     return { rows }
-  }) as unknown as DbTransaction
+  })
   return { tx, sent }
 }
 

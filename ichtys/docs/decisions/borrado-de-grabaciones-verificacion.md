@@ -26,7 +26,7 @@ Solo cantidades de pedidos a la ruta por código de respuesta, en el proyecto de
 ## El aviso de «no corrió» (15/11/2026)
 
 - Cada corrida autorizada deja un registro `retention.run` con cuántas grabaciones borró de cada tabla, en la misma transacción que el borrado y aunque no haya borrado nada. Un pedido sin el secreto, o una corrida que falla, no deja registro.
-- Inicio le muestra a quien administra el centro, con prioridad alta, «El borrado diario de grabaciones no está corriendo» cuando el último registro tiene más de 36 horas o no hay ninguno. Dice cuándo fue la última corrida y que *puede* haber grabaciones vencidas sin borrar; no afirma que las haya. Va arriba de todo en la lista de atención prioritaria.
+- Inicio le muestra a quien administra el centro, con prioridad alta, «El borrado diario de grabaciones no está corriendo» cuando el último registro tiene más de 36 horas o no hay ninguno. Dice cuándo fue la última corrida y que *puede* haber grabaciones vencidas sin borrar; no afirma que las haya. Va arriba de todo en la lista de atención prioritaria. No lleva a ninguna pantalla y dice «Avisá a quien administra la plataforma»: la tarea y su secreto son de la plataforma, y desde el centro no se arreglan.
 - En un entorno donde la tarea no corre (el de prueba), el aviso queda a la vista siempre. Es cierto: ahí nada se borra solo.
 - Después de desplegar esto por primera vez, el aviso aparece hasta la primera corrida (06:17 UTC).
 
@@ -45,5 +45,6 @@ Solo cantidades de pedidos a la ruta por código de respuesta, en el proyecto de
 ## Pendiente de decisión
 
 - Si el entorno de prueba debe tener su propia corrida (hoy sus grabaciones no vencen nunca en la práctica).
+- **A quién le llega.** Hoy, a quien administra cada centro, que no lo puede arreglar y tiene que avisar. Como la tarea es una sola, aparece en todos los centros a la vez. Mejor sería mostrarlo a los operadores de la plataforma (una lista como la del sellado); pide cargar una variable nueva en el despliegue.
 - El aviso llega solo a quien abre Inicio con función de administrar el centro. Un aviso que salga a buscar a alguien (correo, mensaje) no existe.
 - La campana de pendientes no cuenta este aviso.

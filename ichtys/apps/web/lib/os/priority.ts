@@ -6,8 +6,11 @@ export interface PriorityItem {
   severity: PrioritySeverity
   title: string
   detail: string
-  /** Pantalla donde se resuelve. Interna (empieza con "/") o del satélite (http/https). */
-  href: string
+  /**
+   * Pantalla donde se resuelve. Interna (empieza con "/") o del satélite (http/https).
+   * `null` cuando no hay ninguna pantalla donde se resuelva: un enlace que no lleva a la solución engaña.
+   */
+  href: string | null
   /** ISO 8601, o null si no se conoce desde cuándo espera. */
   since: string | null
 }
