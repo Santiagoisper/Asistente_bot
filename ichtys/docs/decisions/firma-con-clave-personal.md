@@ -57,7 +57,7 @@ La regla vigente es R7 de la línea de base: ninguna pantalla presenta una acci�
 
 ## Diseño propuesto [O]
 
-1. **Qué se firma.** Un registro por vez: la versión exacta que se va a entregar. La firma guarda la huella SHA-256 de ese contenido en forma canónica, el identificador y la versión del registro.
+1. **Qué se firma.** Un registro por vez: la versión exacta que se va a entregar. La firma guarda la huella SHA-256 de ese contenido en forma canónica, el identificador y la versión del registro. La huella se calcula sobre el **texto en claro**, no sobre lo cifrado: el cifrado cambia en cada guardado aunque el contenido sea el mismo. «Forma canónica» es una regla fija y escrita antes de construir: para lo estructurado, una serialización canónica (por ejemplo la del RFC 8785); para el texto, saltos de línea unificados y Unicode normalizado (NFC).
 2. **Qué significa.** Un texto fijo por tipo, a la vista antes de firmar y guardado con la firma. Para la entrega: «Revisé este registro y autorizo su envío a la historia clínica». No dice «apruebo el contenido clínico» si eso lo firma el profesional en la historia clínica.
 3. **Con qué se firma.** Dos caminos; hay que elegir uno (decisión 3):
    - **A. Reautenticación en el proveedor de identidad** en el momento de firmar (clave y, si está activo, segundo factor). No agrega secretos a Alphi. [P] Hay que comprobar que el proveedor permite pedirla para cada forma de ingreso (quien entra con una cuenta de terceros no tiene clave propia), en el plan contratado y en la instancia de producción, que hoy es una de desarrollo (tarea 23).
@@ -65,14 +65,15 @@ La regla vigente es R7 de la línea de base: ninguna pantalla presenta una acci�
 4. **Sesión de firma.** La primera firma pide los dos componentes; las siguientes, dentro de un plazo corto y sin cerrar la sesión, uno. Al vencer el plazo o cerrar, se vuelve a pedir todo.
 5. **La firma no se mueve ni sobrevive a un cambio.** Al leer un registro firmado se recalcula la huella. Si no coincide, la pantalla muestra «firma inválida: el contenido cambió después de firmar» y el registro no se entrega.
 6. **Dónde se ve.** Nombre, fecha, hora (UTC y local) y significado, junto al registro, en la exportación y en el mensaje a la historia clínica.
-7. **Quién puede firmar.** Una capacidad propia, asignada por estudio; no viene con la de escribir.
+7. **Quién puede firmar.** Una capacidad propia, asignada por estudio; no viene con la de escribir. **Cuidado con el modo abierto:** hoy, fuera del modo estricto, pedir una capacidad en el validador no restringe a nadie (pasó con la anulación de evoluciones). La firma necesita su propia comprobación, que valga en los dos modos, o existir solo en modo estricto. Con el validador de siempre, en modo abierto firmaría cualquiera con acceso clínico.
 8. **Rastro.** Cada firma y cada intento fallido, en la misma transacción que la entrega, sin contenido clínico.
 9. **Lo que no hace la IA.** Nada generado por IA se firma solo ni se marca como firmado (R6).
-10. **Lo que queda del lado del centro.** Verificar la identidad antes de dar la capacidad de firmar; la política que hace responsable a cada persona; la carta a la FDA cuando corresponda; la validación de la función con sus pruebas.
+10. **Firmar y después anular.** Un registro firmado, o ya entregado, puede anularse después (registrado en el sujeto equivocado). La firma no se borra: lo que hubo queda a la vista. La anulación se muestra junto a la firma, y si el registro ya se entregó, la historia clínica del centro tiene que recibir el aviso. Cómo se le avisa depende del contrato de entregas (tarea 47).
+11. **Lo que queda del lado del centro.** Verificar la identidad antes de dar la capacidad de firmar; la política que hace responsable a cada persona; la carta a la FDA cuando corresponda; la validación de la función con sus pruebas.
 
 ## Pruebas que la construcción tiene que traer
 
-1. Cambiar un carácter del contenido firmado invalida la firma, a la vista, y bloquea la entrega.
+1. Cambiar un carácter del contenido firmado invalida la firma, a la vista, y bloquea la entrega. Y al revés: guardar, releer y recalcular sin cambiar nada da la misma huella.
 2. La firma de un registro no vale para otro, aunque el contenido sea igual.
 3. La primera firma de una sesión sin los dos componentes se rechaza; la segunda con uno se acepta; vencido el plazo se piden los dos. **Cerrar la sesión también:** después de salir y volver a entrar, la primera firma pide los dos, aunque el plazo no haya vencido.
 4. Una persona sin la capacidad de firmar no firma, tenga la función que tenga.
@@ -83,13 +84,16 @@ La regla vigente es R7 de la línea de base: ninguna pantalla presenta una acci�
 9. La firma y la entrega van en una transacción: no queda una sin la otra.
 10. La huella es estable: el mismo contenido, vuelto a serializar (otro orden de campos, otros espacios), da la misma huella. Sin esto habría firmas que se muestran inválidas sin que nadie haya cambiado nada.
 
+11. En modo abierto, una persona sin la capacidad de firmar tampoco firma.
+12. Un registro firmado que después se anula conserva su firma, muestra la anulación junto a ella y, si ya se había entregado, genera el aviso a la historia clínica.
+
 **Si se elige el camino B (clave de firma propia), además:**
 
-11. La clave no se guarda en claro ni de forma reversible: solo su derivación, con una sal distinta por persona. Dos personas con la misma clave no dejan el mismo valor guardado.
-12. La clave vence: pasada la fecha, no firma hasta que se cambia.
-13. Se bloquea tras el límite de intentos fallidos y el bloqueo no lo levanta la misma persona sola.
-14. Restablecerla exige a la persona y a quien administra: ninguno de los dos puede hacerlo solo, y queda registro de los dos.
-15. Quien administra no puede leer la clave ni firmar con ella.
+13. La clave no se guarda en claro ni de forma reversible: solo su derivación, con una sal distinta por persona. Dos personas con la misma clave no dejan el mismo valor guardado.
+14. La clave vence: pasada la fecha, no firma hasta que se cambia.
+15. Se bloquea tras el límite de intentos fallidos y el bloqueo no lo levanta la misma persona sola.
+16. Restablecerla exige a la persona y a quien administra: ninguno de los dos puede hacerlo solo, y queda registro de los dos.
+17. Quien administra no puede leer la clave ni firmar con ella.
 
 ## Decisiones para Santiago
 
@@ -97,7 +101,8 @@ La regla vigente es R7 de la línea de base: ninguna pantalla presenta una acci�
 2. **¿Por registro o por tanda?** Propuesta: por registro, con sesión de firma.
 3. **¿Camino A o B?** A si el proveedor de identidad lo permite para todas las formas de ingreso; B si no. B pide migración.
 4. **¿Quién verifica la identidad** de quien va a firmar en cada centro, y dónde queda la constancia?
-5. **¿A quién le toca la carta a la FDA** en los estudios que la requieran? Es pregunta para Calidad y Legales.
+5. **¿La firma existe solo en modo estricto**, o se construye con una comprobación propia que valga también en modo abierto?
+6. **¿A quién le toca la carta a la FDA** en los estudios que la requieran? Es pregunta para Calidad y Legales.
 
 ## Lo que no se leyó o no se pudo comprobar
 
