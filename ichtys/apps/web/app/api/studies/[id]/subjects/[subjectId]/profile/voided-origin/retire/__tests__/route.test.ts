@@ -182,3 +182,22 @@ describe('POST — retirar del perfil lo que entró desde una evolución anulada
     expect(mocks.retire).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * El perfil guarda identificadores como texto; la base los compara como `uuid`, sin distinguir
+ * mayúsculas. Al servicio va el que devolvió la base, no el que llegó en el pedido (hallazgo de
+ * revisión del #178). De punta a punta: `route.canonical-id.test.ts`.
+ */
+describe('POST — el identificador de la evolución, como lo devuelve la base', () => {
+  const CANONICAL = 'a3b4c5d6-e7f8-4a1b-9c2d-e3f4a5b6c7d8'
+
+  it('llega en mayúsculas: al servicio va el de la base', async () => {
+    mocks.findEvolution.mockResolvedValue({ id: CANONICAL, authorUserId: 'user_x', voided: { reason: 'wrong_subject', declaredBy: 'user_x', declaredAt: new Date() } })
+
+    const res = await POST(request({ ...valid, evolutionId: CANONICAL.toUpperCase() }), params)
+
+    expect(res.status).toBe(200)
+    expect(mocks.retire).toHaveBeenCalledTimes(1)
+    expect((mocks.retire.mock.calls[0] as [{ evolutionId: string }])[0].evolutionId).toBe(CANONICAL)
+  })
+})

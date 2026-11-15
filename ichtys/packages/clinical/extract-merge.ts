@@ -1,4 +1,5 @@
 import type { ExtractedFacts } from './extract-facts'
+import { mergedBloodPressure } from './blood-pressure'
 import { labFromEvolution } from './lab-source'
 import { upsertLab } from './lab-utils'
 import type { FieldConfidenceLevel, PatientProfile, ProfileFieldConfidence } from './profile-schema'
@@ -175,14 +176,8 @@ export function mergeProfileWithExtraction(
     demographics: {
       ageYears: facts.ageYears ?? current.demographics?.ageYears,
     },
-    vitals: {
-      systolic: facts.systolic ?? current.vitals?.systolic,
-      diastolic: facts.diastolic ?? current.vitals?.diastolic,
-      bloodPressureLabel:
-        facts.systolic && facts.diastolic
-          ? `${facts.systolic}/${facts.diastolic}`
-          : current.vitals?.bloodPressureLabel,
-    },
+    // La presión es un par: medio par no entra ni pisa nada (blood-pressure.ts).
+    vitals: mergedBloodPressure(current.vitals, facts),
     labs,
     medications,
     conditions,

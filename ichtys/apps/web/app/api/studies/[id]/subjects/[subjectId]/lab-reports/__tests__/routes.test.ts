@@ -218,6 +218,29 @@ describe('POST confirm / reject', () => {
     expect(audit).not.toContain('Hemoglobina')
   })
 
+  it('la fecha de la muestra que confirma la persona llega al servicio; sin fecha, llega desconocida', async () => {
+    await confirm(jsonRequest({ rows: [row], sampleDate: '2026-09-24' }), reportCtx)
+    expect(mocks.confirmLabReport.mock.calls[0]?.[0].sampleDate).toBe('2026-09-24')
+    await confirm(jsonRequest({ rows: [row], sampleDate: null }), reportCtx)
+    expect(mocks.confirmLabReport.mock.calls[1]?.[0].sampleDate).toBeNull()
+    await confirm(jsonRequest({ rows: [row] }), reportCtx)
+    expect(mocks.confirmLabReport.mock.calls[2]?.[0].sampleDate).toBeNull()
+  })
+
+  it('el registro dice si se confirmó una fecha de muestra, sin la fecha', async () => {
+    await confirm(jsonRequest({ rows: [row], sampleDate: '2026-09-24' }), reportCtx)
+    const build = mocks.confirmLabReport.mock.calls[0]?.[0].audit as (facts: Record<string, unknown>) => { metadata: Record<string, unknown> }
+    const audit = build({ rowCount: 1, newAnalytes: 0 })
+    expect(audit.metadata.sampleDateKnown).toBe(true)
+    expect(JSON.stringify(audit)).not.toContain('2026-09-24')
+  })
+
+  it.each([['2999-01-01'], ['2026-02-31'], ['24/09/2026'], ['']])('una fecha de muestra futura o imposible (%s): 400 y no se confirma nada', async (sampleDate) => {
+    const res = await confirm(jsonRequest({ rows: [row], sampleDate }), reportCtx)
+    expect(res.status).toBe(400)
+    expect(mocks.confirmLabReport).not.toHaveBeenCalled()
+  })
+
   it('rechazo: registra lab.reject; ya revisado da 409', async () => {
     expect((await reject(new Request('https://os.example.test/x', { method: 'POST' }), reportCtx)).status).toBe(200)
     expect(mocks.writeAuditLog).not.toHaveBeenCalled()
@@ -371,5 +394,38 @@ describe('límite de pedidos — subir un informe de laboratorio', () => {
     expect(res.status).toBe(429)
     expect(req.bodyUsed).toBe(false)
     expect(mocks.createLabReportFromPdf).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * El identificador del informe llega al servicio y al registro en su forma canónica, aunque la
+ * ruta lo traiga en mayúsculas: el servicio lo guarda como origen de cada laboratorio, que es
+ * texto y distingue mayúsculas (la misma clase del hallazgo del #178).
+ */
+describe('lab-reports/[reportId] — el identificador de la ruta, en su forma canónica', () => {
+  const CANONICAL = 'a3f1c2d4-5b6e-4f70-8a9b-0c1d2e3f4a5b'
+  const upperCtx = () => ({ params: Promise.resolve({ id: STUDY, subjectId: SUBJECT, reportId: CANONICAL.toUpperCase() }) })
+
+  it('leer: el servicio y el registro reciben el identificador en minúsculas', async () => {
+    // Una prueba anterior deja el registro fallando: acá tiene que poder escribirse.
+    mocks.writeAuditLog.mockResolvedValue(undefined)
+    mocks.loadLabReport.mockResolvedValue({ id: CANONICAL, status: 'pending_review', createdAt: new Date('2026-11-10T12:00:00Z'), reviewedAt: null, content: { rows: [] } })
+    const res = await read(new Request('https://os.example.test/x'), upperCtx())
+    expect(res.status).toBe(200)
+    expect(mocks.loadLabReport).toHaveBeenCalledWith(expect.objectContaining({ reportId: CANONICAL }))
+    expect(mocks.writeAuditLog).toHaveBeenCalledWith(expect.objectContaining({ resourceId: CANONICAL }))
+  })
+
+  it('confirmar: el servicio que escribe el origen de los laboratorios recibe el identificador en minúsculas', async () => {
+    const res = await confirm(jsonRequest({ rows: [row] }), upperCtx())
+    expect(res.status).toBe(200)
+    for (const call of mocks.confirmLabReport.mock.calls) expect(JSON.stringify(call)).not.toContain(CANONICAL.toUpperCase())
+    expect(JSON.stringify(mocks.confirmLabReport.mock.calls)).toContain(CANONICAL)
+  })
+
+  it('rechazar: lo mismo', async () => {
+    await reject(new Request('https://os.example.test/x', { method: 'POST' }), upperCtx())
+    expect(JSON.stringify(mocks.rejectLabReport.mock.calls)).toContain(CANONICAL)
+    expect(JSON.stringify(mocks.rejectLabReport.mock.calls)).not.toContain(CANONICAL.toUpperCase())
   })
 })

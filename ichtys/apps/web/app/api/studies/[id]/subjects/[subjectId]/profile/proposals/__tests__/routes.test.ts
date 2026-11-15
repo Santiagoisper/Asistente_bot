@@ -148,3 +148,29 @@ describe('propuestas para el perfil — la evolución se anuló', () => {
     expect(mocks.confirmProfileProposal).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * La propuesta pendiente se busca en el perfil comparando el identificador como texto; la base
+ * lo compara como `uuid`, sin distinguir mayúsculas. Con el identificador en mayúsculas la
+ * evolución existía y la propuesta «no estaba»: 409 `no_pending_proposal` con la propuesta a la
+ * vista. Al servicio va el identificador como lo guarda la base (la clase del hallazgo de
+ * revisión del #178).
+ */
+describe('propuestas para el perfil — el identificador de la evolución, como lo guarda la base', () => {
+  const CANONICAL = 'a3b4c5d6-e7f8-4a1b-9c2d-e3f4a5b6c7d8'
+
+  beforeEach(() => {
+    mocks.findSubjectEvolution.mockResolvedValue({ id: CANONICAL, authorUserId: 'user_md', voided: null })
+  })
+
+  it.each([
+    ['aceptar', confirm, mocks.confirmProfileProposal],
+    ['descartar', reject, mocks.rejectProfileProposal],
+  ] as const)('%s con el identificador en mayúsculas: al servicio va en minúsculas', async (_name, handler, service) => {
+    const res = await handler(req(), ctx(CANONICAL.toUpperCase()))
+
+    expect(res.status).toBe(200)
+    expect(service).toHaveBeenCalledTimes(1)
+    expect(service).toHaveBeenCalledWith({ orgId: 'org-1', studyId: STUDY, subjectId: SUBJECT, evolutionId: CANONICAL, userId: 'user_md' })
+  })
+})

@@ -54,9 +54,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!evolution) return new Response('Not Found', { status: 404 })
     if (!evolution.voided) return Response.json({ error: 'evolution_not_voided' }, { status: 409 })
 
+    // Al servicio va el identificador que devolvió la base, no el que llegó en el pedido: la base
+    // lo compara como `uuid` y no distingue mayúsculas; el perfil guarda texto y sí las distingue.
+    // Con el del pedido en mayúsculas no coincidía con el origen de ningún laboratorio.
     const result = await retireVoidedOriginFacts({
       ...scope,
-      evolutionId: parsed.data.evolutionId,
+      evolutionId: evolution.id,
       userId: access.userId,
       removeAge: parsed.data.removeAge ?? false,
       removeBloodPressure: parsed.data.removeBloodPressure ?? false,

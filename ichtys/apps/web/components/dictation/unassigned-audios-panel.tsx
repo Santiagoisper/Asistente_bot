@@ -111,6 +111,8 @@ function UnassignedAudioRow({ audio }: { audio: UnassignedAudioItem }) {
  */
 export function UnassignedAudiosPanel({ variant }: { variant: 'inicio' | 'page' }) {
   const [audios, setAudios] = useState<UnassignedAudioItem[] | null>(null)
+  /** La lista llegó al tope: hay grabaciones que no se muestran. */
+  const [truncated, setTruncated] = useState(false)
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
@@ -119,8 +121,11 @@ export function UnassignedAudiosPanel({ variant }: { variant: 'inicio' | 'page' 
       try {
         const res = await fetch('/api/dictation-audios/unassigned')
         if (!res.ok) throw new Error('list_failed')
-        const data = (await res.json()) as { audios?: UnassignedAudioItem[] }
-        if (alive) setAudios(Array.isArray(data.audios) ? data.audios : [])
+        const data = (await res.json()) as { audios?: UnassignedAudioItem[]; truncated?: boolean }
+        if (alive) {
+          setAudios(Array.isArray(data.audios) ? data.audios : [])
+          setTruncated(data.truncated === true)
+        }
       } catch {
         if (alive) setFailed(true)
       }
@@ -179,6 +184,11 @@ export function UnassignedAudiosPanel({ variant }: { variant: 'inicio' | 'page' 
           </>
         )}
       </div>
+      {truncated ? (
+        <p role="status" className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          Se muestran las {audios.length} que se retiraron más recientemente. Hay más: las anteriores no aparecen en esta lista.
+        </p>
+      ) : null}
       <ul className="space-y-2">
         {audios.map((audio) => (
           <UnassignedAudioRow key={audio.id} audio={audio} />

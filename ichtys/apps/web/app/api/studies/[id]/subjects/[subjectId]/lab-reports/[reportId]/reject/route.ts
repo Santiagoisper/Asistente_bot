@@ -1,7 +1,8 @@
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
 import { isOsEnabled } from '../../../../../../../../../lib/flags'
-import { isUuid, labReportErrorResponse } from '../../../../../../../../../lib/labs/lab-report-http'
+import { labReportErrorResponse } from '../../../../../../../../../lib/labs/lab-report-http'
 import { rejectLabReport } from '../../../../../../../../../lib/labs/lab-report-service'
+import { parseRouteUuid } from '../../../../../../../../../lib/api/route-uuid'
 
 export const runtime = 'nodejs'
 
@@ -10,12 +11,13 @@ export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string; subjectId: string; reportId: string }> },
 ): Promise<Response> {
-  const { id: studyId, subjectId, reportId } = await params
+  const { id: studyId, subjectId, reportId: rawReportId } = await params
+  const reportId = parseRouteUuid(rawReportId)
   if (!isOsEnabled()) return new Response('Not Found', { status: 404 })
 
   try {
     const access = await validateSubjectAccess(subjectId, studyId, { require: 'labs.manage' })
-    if (!isUuid(reportId)) return Response.json({ error: 'not_found' }, { status: 404 })
+    if (!reportId) return Response.json({ error: 'not_found' }, { status: 404 })
 
     await rejectLabReport({
       orgId: access.orgId,

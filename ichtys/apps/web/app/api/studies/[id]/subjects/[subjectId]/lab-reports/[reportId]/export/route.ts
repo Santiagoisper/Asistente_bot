@@ -3,10 +3,11 @@ import { NO_DESTINATION } from '@ichtys/integrations'
 import { writeAuditLog } from '../../../../../../../../../lib/chat/persistence'
 import { isOsEnabled } from '../../../../../../../../../lib/flags'
 import { exportFileName, labReportCsv, labRowsForClipboard } from '../../../../../../../../../lib/labs/lab-export'
-import { isUuid, labReportErrorResponse } from '../../../../../../../../../lib/labs/lab-report-http'
+import { labReportErrorResponse } from '../../../../../../../../../lib/labs/lab-report-http'
 import { loadLabReport } from '../../../../../../../../../lib/labs/lab-report-service'
 import { loadOrgTimeZone } from '../../../../../../../../../lib/os/org-settings'
 import { PhiConfigError } from '../../../../../../../../../lib/subjects/phi-fields'
+import { parseRouteUuid } from '../../../../../../../../../lib/api/route-uuid'
 
 export const runtime = 'nodejs'
 
@@ -22,12 +23,13 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string; subjectId: string; reportId: string }> },
 ): Promise<Response> {
-  const { id: studyId, subjectId, reportId } = await params
+  const { id: studyId, subjectId, reportId: rawReportId } = await params
+  const reportId = parseRouteUuid(rawReportId)
   if (!isOsEnabled()) return new Response('Not Found', { status: 404 })
 
   try {
     const access = await validateSubjectAccess(subjectId, studyId)
-    if (!isUuid(reportId)) return Response.json({ error: 'not_found' }, { status: 404 })
+    if (!reportId) return Response.json({ error: 'not_found' }, { status: 404 })
     const requested = new URL(req.url).searchParams.get('formato') ?? 'csv'
     if (!Object.hasOwn(FORMATS, requested)) return Response.json({ error: 'invalid_format' }, { status: 400 })
     const format = FORMATS[requested as keyof typeof FORMATS]

@@ -5,12 +5,12 @@ import { writeAuditLog } from '../../../../../lib/chat/persistence'
 import { findUnassignedAudio, loadUnassignedAudioBytes } from '../../../../../lib/dictation/audio-store'
 import { clinicalRateLimit } from '../../../../../lib/security/clinical-rate-limit'
 import { PhiConfigError } from '../../../../../lib/subjects/phi-fields'
+import { parseRouteUuid } from '../../../../../lib/api/route-uuid'
 
 export const runtime = 'nodejs'
 
 type Params = { params: Promise<{ audioId: string }> }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const ENDPOINT = '/api/dictation-audios/unassigned/[audioId]'
 /** Lo mismo para la que no existe y para la que no le corresponde: no se confirma nada. */
 const notFound = () => new Response('Not Found', { status: 404 })
@@ -26,10 +26,11 @@ const expired = () => Response.json({ error: 'audio_expired' }, { status: 410 })
  * cuál de los dos fue.
  */
 export async function GET(req: Request, { params }: Params): Promise<Response> {
-  const { audioId } = await params
+  const { audioId: rawAudioId } = await params
+  const audioId = parseRouteUuid(rawAudioId)
   try {
     const { orgId, userId, access } = await resolveOrgAccessContext()
-    if (!UUID.test(audioId)) return notFound()
+    if (!audioId) return notFound()
 
     const audio = await findUnassignedAudio({ orgId, id: audioId })
     if (!audio) return notFound()
