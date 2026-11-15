@@ -81,7 +81,7 @@
 
 - [x] `PHI_ENCRYPTION_KEY` configurada en Vercel production (2026-07-04)
 - [x] Migraciones Fase 1 aplicadas en prod (`pnpm iq:check` — 2026-07-04)
-- [x] BAAs/DPA firmados (2026-07-04 — ver tracker)
+- [ ] BAAs/DPA firmados — **no:** los de Anthropic y OpenAI están pendientes de firma (corregido el 15/11/2026; ver tracker). Los demás no tienen evidencia enlazada
 - [x] MFA habilitado para roles clínicos (Clerk org policy — 2026-07-04)
 - [x] Backup PITR Neon verificado (2026-07-04)
 - [x] Rate limiting activo (Upstash KV)

@@ -62,7 +62,13 @@ export type Evidence = {
 export type LlmUsageEvent = {
   kind: 'chat_answer' | 'chat_eval'
   provider: string
+  /** El modelo que se pidió. Con este nombre se calcula el costo. */
   model: string
+  /**
+   * El modelo que el proveedor dijo que respondió (regla R6). A veces difiere del pedido
+   * (un alias que el proveedor resuelve a una versión con fecha). Null si no lo informó.
+   */
+  responseModel?: string | null
   inputTokens: number
   outputTokens: number
   keySource: 'org' | 'platform' | 'none'
@@ -493,6 +499,7 @@ export async function answerEngine(input: AnswerEngineInput): Promise<AnswerResu
 
   let structured: StructuredAnswer
   let usageEvents: LlmUsageEvent[]
+  let responseModel: string | null = null
   try {
     const { result, provider, modelId, usage, keySource } = await runWithLlmFallback(
       {
@@ -517,6 +524,7 @@ export async function answerEngine(input: AnswerEngineInput): Promise<AnswerResu
           prompt: buildUserPrompt(question, context, conversationHistory),
         })
         reportUsage({ inputTokens: result.usage?.inputTokens ?? 0, outputTokens: result.usage?.outputTokens ?? 0 })
+        responseModel = result.response?.modelId || null
         return result.object as StructuredAnswer
       },
     )
@@ -526,6 +534,7 @@ export async function answerEngine(input: AnswerEngineInput): Promise<AnswerResu
         kind: 'chat_answer',
         provider,
         model: modelId,
+        responseModel,
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
         keySource,
@@ -833,10 +842,12 @@ export async function* answerEngineStream(
         // TS no ve la asignación del closure arriba: cast explícito del nullable.
         const streamResult = streamResultRef as ReturnType<typeof streamText> | null
         const streamUsage = await Promise.resolve(streamResult?.usage).catch(() => null)
+        const streamResponse = await Promise.resolve(streamResult?.response).catch(() => null)
         answerUsageEvent = {
           kind: 'chat_answer',
           provider,
           model: getModelId(provider, 'answer'),
+          responseModel: streamResponse?.modelId || null,
           inputTokens: streamUsage?.inputTokens ?? 0,
           outputTokens: streamUsage?.outputTokens ?? 0,
           keySource,

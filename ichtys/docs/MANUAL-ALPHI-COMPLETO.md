@@ -34,7 +34,7 @@
 | Arquitectura de seguridad (diseño) | 🟢 Excelente | Multi-tenancy con defensa en profundidad real, PHI cifrado, prompt-injection considerado |
 | Implementación de seguridad (código) | 🟢 Muy buena | Tras esta sesión: 0 CVEs high, headers, magic bytes, gate de leakage real |
 | Calidad / tests | 🟢 Fuerte | **598 tests verdes** (494 unit + 75 leakage + 29 OQ), typecheck y lint limpios |
-| Compliance documental | 🟢 Inusualmente maduro | Fase 0 cerrada con DPA/BAA/DPIA/HIPAA firmados 2026-07-04 |
+| Compliance documental | 🟢 Inusualmente maduro | Fase 0 cerrada el 2026-07-04 (DPIA, HIPAA RA). Los acuerdos con Anthropic y OpenAI están pendientes de firma (corregido el 15/11/2026) |
 | Validación formal (CSV/GAMP 5) | 🟡 En curso | IQ ✅, OQ ✅, **PQ piloto y VSR pendientes** |
 | Preparación go-to-market comercial | 🔴 Incompleta | **No hay billing**, onboarding self-serve ni soporte formalizado |
 
@@ -296,7 +296,7 @@ Logger estructurado JSON con allowlist de campos; **prohibido** loggear question
 | Etapa | Contenido | Estado |
 |---|---|---|
 | 0 — Features | 10/10 en prod | ✅ Cerrada (2026-07-04) |
-| 1 — Compliance Fase 0 (pre-PHI) | 15 entregables: políticas, DPA/BAA firmados, DPIA aprobado, HIPAA RA, PHI key en prod | ✅ Cerrada (2026-07-04) |
+| 1 — Compliance Fase 0 (pre-PHI) | 15 entregables: políticas, DPA/BAA con procesadores, DPIA aprobado, HIPAA RA, PHI key en prod | Cerrada (2026-07-04) salvo los acuerdos con Anthropic y OpenAI, pendientes de firma (corregido el 15/11/2026) |
 | 2 — Validación CSV / GAMP 5 | URS/FRS/RTM v1.0 ✅ · FMEA ✅ · IQ ✅ · OQ ✅ · **PQ piloto 🟡 pendiente** · **VSR 🟡 borrador, firma post-PQ** | 🟡 En curso |
 | 3 — Go-live piloto con PHI real | Primer sitio, DR probado en vivo, breach notification activo | ⬜ Bloqueada por Etapa 2 |
 | 4 — Escala | Multi-sitio, ISO 27001/27701/42001 certificadas, billing | ⬜ Futuro |
@@ -333,7 +333,7 @@ Logger estructurado JSON con allowlist de campos; **prohibido** loggear question
 | 1 | **Billing** | No existe. Stripe + gate por plan (E2 espera esto). Sin billing no hay revenue ni límites por tier |
 | 2 | **Onboarding de clientes** | Alta de org nueva es manual/JIT técnico. Definir: invitación, trial, contrato, provisioning, DPA por cliente |
 | 3 | **Soporte y SLA** | Canal de soporte, tiempos de respuesta comprometidos, proceso de incidentes cara al cliente (el breach procedure interno ya existe) |
-| 4 | **Contratos comerciales** | MSA/Order Form + DPA propio para clientes (los DPA/BAA firmados son con NUESTROS procesadores; falta el papel hacia el cliente) |
+| 4 | **Contratos comerciales** | MSA/Order Form + DPA propio para clientes (los DPA/BAA son con NUESTROS procesadores, y los de Anthropic y OpenAI están pendientes de firma al 15/11/2026; falta además el papel hacia el cliente) |
 | 5 | **Decisión de jurisdicción piloto** | UE vs US vs LATAM define qué marco se activa primero (nota explícita del ROADMAP: decisión CINME/Innova) |
 
 ### 8.3 P1 — Seguridad avanzada (primeros 60 días post-piloto)
