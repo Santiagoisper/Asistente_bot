@@ -82,7 +82,7 @@ Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, acces
 
 | Comportamiento | Prueba | Evidencia fuera de las pruebas | Sin cubrir |
 |---|---|---|---|
-| La palabra «firma» y la expresión «validación clínica» no aparecen en el texto de la aplicación fuera de tres usos anotados con su motivo (contratos con proveedores, consentimiento en papel de los datos de demostración, firma técnica entre sistemas) | `apps/web/tests/leakage/no-apparent-signature.test.ts` | Ninguna | La guarda mira palabras en castellano: no ve un botón en inglés, un ícono ni una pantalla que dé a entender una firma sin nombrarla. El diseño de la firma está en [`firma-con-clave-personal.md`](../decisions/firma-con-clave-personal.md) |
+| En el texto de la aplicación no aparecen «firmar» en ninguna de sus formas, «rubricar», «suscribir», las frases de conformidad, «validación clínica», «signature» o «signed by», ni el ícono de firma, fuera de dos usos anotados con su motivo (contratos con proveedores «pendientes de firma» y el consentimiento en papel de los datos de demostración) | `apps/web/tests/leakage/no-apparent-signature.test.ts` | Ninguna | La guarda busca palabras: no ve una palabra partida en pedazos o armada desde un diccionario, otros íconos que se leen como firmar, ni una pantalla que dé a entender una firma sin nombrarla. Nadie recorrió las pantallas con ese ojo. El diseño de la firma está en [`firma-con-clave-personal.md`](../decisions/firma-con-clave-personal.md) |
 
 ## R10 y R11 — Hora del servidor; afirmar solo lo probado
 
