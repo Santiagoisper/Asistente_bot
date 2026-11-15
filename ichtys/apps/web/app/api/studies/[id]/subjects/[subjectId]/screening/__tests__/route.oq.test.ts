@@ -67,6 +67,7 @@ const mocks = vi.hoisted(() => {
     writeAuditLog: vi.fn().mockResolvedValue(undefined),
     loadPatientProfile: vi.fn(),
     getLatestStudySpec: vi.fn(),
+    getLatestSpecAttempt: vi.fn(),
     evaluateAndPersistScreening: vi.fn(),
   }
 })
@@ -79,6 +80,7 @@ vi.mock('@ichtys/auth', () => ({
 
 vi.mock('@ichtys/ingestion/spec-store', () => ({
   getLatestStudySpec: mocks.getLatestStudySpec,
+  getLatestSpecAttempt: mocks.getLatestSpecAttempt,
 }))
 
 vi.mock('../../../../../../../../lib/chat/persistence', () => ({
@@ -325,67 +327,117 @@ describe('perfil guardado que no se pudo leer', () => {
 describe('C5 — la elegibilidad exige un protocolo aprobado', () => {
   afterEach(() => {
     mocks.getLatestStudySpec.mockReset()
+    mocks.getLatestSpecAttempt.mockReset()
   })
-  const draft = (version: number) => ({ version, status: 'draft', documentVersionId: `doc-v${version}`, spec: VALID_SPEC })
-  const approved = (version: number) => ({ version, status: 'approved', documentVersionId: `doc-v${version}`, spec: VALID_SPEC })
-  const arrange = () => {
-    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
-    mocks.loadPatientProfile.mockResolvedValueOnce({ profile: mocks.mockProfile, unreadable: false })
+  const SPEC_WITH_VISIT = {
+    ...VALID_SPEC,
+    visits: [{ name: 'Visita 1', label: 'Semana 0', day: 0, windowDays: null, procedures: ['Signos vitales'], sourcePages: [20], confidence: 'high' as const }],
   }
-  /** Responde según lo que se le pide: el aprobado o el último. Así un cambio de `approvedOnly` se nota. */
-  const store = (rows: { approved: unknown; latest: unknown }) =>
+  const draft = (version: number, spec: unknown = SPEC_WITH_VISIT) => ({ version, status: 'draft', documentVersionId: `doc-v${version}`, spec })
+  const approved = (version: number) => ({ version, status: 'approved', documentVersionId: `doc-v${version}`, spec: VALID_SPEC })
+  const arrange = (unreadable = false) => {
+    mocks.validateSubjectAccess.mockResolvedValueOnce(subjectContext())
+    mocks.loadPatientProfile.mockResolvedValueOnce({ profile: mocks.mockProfile, unreadable })
+  }
+  /**
+   * Responde según lo que se le pide: el aprobado, el último útil o el último intento. Así un
+   * cambio de `approvedOnly` o de la consulta del aviso se nota.
+   */
+  const store = (rows: { approved: unknown; latest: unknown; attempt?: unknown }) => {
     mocks.getLatestStudySpec.mockImplementation(async (params: { approvedOnly?: boolean }) => (params.approvedOnly ? rows.approved : rows.latest))
+    mocks.getLatestSpecAttempt.mockImplementation(async () => (rows.attempt === undefined ? rows.latest : rows.attempt))
+  }
+  const evaluated = (specVersion: number) =>
+    mocks.evaluateAndPersistScreening.mockResolvedValueOnce({ assessments: [], summary: { pass: 0, fail: 0, unknown: 0 }, specVersion, protocolDocumentId: null })
+  const get = async () => (await (await GET(new Request('http://localhost/api/screening'), makeParams())).json()) as Record<string, unknown>
 
   it('pide el protocolo aprobado, no el último', async () => {
     arrange()
     store({ approved: null, latest: draft(1) })
-    await GET(new Request('http://localhost/api/screening'), makeParams())
+    await get()
     expect(mocks.getLatestStudySpec.mock.calls[0]![0]).toMatchObject({ approvedOnly: true })
   })
 
-  it('solo hay un borrador: no evalúa, no guarda instantánea, no entrega visitas y dice que espera aprobación', async () => {
+  it('solo hay un borrador: no evalúa, no guarda instantánea y dice que espera aprobación', async () => {
     arrange()
     store({ approved: null, latest: draft(2) })
-    const res = await GET(new Request('http://localhost/api/screening'), makeParams())
-    const body = (await res.json()) as Record<string, unknown>
+    const body = await get()
 
-    expect(res.status).toBe(200)
     expect(body.specAvailable).toBe(false)
     expect(body.specPendingApproval).toBe(true)
     expect(body.pendingSpecVersion).toBe(2)
     expect(body.assessments).toEqual([])
-    expect(body.visits).toBeUndefined()
     expect(String(body.message)).toContain('no fue aprobado')
     expect(mocks.evaluateAndPersistScreening).not.toHaveBeenCalled()
   })
 
-  it('no hay nada extraído: no dice que algo espera aprobación', async () => {
+  it('solo hay un borrador: el cronograma sale para la guía, marcado como de borrador', async () => {
+    arrange()
+    store({ approved: null, latest: draft(2) })
+    const body = await get()
+    expect(body.visitsFromDraft).toBe(true)
+    expect(Array.isArray(body.visits)).toBe(true)
+    expect((body.visits as unknown[]).length).toBe(1)
+  })
+
+  it('no hay nada extraído: no dice que algo espera aprobación ni entrega visitas', async () => {
     arrange()
     store({ approved: null, latest: null })
-    const body = (await (await GET(new Request('http://localhost/api/screening'), makeParams())).json()) as Record<string, unknown>
+    const body = await get()
     expect(body.specAvailable).toBe(false)
     expect(body.specPendingApproval).toBe(false)
     expect(body.pendingSpecVersion).toBeNull()
+    expect(body.visits).toBeUndefined()
+    expect(body.visitsFromDraft).toBeUndefined()
   })
 
-  it('aprobado y un borrador más nuevo: evalúa con el aprobado y avisa del borrador', async () => {
+  it('aprobado y un borrador más nuevo: evalúa con el aprobado, avisa del borrador y las visitas no son de borrador', async () => {
     arrange()
     store({ approved: approved(1), latest: draft(2) })
-    mocks.evaluateAndPersistScreening.mockResolvedValueOnce({ assessments: [], summary: { pass: 0, fail: 0, unknown: 0 }, specVersion: 1, protocolDocumentId: null })
-    const body = (await (await GET(new Request('http://localhost/api/screening'), makeParams())).json()) as Record<string, unknown>
+    evaluated(1)
+    const body = await get()
 
     expect(body.specAvailable).toBe(true)
     expect(body.specStatus).toBe('approved')
     expect(body.specPendingApproval).toBe(true)
     expect(body.pendingSpecVersion).toBe(2)
+    expect(body.visitsFromDraft).toBeUndefined()
     expect(mocks.evaluateAndPersistScreening.mock.calls.at(-1)![0]).toMatchObject({ specVersion: 1, documentVersionId: 'doc-v1' })
   })
 
   it('aprobado y nada más nuevo: no avisa de ningún borrador', async () => {
     arrange()
     store({ approved: approved(3), latest: approved(3) })
-    mocks.evaluateAndPersistScreening.mockResolvedValueOnce({ assessments: [], summary: { pass: 0, fail: 0, unknown: 0 }, specVersion: 3, protocolDocumentId: null })
-    const body = (await (await GET(new Request('http://localhost/api/screening'), makeParams())).json()) as Record<string, unknown>
-    expect(body.specPendingApproval).toBe(false)
+    evaluated(3)
+    expect((await get()).specPendingApproval).toBe(false)
+  })
+
+  it('un borrador nuevo que solo trae la identificación también espera aprobación', async () => {
+    // «El último útil» sigue siendo el aprobado; el aviso mira el último intento.
+    arrange()
+    const partial = draft(2, { identification: VALID_SPEC.identification, inclusionCriteria: [], exclusionCriteria: [], endpoints: [], visits: [] })
+    store({ approved: approved(1), latest: approved(1), attempt: partial })
+    evaluated(1)
+    const body = await get()
+    expect(body.specPendingApproval).toBe(true)
+    expect(body.pendingSpecVersion).toBe(2)
+  })
+
+  it('una extracción fallida más nueva no espera aprobación', async () => {
+    arrange()
+    const failed = draft(2, { ...VALID_SPEC, extractionFailed: true })
+    store({ approved: approved(1), latest: approved(1), attempt: failed })
+    evaluated(1)
+    expect((await get()).specPendingApproval).toBe(false)
+  })
+
+  it('con el perfil ilegible sigue diciendo qué versión espera aprobación', async () => {
+    arrange(true)
+    store({ approved: approved(1), latest: draft(2) })
+    const body = await get()
+    expect(body.profileUnreadable).toBe(true)
+    expect(body.specPendingApproval).toBe(true)
+    expect(body.pendingSpecVersion).toBe(2)
+    expect(mocks.evaluateAndPersistScreening).not.toHaveBeenCalled()
   })
 })
