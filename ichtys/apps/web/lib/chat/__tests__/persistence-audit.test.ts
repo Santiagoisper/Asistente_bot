@@ -107,6 +107,7 @@ describe('chat — el mensaje y su registro van en la misma transacción', () =>
       answer: 'respuesta ficticia',
       confidence: 'high' as never,
       evidences: [{ citationIndex: 1, chunkId: 'chunk-1', documentId: 'doc-1', documentVersionId: 'docv-1', pageStart: 3, pageEnd: 3, sectionTitle: null, excerpt: 'texto' } as never],
+      generatedBy: { provider: 'anthropic', model: 'modelo-de-prueba-1' },
       audit: audit('rag.answer.completed'),
     })
 
@@ -114,12 +115,19 @@ describe('chat — el mensaje y su registro van en la misma transacción', () =>
     expect(state.transactions).toBe(1)
     expect(state.writes.map((w) => `${w.via}:${w.table}`)).toEqual(['tx:messages', 'tx:citations', 'tx:audit_logs'])
     expect(state.writes[2]!.values).toMatchObject({ action: 'rag.answer.completed' })
+    // R6: el mensaje guarda con qué proveedor y modelo se generó.
+    expect(state.writes[0]!.values).toMatchObject({ role: 'assistant', provider: 'anthropic', model: 'modelo-de-prueba-1' })
+  })
+
+  it('respuesta sin llamada a un modelo: proveedor y modelo quedan vacíos, no inventados', async () => {
+    await persistAssistantMessageAndCitations({ conversationId: 'conv-1', orgId: 'org-1', studyId: 'study-1', answer: 'sin evidencia', confidence: 'insufficient_evidence' as never, evidences: [], generatedBy: null, audit: audit('rag.answer.completed') })
+    expect(state.writes[0]!.values).toMatchObject({ provider: null, model: null })
   })
 
   it('respuesta: si el registro falla, no quedan ni el mensaje ni las citas', async () => {
     state.failAudit = true
     await expect(
-      persistAssistantMessageAndCitations({ conversationId: 'conv-1', orgId: 'org-1', studyId: 'study-1', answer: 'respuesta ficticia', confidence: 'high' as never, evidences: [], audit: audit('rag.answer.completed') }),
+      persistAssistantMessageAndCitations({ conversationId: 'conv-1', orgId: 'org-1', studyId: 'study-1', answer: 'respuesta ficticia', confidence: 'high' as never, evidences: [], generatedBy: null, audit: audit('rag.answer.completed') }),
     ).rejects.toThrow('audit unavailable')
     expect(state.writes).toEqual([])
   })

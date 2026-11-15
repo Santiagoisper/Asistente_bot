@@ -47,7 +47,7 @@ async function extractFactsWithLlm(
   orgId: string,
   studyId: string,
   redactedContent: string,
-): Promise<ReturnType<typeof extractFactsFromEvolution> | null> {
+): Promise<{ extraction: ReturnType<typeof extractFactsFromEvolution>; generatedBy: { provider: string; model: string } } | null> {
   const orgApiKeys = await getOrgLlmApiKeys(orgId).catch(() => null)
 
   try {
@@ -90,7 +90,7 @@ Medicaciones: nombre genérico, dosis y frecuencia si aparecen.`,
       keySource: keySource === 'none' ? 'platform' : keySource,
     })
 
-    return normalizeLlmFacts(result)
+    return { extraction: normalizeLlmFacts(result), generatedBy: { provider, model: modelId } }
   } catch (err) {
     console.error('[clinical-extract] LLM extraction failed:', summarizeLlmError(err))
     return null
@@ -354,14 +354,16 @@ export async function proposeProfileFromEvolution(
   // La extracción (que puede llamar a un modelo) se hace una sola vez, fuera del reintento.
   const heuristic = extractFactsFromEvolution(params.evolutionContent, params.evolutionId)
   const { text: redacted } = redactPhiForLlm(params.evolutionContent)
-  const llmFacts = await extractFactsWithLlm(params.orgId, params.studyId, redacted)
-  const merged = mergeExtractions(heuristic, llmFacts)
+  const llm = await extractFactsWithLlm(params.orgId, params.studyId, redacted)
+  const merged = mergeExtractions(heuristic, llm?.extraction ?? null)
   const proposal: PendingProfileProposal = {
     requiresHumanReview: true,
     evolutionId: params.evolutionId,
     extractedAt: new Date().toISOString(),
     facts: merged.facts,
     fieldConfidence: merged.fieldConfidence,
+    // R6: con qué modelo se generó. `null` si el modelo no respondió y quedaron solo las reglas.
+    generatedBy: llm?.generatedBy ?? null,
   }
   const factCount = proposalFactCount(proposal.facts)
   if (factCount === 0) return { factCount }
