@@ -466,7 +466,14 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         if (outcome.proposalRetired === true) setProposalsRetired((prev) => [...prev, evolutionId])
         setScreeningNotRead(true)
       } else {
-        feedback = { kind: 'error', text: voidErrorMessage(res.status, await errorCode(res)) }
+        const code = await errorCode(res)
+        feedback = { kind: 'error', text: voidErrorMessage(res.status, code) }
+        // «Ya figuraba»: el servidor prueba que está declarada, aunque no por este pedido. Hasta
+        // volver a leer la historia tampoco se ofrece de nuevo. De la propuesta no dijo nada.
+        if (code === 'already_voided') {
+          setVoiding(null)
+          setVoidsNotReread((prev) => [...prev, evolutionId])
+        }
       }
     } catch {
       feedback = { kind: 'error', text: voidErrorMessage(0, 'request_failed') }

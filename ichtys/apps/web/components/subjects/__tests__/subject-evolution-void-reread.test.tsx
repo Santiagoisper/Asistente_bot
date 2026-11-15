@@ -270,6 +270,19 @@ describe('después de una declaración confirmada', () => {
     expect(text()).toContain('Condición · Hipertensión inventada')
   })
 
+  it('«ya figuraba» (409) y la historia no se puede volver a leer: está declarada, así que no se ofrece declararla otra vez', async () => {
+    await mount()
+    api.void = () => json({ error: 'already_voided' }, 409)
+    api.evolutions = () => failed(500)
+    await declare(EVO)
+
+    expect(card(EVO).textContent).toContain('ya figuraba como registrada por error')
+    expect(card(EVO).textContent).toContain(VOID_HISTORY_NOT_REREAD)
+    expect(within(card(EVO), VOID_ACTION)).toHaveLength(0)
+    // De la propuesta la respuesta no dijo nada: no se saca de la pantalla.
+    expect(text()).toContain('Condición · Hipertensión inventada')
+  })
+
   it('cuando una lectura posterior sale bien, los avisos se van y vale lo que trae el servidor', async () => {
     const two = (first: Record<string, unknown>, second: Record<string, unknown>) =>
       json({ subjectCode: CODE, evolutions: [evolution(EVO, first), evolution(OTHER, second)] })
