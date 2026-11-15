@@ -41,7 +41,7 @@ const SUBPROCESSORS = [
     name: 'OpenAI',
     service: 'Vectores de búsqueda de los documentos',
     region: 'US',
-    phi: 'Fragmentos de los documentos del estudio y las preguntas que se escriben en el asistente. Es el proveedor por defecto; la instalación puede configurar Google o Groq en su lugar',
+    phi: 'Ver «Qué proveedor de IA recibe qué dato», más abajo',
     baa: 'Acuerdo pendiente de firma',
   },
   {
@@ -121,8 +121,9 @@ export default function TrustPage() {
             <strong>En tránsito:</strong> TLS 1.2+ entre cliente, Vercel y proveedores.
           </li>
           <li>
-            <strong>Antes de enviar una evolución a un modelo:</strong> se reemplazan los números de
-            documento, los correos y los teléfonos. <strong>Los nombres propios no se quitan.</strong>
+            <strong>Antes de enviar una evolución a un modelo:</strong> se reemplazan algunos
+            formatos de documento, correo y teléfono. No se garantiza que se quite todo dato
+            personal. <strong>Los nombres propios no se quitan.</strong>
           </li>
           <li>
             <strong>Dictado:</strong> la transcripción corre en el navegador de quien dicta; el audio
@@ -223,8 +224,9 @@ export default function TrustPage() {
           </table>
         </div>
         <p className="mt-3 text-xs text-alphi-muted">
-          Proveedores que una organización puede elegir para lo que no es fijo:{' '}
-          {SELECTABLE_PROVIDER_NAMES.join(', ')}.
+          Proveedores que una organización puede elegir en Ajustes para el asistente:{' '}
+          {SELECTABLE_PROVIDER_NAMES.join(', ')}. Lo que una persona escribe en el asistente puede
+          incluir datos de un paciente: va al proveedor de ese uso tal como se escribió.
         </p>
       </section>
 
