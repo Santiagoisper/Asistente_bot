@@ -74,13 +74,22 @@ La regla vigente es R7 de la línea de base: ninguna pantalla presenta una acci�
 
 1. Cambiar un carácter del contenido firmado invalida la firma, a la vista, y bloquea la entrega.
 2. La firma de un registro no vale para otro, aunque el contenido sea igual.
-3. La primera firma de una sesión sin los dos componentes se rechaza; la segunda con uno se acepta; vencido el plazo se piden los dos.
+3. La primera firma de una sesión sin los dos componentes se rechaza; la segunda con uno se acepta; vencido el plazo se piden los dos. **Cerrar la sesión también:** después de salir y volver a entrar, la primera firma pide los dos, aunque el plazo no haya vencido.
 4. Una persona sin la capacidad de firmar no firma, tenga la función que tenga.
 5. Intentos fallidos: se registran, bloquean tras el límite y avisan.
 6. Nombre, fecha, hora y significado aparecen en pantalla, en la exportación y en lo entregado.
 7. La hora la pone el servidor; la que mande el navegador se ignora.
 8. Ninguna pantalla usa la palabra «firma» fuera de este circuito (guarda sobre el texto de la interfaz).
 9. La firma y la entrega van en una transacción: no queda una sin la otra.
+10. La huella es estable: el mismo contenido, vuelto a serializar (otro orden de campos, otros espacios), da la misma huella. Sin esto habría firmas que se muestran inválidas sin que nadie haya cambiado nada.
+
+**Si se elige el camino B (clave de firma propia), además:**
+
+11. La clave no se guarda en claro ni de forma reversible: solo su derivación, con una sal distinta por persona. Dos personas con la misma clave no dejan el mismo valor guardado.
+12. La clave vence: pasada la fecha, no firma hasta que se cambia.
+13. Se bloquea tras el límite de intentos fallidos y el bloqueo no lo levanta la misma persona sola.
+14. Restablecerla exige a la persona y a quien administra: ninguno de los dos puede hacerlo solo, y queda registro de los dos.
+15. Quien administra no puede leer la clave ni firmar con ella.
 
 ## Decisiones para Santiago
 
