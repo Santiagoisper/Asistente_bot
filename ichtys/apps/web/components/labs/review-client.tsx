@@ -20,6 +20,7 @@ import {
   type ReviewRow,
   type ReviewPhase,
 } from '../../lib/labs/review-rows'
+import { initialSampleDateField, sampleDateDecision, sampleDateHelp } from '../../lib/labs/sample-date-field'
 
 const focusRing =
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-os-accent'
@@ -98,6 +99,12 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
   const [confirmingReject, setConfirmingReject] = useState(false)
   const [profileWarning, setProfileWarning] = useState(false)
   const [compared, setCompared] = useState(false)
+  // La fecha de la muestra: el lector la propone y la persona la confirma, la cambia o declara que no figura (C4, D3).
+  const [sampleDate, setSampleDate] = useState(() => initialSampleDateField(content.transcription.split('\n')))
+  const [today] = useState(() => new Date().toISOString().slice(0, 10))
+  const dateDecision = sampleDateDecision(sampleDate, today)
+  /** La fecha con la que quedó guardado: la de recién, o la que trae un informe ya confirmado. Null: desconocida. */
+  const [savedSampleDate, setSavedSampleDate] = useState<string | null>(content.sampleDate ?? null)
   const [exportNote, setExportNote] = useState<{ text: string; failed: boolean } | null>(null)
   const [downloading, setDownloading] = useState(false)
   const fromImage = content.source === 'image'
@@ -110,7 +117,7 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
     const problem = rowProblem(row)
     return problem === 'reading_unset' || problem === 'needs_decision'
   }).length
-  const canConfirm = payload !== null && (!fromImage || compared)
+  const canConfirm = payload !== null && (!fromImage || compared) && dateDecision.ok
   const incomplete = rows.filter((row) => {
     const problem = rowProblem(row)
     return problem === 'missing_analyte' || problem === 'missing_value'
@@ -173,7 +180,10 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
       const response = await fetch(`${base}/${action}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: action === 'confirm' ? JSON.stringify(fromImage ? { rows: payload, comparedWithImage: true } : { rows: payload }) : undefined,
+        body:
+          action === 'confirm'
+            ? JSON.stringify({ rows: payload, ...(fromImage ? { comparedWithImage: true } : {}), sampleDate: dateDecision.ok ? dateDecision.sampleDate : null })
+            : undefined,
       })
       if (response.status === 409) {
         justActed.current = true
@@ -192,6 +202,7 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
       if (action === 'confirm') {
         const result: unknown = await response.json().catch(() => null)
         setProfileWarning(typeof result === 'object' && result !== null && (result as { profileUpdated?: unknown }).profileUpdated === false)
+        setSavedSampleDate(dateDecision.ok ? dateDecision.sampleDate : null)
         justActed.current = true
         setPhase('confirmed')
       } else {
@@ -236,6 +247,9 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
         <div role="status" className="rounded-2xl bg-os-tint px-5 py-4 text-sm text-os-accentdim">
           <p className="font-semibold">{delivery.label}</p>
           <p className="mt-0.5">{delivery.detail}</p>
+          <p className="mt-0.5" data-testid="fecha-muestra-guardada">
+            Fecha de la muestra: {savedSampleDate ? savedSampleDate.split('-').reverse().join('/') : 'desconocida'}.
+          </p>
           {profileWarning ? (
             <p className="mt-1 text-[#6B4200]">El estudio quedó confirmado, pero no se pudo actualizar el perfil de screening del sujeto. Avisá a soporte.</p>
           ) : null}
@@ -468,6 +482,34 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
                 </button>
               )}
               <div className="flex flex-col items-end gap-2">
+                <div className="flex max-w-sm flex-col items-end gap-1 text-sm text-os-ink">
+                  <label className="flex items-center gap-2">
+                    <span className="font-semibold">Fecha de la muestra</span>
+                    <input
+                      type="date"
+                      max={today}
+                      value={sampleDate.unknown ? '' : sampleDate.value}
+                      disabled={phase === 'saving' || sampleDate.unknown}
+                      aria-describedby="fecha-muestra-ayuda"
+                      aria-invalid={!dateDecision.ok && dateDecision.reason === 'invalid'}
+                      className={`min-h-11 rounded-lg border border-alphi-border bg-white px-2 text-sm text-os-ink disabled:opacity-50 ${focusRing}`}
+                      onChange={(event) => setSampleDate((current) => ({ ...current, value: event.target.value }))}
+                    />
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-2">
+                    <input
+                      type="checkbox"
+                      className={`mt-0.5 h-5 w-5 shrink-0 accent-[#0B7A6E] ${focusRing}`}
+                      checked={sampleDate.unknown}
+                      disabled={phase === 'saving'}
+                      onChange={(event) => setSampleDate((current) => ({ ...current, unknown: event.target.checked }))}
+                    />
+                    <span>El informe no trae la fecha de la muestra.</span>
+                  </label>
+                  <p id="fecha-muestra-ayuda" className="text-right text-xs text-os-subtle">
+                    {sampleDateHelp(sampleDate)}
+                  </p>
+                </div>
                 {fromImage ? (
                   <label className="flex max-w-sm cursor-pointer items-start gap-2 text-sm text-os-ink">
                     <input type="checkbox" className={`mt-0.5 h-5 w-5 shrink-0 accent-[#0B7A6E] ${focusRing}`} checked={compared} disabled={phase === 'saving'} onChange={(event) => setCompared(event.target.checked)} />
@@ -488,6 +530,10 @@ export function LabReviewClient({ studyId, subjectId, reportId, subjectCode, stu
                     ? `Falta decidir ${pendingDecisions === 1 ? 'un valor' : `${pendingDecisions} valores`}.`
                     : fromImage && !compared && payload !== null
                       ? 'Falta marcar que comparaste los valores con la imagen.'
+                    : !dateDecision.ok && payload !== null
+                      ? dateDecision.reason === 'missing'
+                        ? 'Falta la fecha de la muestra: escribila o marcá que el informe no la trae.'
+                        : 'La fecha de la muestra no puede ser futura.'
                     : incomplete > 0
                       ? 'Hay campos sin completar.'
                       : rows.length === 0

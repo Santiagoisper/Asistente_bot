@@ -111,6 +111,16 @@ Cada prueba asierta el valor exacto, nunca «no es otra cosa» (L27).
 3. **Fecha propuesta y confirmada** en la pantalla de revisión del informe (pruebas 5, 6, 7 y 11). Con pantalla, así que L1, L2 y L6: captura a 1360px mirada.
 4. **`0023` + huella, quién y camino** (pruebas 1 a 4). Aplicar la `0023` antes de integrar. Carril de Fable.
 
+## Paso 3, construido (14/11/2026)
+
+- **Quién propone:** `proposeSampleDate` (`packages/clinical/lab-sample-date.ts`) lee la transcripción guardada del informe. Solo un renglón de extracción, toma o muestra, con o sin hora. Emisión, informe, recepción, ingreso, validación y un «Fecha:» a secas no proponen nada. Dos fechas de muestra distintas: no elige. No se guarda la propuesta: se calcula al abrir la revisión, así el contenido del informe no suma campos.
+- **La trampa de la hora, cerrada:** el lector de informes ahora conserva el renglón de fecha también cuando trae hora; antes se tapaba con el resto del encabezado y la fecha se perdía.
+- **Quién confirma:** en la pantalla de revisión, junto al botón de confirmar, el campo «Fecha de la muestra» arranca con lo leído. La persona lo deja, escribe otra o marca «El informe no trae la fecha de la muestra». Vacío y sin marcar no se puede confirmar: «desconocida» se declara, no pasa por defecto.
+- **Qué se guarda:** la fecha confirmada (o `null`) en el informe y en cada valor que ese informe suma al perfil. Nunca la fecha de carga. El servidor rechaza una fecha futura o imposible (`invalid_sample_date`). El registro anota si hubo fecha, sin la fecha.
+- **Qué no cambia (D6):** la regla de reemplazo y la elegibilidad. Hay una prueba que se pone en rojo si alguna regla empieza a leer la fecha.
+- **Una pantalla anterior abierta** que confirme sin mandar el campo guarda «desconocida».
+- **Sin hacer:** mostrar la fecha y el origen de cada valor en la ficha del sujeto; el texto pegado y las evoluciones siguen sin fecha de muestra (D3: solo un informe confirmado la aporta).
+
 ## Sin resolver (para Santiago)
 
 - **Ventana de vigencia** de un valor de laboratorio para elegibilidad (pendiente desde el #143). Esta nota solo deja el dato listo.

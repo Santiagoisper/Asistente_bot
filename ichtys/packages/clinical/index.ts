@@ -29,6 +29,7 @@ export {
   type LabOcrParseResult,
 } from './lab-ocr-parser'
 export { labFromEvolution, labsFromLabReport, labsFromPastedText } from './lab-source'
+export { acceptableSampleDate, proposeSampleDate } from './lab-sample-date'
 export { redactPhiForLlm, type PhiRedactionResult } from './phi-redact'
 export {
   mergeExtractions,

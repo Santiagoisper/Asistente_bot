@@ -218,6 +218,29 @@ describe('POST confirm / reject', () => {
     expect(audit).not.toContain('Hemoglobina')
   })
 
+  it('la fecha de la muestra que confirma la persona llega al servicio; sin fecha, llega desconocida', async () => {
+    await confirm(jsonRequest({ rows: [row], sampleDate: '2026-09-24' }), reportCtx)
+    expect(mocks.confirmLabReport.mock.calls[0]?.[0].sampleDate).toBe('2026-09-24')
+    await confirm(jsonRequest({ rows: [row], sampleDate: null }), reportCtx)
+    expect(mocks.confirmLabReport.mock.calls[1]?.[0].sampleDate).toBeNull()
+    await confirm(jsonRequest({ rows: [row] }), reportCtx)
+    expect(mocks.confirmLabReport.mock.calls[2]?.[0].sampleDate).toBeNull()
+  })
+
+  it('el registro dice si se confirmó una fecha de muestra, sin la fecha', async () => {
+    await confirm(jsonRequest({ rows: [row], sampleDate: '2026-09-24' }), reportCtx)
+    const build = mocks.confirmLabReport.mock.calls[0]?.[0].audit as (facts: Record<string, unknown>) => { metadata: Record<string, unknown> }
+    const audit = build({ rowCount: 1, newAnalytes: 0 })
+    expect(audit.metadata.sampleDateKnown).toBe(true)
+    expect(JSON.stringify(audit)).not.toContain('2026-09-24')
+  })
+
+  it.each([['2999-01-01'], ['2026-02-31'], ['24/09/2026'], ['']])('una fecha de muestra futura o imposible (%s): 400 y no se confirma nada', async (sampleDate) => {
+    const res = await confirm(jsonRequest({ rows: [row], sampleDate }), reportCtx)
+    expect(res.status).toBe(400)
+    expect(mocks.confirmLabReport).not.toHaveBeenCalled()
+  })
+
   it('rechazo: registra lab.reject; ya revisado da 409', async () => {
     expect((await reject(new Request('https://os.example.test/x', { method: 'POST' }), reportCtx)).status).toBe(200)
     expect(mocks.writeAuditLog).not.toHaveBeenCalled()
