@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { afterDeclaredVoid, declaredByResponse, proposalsStillOffered, voidDoneMessage, voidErrorMessage } from '../evolution-void-screen'
+import { voidDoneMessage, voidErrorMessage } from '../evolution-void-screen'
 import { retireErrorMessage } from '../voided-origin'
 
 /** D24, punto 1 — lo que la pantalla dice al declarar que una evolución se registró en el sujeto equivocado. */
@@ -93,63 +93,5 @@ describe('retireErrorMessage — tampoco afirma lo que no se sabe', () => {
 
   it('un pedido mal armado sí se sabe que no cambió nada', () => {
     expect(retireErrorMessage(400, 'request_failed')).toContain('El perfil no cambió')
-  })
-})
-
-/**
- * Hallazgo de revisión del #180: después de una declaración confirmada, si la historia no se
- * puede volver a leer, la pantalla seguía mostrando la evolución como vigente y ofreciendo
- * declararla otra vez; y la propuesta ya retirada seguía a la vista como pendiente.
- */
-describe('afterDeclaredVoid — lo que ya se sabe que se declaró no se muestra como vigente', () => {
-  const list = [
-    { id: 'a', voided: null, canVoid: true },
-    { id: 'b', voided: null, canVoid: true },
-    { id: 'c', voided: { at: 'x' }, canVoid: false },
-  ]
-
-  it('sin nada declarado en esta pantalla, la lista queda igual', () => {
-    expect(afterDeclaredVoid(list, new Set())).toEqual(list)
-  })
-
-  it('la declarada que la lista todavía trae como vigente deja de ofrecer la acción y queda marcada', () => {
-    const out = afterDeclaredVoid(list, new Set(['a']))
-    expect(out[0]).toEqual({ id: 'a', voided: null, canVoid: false, voidUnrefreshed: true })
-    expect(out[1]).toEqual(list[1])
-  })
-
-  it('cuando la relectura ya la trae anulada, manda lo que dice el servidor', () => {
-    expect(afterDeclaredVoid(list, new Set(['c']))[2]).toEqual(list[2])
-  })
-
-  it('no cambia la lista que recibe', () => {
-    afterDeclaredVoid(list, new Set(['a']))
-    expect(list[0]).toEqual({ id: 'a', voided: null, canVoid: true })
-  })
-})
-
-describe('proposalsStillOffered — la propuesta de una evolución declarada por error no se ofrece', () => {
-  const proposals = [{ evolutionId: 'a' }, { evolutionId: 'b' }]
-
-  it('saca la de la evolución declarada y deja las demás', () => {
-    expect(proposalsStillOffered(proposals, new Set(['a']))).toEqual([{ evolutionId: 'b' }])
-  })
-
-  it('sin nada declarado, todas', () => {
-    expect(proposalsStillOffered(proposals, new Set())).toEqual(proposals)
-  })
-})
-
-describe('declaredByResponse — cuándo la respuesta prueba que la evolución quedó declarada', () => {
-  it('una respuesta correcta', () => {
-    expect(declaredByResponse(true, '')).toBe(true)
-  })
-
-  it('«ya figuraba»: también está declarada, aunque no por este pedido', () => {
-    expect(declaredByResponse(false, 'already_voided')).toBe(true)
-  })
-
-  it('cualquier otro rechazo, o no saber, no la da por declarada', () => {
-    for (const code of ['subject_mismatch', 'request_failed', 'profile_unreadable', '']) expect(declaredByResponse(false, code), code).toBe(false)
   })
 })

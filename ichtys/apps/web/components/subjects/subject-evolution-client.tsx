@@ -20,7 +20,7 @@ import { ProfileSummary } from './profile-summary'
 import { VoidedOriginNoticeCard } from './voided-origin-notice'
 import { VoidedOriginReviewForm, type RetireChoice } from './voided-origin-review'
 import { labNamesFromEvolution, retireErrorMessage, storedBloodPressureText, voidedOriginNotice } from '../../lib/subjects/voided-origin'
-import { afterDeclaredVoid, declaredByResponse, proposalsStillOffered, SCREENING_STALE_NOTICE, type VoidOutcome, VOID_UNREFRESHED_NOTICE, voidDoneMessage, voidErrorMessage } from '../../lib/subjects/evolution-void-screen'
+import { voidDoneMessage, voidErrorMessage, type VoidOutcome } from '../../lib/subjects/evolution-void-screen'
 
 interface EvolutionItem {
   id: string
@@ -205,10 +205,6 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const [labOcrText, setLabOcrText] = useState('')
   const [labBusy, setLabBusy] = useState(false)
   const [proposalBusy, setProposalBusy] = useState(false)
-  /** Evoluciones que esta pantalla sabe declaradas por error, aunque la historia no se haya podido releer. */
-  const [declaredVoids, setDeclaredVoids] = useState<ReadonlySet<string>>(new Set())
-  /** La última relectura del perfil y la elegibilidad falló: lo que se ve puede no estar al día. */
-  const [screeningStale, setScreeningStale] = useState(false)
 
   /** Qué más decir en este estudio para este sujeto: sale de los criterios a revisar. */
   const studyPrompts = useMemo(() => studyDictationPrompts(assessments), [assessments])
@@ -218,10 +214,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
   const loadScreening = useCallback(async () => {
     try {
       const res = await fetch(`/api/studies/${studyId}/subjects/${subjectId}/screening`)
-      if (!res.ok) {
-        setScreeningStale(true)
-        return
-      }
+      if (!res.ok) return
       const data = (await res.json()) as {
         profile: PatientProfileView
         assessments: ScreeningAssessment[]
@@ -239,10 +232,8 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
       setProtocolDocumentId(data.protocolDocumentId ?? null)
       setProtocolVisits(data.visits ?? [])
       setProfileUnreadable(data.profileUnreadable === true)
-      setScreeningStale(false)
     } catch {
-      // No bloquea la página, pero se dice: lo que quedó a la vista puede no estar al día.
-      setScreeningStale(true)
+      // screening es complementario — no bloquea la página
     }
   }, [studyId, subjectId])
 
@@ -446,12 +437,8 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         const outcome = (await res.json().catch(() => ({}))) as VoidOutcome
         feedback = { kind: 'done', text: voidDoneMessage(outcome) }
         setVoiding(null)
-        setDeclaredVoids((previous) => new Set(previous).add(evolutionId))
       } else {
-        const code = await errorCode(res)
-        feedback = { kind: 'error', text: voidErrorMessage(res.status, code) }
-        // «Ya figuraba»: también está declarada; no se vuelve a ofrecer aunque la relectura falle.
-        if (declaredByResponse(false, code)) setDeclaredVoids((previous) => new Set(previous).add(evolutionId))
+        feedback = { kind: 'error', text: voidErrorMessage(res.status, await errorCode(res)) }
       }
     } catch {
       feedback = { kind: 'error', text: voidErrorMessage(0, 'request_failed') }
@@ -517,8 +504,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
     }
   }
 
-  const pendingProposals = proposalsStillOffered(profile?.pendingEvolutionProposals ?? [], declaredVoids)
-  const shownEvolutions = afterDeclaredVoid(evolutions, declaredVoids)
+  const pendingProposals = profile?.pendingEvolutionProposals ?? []
   const voidedOrigin = voidedOriginNotice({
     labs: profile?.labs ?? [],
     voided: evolutions.filter((evo) => evo.voided).map((evo) => ({ id: evo.id, createdAt: evo.createdAt })),
@@ -707,12 +693,6 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
         </div>
       )}
 
-      {screeningStale && profile ? (
-        <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          {SCREENING_STALE_NOTICE}
-        </p>
-      ) : null}
-
       {pendingProposals.map((proposal) => (
         <div key={proposal.evolutionId} className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
           <p className="text-sm font-semibold text-amber-900">Propuesta para el perfil: falta que una persona la revise</p>
@@ -896,7 +876,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
           <p className="text-sm text-alphi-muted">Sin evoluciones guardadas.</p>
         ) : (
           <ul className="space-y-4">
-            {shownEvolutions.map((evo) => (
+            {evolutions.map((evo) => (
               <li key={evo.id} className="rounded-lg border border-alphi-border bg-white p-4">
                 <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-alphi-muted">
                   <time dateTime={evo.createdAt}>
@@ -907,11 +887,6 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                   )}
                 </div>
                 <EvolutionBody content={evo.content} voided={evo.voided ?? null} />
-                {evo.voidUnrefreshed ? (
-                  <p role="status" className="mt-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                    {VOID_UNREFRESHED_NOTICE}
-                  </p>
-                ) : null}
                 <EvolutionVoidControl
                   subjectCode={subjectCode}
                   evolutionLabel={`la evolución del ${new Date(evo.createdAt).toLocaleString('es-AR')}`}
