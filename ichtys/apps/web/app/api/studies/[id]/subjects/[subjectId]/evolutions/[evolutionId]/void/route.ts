@@ -9,12 +9,12 @@ import { txVoidStore } from '../../../../../../../../../lib/subjects/evolution-v
 import { ProfileUnreadableError, retireProposalOfVoidedEvolution } from '../../../../../../../../../lib/subjects/patient-profile-service'
 import { PhiConfigError } from '../../../../../../../../../lib/subjects/phi-fields'
 import { voidEvolutionInput } from '../../../../../../../../../lib/subjects/schemas'
+import { parseRouteUuid } from '../../../../../../../../../lib/api/route-uuid'
 
 export const runtime = 'nodejs'
 
 type Params = { params: Promise<{ id: string; subjectId: string; evolutionId: string }> }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const ENDPOINT = '/api/studies/[id]/subjects/[subjectId]/evolutions/[evolutionId]/void'
 
 const notFound = () => new Response('Not Found', { status: 404 })
@@ -32,10 +32,11 @@ const notFound = () => new Response('Not Found', { status: 404 })
  * - Alphi no lo hace solo: lo declara una persona, que confirma el sujeto.
  */
 export async function POST(req: Request, { params }: Params): Promise<Response> {
-  const { id: routeStudyId, subjectId, evolutionId } = await params
+  const { id: routeStudyId, subjectId, evolutionId: rawEvolutionId } = await params
+  const evolutionId = parseRouteUuid(rawEvolutionId)
   try {
     const access = await validateSubjectAccess(subjectId, routeStudyId)
-    if (!UUID.test(evolutionId)) return notFound()
+    if (!evolutionId) return notFound()
 
     // Después del acceso (hace falta saber quién es) y antes de leer el cuerpo.
     const limited = await clinicalRateLimit('evolution_write', { orgId: access.orgId, userId: access.userId, studyId: access.study.id, req, endpoint: ENDPOINT })

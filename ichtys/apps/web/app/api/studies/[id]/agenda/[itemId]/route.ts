@@ -5,14 +5,15 @@ import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../lib/api/b
 import { auditedWrite } from '../../../../../../lib/audit/audited-write'
 import { isOsEnabled } from '../../../../../../lib/flags'
 import { loadOrgTimeZone } from '../../../../../../lib/os/org-settings'
+import { parseRouteUuid } from '../../../../../../lib/api/route-uuid'
 
 export const runtime = 'nodejs'
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** PATCH — cambia el estado de un turno o lo reprograma. */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string; itemId: string }> }): Promise<Response> {
-  const { id: studyId, itemId } = await params
+  const { id: studyId, itemId: rawItemId } = await params
+  const itemId = parseRouteUuid(rawItemId)
   if (!isOsEnabled()) return new Response('Not Found', { status: 404 })
 
   let access: Awaited<ReturnType<typeof validatePhiStudyAccess>>
@@ -21,7 +22,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   } catch (err) {
     return handleApiError(err)
   }
-  if (!UUID.test(itemId)) return Response.json({ error: 'not_found' }, { status: 404 })
+  if (!itemId) return Response.json({ error: 'not_found' }, { status: 404 })
 
   let body: unknown
   try {
