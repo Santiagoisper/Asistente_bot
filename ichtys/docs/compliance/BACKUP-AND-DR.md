@@ -9,7 +9,7 @@
 
 | Métrica | Target MVP | Notas |
 |---------|------------|-------|
-| **RPO** (Recovery Point Objective) | ≤ 24 horas | Neon PITR según plan |
+| **RPO** (Recovery Point Objective) | ≤ 24 horas | Neon PITR según plan. **Al 16/11/2026 no está sostenido:** la ventana del historial de la base de producción es de seis horas (`history_retention_seconds` = 21.600) y no hay volcados; ver C3 en [`REGULATORY-BASELINE.md`](./REGULATORY-BASELINE.md) |
 | **RTO** (Recovery Time Objective) | ≤ 4 horas | Rollback Vercel + restore DB |
 | **Uptime** | 99.5% | PRD §8 |
 
