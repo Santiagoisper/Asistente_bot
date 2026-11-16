@@ -3,6 +3,7 @@ import { allows } from '@ichtys/auth/functions'
 import { studyScopeFilter, studyScopeOrOrgLevelFilter } from '@ichtys/auth/study-scope'
 import { and, db, eq, studies, documents, documentVersions, auditLogs } from '@ichtys/db'
 import { getOsContext } from '../../../lib/os/context'
+import { formatDateTime } from '../../../lib/os/date-time'
 
 /** Comprobación histórica: administrador del estudio o de la organización. */
 const couldAdminister = (role: Role): boolean => roleSatisfies(role, ROLES.STUDY_ADMIN)
@@ -138,7 +139,7 @@ export default async function AdminPage() {
             <tbody className="divide-y divide-alphi-border bg-white">
               {recentAudit.map((entry) => (
                 <tr key={entry.id}>
-                  <td className="px-3 py-2 align-top text-alphi-navy">{entry.createdAt.toLocaleString('es-AR')}</td>
+                  <td className="px-3 py-2 align-top text-alphi-navy">{formatDateTime(entry.createdAt)}</td>
                   <td className="px-3 py-2 align-top text-alphi-navy break-words">{entry.action}</td>
                   <td className="px-3 py-2 align-top text-alphi-muted break-words">{entry.resourceType ?? '—'}:{entry.resourceId ?? '—'}</td>
                 </tr>

@@ -22,6 +22,7 @@ import { VoidedOriginNoticeCard } from './voided-origin-notice'
 import { VoidedOriginReviewForm, type RetireChoice } from './voided-origin-review'
 import { labNamesFromEvolution, retireErrorMessage, storedBloodPressureText, voidedOriginNotice } from '../../lib/subjects/voided-origin'
 import { SCREENING_NOT_READ, VOID_HISTORY_NOT_REREAD, voidDoneMessage, voidErrorMessage, type VoidOutcome } from '../../lib/subjects/evolution-void-screen'
+import { formatDateTime } from '../../lib/os/date-time'
 
 interface EvolutionItem {
   id: string
@@ -955,7 +956,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
               <li key={evo.id} className="rounded-lg border border-alphi-border bg-white p-4">
                 <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-alphi-muted">
                   <time dateTime={evo.createdAt}>
-                    {new Date(evo.createdAt).toLocaleString('es-AR')}
+                    {formatDateTime(evo.createdAt)}
                   </time>
                   {evo.visitLabel && (
                     <span className="alphi-pill text-[10px]">{evo.visitLabel}</span>
@@ -964,7 +965,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId }: SubjectEv
                 <EvolutionBody content={evo.content} voided={evo.voided ?? null} />
                 <EvolutionVoidControl
                   subjectCode={subjectCode}
-                  evolutionLabel={`la evolución del ${new Date(evo.createdAt).toLocaleString('es-AR')}`}
+                  evolutionLabel={`la evolución del ${formatDateTime(evo.createdAt)}`}
                   voided={Boolean(evo.voided)}
                   allowed={evo.canVoid === true && !voidsNotReread.includes(evo.id)}
                   open={voiding === evo.id}

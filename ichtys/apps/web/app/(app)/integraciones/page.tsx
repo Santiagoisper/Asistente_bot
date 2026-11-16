@@ -15,6 +15,7 @@ const timeFormat = new Intl.DateTimeFormat('es-AR', {
   timeZone: 'America/Argentina/Buenos_Aires',
   dateStyle: 'short',
   timeStyle: 'medium',
+  hourCycle: 'h23',
 })
 
 export default async function IntegracionesPage() {
