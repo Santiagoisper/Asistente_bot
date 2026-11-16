@@ -17,8 +17,9 @@ import * as schema from '@ichtys/db/schema'
  * Límites:
  * - Mira el nombre de la columna, no lo que se escribe en ella: que una columna `_encrypted` reciba
  *   texto cifrado lo prueban las pruebas de cada servicio, no esta.
- * - No mira `messages` ni `chunks`: son preguntas al asistente y texto de documentos del estudio, que
- *   hoy van en claro. Si eso es dato de salud es una decisión que esta guarda no toma.
+ * - No mira `chunks`: texto de documentos del estudio, no de la persona. El contenido de los mensajes
+ *   del asistente SÍ se mira desde el PR-B del chat cifrado (2026-11-16): va cifrado y lo heredado
+ *   en claro figura como pendiente hasta el sellado.
  * - No mira `audit_logs.metadata`, que es una estructura libre. Hoy guarda motivos de lista cerrada,
  *   nombres de archivo y cantidades; nada impide que un servicio nuevo escriba ahí el texto de una nota.
  *   Que el registro no lleve contenido clínico lo prueban las pruebas de cada ruta, no esta.
@@ -27,7 +28,7 @@ import * as schema from '@ichtys/db/schema'
  *   muestra, pasaría sin anotarse.
  * - Importa solo el esquema, sin cliente: no necesita una base.
  */
-const EXTRA_TABLES = ['subjects', 'lab_report_images', 'unassigned_dictation_audios']
+const EXTRA_TABLES = ['subjects', 'lab_report_images', 'unassigned_dictation_audios', 'conversations', 'messages']
 
 /** Columnas en claro, con su motivo. `tabla.columna` → por qué. */
 const PLAIN: Record<string, string> = {
@@ -63,6 +64,13 @@ const PLAIN: Record<string, string> = {
   'evolution_voids.reason': 'motivo de la anulación, de una lista cerrada; la nota libre va cifrada aparte',
   'evolution_voids.declared_by': 'identificador de quien declaró el error',
   'agenda_items.title': 'TEXTO LIBRE EN CLARO, heredado: el nombre del turno va cifrado en title_encrypted desde el 15/11/2026 y el código ya no escribe acá. Quedan en claro los turnos anteriores hasta que se rellenen; después la columna se saca con otra migración',
+  'conversations.user_id': 'identificador de Clerk de quien conversa: texto técnico, no dato del sujeto',
+  'messages.role': 'rol del mensaje, de una lista cerrada (user | assistant)',
+  'messages.confidence': 'confianza de la respuesta, de una lista cerrada',
+  'messages.provider': 'proveedor del modelo que respondió: nombre, no dato de la persona',
+  'messages.model': 'identificador del modelo que respondió: nombre, no dato de la persona',
+  'messages.content': 'TEXTO LIBRE EN CLARO, heredado: el cuerpo del mensaje va cifrado en content_encrypted desde el PR-B del chat cifrado (2026-11-16) y el código ya no escribe acá. Quedan en claro los mensajes anteriores hasta que se sellen; después la columna se saca con otra migración',
+  'conversations.title': 'TEXTO LIBRE EN CLARO, heredado: el título lo arma un modelo desde la primera pregunta y va cifrado en title_encrypted desde el PR-B del chat cifrado (2026-11-16); el código ya no escribe acá. Quedan en claro los anteriores hasta que se sellen',
   'agenda_items.kind': 'tipo de turno, de una lista cerrada',
   'agenda_items.status': 'estado del turno, de una lista cerrada',
   'agenda_items.created_by': 'identificador de quien lo agendó',
@@ -91,7 +99,7 @@ const plainColumns = watched.flatMap((table) =>
 describe('leakage — datos de salud cifrados campo por campo (R5)', () => {
   it('mira las tablas con contenido de un sujeto', () => {
     expect(watched.map((table) => table.name).sort()).toEqual(
-      ['agenda_items', 'clinical_evolutions', 'dictation_audios', 'evolution_voids', 'lab_report_images', 'lab_reports', 'patient_profiles', 'screening_assessments', 'subjects', 'unassigned_dictation_audios'].sort(),
+      ['agenda_items', 'clinical_evolutions', 'conversations', 'dictation_audios', 'evolution_voids', 'lab_report_images', 'lab_reports', 'messages', 'patient_profiles', 'screening_assessments', 'subjects', 'unassigned_dictation_audios'].sort(),
     )
   })
 
@@ -110,6 +118,6 @@ describe('leakage — datos de salud cifrados campo por campo (R5)', () => {
 
   it('el texto libre en claro es exactamente el que está marcado como decisión pendiente', () => {
     const pending = Object.entries(PLAIN).filter(([, why]) => why.startsWith('TEXTO LIBRE EN CLARO')).map(([column]) => column)
-    expect(pending.sort()).toEqual(['agenda_items.title'])
+    expect(pending.sort()).toEqual(['agenda_items.title', 'conversations.title', 'messages.content'])
   })
 })
