@@ -19,7 +19,7 @@
 
 | Componente | Método | Frecuencia | Retención | Responsable |
 |------------|--------|------------|-----------|-------------|
-| **Neon Postgres** | Point-in-time recovery (PITR) | Continuo | Según plan Neon | Neon / Ops |
+| **Neon Postgres** | Point-in-time recovery (PITR) | Continuo | 6 horas (`history_retention_seconds` = 21.600, leído el 16/11/2026); sin instantáneas ni volcados | Neon / Ops |
 | **Vercel Blob** | Replicación proveedor | Continuo | Lifecycle policy | Vercel |
 | **Código fuente** | GitHub | Cada push | Indefinido | Dev |
 | **PHI_ENCRYPTION_KEY** | Vercel env + backup offline seguro | Al rotar | 2 copias offline | Security Officer |
