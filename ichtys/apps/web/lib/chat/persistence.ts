@@ -122,7 +122,9 @@ export async function loadConversationHistory(params: {
 
   // La query trae los más recientes primero; el prompt los necesita en orden
   // cronológico.
-  return rows.reverse().map((row) => ({ role: row.role, content: row.content }))
+  // content es nullable desde la 0026 (PR-A del chat cifrado): hasta el PR-B toda
+  // fila tiene cuerpo en claro, pero el tipo ya no lo promete.
+  return rows.reverse().map((row) => ({ role: row.role, content: row.content ?? '' }))
 }
 
 export async function persistUserMessage(params: {
