@@ -19,7 +19,7 @@
 
 | Componente | Método | Frecuencia | Retención | Responsable |
 |------------|--------|------------|-----------|-------------|
-| **Neon Postgres** | Point-in-time recovery (PITR) | Continuo | 6 horas (`history_retention_seconds` = 21.600, leído el 16/11/2026); una instantánea manual del 16/11/2026, sin programa; sin volcados | Neon / Ops |
+| **Neon Postgres** | Point-in-time recovery (PITR) | Continuo | 6 horas (`history_retention_seconds` = 21.600, leído el 16/11/2026); una instantánea manual del 16/11/2026, sin programa; sin volcados. Es transitoria: lleva el chat en claro y se reemplaza tras el sellado del chat (la borra Santiago y se toma una nueva, dentro de las 24 horas; ver C3 en `REGULATORY-BASELINE.md`) | Neon / Ops |
 | **Vercel Blob** | Replicación proveedor | Continuo | Lifecycle policy | Vercel |
 | **Código fuente** | GitHub | Cada push | Indefinido | Dev |
 | **PHI_ENCRYPTION_KEY** | Vercel env + backup offline seguro | Al rotar | 2 copias offline | Security Officer |
