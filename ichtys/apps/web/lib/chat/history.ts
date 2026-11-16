@@ -90,7 +90,7 @@ export async function getConversationMessages(
   return rows.map((row) => ({
     messageId: row.id,
     role: row.role,
-    content: row.content,
+    content: row.content ?? '',
     confidence: row.confidence ?? null,
     createdAt: row.createdAt.toISOString(),
   }))
