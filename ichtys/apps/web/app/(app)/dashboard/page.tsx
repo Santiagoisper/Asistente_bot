@@ -4,6 +4,7 @@ import { isOsEnabled } from '../../../lib/flags'
 import { studyScopeFilter, type StudyScope } from '@ichtys/auth/study-scope'
 import { and, conversations, db, eq, studies, documents } from '@ichtys/db'
 import { getOsContext } from '../../../lib/os/context'
+import { readConversationTitle } from '../../../lib/chat/persistence'
 
 /** Todo filtra por organización y por el alcance de la persona (en modo estricto, solo sus estudios). */
 async function getDashboardData(org: { id: string }, userId: string, scope: StudyScope) {
@@ -162,7 +163,7 @@ export default async function DashboardPage() {
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-alphi-navy transition-colors group-hover:text-alphi-teal">
-                      {conv.title ?? 'Consulta sin título'}
+                      {readConversationTitle(conv) ?? 'Consulta sin título'}
                     </p>
                     <p className="mt-0.5 text-xs text-alphi-muted">{formatRelative(conv.updatedAt)}</p>
                   </div>

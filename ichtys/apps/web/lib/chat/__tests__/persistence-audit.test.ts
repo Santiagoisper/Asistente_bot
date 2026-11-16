@@ -1,10 +1,21 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * Regla R3 (brecha C1) en el chat: el mensaje y su registro de auditoría se
  * confirman en la misma transacción. Antes la ruta guardaba el mensaje y
  * después auditaba como paso aparte.
  */
+// El cuerpo del mensaje se cifra desde el PR-B del chat cifrado: la key de
+// PHI es necesaria para persistir (key de test local, no una credential).
+const savedKey = process.env.PHI_ENCRYPTION_KEY
+beforeAll(() => {
+  process.env.PHI_ENCRYPTION_KEY = '0f1e2d3c4b5a69788796a5b4c3d2e1f0'.repeat(2)
+})
+afterAll(() => {
+  if (savedKey === undefined) delete process.env.PHI_ENCRYPTION_KEY
+  else process.env.PHI_ENCRYPTION_KEY = savedKey
+})
+
 const state = vi.hoisted(() => ({
   writes: [] as Array<{ table: string; values: Record<string, unknown>; via: 'tx' | 'db' }>,
   transactions: 0,

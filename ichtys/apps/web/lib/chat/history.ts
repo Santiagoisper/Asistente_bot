@@ -1,4 +1,6 @@
 import { db } from '@ichtys/db'
+import { annotateAnswerSync, type MedicalAnnotation } from '@ichtys/rag/medical-annotator'
+import { readConversationTitle, readMessageContent } from './persistence'
 import type { AnswerConfidence, MessageRole } from '@ichtys/db'
 
 /**
@@ -29,6 +31,13 @@ export type MessageItem = {
   content: string
   confidence: AnswerConfidence | null
   createdAt: string
+  /**
+   * Anotaciones recalculadas al reabrir (PR-B del chat cifrado): ya no se
+   * guardan. Solo para respuestas del asistente; se recalculan con el
+   * diccionario sobre la respuesta ya descifrada (menos de 2 ms, sin red), así
+   * que pueden diferir de las de la consulta en vivo — no son dato guardado.
+   */
+  annotations?: MedicalAnnotation[]
 }
 
 export type CitationItem = {
@@ -66,7 +75,7 @@ export async function listConversationsForStudy(
   return rows.map((row) => ({
     conversationId: row.id,
     studyId: row.studyId,
-    title: row.title,
+    title: readConversationTitle(row),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }))
@@ -90,9 +99,10 @@ export async function getConversationMessages(
   return rows.map((row) => ({
     messageId: row.id,
     role: row.role,
-    content: row.content ?? '',
+    content: readMessageContent(row),
     confidence: row.confidence ?? null,
     createdAt: row.createdAt.toISOString(),
+    ...(row.role === 'assistant' ? { annotations: annotateAnswerSync(readMessageContent(row)) } : {}),
   }))
 }
 

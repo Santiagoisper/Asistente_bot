@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, real, timestamp, index, uniqueIndex, jsonb, check } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, integer, real, timestamp, index, uniqueIndex, check } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
 import { organizations } from './organizations'
 import { studies } from './studies'
@@ -60,11 +60,11 @@ export const messages = pgTable(
     contentEncrypted: text('content_encrypted'),
     confidence: text('confidence', { enum: answerConfidence }),
     /**
-     * SNOMED-CT / LOINC annotations detected in the assistant's answer.
-     * Nullable: null for user messages and answers with insufficient_evidence.
-     * Shape: MedicalAnnotation[] — see packages/rag/medical-annotator.ts.
+     * (Columna `annotations` de la base: fuera del schema desde el PR-B del chat
+     * cifrado, 2026-11-16. Las anotaciones se dejan de guardar: se calculan en
+     * memoria para el stream y se recalculan al reabrir. El sellado vaciará la
+     * columna vieja con SQL crudo — con drizzle no se puede, ya no está acá.)
      */
-    annotations: jsonb('annotations'),
     /**
      * Con qué proveedor y modelo se generó la respuesta (regla R6). Null en los mensajes de la
      * persona, en las respuestas sin llamada a un modelo (sin evidencia) y en las anteriores al

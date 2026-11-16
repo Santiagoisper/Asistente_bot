@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * Corrida 2 del E2E (2026-10-22): los títulos de conversación salían en inglés
@@ -9,6 +9,16 @@ const generateTextMock = vi.hoisted(() => vi.fn())
 const runWithLlmFallbackMock = vi.hoisted(() => vi.fn())
 const dbUpdateMock = vi.hoisted(() => vi.fn())
 const recordUsageMock = vi.hoisted(() => vi.fn())
+
+// El título se cifra desde el PR-B del chat cifrado: key de PHI de test.
+const savedTitleKey = process.env.PHI_ENCRYPTION_KEY
+beforeAll(() => {
+  process.env.PHI_ENCRYPTION_KEY = '0f1e2d3c4b5a69788796a5b4c3d2e1f0'.repeat(2)
+})
+afterAll(() => {
+  if (savedTitleKey === undefined) delete process.env.PHI_ENCRYPTION_KEY
+  else process.env.PHI_ENCRYPTION_KEY = savedTitleKey
+})
 
 vi.mock('ai', () => ({ generateText: generateTextMock }))
 vi.mock('@ichtys/llm', () => ({ runWithLlmFallback: runWithLlmFallbackMock }))

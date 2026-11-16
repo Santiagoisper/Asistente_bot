@@ -4,6 +4,7 @@ import { db, eq, organizations } from '@ichtys/db'
 import { siteTimeZone } from '../../../../../lib/agenda/agenda-time'
 import { formatDateTime } from '../../../../../lib/os/date-time'
 import { loadOrgTimeZone } from '../../../../../lib/os/org-settings'
+import { readConversationTitle } from '../../../../../lib/chat/persistence'
 
 interface HistoryPageProps {
   params: Promise<{ id: string }>
@@ -29,7 +30,7 @@ export default async function StudyHistoryPage({ params }: HistoryPageProps) {
     })
     if (org) {
       timeZone = await loadOrgTimeZone(org.id)
-      items = await db.query.conversations.findMany({
+      const rows = await db.query.conversations.findMany({
         where: (c, { and, eq }) => and(
           eq(c.organizationId, org.id),
           eq(c.studyId, studyId),
@@ -37,6 +38,9 @@ export default async function StudyHistoryPage({ params }: HistoryPageProps) {
         ),
         orderBy: (c, { desc }) => [desc(c.updatedAt)],
       })
+      // El título va cifrado desde el PR-B del chat cifrado; lo heredado en
+      // claro se sigue leyendo hasta el sellado (readConversationTitle).
+      items = rows.map((row) => ({ id: row.id, title: readConversationTitle(row), updatedAt: row.updatedAt, createdAt: row.createdAt }))
     }
   }
 
