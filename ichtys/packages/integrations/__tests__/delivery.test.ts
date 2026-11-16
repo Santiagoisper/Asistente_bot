@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { describeDelivery } from '../connector'
 import {
+  DELIVERY_ENVIRONMENTS,
+  DELIVERY_FINGERPRINT_VERSION,
   buildDeliveryEnvelope,
   createSimulatedDestination,
   deliveryFingerprint,
@@ -17,6 +19,7 @@ const input = (over: Partial<Parameters<typeof buildDeliveryEnvelope>[0]> = {}) 
   reviewedBy: 'user_ficticio',
   reviewedAt: new Date('2026-11-15T18:00:00.000Z'),
   context: { studyCode: 'E2E-FICT-001', subjectCode: 'E2E-001' },
+  origin: { organizationId: 'org_ficticia', environment: 'prueba' },
   ...over,
 })
 const envelope = (over = {}): DeliveryEnvelope => buildDeliveryEnvelope(input(over))
@@ -28,7 +31,8 @@ describe('huella de lo que se entrega', () => {
     expect(deliveryFingerprint({ ...CONTENT, nota: 'Ayunas de 8 h.\r\nSin incidencias.' })).toBe(base)
     const composed = deliveryFingerprint({ texto: 'evolución' })
     expect(deliveryFingerprint({ texto: 'evolución' })).toBe(composed)
-    expect(base).toMatch(/^[0-9a-f]{64}$/)
+    // La huella dice con qué versión de la forma canónica se calculó: sin eso, mañana nadie sabe cómo recalcularla.
+    expect(base).toMatch(/^h1:[0-9a-f]{64}$/)
   })
 
   it('un carácter distinto da otra huella', () => {
@@ -118,6 +122,47 @@ describe('la forma canónica solo acepta JSON plano: lo demás frena, no se conv
   })
 })
 
+/**
+ * Vectores fijos de `h1`. El contenido y la huella están escritos a mano: la huella se calculó
+ * por fuera de este código (SHA-256 de la forma canónica que figura en cada comentario, en
+ * UTF-8), no con `deliveryFingerprint`. Las demás pruebas comparan la función contra sí misma y
+ * siguen en verde si la forma canónica cambia; estas no.
+ *
+ * Si una de estas pruebas falla, la forma canónica cambió. No se edita el vector: se sube
+ * `DELIVERY_FINGERPRINT_VERSION`, se conserva la función de `h1` para comprobar las huellas ya
+ * guardadas y se agregan vectores para la versión nueva.
+ */
+describe('h1 es una forma canónica fija: vectores escritos a mano', () => {
+  it('estos vectores son de la versión 1', () => {
+    expect(DELIVERY_FINGERPRINT_VERSION).toBe(1)
+  })
+
+  it('claves desordenadas: se ordenan, sin espacios', () => {
+    // {"a":"uno","b":2,"c":[true,null]}
+    expect(deliveryFingerprint({ b: 2, c: [true, null], a: 'uno' })).toBe('h1:6b45a648c788057b63be7dcf5e857e8a9e37a81cec2815fb01b88d70fa13fe95')
+  })
+
+  it('texto con salto de línea de Windows y una «ó» descompuesta: un solo salto, Unicode compuesto', () => {
+    // {"nota":"Evolución.\nSin cambios."}  (la «ó» es U+00F3; el salto, la secuencia de escape de JSON)
+    expect(deliveryFingerprint({ nota: 'Evolucio\u0301n.\r\nSin cambios.' })).toBe('h1:fe992f90b3398ee7b1dd0f6b4981f004e4f60a7bc05dd6df62cae4efaf645c35')
+  })
+
+  it('contenido anidado, con una clave descompuesta, números y una fecha como texto', () => {
+    // {"año":2026,"registro":{"filas":[{"analito":"HbA1c","unidad":"%","valor":7.4},{"analito":"Glucemia","unidad":"mg/dL","valor":102}],"tomadaEl":"2026-11-15T12:00:00.000Z"}}
+    const content = {
+      registro: {
+        tomadaEl: '2026-11-15T12:00:00.000Z',
+        filas: [
+          { valor: 7.4, analito: 'HbA1c', unidad: '%' },
+          { unidad: 'mg/dL', valor: 102, analito: 'Glucemia' },
+        ],
+      },
+      'an\u0303o': 2026,
+    }
+    expect(deliveryFingerprint(content)).toBe('h1:ff413b2f82fee3844990fed76cd2dcba8940b2990d75054f744b0852b075a218')
+  })
+})
+
 describe('sobre de entrega', () => {
   it('con un contenido que no es JSON plano no hay sobre', () => {
     expect(() => envelope({ content: { tomadaEl: new Date('2026-01-01T00:00:00.000Z') } })).toThrow(NonCanonicalContentError)
@@ -126,13 +171,50 @@ describe('sobre de entrega', () => {
   it('lleva la huella del contenido, quién revisó y cuándo, y una clave que identifica registro y versión', () => {
     const built = envelope()
     expect(built.contentFingerprint).toBe(deliveryFingerprint(CONTENT))
-    expect(built.idempotencyKey).toBe('lab_report:rec-1:v3')
+    expect(built.idempotencyKey).toBe('org_ficticia/prueba/lab_report:rec-1:v3')
     expect(built.reviewedBy).toBe('user_ficticio')
     expect(built.reviewedAt).toBe('2026-11-15T18:00:00.000Z')
   })
 
   it('otra versión del mismo registro es otra entrega', () => {
-    expect(envelope({ record: { kind: 'lab_report', id: 'rec-1', version: 4 } }).idempotencyKey).toBe('lab_report:rec-1:v4')
+    expect(envelope({ record: { kind: 'lab_report', id: 'rec-1', version: 4 } }).idempotencyKey).toBe('org_ficticia/prueba/lab_report:rec-1:v4')
+  })
+
+  it('el mismo registro desde otro entorno u otra organización es otra entrega: no chocan en un destino compartido', () => {
+    const base = envelope().idempotencyKey
+    expect(envelope({ origin: { organizationId: 'org_ficticia', environment: 'produccion' } }).idempotencyKey).not.toBe(base)
+    expect(envelope({ origin: { organizationId: 'org_otra', environment: 'prueba' } }).idempotencyKey).not.toBe(base)
+  })
+
+  it('sin origen completo no hay sobre, y el origen no puede traer el separador', () => {
+    expect(() => envelope({ origin: { organizationId: '', environment: 'prueba' } })).toThrow(/origen/)
+    expect(() => envelope({ origin: { organizationId: 'org_ficticia', environment: ' ' } })).toThrow(/origen/)
+    expect(() => envelope({ origin: { organizationId: 'org/ficticia', environment: 'prueba' } })).toThrow(/origen/)
+  })
+
+  it('el entorno sale de una lista cerrada: produccion, prueba o desarrollo', () => {
+    expect(DELIVERY_ENVIRONMENTS).toEqual(['produccion', 'prueba', 'desarrollo'])
+    for (const environment of DELIVERY_ENVIRONMENTS) {
+      expect(envelope({ origin: { organizationId: 'org_ficticia', environment } }).idempotencyKey).toBe(`org_ficticia/${environment}/lab_report:rec-1:v3`)
+    }
+  })
+
+  it.each(['prod', 'production', 'producción', 'Produccion', 'PRUEBA', 'preview', 'test', 'dev', 'prueba2'])(
+    'otro nombre para el entorno («%s») no arma el sobre: el mismo registro tendría dos claves',
+    (environment) => {
+      expect(() => envelope({ origin: { organizationId: 'org_ficticia', environment } })).toThrow(/El entorno de una entrega es uno de: produccion, prueba, desarrollo\.$/)
+    },
+  )
+
+  it('el rechazo del entorno no repite lo que recibió', () => {
+    let message = ''
+    try {
+      envelope({ origin: { organizationId: 'org_ficticia', environment: 'valor-que-no-va' } })
+    } catch (error) {
+      message = error instanceof Error ? error.message : ''
+    }
+    expect(message).toMatch(/entorno/)
+    expect(message).not.toContain('valor-que-no-va')
   })
 
   it('sin una persona que lo haya revisado no hay sobre', () => {

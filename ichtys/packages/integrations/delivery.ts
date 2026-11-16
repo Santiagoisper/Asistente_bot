@@ -130,17 +130,43 @@ function canonicalize(value: unknown, path: string, ancestors: readonly object[]
 }
 
 /**
- * Huella SHA-256 (hexadecimal) del contenido en forma canónica. Se calcula sobre el texto en claro.
- * Si el contenido no es JSON plano no hay huella: lanza `NonCanonicalContentError`.
+ * Versión de la forma canónica. Va delante de cada huella (`h1:…`): una huella guardada tiene que
+ * decir cómo se calculó, o mañana nadie puede recalcularla.
+ *
+ * `h1` es el SHA-256, en hexadecimal, del texto UTF-8 que devuelve `canonicalize` tal como está
+ * escrita acá. Los vectores fijos de `__tests__/delivery.test.ts` (contenido y huella escritos a
+ * mano) la atan a esa forma: si alguien cambia la forma canónica, fallan. Entonces no se edita el
+ * vector: este número sube, y la función de la versión anterior se conserva para seguir
+ * comprobando las huellas ya guardadas.
+ */
+export const DELIVERY_FINGERPRINT_VERSION = 1
+
+/**
+ * Huella del contenido en forma canónica: `h<versión>:` y el SHA-256 en hexadecimal. Se calcula
+ * sobre el texto en claro. Si el contenido no es JSON plano no hay huella: lanza
+ * `NonCanonicalContentError`.
  */
 export function deliveryFingerprint(content: unknown): string {
-  return createHash('sha256').update(canonicalize(content, '$', []), 'utf8').digest('hex')
+  const digest = createHash('sha256').update(canonicalize(content, '$', []), 'utf8').digest('hex')
+  return `h${DELIVERY_FINGERPRINT_VERSION}:${digest}`
 }
 
 export type DeliverableKind = 'lab_report' | 'evolution'
 
+/**
+ * De qué entorno sale una entrega. Lista cerrada: con texto libre, un lugar que escribe `prod` y
+ * otro que escribe `produccion` le dan dos claves al mismo registro, y el destino lo registra dos
+ * veces. Qué entorno le corresponde a cada despliegue lo decide quien arma el sobre.
+ */
+export const DELIVERY_ENVIRONMENTS = ['produccion', 'prueba', 'desarrollo'] as const
+export type DeliveryEnvironment = (typeof DELIVERY_ENVIRONMENTS)[number]
+
+export function isDeliveryEnvironment(value: string): value is DeliveryEnvironment {
+  return DELIVERY_ENVIRONMENTS.some((environment) => environment === value)
+}
+
 export interface DeliveryEnvelope {
-  /** Mismo registro y misma versión → misma clave. Entregar dos veces no registra dos veces. */
+  /** Mismo origen, mismo registro y misma versión → misma clave. Entregar dos veces no registra dos veces. */
   idempotencyKey: string
   record: { kind: DeliverableKind; id: string; version: number }
   /** Huella del contenido exacto que una persona revisó. */
@@ -168,11 +194,25 @@ export function buildDeliveryEnvelope(input: {
   reviewedBy: string
   reviewedAt: Date
   context: DeliveryEnvelope['context']
+  /**
+   * De dónde sale la entrega. Entra en la clave de idempotencia para que dos organizaciones, o el
+   * entorno de prueba y el de producción, no choquen si alguna vez comparten un destino. El
+   * entorno es uno de `DELIVERY_ENVIRONMENTS`; llega como texto porque sale de la configuración,
+   * y acá se comprueba.
+   */
+  origin: { organizationId: string; environment: string }
 }): DeliveryEnvelope {
   const reviewedBy = input.reviewedBy.trim()
   if (!reviewedBy) throw new Error('No se arma una entrega sin la persona que la revisó')
+  const organizationId = input.origin.organizationId.trim()
+  const environment = input.origin.environment.trim()
+  if (!organizationId || !environment || organizationId.includes('/') || environment.includes('/')) {
+    throw new Error('No se arma una entrega sin su origen: organización y entorno, sin barras')
+  }
+  // El mensaje nombra la lista y no repite lo que recibió.
+  if (!isDeliveryEnvironment(environment)) throw new Error(`El entorno de una entrega es uno de: ${DELIVERY_ENVIRONMENTS.join(', ')}.`)
   return {
-    idempotencyKey: `${input.record.kind}:${input.record.id}:v${input.record.version}`,
+    idempotencyKey: `${organizationId}/${environment}/${input.record.kind}:${input.record.id}:v${input.record.version}`,
     record: input.record,
     contentFingerprint: deliveryFingerprint(input.content),
     content: input.content,
