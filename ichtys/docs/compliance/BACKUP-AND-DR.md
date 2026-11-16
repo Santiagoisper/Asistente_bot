@@ -9,8 +9,8 @@
 
 | Métrica | Target MVP | Notas |
 |---------|------------|-------|
-| **RPO** (Recovery Point Objective) | ≤ 24 horas | Neon PITR según plan |
-| **RTO** (Recovery Time Objective) | ≤ 4 horas | Rollback Vercel + restore DB |
+| **RPO** (Recovery Point Objective) | ≤ 24 horas (objetivo). **Real al 16/11/2026: hasta 6 horas, y solo si el problema se detecta dentro de esas 6 horas** | La ventana del historial de la base de producción es de seis horas (`history_retention_seconds` = 21.600); no hay instantáneas, programa de instantáneas ni volcados. Un error descubierto después de seis horas no tiene recuperación. Ver C3 en [`REGULATORY-BASELINE.md`](./REGULATORY-BASELINE.md) |
+| **RTO** (Recovery Time Objective) | ≤ 4 horas (objetivo, sin probar: el simulacro de restauración está pendiente) | Rollback Vercel + restore DB |
 | **Uptime** | 99.5% | PRD §8 |
 
 ---
@@ -19,7 +19,7 @@
 
 | Componente | Método | Frecuencia | Retención | Responsable |
 |------------|--------|------------|-----------|-------------|
-| **Neon Postgres** | Point-in-time recovery (PITR) | Continuo | Según plan Neon | Neon / Ops |
+| **Neon Postgres** | Point-in-time recovery (PITR) | Continuo | 6 horas (`history_retention_seconds` = 21.600, leído el 16/11/2026); sin instantáneas ni volcados | Neon / Ops |
 | **Vercel Blob** | Replicación proveedor | Continuo | Lifecycle policy | Vercel |
 | **Código fuente** | GitHub | Cada push | Indefinido | Dev |
 | **PHI_ENCRYPTION_KEY** | Vercel env + backup offline seguro | Al rotar | 2 copias offline | Security Officer |

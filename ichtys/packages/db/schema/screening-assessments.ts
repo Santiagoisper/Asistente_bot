@@ -5,8 +5,11 @@ import { studies } from './studies'
 import { subjects } from './subjects'
 
 /**
- * screening_assessments — snapshots de evaluación determinista vs study spec.
- * Sin PHI: solo metadata de reglas (status/reason/criterionNumber).
+ * screening_assessments — instantáneas de la evaluación determinista contra el protocolo extraído.
+ * Es dato clínico: el motivo de cada criterio cita valores del sujeto y el resumen dice si cumple.
+ * Por eso `assessments` y `summary` se guardan cifrados (un sobre `{ enc, ciphertext }` dentro del
+ * mismo JSONB; ver apps/web/lib/subjects/screening-crypto.ts). No se puede contar ni filtrar por
+ * su contenido en la base. Brecha C3 de docs/compliance/REGULATORY-BASELINE.md.
  */
 export const screeningAssessments = pgTable(
   'screening_assessments',
