@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { auth } from '@clerk/nextjs/server'
 import { db, eq, organizations } from '@ichtys/db'
+import { formatDateTime } from '../../../../../lib/os/date-time'
 
 interface HistoryPageProps {
   params: Promise<{ id: string }>
@@ -53,7 +54,7 @@ export default async function StudyHistoryPage({ params }: HistoryPageProps) {
                     {conversation.title ?? 'Conversación sin título'}
                   </p>
                   <p className="text-xs text-alphi-muted">
-                    Actualizada: {conversation.updatedAt.toLocaleString('es-AR')}
+                    Actualizada: {formatDateTime(conversation.updatedAt)}
                   </p>
                 </div>
                 <span className="text-xs text-alphi-muted">{conversation.id.slice(0, 8)}</span>
