@@ -82,9 +82,18 @@ conoce. Solo para el servidor.
   identificada por código. Es dato **seudonimizado, no anónimo**, y así hay que
   tratarlo el día que el sobre salga hacia un destino real.
 - La huella lleva delante la versión de la forma canónica (`h1:…`), para que una
-  huella guardada diga cómo se calculó.
+  huella guardada diga cómo se calculó. **`h1` es el SHA-256, en hexadecimal,
+  del texto UTF-8 de la forma canónica tal como está escrita en `delivery.ts`.**
+  Tres vectores fijos en las pruebas (contenido y huella escritos a mano, la
+  huella calculada por fuera de este código) la atan a esa forma: cambiar la
+  forma canónica los hace fallar. Cuando eso pase no se edita el vector: sube
+  `DELIVERY_FINGERPRINT_VERSION` y **la función de `h1` se conserva**, para
+  seguir comprobando las huellas ya guardadas.
 - La clave de idempotencia es origen (organización y entorno) + registro + versión: entregar dos veces no registra
-  dos veces. **Una versión no se edita nunca:** si el registro se corrige, sube
+  dos veces. **El entorno sale de una lista cerrada** (`DELIVERY_ENVIRONMENTS`:
+  `produccion`, `prueba`, `desarrollo`): con texto libre, `prod` y `produccion`
+  le darían dos claves al mismo registro. Qué entorno le corresponde a cada
+  despliegue lo decide quien arme el sobre; hoy nada lo usa. **Una versión no se edita nunca:** si el registro se corrige, sube
   la versión. La misma clave con otra huella es siempre un error (`conflict`),
   nunca un reenvío.
 - `toDeliveryRecord` — «registrada» solo si el conector declara que puede
