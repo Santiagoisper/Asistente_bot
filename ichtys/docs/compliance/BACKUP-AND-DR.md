@@ -9,8 +9,8 @@
 
 | Métrica | Target MVP | Notas |
 |---------|------------|-------|
-| **RPO** (Recovery Point Objective) | ≤ 24 horas | Neon PITR según plan. **Al 16/11/2026 no está sostenido:** la ventana del historial de la base de producción es de seis horas (`history_retention_seconds` = 21.600) y no hay volcados; ver C3 en [`REGULATORY-BASELINE.md`](./REGULATORY-BASELINE.md) |
-| **RTO** (Recovery Time Objective) | ≤ 4 horas | Rollback Vercel + restore DB |
+| **RPO** (Recovery Point Objective) | ≤ 24 horas (objetivo). **Real al 16/11/2026: hasta 6 horas, y solo si el problema se detecta dentro de esas 6 horas** | La ventana del historial de la base de producción es de seis horas (`history_retention_seconds` = 21.600); no hay instantáneas, programa de instantáneas ni volcados. Un error descubierto después de seis horas no tiene recuperación. Ver C3 en [`REGULATORY-BASELINE.md`](./REGULATORY-BASELINE.md) |
+| **RTO** (Recovery Time Objective) | ≤ 4 horas (objetivo, sin probar: el simulacro de restauración está pendiente) | Rollback Vercel + restore DB |
 | **Uptime** | 99.5% | PRD §8 |
 
 ---
