@@ -47,6 +47,40 @@ function problemsIn(file: string, text: string): string[] {
   return found
 }
 
+/**
+ * La zona de respaldo se escribe en un solo lugar. Con dos constantes iguales, o con la zona
+ * escrita a mano en una pantalla, esa pantalla se queda en Buenos Aires cuando la organización
+ * trabaja en otra zona, y ninguna prueba lo ve mientras todo sea Buenos Aires.
+ */
+const FALLBACK_ZONE = 'America/Argentina/Buenos_Aires'
+const FALLBACK_ZONE_ALLOWED = [
+  // La constante de respaldo.
+  'lib/agenda/agenda-time.ts',
+  // La lista de zonas que se le ofrece a quien configura el centro.
+  'components/os/org-config-form.tsx',
+]
+
+function fallbackZoneUses(file: string, text: string): string[] {
+  if (FALLBACK_ZONE_ALLOWED.includes(file)) return []
+  return text.split('\n').flatMap((line, index) => (line.includes(FALLBACK_ZONE) ? [`${file}:${index + 1} escribe la zona de respaldo a mano`] : []))
+}
+
+describe('la zona de respaldo se escribe en un solo lugar', () => {
+  it('ninguna pantalla ni biblioteca la repite', () => {
+    const problems = ROOTS.flatMap(sourceFiles).flatMap((path) => fallbackZoneUses(relative(WEB, path), readFileSync(path, 'utf8')))
+    expect(problems).toEqual([])
+  })
+
+  it('la constante existe y es la única fuente', () => {
+    expect(readFileSync(join(WEB, 'lib/agenda/agenda-time.ts'), 'utf8')).toContain(`export const DEFAULT_SITE_TIMEZONE = '${FALLBACK_ZONE}'`)
+  })
+
+  it('la guarda reconoce el caso que busca y deja pasar los dos lugares anotados', () => {
+    expect(fallbackZoneUses('app/x/page.tsx', "  timeZone: 'America/Argentina/Buenos_Aires',")).toHaveLength(1)
+    expect(fallbackZoneUses('lib/agenda/agenda-time.ts', "export const DEFAULT_SITE_TIMEZONE = 'America/Argentina/Buenos_Aires'")).toEqual([])
+  })
+})
+
 describe('la hora no se muestra ambigua', () => {
   const files = ROOTS.flatMap(sourceFiles)
 
