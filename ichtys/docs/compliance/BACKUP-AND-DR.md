@@ -9,7 +9,7 @@
 
 | Métrica | Target MVP | Notas |
 |---------|------------|-------|
-| **RPO** (Recovery Point Objective) | ≤ 24 horas (objetivo). **Real al 16/11/2026: hasta 6 horas, y solo si el problema se detecta dentro de esas 6 horas** | La ventana del historial de la base de producción es de seis horas (`history_retention_seconds` = 21.600); no hay instantáneas, programa de instantáneas ni volcados. Un error descubierto después de seis horas no tiene recuperación. Ver C3 en [`REGULATORY-BASELINE.md`](./REGULATORY-BASELINE.md) |
+| **RPO** (Recovery Point Objective) | ≤ 24 horas (objetivo). **Real al 16/11/2026: hasta 6 horas, y solo si el problema se detecta dentro de esas 6 horas** | La ventana del historial de la base de producción es de seis horas (`history_retention_seconds` = 21.600); no hay programa de instantáneas ni volcados. Un error descubierto después de seis horas solo puede volver a la **instantánea manual del 16/11/2026** (la única que admite el plan actual; restaurarla no se probó), y pierde todo lo posterior a esa fecha. Ver C3 en [`REGULATORY-BASELINE.md`](./REGULATORY-BASELINE.md) |
 | **RTO** (Recovery Time Objective) | ≤ 4 horas (objetivo, sin probar: el simulacro de restauración está pendiente) | Rollback Vercel + restore DB |
 | **Uptime** | 99.5% | PRD §8 |
 
@@ -19,7 +19,7 @@
 
 | Componente | Método | Frecuencia | Retención | Responsable |
 |------------|--------|------------|-----------|-------------|
-| **Neon Postgres** | Point-in-time recovery (PITR) | Continuo | 6 horas (`history_retention_seconds` = 21.600, leído el 16/11/2026); sin instantáneas ni volcados | Neon / Ops |
+| **Neon Postgres** | Point-in-time recovery (PITR) | Continuo | 6 horas (`history_retention_seconds` = 21.600, leído el 16/11/2026); una instantánea manual del 16/11/2026, sin programa; sin volcados. Es transitoria: lleva el chat en claro y se reemplaza tras el sellado del chat (la borra Santiago y se toma una nueva, dentro de las 24 horas; ver C3 en `REGULATORY-BASELINE.md`) | Neon / Ops |
 | **Vercel Blob** | Replicación proveedor | Continuo | Lifecycle policy | Vercel |
 | **Código fuente** | GitHub | Cada push | Indefinido | Dev |
 | **PHI_ENCRYPTION_KEY** | Vercel env + backup offline seguro | Al rotar | 2 copias offline | Security Officer |
