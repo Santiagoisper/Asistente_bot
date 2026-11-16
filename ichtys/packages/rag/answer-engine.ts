@@ -20,7 +20,6 @@ import {
   assessEvidence,
   filterByThreshold,
   getInsufficientEvidenceMessage,
-  MIN_SIMILARITY_THRESHOLD,
 } from './guardrails'
 
 /**
@@ -470,17 +469,10 @@ export async function answerEngine(input: AnswerEngineInput): Promise<AnswerResu
   // 1. Filtrar por umbral de similitud; los chunks bajo el umbral no son evidencia.
   const aboveThreshold = filterByThreshold(retrievedChunks)
 
-  if (process.env.NODE_ENV === 'development') {
-    const scores = retrievedChunks.map((c) => `${c.similarityScore.toFixed(3)} [${c.sectionTitle ?? 'no-section'}]`)
-    const logLine = `[rag:scores] q="${question.slice(0, 80)}" threshold=${MIN_SIMILARITY_THRESHOLD} above=${aboveThreshold.length}/${retrievedChunks.length} | ${scores.join(' | ')}\n`
-    console.log(logLine.trim())
-    try {
-      const { appendFile } = await import('node:fs/promises')
-      const { join } = await import('node:path')
-      const { tmpdir } = await import('node:os')
-      await appendFile(join(tmpdir(), 'ichtys-rag-scores.log'), logLine)
-    } catch { /* non-critical */ }
-  }
+  // (Registro de desarrollo eliminado en el PR-B del chat cifrado: logueaba
+  // hasta 80 caracteres de la pregunta por consola y a un archivo temporal
+  // — texto potencialmente clínico. Si algún día vuelve a hacer falta uno, solo
+  // largo, cuentas y puntajes; hay una prueba estática que lo impide.)
 
   // 2. Evaluar suficiencia mínima antes de llamar al LLM.
   const assessment = assessEvidence(aboveThreshold)

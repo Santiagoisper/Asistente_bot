@@ -15,10 +15,10 @@ import {
 } from '@ichtys/db'
 import { AccessError, logServerError } from '@ichtys/auth'
 import type { ConversationTurn, Evidence } from '@ichtys/rag'
-import type { MedicalAnnotation } from '@ichtys/rag/medical-annotator'
 import { runWithLlmFallback } from '@ichtys/llm'
 import { generateText } from 'ai'
 import { insertAuditLog } from '../audit/audited-write'
+import { decryptClinicalContent, encryptClinicalContent } from '../subjects/phi-fields'
 
 /**
  * persistence.ts — helpers server-only de persistencia de chat.
@@ -37,6 +37,57 @@ import { insertAuditLog } from '../audit/audited-write'
  *    transacción (regla R3 del marco normativo): no queda un mensaje sin rastro
  *    de quién lo pidió, ni un registro de algo que no se guardó.
  */
+
+// ---------------------------------------------------------------------------
+// Lectura del contenido cifrado (PR-B del chat cifrado, 2026-11-16)
+// ---------------------------------------------------------------------------
+
+/**
+ * VOLVER ATRÁS EL CÓDIGO DESDE ACÁ TIENE DOS CONSECUENCIAS (decisión de Fable,
+ * como la nota de C3): (1) los mensajes y títulos guardados después de este PR se
+ * ven VACÍOS — el código viejo lee content/title, los encuentra NULL y el fallback
+ * «[mensaje ilegible]» / «Consulta sin título» vive solo acá; (2) un rollback que
+ * siga corriendo vuelve a escribir en claro en content/title, reabriendo la brecha.
+ * La migración 0026 (PR-A) solo agregó columnas; la base ya las tiene cuando esto
+ * se integra (regla 48).
+ */
+
+/** Lo que se muestra cuando el cuerpo de un mensaje no se puede leer. */
+export const UNREADABLE_MESSAGE = '[mensaje ilegible]'
+
+/** Lo que se muestra cuando el título de una conversación no se puede leer. */
+export const UNREADABLE_CONVERSATION_TITLE = 'Consulta sin título'
+
+/**
+ * El cuerpo de un mensaje. Va cifrado desde el PR-B; lo anterior vive en la
+ * columna heredada `content` hasta el sellado. Un cuerpo que no se puede
+ * descifrar no tira la conversación: se muestra el aviso y sigue.
+ */
+export function readMessageContent(row: { contentEncrypted: string | null; content: string | null }): string {
+  if (row.contentEncrypted !== null) {
+    try {
+      return decryptClinicalContent(row.contentEncrypted)
+    } catch {
+      return UNREADABLE_MESSAGE
+    }
+  }
+  return row.content ?? UNREADABLE_MESSAGE
+}
+
+/**
+ * El título de una conversación. Va cifrado desde el PR-B; lo anterior vive en
+ * `title` hasta el sellado. Mismo patrón que readTitle de la agenda.
+ */
+export function readConversationTitle(row: { titleEncrypted: string | null; title: string | null }): string | null {
+  if (row.titleEncrypted !== null) {
+    try {
+      return decryptClinicalContent(row.titleEncrypted)
+    } catch {
+      return UNREADABLE_CONVERSATION_TITLE
+    }
+  }
+  return row.title
+}
 
 // ---------------------------------------------------------------------------
 // Conversación
@@ -108,6 +159,7 @@ export async function loadConversationHistory(params: {
     .select({
       role: messages.role,
       content: messages.content,
+      contentEncrypted: messages.contentEncrypted,
     })
     .from(messages)
     .where(
@@ -121,10 +173,9 @@ export async function loadConversationHistory(params: {
     .limit(params.limit ?? DEFAULT_HISTORY_LIMIT)
 
   // La query trae los más recientes primero; el prompt los necesita en orden
-  // cronológico.
-  // content es nullable desde la 0026 (PR-A del chat cifrado): hasta el PR-B toda
-  // fila tiene cuerpo en claro, pero el tipo ya no lo promete.
-  return rows.reverse().map((row) => ({ role: row.role, content: row.content ?? '' }))
+  // cronológico. El cuerpo sale de la columna cifrada; lo heredado en claro
+  // sigue leyéndose hasta el sellado (readMessageContent).
+  return rows.reverse().map((row) => ({ role: row.role, content: readMessageContent(row) }))
 }
 
 export async function persistUserMessage(params: {
@@ -143,7 +194,7 @@ export async function persistUserMessage(params: {
         organizationId: params.orgId,
         studyId: params.studyId,
         role: 'user',
-        content: params.question,
+        contentEncrypted: encryptClinicalContent(params.question),
       })
       .returning({ id: messages.id })
 
@@ -169,7 +220,11 @@ export async function persistAssistantMessageAndCitations(params: {
   answer: string
   confidence: AnswerConfidence
   evidences: Evidence[]
-  annotations?: MedicalAnnotation[]
+  /**
+   * (Parámetro `annotations` fuera desde el PR-B del chat cifrado: las
+   * anotaciones se dejan de guardar; se calculan en memoria para el stream y
+   * se recalculan al reabrir la conversación.)
+   */
   /** Con qué proveedor y modelo se generó (R6). `null` si no hubo llamada a un modelo. */
   generatedBy: { provider: string; model: string } | null
   /** Registro de la respuesta. Se escribe en la misma transacción que el mensaje y sus citas. */
@@ -184,9 +239,8 @@ export async function persistAssistantMessageAndCitations(params: {
         organizationId: params.orgId,
         studyId: params.studyId,
         role: 'assistant',
-        content: params.answer,
+        contentEncrypted: encryptClinicalContent(params.answer),
         confidence: params.confidence,
-        annotations: params.annotations && params.annotations.length > 0 ? params.annotations : null,
         provider: params.generatedBy?.provider ?? null,
         model: params.generatedBy?.model ?? null,
       })
@@ -317,7 +371,7 @@ export async function generateAndPersistConversationTitle(params: {
 
   await db
     .update(conversations)
-    .set({ title, updatedAt: new Date() })
+    .set({ titleEncrypted: encryptClinicalContent(title), updatedAt: new Date() })
     .where(eq(conversations.id, params.conversationId))
 
   return title

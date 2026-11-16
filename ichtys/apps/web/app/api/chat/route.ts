@@ -11,6 +11,7 @@ import {
   writeAuditLog,
 } from '../../../lib/chat/persistence'
 import { answerModel } from '../../../lib/chat/answer-model'
+import { buildChatAuditMetadata } from '../../../lib/chat/audit-metadata'
 import {
   enforceSlidingWindowRateLimit,
   getChatRateLimitConfig,
@@ -162,11 +163,11 @@ export async function POST(req: Request): Promise<Response> {
         userId,
         resourceType: 'conversation',
         resourceId: conversationId,
-        metadata: {
+        metadata: buildChatAuditMetadata('rag.answer.requested', {
           documentType: documentType ?? null,
           topK: topK ?? null,
           historyTurns: conversationHistory.length,
-        },
+        }),
       },
     })
   } catch {
@@ -190,7 +191,7 @@ export async function POST(req: Request): Promise<Response> {
         userId,
         resourceType: 'conversation',
         resourceId: conversationId,
-        metadata: { error: code },
+        metadata: buildChatAuditMetadata('rag.answer.failed', { error: code }),
       })
     } catch {
       // audit write failure non-fatal
@@ -233,11 +234,11 @@ export async function POST(req: Request): Promise<Response> {
         userId,
         resourceType: 'conversation',
         resourceId: conversationId,
-        metadata: {
+        metadata: buildChatAuditMetadata('rag.answer.completed', {
           confidence: result.confidence,
           evidenceCount: result.evidences.length,
           retrievalCount: result.retrievalCount,
-        },
+        }),
       },
     })
   } catch {

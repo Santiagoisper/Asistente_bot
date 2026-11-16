@@ -18,6 +18,7 @@ import {
   persistUserMessage,
 } from '../../../../lib/chat/persistence'
 import { answerModel } from '../../../../lib/chat/answer-model'
+import { buildChatAuditMetadata } from '../../../../lib/chat/audit-metadata'
 import {
   enforceSlidingWindowRateLimit,
   getChatRateLimitConfig,
@@ -159,7 +160,7 @@ export async function POST(req: Request): Promise<Response> {
         userId,
         resourceType: 'conversation',
         resourceId: conversationId,
-        metadata: { documentType: documentType ?? null, topK: topK ?? null, historyTurns: conversationHistory.length, streaming: true },
+        metadata: buildChatAuditMetadata('rag.answer.requested', { documentType: documentType ?? null, topK: topK ?? null, historyTurns: conversationHistory.length, streaming: true }),
       },
     })
   } catch {
@@ -364,7 +365,8 @@ export async function POST(req: Request): Promise<Response> {
           (e) => !e.chunkId.startsWith('spec:'),
         )
 
-        // 10e. Persist assistant message + citations + annotations + audit
+        // 10e. Persist assistant message + citations + audit (las anotaciones NO se
+        // guardan desde el PR-B del chat cifrado: van al stream en memoria)
         //      «completed» en una sola transacción (R3). Si el registro falla,
         //      la respuesta no queda guardada y el stream termina en error.
         const assistantMessageId = await persistAssistantMessageAndCitations({
@@ -374,7 +376,6 @@ export async function POST(req: Request): Promise<Response> {
           answer: fullAnswer,
           confidence: finalConfidence,
           evidences: persistableEvidences,
-          annotations: annotations.length > 0 ? annotations : undefined,
           generatedBy: answerModel(engineUsageEvents),
           audit: {
             action: 'rag.answer.completed',
@@ -383,7 +384,7 @@ export async function POST(req: Request): Promise<Response> {
             userId,
             resourceType: 'conversation',
             resourceId: conversationId,
-            metadata: { confidence: finalConfidence, evidenceCount: finalEvidences.length, retrievalCount, annotationCount: annotations.length, streaming: true },
+            metadata: buildChatAuditMetadata('rag.answer.completed', { confidence: finalConfidence, evidenceCount: finalEvidences.length, retrievalCount, annotationCount: annotations.length, streaming: true }),
           },
         })
 
