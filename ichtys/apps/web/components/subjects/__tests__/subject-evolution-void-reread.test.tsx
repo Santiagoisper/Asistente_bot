@@ -111,7 +111,7 @@ async function settle() {
 }
 async function mount() {
   await act(async () => {
-    root.render(<SubjectEvolutionClient studyId={STUDY} subjectId={SUBJECT} />)
+    root.render(<SubjectEvolutionClient studyId={STUDY} subjectId={SUBJECT} timeZone="America/Argentina/Buenos_Aires" />)
   })
   await settle()
 }

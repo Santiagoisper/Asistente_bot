@@ -394,8 +394,10 @@ export default async function InicioPage() {
               <Mic aria-hidden="true" className="h-6 w-6" strokeWidth={1.75} />
             </span>
             <p className="text-sm text-os-subtle">
-              La grabación en vivo se va a probar primero con consultas simuladas. No se graba a ningún paciente hasta tener el
-              consentimiento y el acuerdo de datos del proveedor de transcripción.
+              Lo que ya existe es el dictado: en la ficha de cada sujeto podés grabar o subir un audio y revisar el texto
+              antes de guardarlo. Lo que todavía no existe es escuchar la consulta completa. Eso se va a probar primero con
+              consultas simuladas: no se graba a ningún paciente hasta tener el consentimiento y el acuerdo de datos del
+              proveedor de transcripción.
             </p>
           </div>
         </Card>

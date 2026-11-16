@@ -1,6 +1,9 @@
 import Link from 'next/link'
 import { auth } from '@clerk/nextjs/server'
 import { db, eq, organizations } from '@ichtys/db'
+import { siteTimeZone } from '../../../../../lib/agenda/agenda-time'
+import { formatDateTime } from '../../../../../lib/os/date-time'
+import { loadOrgTimeZone } from '../../../../../lib/os/org-settings'
 
 interface HistoryPageProps {
   params: Promise<{ id: string }>
@@ -17,11 +20,15 @@ export default async function StudyHistoryPage({ params }: HistoryPageProps) {
     createdAt: Date
   }> = []
 
+  // Sin organización no hay conversaciones que mostrar; con organización, la hora es la del centro.
+  let timeZone = siteTimeZone()
+
   if (clerkOrgId && userId) {
     const org = await db.query.organizations.findFirst({
       where: eq(organizations.clerkOrgId, clerkOrgId),
     })
     if (org) {
+      timeZone = await loadOrgTimeZone(org.id)
       items = await db.query.conversations.findMany({
         where: (c, { and, eq }) => and(
           eq(c.organizationId, org.id),
@@ -53,7 +60,7 @@ export default async function StudyHistoryPage({ params }: HistoryPageProps) {
                     {conversation.title ?? 'Conversación sin título'}
                   </p>
                   <p className="text-xs text-alphi-muted">
-                    Actualizada: {conversation.updatedAt.toLocaleString('es-AR')}
+                    Actualizada: {formatDateTime(conversation.updatedAt, timeZone)}
                   </p>
                 </div>
                 <span className="text-xs text-alphi-muted">{conversation.id.slice(0, 8)}</span>

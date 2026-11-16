@@ -1,5 +1,6 @@
 import { AccessError, validateSubjectAccess } from '@ichtys/auth'
 import SubjectEvolutionClient from '../../../../../../components/subjects/subject-evolution-client'
+import { loadOrgTimeZone } from '../../../../../../lib/os/org-settings'
 
 interface SubjectDetailPageProps {
   params: Promise<{ id: string; subjectId: string }>
@@ -7,8 +8,9 @@ interface SubjectDetailPageProps {
 
 export default async function SubjectDetailPage({ params }: SubjectDetailPageProps) {
   const { id: studyId, subjectId } = await params
+  let orgId: string
   try {
-    await validateSubjectAccess(subjectId, studyId)
+    orgId = (await validateSubjectAccess(subjectId, studyId)).orgId
   } catch (err) {
     if (err instanceof AccessError && err.status === 404) {
       return <p className="text-sm text-alphi-rose">Sujeto no pertenece a este estudio.</p>
@@ -16,5 +18,6 @@ export default async function SubjectDetailPage({ params }: SubjectDetailPagePro
     throw err
   }
 
-  return <SubjectEvolutionClient studyId={studyId} subjectId={subjectId} />
+  // La hora de cada evolución se muestra en la zona del centro. El navegador no la conoce: se la pasa esta página.
+  return <SubjectEvolutionClient studyId={studyId} subjectId={subjectId} timeZone={await loadOrgTimeZone(orgId)} />
 }

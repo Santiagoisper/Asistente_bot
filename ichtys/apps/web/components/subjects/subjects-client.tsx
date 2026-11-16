@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
+import { createSubjectError, subjectCodeProblem } from '../../lib/labs/upload-form-state'
 
 export interface SubjectListItem {
   id: string
@@ -59,6 +60,12 @@ export default function SubjectsClient({ studyId }: SubjectsClientProps) {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     if (!newCode.trim()) return
+    // Misma regla que el servidor: se dice qué está mal antes de pedir nada.
+    const problem = subjectCodeProblem(newCode.trim())
+    if (problem) {
+      setError(problem)
+      return
+    }
     setCreating(true)
     setError(null)
     try {
@@ -75,7 +82,11 @@ export default function SubjectsClient({ studyId }: SubjectsClientProps) {
         setError('Esta instalación no tiene configurado el cifrado de datos clínicos. No se guardó nada. Avisá a quien administra la plataforma.')
         return
       }
-      if (!res.ok) throw new Error('create_failed')
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: unknown } | null
+        setError(createSubjectError(res.status, body?.error))
+        return
+      }
       setNewCode('')
       await loadSubjects()
     } catch {

@@ -4,18 +4,13 @@ import { OrgConfigForm } from '../../../components/os/org-config-form'
 import { ButtonLink, Card, EmptyState, PageHeader, Pill } from '../../../components/os/ui'
 import { isOsEnabled } from '../../../lib/flags'
 import { getOsContext } from '../../../lib/os/context'
+import { formatDateTime } from '../../../lib/os/date-time'
 import { MODULE_ROUTES, MODULE_TITLES, statusCopy } from '../../../lib/os/module-status'
 import { loadOrgIntegrations } from '../../../lib/os/org-integrations'
 import { loadOrgTimeZoneSetting } from '../../../lib/os/org-settings'
 import { loadModuleSummary } from '../../../lib/os/summaries'
 
 export const dynamic = 'force-dynamic'
-
-const timeFormat = new Intl.DateTimeFormat('es-AR', {
-  timeZone: 'America/Argentina/Buenos_Aires',
-  dateStyle: 'short',
-  timeStyle: 'medium',
-})
 
 export default async function IntegracionesPage() {
   if (!isOsEnabled()) notFound()
@@ -63,7 +58,7 @@ export default async function IntegracionesPage() {
                       ? 'Esta organización no tiene este módulo conectado.'
                       : result.status === 'installation_not_ready'
                         ? 'No se hizo ningún pedido al sistema.'
-                        : `Última comprobación: ${timeFormat.format(new Date(result.fetchedAt))}`}
+                        : `Última comprobación: ${formatDateTime(result.fetchedAt, zone.effective)}`}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">

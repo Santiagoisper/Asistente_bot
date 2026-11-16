@@ -3,6 +3,8 @@ import { allows } from '@ichtys/auth/functions'
 import { studyScopeFilter, studyScopeOrOrgLevelFilter } from '@ichtys/auth/study-scope'
 import { and, db, eq, studies, documents, documentVersions, auditLogs } from '@ichtys/db'
 import { getOsContext } from '../../../lib/os/context'
+import { formatDateTimeWithZone } from '../../../lib/os/date-time'
+import { loadOrgTimeZone } from '../../../lib/os/org-settings'
 
 /** Comprobación histórica: administrador del estudio o de la organización. */
 const couldAdminister = (role: Role): boolean => roleSatisfies(role, ROLES.STUDY_ADMIN)
@@ -69,6 +71,8 @@ export default async function AdminPage() {
     orderBy: (a, { desc: descBy }) => [descBy(a.createdAt)],
     limit: 50,
   })
+  // La hora del centro: la zona de la organización, la misma de la Agenda.
+  const timeZone = await loadOrgTimeZone(org.id)
 
   return (
     <section className="mx-auto max-w-5xl space-y-6">
@@ -138,7 +142,7 @@ export default async function AdminPage() {
             <tbody className="divide-y divide-alphi-border bg-white">
               {recentAudit.map((entry) => (
                 <tr key={entry.id}>
-                  <td className="px-3 py-2 align-top text-alphi-navy">{entry.createdAt.toLocaleString('es-AR')}</td>
+                  <td className="px-3 py-2 align-top text-alphi-navy">{formatDateTimeWithZone(entry.createdAt, timeZone)}</td>
                   <td className="px-3 py-2 align-top text-alphi-navy break-words">{entry.action}</td>
                   <td className="px-3 py-2 align-top text-alphi-muted break-words">{entry.resourceType ?? '—'}:{entry.resourceId ?? '—'}</td>
                 </tr>
