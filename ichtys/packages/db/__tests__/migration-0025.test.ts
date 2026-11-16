@@ -32,11 +32,12 @@ EXCEPTION WHEN duplicate_object THEN null; END $$;`,
     expect(read('0024_messages_model_only_on_assistant.sql')).not.toContain('together')
   })
 
-  it('está en el registro de migraciones, última y después de la 0024', () => {
+  it('está en el registro de migraciones, después de la 0024 (la última es la que sigue: hoy la 0026 del chat cifrado)', () => {
     const journal = JSON.parse(read('meta/_journal.json')) as { entries: Array<{ idx: number; tag: string; when: number }> }
-    const [previous, last] = journal.entries.slice(-2)
+    const previous = journal.entries.find((entry) => entry.idx === 24)
+    const entry = journal.entries.find((entry) => entry.idx === 25)
     expect([previous!.idx, previous!.tag]).toEqual([24, '0024_messages_model_only_on_assistant'])
-    expect([last!.idx, last!.tag]).toEqual([25, '0025_messages_provider_and_model_together'])
-    expect(last!.when).toBeGreaterThan(previous!.when)
+    expect([entry!.idx, entry!.tag]).toEqual([25, '0025_messages_provider_and_model_together'])
+    expect(entry!.when).toBeGreaterThan(previous!.when)
   })
 })

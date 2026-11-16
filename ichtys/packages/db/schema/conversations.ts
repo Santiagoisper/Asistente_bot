@@ -22,6 +22,12 @@ export const conversations = pgTable(
       .references(() => studies.id),
     userId: text('user_id').notNull(), // Clerk user ID
     title: text('title'),
+    /**
+     * Título cifrado (2026-11-16, migración 0026): el título lo arma un modelo desde la
+     * primera pregunta y puede llevar dato clínico. El código nuevo escribe solo acá;
+     * "title" queda para leer los títulos anteriores hasta el sellado (0027 la saca).
+     */
+    titleEncrypted: text('title_encrypted'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -44,7 +50,14 @@ export const messages = pgTable(
       .notNull()
       .references(() => studies.id),
     role: text('role', { enum: messageRole }).notNull(),
-    content: text('content').notNull(),
+    /**
+     * Cuerpo del mensaje en claro (heredado): el código nuevo (PR-B) escribe solo
+     * content_encrypted; esta queda para leer lo anterior hasta el sellado. Nullable
+     * desde la 0026; todo mensaje tiene cuerpo por el CHECK messages_content_present.
+     */
+    content: text('content'),
+    /** Cuerpo cifrado (2026-11-16, migración 0026): pregunta y respuesta van acá. */
+    contentEncrypted: text('content_encrypted'),
     confidence: text('confidence', { enum: answerConfidence }),
     /**
      * SNOMED-CT / LOINC annotations detected in the assistant's answer.

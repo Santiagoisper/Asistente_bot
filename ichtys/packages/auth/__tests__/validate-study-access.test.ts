@@ -395,6 +395,7 @@ function createTenantFixture(): TenantFixture {
       studyId,
       role: 'assistant',
       content: crypto.randomUUID(),
+      contentEncrypted: null,
       confidence: 'high',
       annotations: null,
       provider: null,
@@ -898,6 +899,7 @@ describe('object-level authorization', () => {
       organizationId: fixture.orgId,
       studyId: fixture.studyId,
       title: null,
+      titleEncrypted: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     })
