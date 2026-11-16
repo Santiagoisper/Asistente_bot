@@ -61,7 +61,7 @@ Médico escribe evolución
   → NLP extracción (transient — Anthropic, sin persistir prompt)
   → patient_profile actualizado (cifrado)
   → Rule engine evalúa vs study_rules
-  → screening_assessment persistido (sin PHI en metadata)
+  → screening_assessment persistido (cifrado: el motivo de cada criterio es dato clínico; brecha C3)
   → Audit log (sin contenido)
 ```
 
