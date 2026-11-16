@@ -52,3 +52,56 @@ decide el texto que se muestra.
 
 Desde un componente cliente se importa `@ichtys/integrations/connector`, que no
 arrastra el firmado de tokens.
+
+## Contrato de entrega y destino simulado
+
+`delivery.ts` — qué se le manda a un sistema de destino y qué contesta. **Es una
+propuesta:** qué campos recibe el destino real y cómo confirma todavía no se
+conoce. Solo para el servidor.
+
+- `deliveryFingerprint(content)` — huella SHA-256 del contenido en forma
+  canónica: claves ordenadas, saltos de línea unificados, Unicode compuesto
+  (NFC). El mismo contenido da siempre la misma huella. Si la forma canónica
+  cambia, las huellas ya guardadas dejan de coincidir.
+- **La forma canónica acepta solo JSON plano:** texto, números finitos,
+  booleanos, `null`, arreglos y objetos sin clase. Con cualquier otra cosa
+  (`Date`, `Map`, `Set`, una instancia de clase, bytes, `NaN`, infinito,
+  `bigint`, una función, un símbolo, un lugar sin valor en un arreglo, dos claves
+  que quedan iguales después de normalizar, un objeto que se contiene a sí
+  mismo) lanza `NonCanonicalContentError` y no hay huella. No convierte nada en
+  silencio: un `Date` convertido quedaría en `{}`, y dos fechas distintas
+  tendrían la misma huella. **Las fechas las pasa quien llama, ya como texto ISO
+  8601.** El error dice el motivo (`reason`), qué encontró (`found`) y dónde
+  (`path`); el mensaje no repite el contenido ni sus claves.
+- `buildDeliveryEnvelope` — el sobre: registro y versión, huella, quién revisó
+  (identificador de cuenta, nunca un nombre), cuándo, y solo códigos de estudio y
+  de sujeto. Sin una persona que revisó no hay sobre; con un contenido que no es
+  JSON plano, tampoco.
+- **Qué datos lleva el sobre:** ni nombres ni documentos, pero sí el contenido
+  (`content`), que es el informe o la evolución: dato de salud de una persona
+  identificada por código. Es dato **seudonimizado, no anónimo**, y así hay que
+  tratarlo el día que el sobre salga hacia un destino real.
+- La huella lleva delante la versión de la forma canónica (`h1:…`), para que una
+  huella guardada diga cómo se calculó. **`h1` es el SHA-256, en hexadecimal,
+  del texto UTF-8 de la forma canónica tal como está escrita en `delivery.ts`.**
+  Tres vectores fijos en las pruebas (contenido y huella escritos a mano, la
+  huella calculada por fuera de este código) la atan a esa forma: cambiar la
+  forma canónica los hace fallar. Cuando eso pase no se edita el vector: sube
+  `DELIVERY_FINGERPRINT_VERSION` y **la función de `h1` se conserva**, para
+  seguir comprobando las huellas ya guardadas.
+- La clave de idempotencia es origen (organización y entorno) + registro + versión: entregar dos veces no registra
+  dos veces. **El entorno sale de una lista cerrada** (`DELIVERY_ENVIRONMENTS`:
+  `produccion`, `prueba`, `desarrollo`): con texto libre, `prod` y `produccion`
+  le darían dos claves al mismo registro. Qué entorno le corresponde a cada
+  despliegue lo decide quien arme el sobre; hoy nada lo usa. **Una versión no se edita nunca:** si el registro se corrige, sube
+  la versión. La misma clave con otra huella es siempre un error (`conflict`),
+  nunca un reenvío.
+- `toDeliveryRecord` — «registrada» solo si el conector declara que puede
+  comprobar (`check_delivery`) y el destino confirmó **la misma huella** que se
+  envió.
+- `createSimulatedDestination()` — destino en memoria para ejercitar el circuito.
+  No hay ningún sistema real detrás, no guarda el contenido (solo clave y huella)
+  y se pierde al reiniciar. Siempre se nombra «(simulador)».
+
+Lo que no existe todavía: guardar las entregas en la base, la pantalla, y
+cualquier conector a un sistema real.
