@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // ---------------------------------------------------------------------------
@@ -398,5 +399,33 @@ describe('POST /api/documents/upload — modo estricto', () => {
 
     expect(res.status).not.toBe(403)
     expect(mocks.putPrivateDocumentPdf).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('POST /api/documents/upload — huella, quién y camino (C4 paso 4)', () => {
+  it('la versión guarda la huella exacta del PDF, quién lo subió y el camino single; la auditoría lleva la misma huella', async () => {
+    mocks.putPrivateDocumentPdf.mockResolvedValueOnce({ url: 'https://blob.example/protocolo.pdf', pathname: 'clinical-documents/protocolo.pdf' })
+    const written: Array<Record<string, unknown>> = []
+    const document = documentRow()
+    const version = versionRow(document.id)
+    const insert = vi
+      .fn()
+      .mockReturnValueOnce({ values: (row: Record<string, unknown>) => (written.push(row), { returning: async () => [document] }) })
+      .mockReturnValueOnce({ values: (row: Record<string, unknown>) => (written.push(row), { returning: async () => [version] }) })
+      .mockReturnValueOnce({ values: async (row: Record<string, unknown>) => void written.push(row) })
+    mocks.transaction.mockImplementation(async (cb: (tx: unknown) => unknown) => cb({ insert }))
+    const expected = createHash('sha256').update(new TextEncoder().encode('%PDF-1.4 sintetico')).digest('hex')
+
+    const res = await POST(uploadRequest())
+
+    expect(res.status).toBe(202)
+    expect(written[1]).toMatchObject({ sha256: expected, uploadedBy: 'user_test', uploadChannel: 'single' })
+    expect((written[2]?.metadata as Record<string, unknown>).sha256).toBe(expected)
+  })
+
+  it('un byte distinto da otra huella', async () => {
+    const a = createHash('sha256').update(new TextEncoder().encode('%PDF-1.4 sintetico')).digest('hex')
+    const b = createHash('sha256').update(new TextEncoder().encode('%PDF-1.4 sintetic0')).digest('hex')
+    expect(a).not.toBe(b)
   })
 })

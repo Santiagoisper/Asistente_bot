@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
@@ -240,6 +241,11 @@ describe('Foto o escaneo — dos lecturas independientes', () => {
       [1, 'image/jpeg', 'org-1', 'study-1'],
       [2, 'image/png', 'org-1', 'study-1'],
     ])
+    // C4 paso 4: cada recorte guarda la huella exacta de los bytes recibidos, no la de lo cifrado.
+    const hashOf = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
+    expect(store.images.map((image) => image.sha256)).toEqual([hashOf(JPEG), hashOf(PNG)])
+    expect(created.sha256).toEqual([hashOf(JPEG), hashOf(PNG)])
+    expect(store.images[0]!.sha256).not.toBe(createHash('sha256').update(String(store.images[0]!.contentEncrypted)).digest('hex'))
     // Cifrada: el contenido guardado no es el base64 de la imagen.
     expect(String(store.images[0]!.contentEncrypted)).not.toContain(Buffer.from(JPEG).toString('base64'))
     const loaded = await loadLabReportImage({ ...scope, reportId: created.reportId, page: 1, purgeAudit })

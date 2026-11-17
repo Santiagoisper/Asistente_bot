@@ -69,7 +69,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   process.env.VERCEL_ENV = 'preview'
   mocks.validateSubjectAccess.mockResolvedValue({ userId: 'user_1', orgId: 'org-1', role: 'site_coordinator', subject: { subjectCode: 'SUJ-1047' }, study: { name: 'Estudio de demostración', protocolNumber: 'ABC-301' } })
-  mocks.createLabReportFromPdf.mockResolvedValue({ reportId: REPORT, rowCount: 6, reviewCount: 1, newFieldCount: 1 })
+  mocks.createLabReportFromPdf.mockResolvedValue({ reportId: REPORT, rowCount: 6, reviewCount: 1, newFieldCount: 1, sha256: ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'] })
   mocks.confirmLabReport.mockResolvedValue({ rowCount: 1, newAnalytes: 0, profileUpdated: true })
   mocks.rejectLabReport.mockResolvedValue(undefined)
 })
@@ -153,11 +153,15 @@ describe('POST lab-reports — subir PDF', () => {
     // La ruta le entrega al servicio el registro; el servicio lo escribe al crear el informe (R3).
     expect(mocks.writeAuditLog).not.toHaveBeenCalled()
     const build = mocks.createLabReportFromPdf.mock.calls[0]?.[0].audit as (created: unknown) => unknown
-    const audit = JSON.stringify(build({ reportId: REPORT, rowCount: 6, reviewCount: 1, newFieldCount: 1 }))
+    const audit = JSON.stringify(build({ reportId: REPORT, rowCount: 6, reviewCount: 1, newFieldCount: 1, sha256: ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'] }))
     expect(audit).toContain('lab.extract')
+    // C4 paso 4: la auditoría de la misma transacción lleva la huella que guarda la fila.
+    expect(audit).toContain('"sha256":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]')
     expect(audit).toContain(REPORT)
     expect(audit).not.toContain('PEREZ')
     expect(audit).not.toContain('13,5')
+    // La respuesta no necesita la huella.
+    expect(await res.json()).toEqual({ reportId: REPORT, rowCount: 6, reviewCount: 1, newFieldCount: 1 })
   })
 
   it('con el interruptor apagado en producción: 404 antes de autenticar', async () => {

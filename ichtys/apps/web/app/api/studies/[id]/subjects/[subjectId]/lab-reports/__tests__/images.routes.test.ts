@@ -97,8 +97,9 @@ describe('POST lab-reports/images — subir foto o escaneo', () => {
     expect(call.images).toHaveLength(2)
     expect(mocks.writeAuditLog).not.toHaveBeenCalled()
     const build = (call as unknown as { audit: (created: unknown) => unknown }).audit
-    const audit = JSON.stringify(build({ reportId: REPORT, rowCount: 12, reviewCount: 2, newFieldCount: 3 }))
+    const audit = JSON.stringify(build({ reportId: REPORT, rowCount: 12, reviewCount: 2, newFieldCount: 3, sha256: ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'] }))
     expect(audit).toContain('"source":"image"')
+    expect(audit).toContain('"sha256":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"]')
     expect(audit).toContain('"pages":2')
     expect(audit).not.toContain('PEREZ')
   })
