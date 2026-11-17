@@ -89,6 +89,31 @@ export function readConversationTitle(row: { titleEncrypted: string | null; titl
   return row.title
 }
 
+/**
+ * Los turnos que se le pasan al modelo como historial, en orden cronológico. Un mensaje que
+ * no se puede descifrar **se omite**: mandarle «[mensaje ilegible]» lo invita a responder
+ * sobre un texto que no existe (matiz de Reviewer sobre #224). En la pantalla, en cambio,
+ * sí se muestra el aviso (readMessageContent), para que la persona sepa que falta algo.
+ */
+export function historyTurnsFrom(
+  rows: ReadonlyArray<{ role: ConversationTurn['role']; contentEncrypted: string | null; content: string | null }>,
+  decrypt: (payload: string) => string = decryptClinicalContent,
+): ConversationTurn[] {
+  const turns: ConversationTurn[] = []
+  for (const row of rows) {
+    if (row.contentEncrypted !== null) {
+      try {
+        turns.push({ role: row.role, content: decrypt(row.contentEncrypted) })
+      } catch {
+        // Ilegible: fuera del historial.
+      }
+      continue
+    }
+    if (row.content !== null) turns.push({ role: row.role, content: row.content })
+  }
+  return turns
+}
+
 // ---------------------------------------------------------------------------
 // Conversación
 // ---------------------------------------------------------------------------
@@ -175,7 +200,8 @@ export async function loadConversationHistory(params: {
   // La query trae los más recientes primero; el prompt los necesita en orden
   // cronológico. El cuerpo sale de la columna cifrada; lo heredado en claro
   // sigue leyéndose hasta el sellado (readMessageContent).
-  return rows.reverse().map((row) => ({ role: row.role, content: readMessageContent(row) }))
+  // Lo ilegible no va al modelo (historyTurnsFrom).
+  return historyTurnsFrom(rows.reverse())
 }
 
 export async function persistUserMessage(params: {
