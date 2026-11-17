@@ -180,3 +180,23 @@ export function databaseTargetOf(connectionString: string | undefined): string |
     return null
   }
 }
+
+/**
+ * Bases de prueba conocidas, por el identificador de su endpoint de Neon. Fuera de producción
+ * solo se sella contra una de estas: una vista previa que apunte por error a la base de
+ * producción no puede sellarla, aunque quien opera tilde la confirmación (hallazgo de
+ * Reviewer sobre #225). El identificador no es una credencial.
+ */
+export const SEAL_TEST_ENDPOINTS: readonly string[] = ['ep-cool-snow-bf9xc6hw']
+
+/**
+ * ¿Se puede sellar `target` desde este entorno? En producción, sí (la confirmación del
+ * destino la hace la ruta). En cualquier otro entorno, o si no se sabe cuál es, solo contra
+ * una base de prueba conocida.
+ */
+export function sealTargetAllowedHere(target: string | null, vercelEnv: string | undefined): boolean {
+  if (target === null) return false
+  if (vercelEnv === 'production') return true
+  const endpoint = target.split('.')[0]?.replace(/-pooler$/, '') ?? ''
+  return SEAL_TEST_ENDPOINTS.includes(endpoint)
+}
