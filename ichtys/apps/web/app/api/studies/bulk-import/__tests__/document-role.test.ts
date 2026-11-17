@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -173,6 +174,23 @@ describe('POST /api/studies/bulk-import — gestión documental (S1)', () => {
     )
     expect(grants).toHaveLength(1)
     expect(grants[0]?.[1]).toMatchObject({ studyId: 'row-1', userId: 'user_1', resourceType: 'study_membership' })
+  })
+})
+
+describe('POST /api/studies/bulk-import — huella, quién y camino (C4 paso 4)', () => {
+  it('la versión guarda la huella exacta del PDF, quién lo subió y el camino bulk_import; la auditoría lleva la misma huella', async () => {
+    mocks.auth.mockResolvedValue({ userId: 'user_1', orgId: 'org_clerk', orgRole: 'org:study_admin' })
+    const expected = createHash('sha256').update(new TextEncoder().encode('%PDF-1.4 protocolo ficticio')).digest('hex')
+
+    const res = await POST(bulkRequest())
+
+    expect(res.status).toBe(202)
+    const written = mocks.txValues.mock.calls as Array<[string | undefined, Record<string, unknown>]>
+    const versions = written.filter(([table]) => table === 'document_versions')
+    expect(versions).toHaveLength(1)
+    expect(versions[0]?.[1]).toMatchObject({ sha256: expected, uploadedBy: 'user_1', uploadChannel: 'bulk_import' })
+    const upload = written.find(([table, row]) => table === 'audit_logs' && row.action === 'document.upload')
+    expect((upload?.[1].metadata as Record<string, unknown>).sha256).toBe(expected)
   })
 })
 

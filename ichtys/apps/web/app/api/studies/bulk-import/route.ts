@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { after } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { canAdministerStudy, normalizeRole, resolveOrProvisionOrganization } from '@ichtys/auth'
@@ -183,6 +184,8 @@ export async function POST(req: Request): Promise<Response> {
     }
 
     try {
+      // Huella del PDF tal como llegó, antes de guardarlo (C4 paso 4, R11).
+      const sha256 = createHash('sha256').update(new Uint8Array(await file.arrayBuffer())).digest('hex')
       const blobKey = buildBlobKey(fileName)
       const blob = await putPrivateDocumentPdf({ blobKey, file })
 
@@ -237,6 +240,9 @@ export async function POST(req: Request): Promise<Response> {
             fileSizeBytes: file.size,
             status: 'pending',
             versionNumber: 1,
+            sha256,
+            uploadedBy: userId,
+            uploadChannel: 'bulk_import',
           })
           .returning()
         if (!version) throw new Error('Document version insert did not return a row')
@@ -270,6 +276,7 @@ export async function POST(req: Request): Promise<Response> {
             documentType: 'protocol',
             fileSizeBytes: file.size,
             fileName,
+            sha256,
             bulk: true,
           },
         })
