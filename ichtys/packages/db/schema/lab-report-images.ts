@@ -27,6 +27,8 @@ export const labReportImages = pgTable(
     page: integer('page').notNull(),
     mime: text('mime').notNull(),
     contentEncrypted: text('content_encrypted').notNull(),
+    /** Huella SHA-256 (hex) del recorte recibido, antes de cifrar (0027). NULL: no se registró. */
+    sha256: text('sha256'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({

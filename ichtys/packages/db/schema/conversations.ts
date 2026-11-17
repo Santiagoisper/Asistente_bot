@@ -25,7 +25,7 @@ export const conversations = pgTable(
     /**
      * Título cifrado (2026-11-16, migración 0026): el título lo arma un modelo desde la
      * primera pregunta y puede llevar dato clínico. El código nuevo escribe solo acá;
-     * "title" queda para leer los títulos anteriores hasta el sellado (0027 la saca).
+     * "title" queda para leer los títulos anteriores hasta el sellado (una migración posterior la saca).
      */
     titleEncrypted: text('title_encrypted'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
