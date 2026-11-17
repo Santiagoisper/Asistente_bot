@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 /**
@@ -140,8 +141,17 @@ describe('Carga de laboratorios — PDF digital de punta a punta', () => {
   let reportId = ''
 
   it('sube el PDF: propone los campos y guarda todo cifrado, sin datos personales', async () => {
-    const created = await createLabReportFromPdf({ ...scope, audit: uploadAudit, userId: 'user_1', fileName: 'PEREZ_JUAN.pdf', data: buildPdf(REPORT_LINES) })
+    const pdf = buildPdf(REPORT_LINES)
+    const created = await createLabReportFromPdf({ ...scope, audit: uploadAudit, userId: 'user_1', fileName: 'PEREZ_JUAN.pdf', data: pdf })
     reportId = created.reportId
+    // C4 paso 4: la fila guarda la huella exacta del PDF recibido, calculada aparte acá.
+    const expected = createHash('sha256').update(pdf).digest('hex')
+    expect(store.reports[0]!.sourceSha256).toBe(expected)
+    expect(created.sha256).toEqual([expected])
+    // Un byte distinto, otra huella.
+    const changed = Uint8Array.from(pdf)
+    changed[changed.length - 1] = changed[changed.length - 1]! ^ 0xff
+    expect(createHash('sha256').update(changed).digest('hex')).not.toBe(expected)
     expect(created).toMatchObject({ rowCount: 4, reviewCount: 1, newFieldCount: 3 })
 
     const stored = store.reports[0]!

@@ -54,6 +54,8 @@ export const labReports = pgTable(
     status: text('status', { enum: labReportStatus }).notNull().default('pending_review'),
     sourceKind: text('source_kind', { enum: labReportSourceKind }).notNull(),
     contentEncrypted: text('content_encrypted').notNull(),
+    /** Huella SHA-256 (hex) del archivo recibido, antes de leerlo (0027). NULL: no se registró. */
+    sourceSha256: text('source_sha256'),
     rowCount: integer('row_count').notNull().default(0),
     createdBy: text('created_by').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

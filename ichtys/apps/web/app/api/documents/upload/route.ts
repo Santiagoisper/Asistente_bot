@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { AccessError, canManageDocuments, handleApiError, validateStudyAccess } from '@ichtys/auth'
 import { allows } from '@ichtys/auth/functions'
@@ -169,6 +170,8 @@ export async function POST(req: Request): Promise<Response> {
       return rateLimitResponse(rateLimit.retryAfterSeconds)
     }
 
+    // Huella del PDF tal como llegó, antes de guardarlo (C4 paso 4, R11).
+    const sha256 = createHash('sha256').update(new Uint8Array(await file.arrayBuffer())).digest('hex')
     const fileName = file.name.trim().length > 0 ? file.name : 'document.pdf'
     const name = meta.data.name ?? fileName
     const blobKey = buildBlobKey(fileName)
@@ -233,6 +236,9 @@ export async function POST(req: Request): Promise<Response> {
           fileSizeBytes: file.size,
           status: 'pending',
           versionNumber,
+          sha256,
+          uploadedBy: userId,
+          uploadChannel: 'single',
         })
         .returning()
 
@@ -252,6 +258,7 @@ export async function POST(req: Request): Promise<Response> {
           documentType: meta.data.documentType,
           fileSizeBytes: file.size,
           fileName,
+          sha256,
         },
       })
 

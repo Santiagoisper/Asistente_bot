@@ -2,7 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../lib/api/body-limit'
 import { screeningSealOperators } from '../../../../lib/flags'
-import { databaseTargetOf } from '../../../../lib/subjects/screening-seal'
+import { databaseTargetOf, sealTargetAllowedHere } from '../../../../lib/subjects/screening-seal'
 import { runSeal } from '../../../../lib/subjects/screening-seal-run'
 import { orgSealStore, sealKeySamples, sealOverview } from '../../../../lib/subjects/screening-seal-store'
 
@@ -80,6 +80,8 @@ export async function POST(req: Request): Promise<Response> {
 
     const target = databaseTargetOf(process.env.DATABASE_URL)
     if (target === null || parsed.data.confirm !== target) return Response.json({ error: 'target_mismatch' }, { status: 409 })
+    // Fuera de producción solo contra una base de prueba conocida (ver sealTargetAllowedHere).
+    if (!sealTargetAllowedHere(target, process.env.VERCEL_ENV)) return Response.json({ error: 'target_not_allowed_here' }, { status: 409 })
 
     const outcome = await runSeal({ overview: sealOverview, keySamples: sealKeySamples, storeFor: orgSealStore }, { userId: operator, batchSize: BATCH_SIZE, budgetMs: BUDGET_MS })
     if (outcome.status === 'no_key') return Response.json({ error: 'no_key' }, { status: 409 })

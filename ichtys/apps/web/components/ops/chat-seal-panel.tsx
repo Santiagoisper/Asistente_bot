@@ -27,6 +27,7 @@ interface SealResult {
 
 const ERRORS: Record<string, string> = {
   target_mismatch: 'La base confirmada no es la de este entorno. No se escribió nada.',
+  target_not_allowed_here: 'Fuera de producción solo se sella una base de prueba conocida, y esta no lo es. No se escribió nada.',
   no_key: 'Este entorno no tiene la clave de cifrado. No se escribió nada.',
   key_mismatch: 'La clave de este entorno no abre lo que la base ya tiene cifrado. No se escribió nada.',
   key_unverified: 'No hay nada cifrado en la base contra qué comprobar la clave. No se escribió nada.',

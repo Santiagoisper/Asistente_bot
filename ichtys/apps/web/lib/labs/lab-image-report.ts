@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { mergeImageReadings, normalizeAnalyteKey, redactIdentifyingLines } from '@ichtys/clinical'
 import { and, db, eq, labReportImages, labReports } from '@ichtys/db'
 import { insertAuditLog } from '../audit/audited-write'
@@ -62,6 +63,9 @@ export async function createLabReportFromImages(
   readers: LabImageReaders = { readImages: readImagesWithModel },
 ): Promise<CreatedLabReport> {
   const scope = { orgId: params.orgId, studyId: params.studyId }
+  // Huella de cada recorte tal como llegó, antes de cifrarlo (C4 paso 4). Es la del recorte:
+  // el servidor nunca ve la imagen completa (R5).
+  const imageSha256 = params.images.map((image) => createHash('sha256').update(image.data).digest('hex'))
   const [main, control] = await Promise.all([
     readers.readImages(scope, params.images).catch(() => null),
     readers.readImages(scope, params.images, { control: true }).catch(() => null),
@@ -140,9 +144,10 @@ export async function createLabReportFromImages(
         page: index + 1,
         mime: image.mime,
         contentEncrypted: encryptClinicalContent(Buffer.from(image.data).toString('base64')),
+        sha256: imageSha256[index],
       })),
     )
-    const report: CreatedLabReport = { reportId: created.id, ...counts }
+    const report: CreatedLabReport = { reportId: created.id, ...counts, sha256: imageSha256 }
     await insertAuditLog(tx, params.audit(report))
     return report
   })

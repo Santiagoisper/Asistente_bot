@@ -35,6 +35,7 @@ beforeEach(() => {
   vi.useFakeTimers({ now: new Date('2026-11-20T12:00:00Z'), toFake: ['Date'] })
   process.env.ALPHI_SEAL_OPERATORS = OPERATOR
   process.env.DATABASE_URL = 'postgresql://usuario:secreto@ep-prueba.neon.tech/neondb?sslmode=require'
+  process.env.VERCEL_ENV = 'production'
   mocks.auth.mockResolvedValue({ userId: OPERATOR, orgId: 'org_clerk_a', orgRole: 'org:member' })
   mocks.chatSealOverview.mockResolvedValue([
     { organizationId: 'org-a', messages: 12, plainMessages: 9, plainTitles: 3, annotations: 4 },
@@ -131,5 +132,29 @@ describe('POST /api/os/chat-seal — sellar', () => {
     const res = await POST(post({ confirm: TARGET }))
     expect(res.status).toBe(500)
     expect(await res.json()).toEqual({ error: 'seal_failed', reason: 'round_trip' })
+  })
+})
+
+describe('POST /api/os/chat-seal — fuera de producción', () => {
+  it('en una vista previa apuntando a una base que no es de prueba responde 409 y no escribe', async () => {
+    process.env.VERCEL_ENV = 'preview'
+    const res = await POST(post({ confirm: TARGET }))
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({ error: 'target_not_allowed_here' })
+    expect(mocks.runChatSeal).not.toHaveBeenCalled()
+  })
+
+  it('sin saber el entorno se trata como fuera de producción', async () => {
+    delete process.env.VERCEL_ENV
+    expect((await POST(post({ confirm: TARGET }))).status).toBe(409)
+    expect(mocks.runChatSeal).not.toHaveBeenCalled()
+  })
+
+  it('en una vista previa apuntando a la base de prueba conocida sí sella', async () => {
+    process.env.VERCEL_ENV = 'preview'
+    process.env.DATABASE_URL = 'postgresql://u:p@ep-cool-snow-bf9xc6hw-pooler.c-5.us-west-2.aws.neon.tech/neondb'
+    const res = await POST(post({ confirm: 'ep-cool-snow-bf9xc6hw-pooler.c-5.us-west-2.aws.neon.tech/neondb' }))
+    expect(res.status).toBe(200)
+    expect(mocks.runChatSeal).toHaveBeenCalledTimes(1)
   })
 })
