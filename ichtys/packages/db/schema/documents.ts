@@ -59,6 +59,13 @@ export const documentVersions = pgTable(
     status: text('status', { enum: documentVersionStatus }).notNull().default('pending'),
     errorMessage: text('error_message'),
     versionNumber: integer('version_number').notNull().default(1),
+    /**
+     * Huella SHA-256 (hex) del PDF tal como llegó, quién lo subió y por qué camino (C4 paso 4,
+     * migración 0027). NULL en las filas anteriores: «no se registró».
+     */
+    sha256: text('sha256'),
+    uploadedBy: text('uploaded_by'),
+    uploadChannel: text('upload_channel', { enum: ['single', 'bulk_import'] }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({

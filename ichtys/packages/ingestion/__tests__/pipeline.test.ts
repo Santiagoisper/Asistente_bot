@@ -231,6 +231,9 @@ function createFixture(): PipelineFixture {
       status: 'pending',
       errorMessage: null,
       versionNumber: 1,
+      sha256: null,
+      uploadedBy: null,
+      uploadChannel: null,
       createdAt,
     },
   }
