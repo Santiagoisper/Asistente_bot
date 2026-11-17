@@ -377,6 +377,9 @@ function createTenantFixture(): TenantFixture {
       status: 'ready',
       errorMessage: null,
       versionNumber: 1,
+      sha256: null,
+      uploadedBy: null,
+      uploadChannel: null,
       createdAt,
     },
     page: {

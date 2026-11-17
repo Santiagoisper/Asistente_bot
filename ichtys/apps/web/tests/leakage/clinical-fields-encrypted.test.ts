@@ -54,6 +54,8 @@ const PLAIN: Record<string, string> = {
   'lab_reports.created_by': 'identificador de quien lo cargó',
   'lab_reports.reviewed_by': 'identificador de quien lo revisó',
   'lab_report_images.mime': 'tipo de archivo',
+  'lab_report_images.sha256': 'huella del recorte recibido; no permite reconstruirlo (0027)',
+  'lab_reports.source_sha256': 'huella del archivo recibido; no permite reconstruirlo (0027)',
   'dictation_audios.mime': 'tipo de archivo',
   'dictation_audios.sha256': 'huella del archivo; no permite reconstruir el contenido',
   'dictation_audios.created_by': 'identificador de quien grabó',
