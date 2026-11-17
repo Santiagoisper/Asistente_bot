@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { insertAuditLog, type DbTransaction } from '../audit/audited-write'
 import type { AuditLogParams } from '../chat/persistence'
 import {
@@ -69,6 +70,8 @@ export interface CreatedLabReport {
   rowCount: number
   reviewCount: number
   newFieldCount: number
+  /** Huella SHA-256 (hex) de lo recibido: el PDF, o cada recorte en orden (C4 paso 4). */
+  sha256: string[]
 }
 
 export interface LabReaders {
@@ -91,6 +94,9 @@ export async function createLabReportFromPdf(
   params: SubjectScope & { userId: string; fileName: string; data: Uint8Array; audit: (created: CreatedLabReport) => AuditLogParams },
   readers: LabReaders = { readText: readTextWithModel },
 ): Promise<CreatedLabReport> {
+  // Huella del archivo tal como llegó, antes de leerlo (C4 paso 4). El original no se guarda:
+  // la huella le sirve al centro, que tiene el original, para compararlo.
+  const sourceSha256 = createHash('sha256').update(params.data).digest('hex')
   let text: string
   try {
     // Cada renglón del informe es un resultado: se pide el texto con sus renglones.
@@ -163,13 +169,14 @@ export async function createLabReportFromPdf(
         status: 'pending_review',
         sourceKind: 'pdf_text',
         contentEncrypted: encryptClinicalContent(JSON.stringify(content)),
+        sourceSha256,
         rowCount: rows.length,
         createdBy: params.userId,
       })
       .returning({ id: labReports.id })
     if (!created) throw new LabReportError('unreadable')
 
-    const report: CreatedLabReport = { reportId: created.id, ...counts }
+    const report: CreatedLabReport = { reportId: created.id, ...counts, sha256: [sourceSha256] }
     await insertAuditLog(tx, params.audit(report))
     return report
   })

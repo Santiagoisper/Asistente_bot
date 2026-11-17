@@ -80,11 +80,14 @@ export async function POST(
           rowCount: report.rowCount,
           reviewCount: report.reviewCount,
           newFieldCount: report.newFieldCount,
+          sha256: report.sha256,
         },
       }),
     })
 
-    return Response.json(created, { status: 201 })
+    // La huella queda en la fila y en la auditoría; la respuesta no la necesita.
+    const { sha256: _sha256, ...body } = created
+    return Response.json(body, { status: 201 })
   } catch (err) {
     // Solo el código y el tamaño: nunca el contenido.
     const known = labReportErrorResponse(err)
