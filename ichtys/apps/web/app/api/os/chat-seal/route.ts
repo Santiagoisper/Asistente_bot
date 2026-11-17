@@ -4,7 +4,7 @@ import { JsonBodyTooLargeError, readJsonBody } from '../../../../lib/api/body-li
 import { runChatSeal } from '../../../../lib/chat/chat-seal'
 import { chatSealKeySamples, chatSealOverview, orgChatSealStore } from '../../../../lib/chat/chat-seal-store'
 import { screeningSealOperators } from '../../../../lib/flags'
-import { databaseTargetOf } from '../../../../lib/subjects/screening-seal'
+import { databaseTargetOf, sealTargetAllowedHere } from '../../../../lib/subjects/screening-seal'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -79,6 +79,8 @@ export async function POST(req: Request): Promise<Response> {
 
     const target = databaseTargetOf(process.env.DATABASE_URL)
     if (target === null || parsed.data.confirm !== target) return Response.json({ error: 'target_mismatch' }, { status: 409 })
+    // Fuera de producción solo contra una base de prueba conocida (ver sealTargetAllowedHere).
+    if (!sealTargetAllowedHere(target, process.env.VERCEL_ENV)) return Response.json({ error: 'target_not_allowed_here' }, { status: 409 })
 
     const outcome = await runChatSeal(
       { overview: chatSealOverview, keySamples: chatSealKeySamples, storeFor: orgChatSealStore },

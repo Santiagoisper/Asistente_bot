@@ -32,6 +32,7 @@ beforeEach(() => {
   vi.useFakeTimers({ now: new Date('2026-11-20T12:00:00Z'), toFake: ['Date'] })
   process.env.ALPHI_SEAL_OPERATORS = OPERATOR
   process.env.DATABASE_URL = 'postgresql://usuario:secreto@ep-prueba.neon.tech/neondb?sslmode=require'
+  process.env.VERCEL_ENV = 'production'
   mocks.auth.mockResolvedValue({ userId: OPERATOR, orgId: 'org_clerk_a', orgRole: 'org:member' })
   mocks.sealOverview.mockResolvedValue([
     { organizationId: 'org-a', rows: 12, plain: 7, foreignEnvelope: 0 },
