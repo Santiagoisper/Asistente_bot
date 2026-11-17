@@ -1,6 +1,6 @@
 # Matriz de trazabilidad del OS: regla → prueba → evidencia
 
-**Versión:** 0.9 · **Fecha:** 2026-11-15 · **Estado:** borrador, sin revisión de Calidad. Tarea 48 del cronograma.
+**Versión:** 0.10 · **Fecha:** 2026-11-17 · **Estado:** borrador, sin revisión de Calidad. Tarea 48 del cronograma.
 
 Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, accesos), la carga de documentos y el asistente con sus citas, que la matriz de julio ([`RTM.md`](./RTM.md)) no cubre. Responde a la brecha de R2 anotada en la [línea de base](./REGULATORY-BASELINE.md).
 
@@ -32,15 +32,15 @@ Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, acces
 |---|---|---|---|
 | Toda ruta de la API pasa por una guarda del servidor: sesión, o un secreto propio en las tareas programadas; las rutas públicas son una lista revisada | `apps/web/tests/leakage/api-auth-coverage.test.ts` | Ninguna | La prueba mira que la guarda esté, no que cada guarda rechace |
 | Toda consulta del OS filtra por organización | `apps/web/tests/leakage/os-org-filter.test.ts` | Ninguna | Dos organizaciones reales en la misma base |
-| Los listados del OS aplican el alcance por estudio | `apps/web/tests/leakage/os-study-scope.test.ts`, `packages/auth/__tests__/study-scope.test.ts` | Ninguna | El modo estricto encendido, función por función (tarea 27) |
-| Los validadores exigen membresía cuando rige el modo estricto | `packages/auth/tests/leakage/validators-enforce-membership.test.ts` | Ninguna | Ídem |
+| Los listados del OS aplican el alcance por estudio | `apps/web/tests/leakage/os-study-scope.test.ts`, `packages/auth/__tests__/study-scope.test.ts` | Entorno de prueba, 17/11: modo estricto encendido, las nueve funciones una por una; sin membresía, 404 en todo el estudio ([ensayo del 17/11](./ENSAYO-MODO-ESTRICTO-2026-11-17.md)) | Con una persona que no administra la organización; producción |
+| Los validadores exigen membresía cuando rige el modo estricto | `packages/auth/tests/leakage/validators-enforce-membership.test.ts` | Entorno de prueba, 17/11 ([ensayo del 17/11](./ENSAYO-MODO-ESTRICTO-2026-11-17.md)) | Ídem |
 | Cambiar el modo de acceso sigue sus reglas y avisa antes de vencer | `apps/web/lib/access/__tests__/mode-rules.test.ts`, `apps/web/components/access/__tests__/mode-panel.test.tsx` | Entorno de prueba, 14/11: aviso de plazo vencido y de que no tiene vuelta (PR #153) | Producción |
 | Quién coordina un estudio se decide con una regla propia en los dos modos, y ningún archivo la reemplaza por el atajo que en modo abierto no restringe | `apps/web/lib/access/__tests__/permissions.test.ts`, `apps/web/lib/access/__tests__/coordination-guard.test.ts` | Ninguna | Con dos cuentas reales |
 | Dar acceso a un estudio exige poder administrarlo, en los dos modos; un estudio de otra organización responde igual que uno inexistente | `apps/web/app/api/org/team/memberships/__tests__/route.test.ts` | Ninguna | Las bajas |
 | Sin permiso sobre el estudio no se agenda nada; un turno de otro estudio u otra organización responde como inexistente | `apps/web/app/api/studies/[id]/agenda/__tests__/routes.test.ts`, `apps/web/lib/agenda/__tests__/agenda-service.test.ts` | Ninguna | Con dos cuentas reales |
 | Un turno no se puede atar a un sujeto de otro estudio | `apps/web/lib/agenda/__tests__/agenda-service.test.ts` | Ninguna | — |
 | Sujetos: sin sesión responde 401; con un estudio ajeno, 404; la ruta compara el estudio de la dirección antes de registrar | `apps/web/app/api/studies/[id]/subjects/__tests__/route.oq.test.ts`, `apps/web/app/api/studies/[id]/subjects/[subjectId]/__tests__/study-binding.test.ts` | Ninguna | Con dos organizaciones reales |
-| Subir un documento: quien no gestiona documentos recibe 403 antes de que se lea el archivo; en modo estricto decide la función, no el rol histórico | `apps/web/app/api/documents/upload/__tests__/route.test.ts` | Ninguna | El modo estricto encendido en un entorno |
+| Subir un documento: quien no gestiona documentos recibe 403 antes de que se lea el archivo; en modo estricto decide la función, no el rol histórico | `apps/web/app/api/documents/upload/__tests__/route.test.ts` | Entorno de prueba, 17/11: en modo estricto subieron solo Study Coordinator, asistente regulatorio y Dirección de Operaciones ([ensayo del 17/11](./ENSAYO-MODO-ESTRICTO-2026-11-17.md)) | Producción |
 | El asistente busca solo en fragmentos de la organización y el estudio de quien pregunta | `packages/rag/tests/leakage/retriever-leakage.test.ts` | Ninguna | La prueba mira el filtro de la consulta y datos simulados, no dos organizaciones en una base |
 | La organización sale de la sesión: un pedido al asistente que la trae en el cuerpo o en la dirección se rechaza | `apps/web/app/api/chat/__tests__/route.test.ts`, `apps/web/lib/rag/__tests__/answer-orchestrator.test.ts` | Ninguna | — |
 | Las citas de una respuesta solo las ve quien hizo la conversación: para un mensaje de otra organización y para la conversación de otra persona la ruta responde el mismo 404, con el mismo cuerpo, y no lee las citas | `apps/web/app/api/citations/[messageId]/__tests__/route.test.ts` | Ninguna | Los tiempos de respuesta de los dos caminos no se comparan |
