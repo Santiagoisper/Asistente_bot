@@ -163,6 +163,9 @@ describe('UploadZone', () => {
     await choose(new File(['x'], 'notas.docx', { type: 'application/msword' }))
     expect(text()).toContain('solo se procesan archivos PDF')
     expect(FakeXhr.sent).toHaveLength(0)
+    // R-01 (recorrido 19/11): reintentar el mismo .docx no sirve; se ofrece elegir otro.
+    expect(text()).toContain('Elegir otro archivo')
+    expect(text()).not.toContain('Reintentar')
   })
 
   it('sube al estudio correcto, dispara la ingesta y espera el estado real hasta «listo»', async () => {
@@ -239,5 +242,14 @@ describe('DocumentsStatusList', () => {
     expect(JSON.parse(call[1].body)).toEqual({ documentVersionId: 'v1' })
     expect(text()).toContain('No se pudo iniciar el reprocesamiento')
     expect(button('Reprocesar')).toBeTruthy()
+  })
+})
+
+describe('recorrido 19/11 (R-01, R-02)', () => {
+  it('el tipo de documento se muestra en palabras', async () => {
+    const { documentTypeLabel } = await import('../documents-status-list')
+    expect(documentTypeLabel('protocol')).toBe('Protocolo')
+    expect(documentTypeLabel('soa')).toBe('Guía de visitas (SoA)')
+    expect(documentTypeLabel('cualquier_cosa')).toBe('Otro')
   })
 })
