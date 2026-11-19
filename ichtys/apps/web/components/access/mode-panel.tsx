@@ -7,6 +7,7 @@ import {
   MODE_ERROR_TEXTS,
   MODE_PANEL_LABELS,
 } from '../../lib/access/team-ui'
+import { rateLimitedText } from '../../lib/security/rate-limit-message'
 
 /**
  * Panel de cambio de modo (docs/decisions/study-membership.md, sección
@@ -70,8 +71,9 @@ export function ModePanel({ onChanged }: { onChanged: () => void }) {
         body: JSON.stringify({ mode: target }),
       })
       if (!res.ok) {
-        const { error } = (await res.json().catch(() => ({}))) as { error?: string }
-        setNotice(error && error in MODE_ERROR_TEXTS ? MODE_ERROR_TEXTS[error as keyof typeof MODE_ERROR_TEXTS] : GENERIC_ERROR)
+        const body = (await res.json().catch(() => ({}))) as { error?: string }
+        const { error } = body
+        setNotice(rateLimitedText(body) ?? (error && error in MODE_ERROR_TEXTS ? MODE_ERROR_TEXTS[error as keyof typeof MODE_ERROR_TEXTS] : GENERIC_ERROR))
         setNoticeIsError(true)
         return
       }

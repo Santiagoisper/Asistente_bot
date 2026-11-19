@@ -9,7 +9,7 @@ import { resetMemoryRateLimitForTests } from '../rate-limit'
  * se cuenta en este proceso y se sigue. Nunca 503.
  */
 const who = { orgId: 'org-a', userId: 'user_1' }
-const KINDS: ClinicalLimitKind[] = ['evolution_write', 'audio_write', 'audio_listen', 'lab_upload', 'lab_extract']
+const KINDS: ClinicalLimitKind[] = ['evolution_write', 'audio_write', 'audio_listen', 'lab_upload', 'lab_extract', 'lab_review', 'study_write', 'admin_write', 'record_read']
 
 beforeEach(() => {
   vi.unstubAllEnvs()

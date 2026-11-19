@@ -3,6 +3,7 @@ import { LabReviewError, rejectLabOcrReview } from '../../../../../../../../lib/
 import { profileWriteErrorResponse } from '../../../../../../../../lib/subjects/profile-write-errors'
 import { PhiConfigError } from '../../../../../../../../lib/subjects/phi-fields'
 import { profileForResponse } from '../../../../../../../../lib/subjects/profile-response'
+import { clinicalRateLimit } from '../../../../../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -15,6 +16,8 @@ export async function POST(
 
   try {
     const { orgId, userId, study, subject } = await validateSubjectAccess(subjectId, routeStudyId, { require: 'labs.manage' })
+    const limited = await clinicalRateLimit('lab_review', { orgId: orgId, userId: userId, studyId: study.id, req: _req, endpoint: 'labs/reject' })
+    if (limited) return limited
 
     const profile = await rejectLabOcrReview({
       orgId,

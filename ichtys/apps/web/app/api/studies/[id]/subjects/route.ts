@@ -15,6 +15,7 @@ import {
 } from '../../../../../lib/subjects/phi-fields'
 import { createSubjectSchema } from '../../../../../lib/subjects/schemas'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../lib/api/body-limit'
+import { clinicalRateLimit } from '../../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -74,6 +75,8 @@ export async function POST(
   } catch (err) {
     return handleApiError(err)
   }
+  const limited = await clinicalRateLimit('study_write', { orgId: access.orgId, userId: access.userId, studyId: access.study.id, req, endpoint: '/api/studies/[id]/subjects' })
+  if (limited) return limited
 
   let body: unknown
   try {
