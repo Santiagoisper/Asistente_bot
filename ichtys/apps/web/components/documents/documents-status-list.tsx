@@ -29,6 +29,20 @@ function formatIngestionError(code: string | null): string | null {
   return code ? describeIngestionErrorMessage(code) : null
 }
 
+/** El tipo guardado, en palabras (recorrido de punta a punta, 19/11, R-02). */
+const DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  protocol: 'Protocolo',
+  soa: 'Guía de visitas (SoA)',
+  investigator_brochure: 'Manual del Investigador',
+  lab_manual: 'Manual de laboratorio',
+  pharmacy_manual: 'Manual de farmacia',
+  other: 'Otro',
+}
+
+export function documentTypeLabel(type: string): string {
+  return DOCUMENT_TYPE_LABELS[type] ?? 'Otro'
+}
+
 /** True si algún item sigue en vuelo (necesita polling). */
 function needsPolling(items: DocumentStatusItem[]): boolean {
   return items.some((i) => i.status === 'processing' || i.status === 'pending')
@@ -257,7 +271,7 @@ export function DocumentsStatusList({ items: initialItems, studyId }: DocumentsS
               {sortedItems.map((item) => (
                 <tr key={item.documentId}>
                   <td className="px-3 py-2 align-top text-alphi-navy break-words">{item.documentName}</td>
-                  <td className="px-3 py-2 align-top text-alphi-muted">{item.documentType}</td>
+                  <td className="px-3 py-2 align-top text-alphi-muted">{documentTypeLabel(item.documentType)}</td>
                   <td className="px-3 py-2 align-top">
                     {item.status === 'processing' || item.status === 'pending' ? (
                       <ProgressIndicator

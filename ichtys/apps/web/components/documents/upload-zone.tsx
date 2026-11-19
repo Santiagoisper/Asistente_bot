@@ -473,7 +473,7 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
             onClick={() => inputRef.current?.click()}
             className="alphi-btn-primary"
           >
-            Reintentar
+            Elegir otro archivo
           </button>
         </div>
       </div>

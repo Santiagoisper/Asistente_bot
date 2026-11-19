@@ -43,7 +43,11 @@ export function countByDay(cards: AgendaCard[]): Record<string, number> {
 /** Resumen de un día: "3 turnos · 1 hecho · 2 pendientes". */
 export function daySummary(cards: AgendaCard[]): string {
   const live = cards.filter((card) => card.status !== 'cancelled')
-  if (live.length === 0) return 'Sin turnos'
+  if (live.length === 0) {
+    // Antes decía «Sin turnos» con turnos cancelados listados debajo (recorrido 19/11, R-10).
+    const cancelled = cards.length
+    return cancelled === 0 ? 'Sin turnos' : `Sin turnos vigentes · ${cancelled} ${cancelled === 1 ? 'cancelado' : 'cancelados'}`
+  }
   const done = live.filter((card) => card.status === 'done').length
   const missed = live.filter((card) => card.status === 'no_show').length
   const pending = live.length - done - missed
