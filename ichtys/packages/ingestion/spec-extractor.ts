@@ -11,6 +11,7 @@ import {
   studyEndpointSchema,
   studyIdentificationSchema,
   MAX_SPEC_ITEMS,
+  MAX_SPEC_VISIT_LABEL_CHARS,
   type SpecGroupOutcome,
   type StudySpec,
 } from './study-spec'
@@ -588,6 +589,40 @@ function readWindowSide(value: number | null | undefined): { value: number | nul
   return { value, invalid: false }
 }
 
+export const WEEKS_AS_DAY_WARNING = 'week_numbers_in_day'
+
+const WEEK_WORD = String.raw`(?:semanas?|weeks?|semaines?|wochen?|settimane|settimana)`
+const DAY_WORD = String.raw`(?:d[ií]as?|days?|study\s+day|jours?|tage?|giorn[oi])`
+const VISIT_WORD = String.raw`(?:visit[ae]?s?|besuche?|visite)`
+
+/**
+ * ¿La tabla de visitas da el tiempo solo en semanas? Hace falta un encabezado de semanas
+ * (fila que empieza con «Semana», o encabezado con «Visita» y «Semana» sin número detrás) y
+ * ninguna señal de días: ni encabezado de días ni un marcador explícito «Día 85» / «Day 85».
+ * Ante la duda dice que no: un falso positivo borraría días correctos (revisión del #249).
+ */
+/** «Semana 12», o la etiqueta del protocolo con la semana si no la nombra («Selección (semana -2)»). */
+function weekLabel(label: string | null, week: number): string {
+  if (!label || !label.trim()) return `Semana ${week}`
+  if (new RegExp(String.raw`(^|[^\d-])${week}(?!\d)`).test(label)) return label
+  return `${label} (semana ${week})`.slice(0, MAX_SPEC_VISIT_LABEL_CHARS)
+}
+
+export function scheduleGivesOnlyWeeks(text: string): boolean {
+  const lines = text.split(/\r?\n/)
+  const weekLead = new RegExp(String.raw`^\s*${WEEK_WORD}\b`, 'i')
+  const weekInHeader = new RegExp(String.raw`\b${WEEK_WORD}\b(?!\s*-?\d)`, 'i')
+  const visitWord = new RegExp(String.raw`\b${VISIT_WORD}\b`, 'i')
+  const dayLead = new RegExp(String.raw`^\s*${DAY_WORD}\b`, 'i')
+  const dayInHeader = new RegExp(String.raw`\b${DAY_WORD}\b(?!\s*-?\d)`, 'i')
+  const dayMarker = new RegExp(String.raw`\b(?:${DAY_WORD}|D)\s*-?\d+\b`, 'i')
+  const weekHeader = lines.some((line) => weekLead.test(line) || (visitWord.test(line) && weekInHeader.test(line)))
+  const dayHeader = lines.some((line) =>
+    dayLead.test(line) || (visitWord.test(line) && dayInHeader.test(line)) || dayMarker.test(line),
+  )
+  return weekHeader && !dayHeader
+}
+
 function validateExtractedVisits(
   result: { visits: StudySpec['visits'] },
   pages: ParsedPage[],
@@ -650,8 +685,27 @@ function validateExtractedVisits(
     )
   }
 
+  // Un cronograma que da solo semanas («Visita | Semana | …») no es un día del estudio.
+  // En el entorno de prueba (19/11) el modelo copió «-2, 0, 4, 12, 24» al día y la pantalla
+  // los mostró como días. Si la tabla tiene columna o fila de semanas y ninguna de días, y el
+  // modelo no dejó la etiqueta, el número pasa a la etiqueta («Semana 12») y el día queda
+  // vacío: convertir semanas a días depende de la convención del protocolo y no se inventa.
+  const weeksOnly = scheduleGivesOnlyWeeks(sourceText)
+  const movedWeeks = new Set<number>()
+  if (weeksOnly) {
+    // Con un cronograma solo en semanas ningún «día» es un día, tenga o no etiqueta
+    // (revisión del #249): se anulan todos y el número se conserva en la etiqueta.
+    for (const [index, visit] of visits.entries()) {
+      if (visit.day !== null) movedWeeks.add(index)
+    }
+    if (movedWeeks.size > 0) warnings.push(`visits: ${WEEKS_AS_DAY_WARNING} count=${movedWeeks.size}`)
+  }
+
   return {
-    visits: visits.map((visit, index) => {
+    visits: visits.map((original, index) => {
+      const visit = movedWeeks.has(index)
+        ? { ...original, label: weekLabel(original.label, original.day!), day: null, confidence: 'low' as const }
+        : original
       const windowBefore = readWindowSide(visit.windowBefore).value
       const windowAfter = readWindowSide(visit.windowAfter).value
       const legacy = readWindowSide(visit.windowDays).value
@@ -842,7 +896,12 @@ export async function extractStudySpec(
     const postProcess = (raw: unknown): T => {
       if (group === 'visits') {
         const normalized = normalizeVisitsGroup(raw, warnings)
-        return validateExtractedVisits(normalized, sectionPages, warnings) as unknown as T
+        const before = warnings.length
+        const validated = validateExtractedVisits(normalized, sectionPages, warnings)
+        if (warnings.slice(before).some((w) => w.includes(WEEKS_AS_DAY_WARNING))) {
+          groupOutcomes.visits = { status: 'invalid_output', code: WEEKS_AS_DAY_WARNING }
+        }
+        return validated as unknown as T
       }
       if (group === 'eligibility') {
         return normalizeEligibilityGroup(raw, warnings) as unknown as T
