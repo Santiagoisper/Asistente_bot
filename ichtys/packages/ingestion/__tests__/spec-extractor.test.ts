@@ -55,6 +55,7 @@ import {
   GROUP_INSTRUCTIONS,
   samplePageTextForMap,
   SPEC_EXTRACTION_SYSTEM_PROMPT,
+  scheduleGivesOnlyWeeks,
 } from '../spec-extractor'
 import { formatVisitWindow } from '../visit-window-format'
 import { groupsNeedingAcknowledgement, studySpecSchema } from '../study-spec'
@@ -459,7 +460,11 @@ describe('extractStudySpec', () => {
       return original(args)
     })
     const pages = makeProtocolPages().map((p) =>
-      p.pageNumber === 18 ? { ...p, rawText: '1.3 Cronograma de actividades (SoA)\nVisita Semana Procedimientos\nV1 Selección -2 Consentimiento' } : p,
+      p.pageNumber === 18
+        ? { ...p, rawText: '1.3 Cronograma de actividades (SoA)\nVisita Semana Procedimientos\nV1 Selección -2 Consentimiento' }
+        : p.pageNumber === 19
+          ? { ...p, rawText: 'V3 4 Signos vitales\nV4 12 HbA1c' }
+          : p,
     )
 
     const result = await extractStudySpec(pages)
@@ -468,10 +473,24 @@ describe('extractStudySpec', () => {
     expect(v3.day).toBeNull()
     expect(v3.label).toBe('Semana 4')
     expect(v3.confidence).toBe('low')
-    // La que ya traía su etiqueta no se toca.
-    expect(result.spec.visits.find((v) => v.name === 'V1')).toMatchObject({ day: -2, label: 'Selección' })
+    // Con etiqueta propia también se anula el día y la semana queda en la etiqueta (revisión del #249).
+    expect(result.spec.visits.find((v) => v.name === 'V1')).toMatchObject({ day: null, label: 'Selección (semana -2)' })
     expect(result.spec.groupOutcomes?.visits).toEqual({ status: 'invalid_output', code: 'week_numbers_in_day' })
     expect(groupsNeedingAcknowledgement(result.spec)).toContain('visits')
+  })
+
+  it.each([
+    ['Visita | Semana | Procedimientos', true],
+    ['Visit 1 2 3\nWeek -2 0 4', true],
+    ['Visite | Semaine | Procédures', true],
+    ['Besuch | Woche | Verfahren', true],
+    ['Visita Semana Procedimientos\nV3 4 ±3 días', true],
+    ['Visita | Semana | Días | Procedimientos', false],
+    ['Week 12 (Day 85)', false],
+    ['Visita Semana Procedimientos\nV4 12 (D85)', false],
+    ['Visita 1 2 3\nSemana -2 0 4\nDía -14 1 29', false],
+  ])('scheduleGivesOnlyWeeks(%j) = %s', (text, expected) => {
+    expect(scheduleGivesOnlyWeeks(text)).toBe(expected)
   })
 
   it('a schedule with a day row keeps the days as extracted', async () => {

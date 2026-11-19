@@ -11,6 +11,7 @@ import {
   studyEndpointSchema,
   studyIdentificationSchema,
   MAX_SPEC_ITEMS,
+  MAX_SPEC_VISIT_LABEL_CHARS,
   type SpecGroupOutcome,
   type StudySpec,
 } from './study-spec'
@@ -590,14 +591,34 @@ function readWindowSide(value: number | null | undefined): { value: number | nul
 
 export const WEEKS_AS_DAY_WARNING = 'week_numbers_in_day'
 
-/** ¿La tabla de visitas tiene encabezado de semanas y ninguno de días? */
+const WEEK_WORD = String.raw`(?:semanas?|weeks?|semaines?|wochen?|settimane|settimana)`
+const DAY_WORD = String.raw`(?:d[ií]as?|days?|study\s+day|jours?|tage?|giorn[oi])`
+const VISIT_WORD = String.raw`(?:visit[ae]?s?|besuche?|visite)`
+
+/**
+ * ¿La tabla de visitas da el tiempo solo en semanas? Hace falta un encabezado de semanas
+ * (fila que empieza con «Semana», o encabezado con «Visita» y «Semana» sin número detrás) y
+ * ninguna señal de días: ni encabezado de días ni un marcador explícito «Día 85» / «Day 85».
+ * Ante la duda dice que no: un falso positivo borraría días correctos (revisión del #249).
+ */
+/** «Semana 12», o la etiqueta del protocolo con la semana si no la nombra («Selección (semana -2)»). */
+function weekLabel(label: string | null, week: number): string {
+  if (!label || !label.trim()) return `Semana ${week}`
+  if (new RegExp(String.raw`(^|[^\d-])${week}(?!\d)`).test(label)) return label
+  return `${label} (semana ${week})`.slice(0, MAX_SPEC_VISIT_LABEL_CHARS)
+}
+
 export function scheduleGivesOnlyWeeks(text: string): boolean {
   const lines = text.split(/\r?\n/)
-  const weekHeader = lines.some((line) =>
-    /^\s*(semanas?|weeks?)\b/i.test(line) || (/\bvisit[ae]?s?\b/i.test(line) && /\b(semanas?|weeks?)\s*$|\b(semana|week)\b(?!\s*\d)/i.test(line)),
-  )
+  const weekLead = new RegExp(String.raw`^\s*${WEEK_WORD}\b`, 'i')
+  const weekInHeader = new RegExp(String.raw`\b${WEEK_WORD}\b(?!\s*-?\d)`, 'i')
+  const visitWord = new RegExp(String.raw`\b${VISIT_WORD}\b`, 'i')
+  const dayLead = new RegExp(String.raw`^\s*${DAY_WORD}\b`, 'i')
+  const dayInHeader = new RegExp(String.raw`\b${DAY_WORD}\b(?!\s*-?\d)`, 'i')
+  const dayMarker = new RegExp(String.raw`\b(?:${DAY_WORD}|D)\s*-?\d+\b`, 'i')
+  const weekHeader = lines.some((line) => weekLead.test(line) || (visitWord.test(line) && weekInHeader.test(line)))
   const dayHeader = lines.some((line) =>
-    /^\s*(d[ií]as?|days?|study day)\b/i.test(line) || (/\bvisit[ae]?s?\b/i.test(line) && /\b(d[ií]a|day)\b(?!\s*-?\d)/i.test(line)),
+    dayLead.test(line) || (visitWord.test(line) && dayInHeader.test(line)) || dayMarker.test(line),
   )
   return weekHeader && !dayHeader
 }
@@ -672,8 +693,10 @@ function validateExtractedVisits(
   const weeksOnly = scheduleGivesOnlyWeeks(sourceText)
   const movedWeeks = new Set<number>()
   if (weeksOnly) {
+    // Con un cronograma solo en semanas ningún «día» es un día, tenga o no etiqueta
+    // (revisión del #249): se anulan todos y el número se conserva en la etiqueta.
     for (const [index, visit] of visits.entries()) {
-      if (visit.day !== null && !visit.label) movedWeeks.add(index)
+      if (visit.day !== null) movedWeeks.add(index)
     }
     if (movedWeeks.size > 0) warnings.push(`visits: ${WEEKS_AS_DAY_WARNING} count=${movedWeeks.size}`)
   }
@@ -681,7 +704,7 @@ function validateExtractedVisits(
   return {
     visits: visits.map((original, index) => {
       const visit = movedWeeks.has(index)
-        ? { ...original, label: `Semana ${original.day}`, day: null, confidence: 'low' as const }
+        ? { ...original, label: weekLabel(original.label, original.day!), day: null, confidence: 'low' as const }
         : original
       const windowBefore = readWindowSide(visit.windowBefore).value
       const windowAfter = readWindowSide(visit.windowAfter).value
