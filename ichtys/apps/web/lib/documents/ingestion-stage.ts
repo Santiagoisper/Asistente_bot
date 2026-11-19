@@ -96,6 +96,9 @@ const INGESTION_ERROR_MESSAGES: Readonly<Record<string, string>> = {
     'El servicio de indexación está saturado. Esperá unos minutos y probá de nuevo.',
   ingestion_internal_error:
     'Error interno al procesar el documento. Probá de nuevo en unos instantes.',
+  stuck_timeout: 'El procesamiento quedó detenido. Usá «Reprocesar».',
+  spec_extraction_failed:
+    'El documento se indexó, pero no se pudo extraer el cronograma de visitas ni los criterios automáticamente. Podés reintentar la extracción desde la pantalla del spec.',
 }
 
 const GENERIC_INGESTION_ERROR =
