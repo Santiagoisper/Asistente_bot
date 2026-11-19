@@ -21,11 +21,11 @@ export const conversations = pgTable(
       .notNull()
       .references(() => studies.id),
     userId: text('user_id').notNull(), // Clerk user ID
-    title: text('title'),
     /**
      * Título cifrado (2026-11-16, migración 0026): el título lo arma un modelo desde la
-     * primera pregunta y puede llevar dato clínico. El código nuevo escribe solo acá;
-     * "title" queda para leer los títulos anteriores hasta el sellado (una migración posterior la saca).
+     * primera pregunta y puede llevar dato clínico. La columna en claro `title` se dejó de
+     * leer el 17/11/2026, después del sellado, y la saca la migración 0028. Null mientras
+     * la conversación no tiene título.
      */
     titleEncrypted: text('title_encrypted'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -51,19 +51,18 @@ export const messages = pgTable(
       .references(() => studies.id),
     role: text('role', { enum: messageRole }).notNull(),
     /**
-     * Cuerpo del mensaje en claro (heredado): el código nuevo (PR-B) escribe solo
-     * content_encrypted; esta queda para leer lo anterior hasta el sellado. Nullable
-     * desde la 0026; todo mensaje tiene cuerpo por el CHECK messages_content_present.
+     * Cuerpo cifrado (2026-11-16, migración 0026): pregunta y respuesta van acá, y es el único
+     * cuerpo del mensaje. La columna en claro `content` se dejó de leer el 17/11/2026, después
+     * del sellado (todos los mensajes de prueba y de producción con cuerpo cifrado), y la saca
+     * la migración 0028, que además vuelve obligatoria esta.
      */
-    content: text('content'),
-    /** Cuerpo cifrado (2026-11-16, migración 0026): pregunta y respuesta van acá. */
-    contentEncrypted: text('content_encrypted'),
+    contentEncrypted: text('content_encrypted').notNull(),
     confidence: text('confidence', { enum: answerConfidence }),
     /**
      * (Columna `annotations` de la base: fuera del schema desde el PR-B del chat
      * cifrado, 2026-11-16. Las anotaciones se dejan de guardar: se calculan en
-     * memoria para el stream y se recalculan al reabrir. El sellado vaciará la
-     * columna vieja con SQL crudo — con drizzle no se puede, ya no está acá.)
+     * memoria para el stream y se recalculan al reabrir. La columna vieja la saca la
+     * migración 0028.)
      */
     /**
      * Con qué proveedor y modelo se generó la respuesta (regla R6). Null en los mensajes de la
