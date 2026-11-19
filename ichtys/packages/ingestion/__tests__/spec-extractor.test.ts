@@ -441,6 +441,46 @@ describe('extractStudySpec', () => {
     runner.mockImplementation(base)
   })
 
+  it('a schedule given only in weeks does not put week numbers in «day» (entorno de prueba 19/11, R-14)', async () => {
+    mockExtractionByPrompt()
+    const original = mocks.generateObject.getMockImplementation()!
+    mocks.generateObject.mockImplementation((args: { prompt: string }) => {
+      if (args.prompt.includes('schedule of activities')) {
+        return Promise.resolve({
+          object: {
+            visits: [
+              { name: 'V1', label: 'Selección', day: -2, windowDays: null, procedures: ['Consentimiento'], sourcePages: [18], confidence: 'high' },
+              { name: 'V3', label: null, day: 4, windowDays: null, procedures: ['Signos vitales'], sourcePages: [18], confidence: 'high' },
+              { name: 'V4', label: null, day: 12, windowDays: null, procedures: ['HbA1c'], sourcePages: [18], confidence: 'high' },
+            ],
+          },
+        })
+      }
+      return original(args)
+    })
+    const pages = makeProtocolPages().map((p) =>
+      p.pageNumber === 18 ? { ...p, rawText: '1.3 Cronograma de actividades (SoA)\nVisita Semana Procedimientos\nV1 Selección -2 Consentimiento' } : p,
+    )
+
+    const result = await extractStudySpec(pages)
+
+    const v3 = result.spec.visits.find((v) => v.name === 'V3')!
+    expect(v3.day).toBeNull()
+    expect(v3.label).toBe('Semana 4')
+    expect(v3.confidence).toBe('low')
+    // La que ya traía su etiqueta no se toca.
+    expect(result.spec.visits.find((v) => v.name === 'V1')).toMatchObject({ day: -2, label: 'Selección' })
+    expect(result.spec.groupOutcomes?.visits).toEqual({ status: 'invalid_output', code: 'week_numbers_in_day' })
+    expect(groupsNeedingAcknowledgement(result.spec)).toContain('visits')
+  })
+
+  it('a schedule with a day row keeps the days as extracted', async () => {
+    mockExtractionByPrompt()
+    const result = await extractStudySpec(makeProtocolPages())
+    expect(result.spec.visits[0]?.day).toBe(85)
+    expect(result.warnings.join(' ')).not.toContain('week_numbers_in_day')
+  })
+
   it('warns and lowers confidence for duplicate or out-of-order visits', async () => {
     mockExtractionByPrompt()
     const original = mocks.generateObject.getMockImplementation()!

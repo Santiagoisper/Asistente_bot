@@ -588,6 +588,20 @@ function readWindowSide(value: number | null | undefined): { value: number | nul
   return { value, invalid: false }
 }
 
+export const WEEKS_AS_DAY_WARNING = 'week_numbers_in_day'
+
+/** ¿La tabla de visitas tiene encabezado de semanas y ninguno de días? */
+export function scheduleGivesOnlyWeeks(text: string): boolean {
+  const lines = text.split(/\r?\n/)
+  const weekHeader = lines.some((line) =>
+    /^\s*(semanas?|weeks?)\b/i.test(line) || (/\bvisit[ae]?s?\b/i.test(line) && /\b(semanas?|weeks?)\s*$|\b(semana|week)\b(?!\s*\d)/i.test(line)),
+  )
+  const dayHeader = lines.some((line) =>
+    /^\s*(d[ií]as?|days?|study day)\b/i.test(line) || (/\bvisit[ae]?s?\b/i.test(line) && /\b(d[ií]a|day)\b(?!\s*-?\d)/i.test(line)),
+  )
+  return weekHeader && !dayHeader
+}
+
 function validateExtractedVisits(
   result: { visits: StudySpec['visits'] },
   pages: ParsedPage[],
@@ -650,8 +664,25 @@ function validateExtractedVisits(
     )
   }
 
+  // Un cronograma que da solo semanas («Visita | Semana | …») no es un día del estudio.
+  // En el entorno de prueba (19/11) el modelo copió «-2, 0, 4, 12, 24» al día y la pantalla
+  // los mostró como días. Si la tabla tiene columna o fila de semanas y ninguna de días, y el
+  // modelo no dejó la etiqueta, el número pasa a la etiqueta («Semana 12») y el día queda
+  // vacío: convertir semanas a días depende de la convención del protocolo y no se inventa.
+  const weeksOnly = scheduleGivesOnlyWeeks(sourceText)
+  const movedWeeks = new Set<number>()
+  if (weeksOnly) {
+    for (const [index, visit] of visits.entries()) {
+      if (visit.day !== null && !visit.label) movedWeeks.add(index)
+    }
+    if (movedWeeks.size > 0) warnings.push(`visits: ${WEEKS_AS_DAY_WARNING} count=${movedWeeks.size}`)
+  }
+
   return {
-    visits: visits.map((visit, index) => {
+    visits: visits.map((original, index) => {
+      const visit = movedWeeks.has(index)
+        ? { ...original, label: `Semana ${original.day}`, day: null, confidence: 'low' as const }
+        : original
       const windowBefore = readWindowSide(visit.windowBefore).value
       const windowAfter = readWindowSide(visit.windowAfter).value
       const legacy = readWindowSide(visit.windowDays).value
@@ -842,7 +873,12 @@ export async function extractStudySpec(
     const postProcess = (raw: unknown): T => {
       if (group === 'visits') {
         const normalized = normalizeVisitsGroup(raw, warnings)
-        return validateExtractedVisits(normalized, sectionPages, warnings) as unknown as T
+        const before = warnings.length
+        const validated = validateExtractedVisits(normalized, sectionPages, warnings)
+        if (warnings.slice(before).some((w) => w.includes(WEEKS_AS_DAY_WARNING))) {
+          groupOutcomes.visits = { status: 'invalid_output', code: WEEKS_AS_DAY_WARNING }
+        }
+        return validated as unknown as T
       }
       if (group === 'eligibility') {
         return normalizeEligibilityGroup(raw, warnings) as unknown as T
