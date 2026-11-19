@@ -5,6 +5,12 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const packer = vi.hoisted(() => ({ fail: false }))
+vi.mock('docx', async (orig) => {
+  const real = (await orig()) as Record<string, unknown> & { Packer: { toBuffer: (d: unknown) => Promise<Buffer> } }
+  return { ...real, Packer: { toBuffer: (d: unknown) => (packer.fail ? Promise.reject(new Error('docx')) : real.Packer.toBuffer(d)) } }
+})
+
 const h = vi.hoisted(() => {
   class AccessError extends Error {
     constructor(message: string, public status: 401 | 403 | 404) {
@@ -92,6 +98,16 @@ describe('GET exportar Study Spec', () => {
     expect(html).not.toContain('<img src=x')
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt; &amp; &lt;img src=x onerror=1&gt;')
     expect(html).toContain('BORRADOR')
+  })
+
+  it('si armar el Word falla, no queda registrada una exportación que no ocurrió', async () => {
+    packer.fail = true
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const res = await GET(req('docx'), p)
+    spy.mockRestore()
+    packer.fail = false
+    expect(res.status).toBe(500)
+    expect(h.insertValues).not.toHaveBeenCalled()
   })
 
   it('si la auditoría falla, no se entrega el archivo', async () => {

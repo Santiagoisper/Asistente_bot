@@ -1,4 +1,4 @@
-import { validateStudyAccess } from '@ichtys/auth'
+import { handleApiError, validateStudyAccess } from '@ichtys/auth'
 import { db, eq } from '@ichtys/db'
 import type { DocumentStatusItem } from '../../../../../components/documents/documents-status-list'
 
@@ -53,7 +53,8 @@ export async function GET(
     })
 
     return Response.json(items)
-  } catch {
-    return new Response('Unauthorized', { status: 401 })
+  } catch (err) {
+    // Antes todo error salía como 401, incluso una caída de la base (auditoría 19/11, H-02).
+    return handleApiError(err)
   }
 }

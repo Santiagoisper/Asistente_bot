@@ -466,21 +466,25 @@ export async function GET(req: Request, { params }: RouteParams) {
     const safeName = protocol.replace(/[^a-z0-9-_]/gi, '_').toLowerCase()
 
     // Sacar el Study Spec del sistema queda registrado, como bajar un documento
-    // (auditoría 19/11, H-03). Si el registro falla, no se entrega el archivo.
-    await db.insert(auditLogs).values({
-      organizationId: orgId,
-      studyId,
-      userId,
-      // Acción existente: sumar una nueva toca packages/db (sí de Santiago). Lo distingue el tipo de recurso.
-      action: 'document.download',
-      resourceType: 'study_spec',
-      resourceId: row.id,
-      metadata: { format, version: row.version, status: row.status },
-    })
+    // (auditoría 19/11, H-03). Se registra recién con el archivo armado (si generarlo
+    // falla, no queda una exportación que no ocurrió) y, si el registro falla, no se entrega.
+    // Acción existente: sumar una nueva toca packages/db (sí de Santiago). Lo distingue el tipo de recurso.
+    const audit = () =>
+      db.insert(auditLogs).values({
+        organizationId: orgId,
+        studyId,
+        userId,
+        action: 'document.download',
+        resourceType: 'study_spec',
+        resourceId: row.id,
+        metadata: { format, version: row.version, status: row.status },
+      })
+
 
     if (format === 'docx') {
       const doc    = buildDocx(spec, row.version, row.status)
       const buffer = await Packer.toBuffer(doc)
+      await audit()
 
       return new Response(new Uint8Array(buffer), {
         status: 200,
@@ -494,6 +498,7 @@ export async function GET(req: Request, { params }: RouteParams) {
 
     // PDF: return print-ready HTML — browser saves as PDF via Ctrl+P / window.print()
     const html = buildHtml(spec, row.version, row.status)
+    await audit()
     return new Response(html, {
       status: 200,
       headers: {

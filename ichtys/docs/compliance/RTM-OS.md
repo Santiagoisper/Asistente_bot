@@ -1,6 +1,6 @@
 # Matriz de trazabilidad del OS: regla → prueba → evidencia
 
-**Versión:** 0.12 · **Fecha:** 2026-11-19 · **Estado:** borrador, sin revisión de Calidad. Tarea 48 del cronograma.
+**Versión:** 0.14 · **Fecha:** 2026-11-19 · **Estado:** borrador, sin revisión de Calidad. Tarea 48 del cronograma.
 
 Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, accesos), la carga de documentos y el asistente con sus citas, que la matriz de julio ([`RTM.md`](./RTM.md)) no cubre. Responde a la brecha de R2 anotada en la [línea de base](./REGULATORY-BASELINE.md).
 
@@ -25,6 +25,7 @@ Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, acces
 | El alta de un sujeto registra solo su código; el listado, solo la cantidad. Un código repetido responde 409 y no deja registro | `apps/web/app/api/studies/[id]/subjects/__tests__/route.oq.test.ts` | Ninguna | — |
 | Cada pregunta al asistente y cada respuesta, con sus citas, se guardan con su registro en una sola transacción; si el registro falla, no queda nada | `apps/web/lib/chat/__tests__/persistence-audit.test.ts`, `apps/web/app/api/chat/stream/__tests__/route.test.ts` | Ninguna | La base está simulada: la reversión real no se prueba |
 | Ver las citas de una respuesta exige dejar registro: si el registro falla, la ruta responde error | `apps/web/app/api/citations/[messageId]/__tests__/route.test.ts` | Ninguna | — |
+| Exportar el Study Spec queda auditado (quién, versión, estado y formato), recién con el archivo armado; sin auditoría no se entrega (auditoría 19/11, H-03) | `apps/web/app/api/studies/[id]/spec/[specId]/export/__tests__/route.test.ts` | Ninguna | Usa la acción `document.download` con tipo de recurso `study_spec`: una acción propia toca `packages/db` |
 
 ## R4 — Acceso mínimo, por organización, función y estudio
 
@@ -37,7 +38,8 @@ Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, acces
 | Cambiar el modo de acceso sigue sus reglas y avisa antes de vencer | `apps/web/lib/access/__tests__/mode-rules.test.ts`, `apps/web/components/access/__tests__/mode-panel.test.tsx` | Entorno de prueba, 14/11: aviso de plazo vencido y de que no tiene vuelta (PR #153) | Producción |
 | Quién coordina un estudio se decide con una regla propia en los dos modos, y ningún archivo la reemplaza por el atajo que en modo abierto no restringe | `apps/web/lib/access/__tests__/permissions.test.ts`, `apps/web/lib/access/__tests__/coordination-guard.test.ts` | Ninguna | Con dos cuentas reales |
 | «Qué cambió y quién»: el historial de accesos lo ve solo quien administra accesos; trae únicamente cambios de funciones, estudios y modo de su organización, sin reenviar la metadata de auditoría, y deja afuera los pedidos que no cambiaron nada | `apps/web/app/api/org/team/history/__tests__/route.test.ts`, `apps/web/lib/access/__tests__/team-history-text.test.ts`, `apps/web/components/access/__tests__/team-access-screen.test.tsx` | Ninguna | Dos organizaciones reales en la misma base; el historial depende de lo que la auditoría conserve |
-| Exportar el Study Spec (Word o HTML para imprimir) queda auditado y sin auditoría no se entrega; el texto del protocolo se escapa en el HTML; el Spec se busca con la organización y el estudio del acceso (auditoría 19/11, H-03) | `apps/web/app/api/studies/[id]/spec/[specId]/export/__tests__/route.test.ts`, `apps/web/app/api/studies/[id]/spec/__tests__/route.test.ts` | Ninguna | Usa la acción `document.download` con tipo de recurso `study_spec`: una acción propia toca `packages/db` |
+| Rutas que no tenían pruebas (auditoría 19/11, H-02): el estado de una importación masiva exige el mismo permiso que crearla y rechaza un identificador inválido; documentos del estudio y precalentamiento del chat ya no disfrazan una falla de la base como 401; descarga y página de documento auditan antes de entregar | `apps/web/app/api/__tests__/auditoria-rutas-sin-pruebas.test.ts` | Ninguna | La ruta del Study Spec y la exportación siguen sin pruebas completas |
+| El Study Spec y su exportación se buscan con la organización y el estudio del acceso; en el HTML para imprimir se escapa el texto del protocolo (auditoría 19/11, H-03) | `apps/web/app/api/studies/[id]/spec/[specId]/export/__tests__/route.test.ts`, `apps/web/app/api/studies/[id]/spec/__tests__/route.test.ts` | Ninguna | — |
 | Dar acceso a un estudio exige poder administrarlo, en los dos modos; un estudio de otra organización responde igual que uno inexistente | `apps/web/app/api/org/team/memberships/__tests__/route.test.ts` | Ninguna | Las bajas |
 | Sin permiso sobre el estudio no se agenda nada; un turno de otro estudio u otra organización responde como inexistente | `apps/web/app/api/studies/[id]/agenda/__tests__/routes.test.ts`, `apps/web/lib/agenda/__tests__/agenda-service.test.ts` | Ninguna | Con dos cuentas reales |
 | Un turno no se puede atar a un sujeto de otro estudio | `apps/web/lib/agenda/__tests__/agenda-service.test.ts` | Ninguna | — |

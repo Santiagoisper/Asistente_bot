@@ -23,6 +23,8 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // No anunciar el framework en cada respuesta (auditoría 19/11, H-07).
+  poweredByHeader: false,
   async headers() {
     return [
       {
