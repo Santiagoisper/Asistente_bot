@@ -30,7 +30,9 @@ const RANGE_WARNING = 'rango sin operador: se asumió inclusivo'
 
 const ANALYTE_ALIASES: Record<AnalyteId, RegExp> = {
   HbA1c: /HbA1c|\bA1c\b|hemoglobina glicosilada|glycated hemoglobin/i,
-  eGFR: /\beGFR\b|\bTFG\b|filtrado glomerular/i,
+  // «Tasa de filtración glomerular estimada» es como lo escribe un protocolo en castellano; antes
+  // solo se reconocía «filtrado glomerular» y el criterio quedaba «a revisar» (recorrido 19/11, R-09).
+  eGFR: /\beGFR\b|\bTFG\b|filtrado glomerular|filtraci[oó]n glomerular|estimated glomerular filtration rate/i,
   BMI: /\bBMI\b|\bIMC\b|índice de masa corporal|indice de masa corporal|body mass index/i,
 }
 
