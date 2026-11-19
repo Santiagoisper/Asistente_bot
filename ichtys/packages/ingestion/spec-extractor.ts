@@ -339,6 +339,12 @@ const SECTION_KEYWORDS: Record<'eligibility' | 'endpoints' | 'visits', RegExp[]>
     /primary\s+endpoint/i,
     /endpoints?\s+primarios?/i,
     /variables?\s+de\s+eficacia/i,
+    // Encabezados de protocolos cortos en castellano e inglés que no nombran «endpoints»
+    // (recorrido 19/11, R-04).
+    /objetivos?\s+primarios?/i,
+    /objetivos?\s+secundarios?/i,
+    /criterios?\s+de\s+valoraci[oó]n\s+principal/i,
+    /primary\s+objectives?/i,
   ],
   visits: [
     /cronograma\s+de\s+actividades/i,
@@ -347,6 +353,10 @@ const SECTION_KEYWORDS: Record<'eligibility' | 'endpoints' | 'visits', RegExp[]>
     /plan\s+de\s+visitas/i,
     /\bSoA\b/,
     /tabla\s+de\s+visitas/i,
+    /esquema\s+de\s+visitas/i,
+    /calendario\s+de\s+visitas/i,
+    /cronograma\s+de\s+visitas/i,
+    /visit\s+schedule/i,
   ],
 }
 
