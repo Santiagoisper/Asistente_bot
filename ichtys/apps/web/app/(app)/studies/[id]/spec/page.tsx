@@ -11,6 +11,7 @@ import {
   hasLegacyExtractionFailure,
   isProtocolProcessing,
   resolveExtractionFailed,
+  describeExtractionWarnings,
   specExtractionWarnings,
   specHasExtractionFailed,
 } from '../../../../../lib/spec-extraction-status'
@@ -160,7 +161,7 @@ export default async function StudySpecPage({ params }: SpecPageProps) {
 
   const spec = parsed.data
   const meaningful = isMeaningfulSpec(spec)
-  const extractionWarnings = specExtractionWarnings(spec)
+  const extractionWarnings = describeExtractionWarnings(specExtractionWarnings(spec))
 
   // Annotate criteria with SNOMED-CT / LOINC — deterministic, < 2 ms total
   const annotatedInclusion = annotateCriteria(spec.inclusionCriteria)

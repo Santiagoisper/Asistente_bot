@@ -11,6 +11,7 @@ import {
   studyEndpointSchema,
   studyIdentificationSchema,
   MAX_SPEC_ITEMS,
+  type SpecGroupOutcome,
   type StudySpec,
 } from './study-spec'
 import {
@@ -803,6 +804,12 @@ export async function extractStudySpec(
     sectionMap.detectedLanguage === 'unknown' ? null : sectionMap.detectedLanguage
 
   // ── Fase 2: Extracción en paralelo ────────────────────────────────────────
+  // Un grupo que queda vacío por no encontrarse su sección o por una falla del
+  // proveedor tiene que pedir confirmación al aprobar la spec. Antes solo quedaba
+  // la advertencia en el banner y la spec se aprobaba sin preguntar (recorrido
+  // de punta a punta, 19/11).
+  const groupOutcomes: Partial<Record<'eligibility' | 'endpoints' | 'visits', SpecGroupOutcome>> = {}
+
   async function runGroup<T>(
     group: 'eligibility' | 'endpoints' | 'visits',
     schema: z.ZodType<T>,
@@ -811,6 +818,7 @@ export async function extractStudySpec(
     const range = toSectionRange(sectionMap[group], pages)
     if (!range) {
       warnings.push(`${group}: section not located by semantic locator — group left empty`)
+      groupOutcomes[group] = { status: 'not_located', code: 'section_not_found' }
       return empty
     }
     const fewShot = buildFewShotContext(fewShotExamples, group)
@@ -900,6 +908,7 @@ export async function extractStudySpec(
       warnings.push(
         `${group} (P${range.pageStart}–P${range.pageEnd}): ${recordProviderFailure(group, extractionError)}`,
       )
+      groupOutcomes[group] = { status: 'provider_error', code: 'extraction_failed' }
       return empty
     }
   }
@@ -959,6 +968,7 @@ export async function extractStudySpec(
     exclusionCriteria: eligibility.exclusionCriteria,
     endpoints: endpoints.endpoints,
     visits: visits.visits,
+    ...(Object.keys(groupOutcomes).length > 0 ? { groupOutcomes } : {}),
   }, warnings)
 
   return { spec, warnings, extractionModel: extractionModelUsed, detectedLanguage }
