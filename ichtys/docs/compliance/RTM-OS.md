@@ -1,6 +1,6 @@
 # Matriz de trazabilidad del OS: regla → prueba → evidencia
 
-**Versión:** 0.12 · **Fecha:** 2026-11-19 · **Estado:** borrador, sin revisión de Calidad. Tarea 48 del cronograma.
+**Versión:** 0.13 · **Fecha:** 2026-11-19 · **Estado:** borrador, sin revisión de Calidad. Tarea 48 del cronograma.
 
 Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, accesos), la carga de documentos y el asistente con sus citas, que la matriz de julio ([`RTM.md`](./RTM.md)) no cubre. Responde a la brecha de R2 anotada en la [línea de base](./REGULATORY-BASELINE.md).
 
