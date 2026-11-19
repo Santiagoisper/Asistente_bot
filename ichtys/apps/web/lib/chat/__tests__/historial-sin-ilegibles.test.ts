@@ -18,8 +18,8 @@ afterEach(() => {
 describe('historyTurnsFrom', () => {
   it('descifra lo cifrado y respeta el orden', () => {
     const turns = historyTurnsFrom([
-      { role: 'user', contentEncrypted: encryptClinicalContent('¿Ventana de la visita 6?'), content: null },
-      { role: 'assistant', contentEncrypted: encryptClinicalContent('±7 días respecto del día 169.'), content: null },
+      { role: 'user', contentEncrypted: encryptClinicalContent('¿Ventana de la visita 6?') },
+      { role: 'assistant', contentEncrypted: encryptClinicalContent('±7 días respecto del día 169.') },
     ])
     expect(turns).toEqual([
       { role: 'user', content: '¿Ventana de la visita 6?' },
@@ -27,15 +27,11 @@ describe('historyTurnsFrom', () => {
     ])
   })
 
-  it('lo heredado en claro sigue entrando hasta el sellado', () => {
-    expect(historyTurnsFrom([{ role: 'user', contentEncrypted: null, content: 'pregunta vieja' }])).toEqual([{ role: 'user', content: 'pregunta vieja' }])
-  })
-
   it('un mensaje que no descifra se omite: ni el aviso ni el texto en claro de respaldo', () => {
     const turns = historyTurnsFrom([
-      { role: 'user', contentEncrypted: encryptClinicalContent('primera'), content: null },
-      { role: 'assistant', contentEncrypted: 'v1:basura', content: 'resto en claro que no debe usarse' },
-      { role: 'user', contentEncrypted: encryptClinicalContent('tercera'), content: null },
+      { role: 'user', contentEncrypted: encryptClinicalContent('primera') },
+      { role: 'assistant', contentEncrypted: 'v1:basura' },
+      { role: 'user', contentEncrypted: encryptClinicalContent('tercera') },
     ])
     expect(turns).toEqual([
       { role: 'user', content: 'primera' },
@@ -44,7 +40,8 @@ describe('historyTurnsFrom', () => {
     expect(JSON.stringify(turns)).not.toContain(UNREADABLE_MESSAGE)
   })
 
-  it('una fila sin cuerpo en ninguna forma no entra', () => {
-    expect(historyTurnsFrom([{ role: 'assistant', contentEncrypted: null, content: null }])).toEqual([])
+  it('un texto en claro que viniera en la fila no entra: solo cuenta lo cifrado', () => {
+    const fila = { role: 'assistant', contentEncrypted: 'v1:basura', content: 'texto en claro' } as { role: 'assistant'; contentEncrypted: string }
+    expect(historyTurnsFrom([fila])).toEqual([])
   })
 })

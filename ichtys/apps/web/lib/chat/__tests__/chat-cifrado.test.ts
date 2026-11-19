@@ -28,9 +28,9 @@ afterEach(() => {
 describe('lectura del contenido cifrado — ida y vuelta y fallbacks', () => {
   it('lo que se guarda cifrado se lee exacto: cuerpo y título', () => {
     const cuerpo = '¿El paciente continúa con metformina 850 mg cada 12 horas?'
-    expect(readMessageContent({ contentEncrypted: encryptClinicalContent(cuerpo), content: null })).toBe(cuerpo)
+    expect(readMessageContent({ contentEncrypted: encryptClinicalContent(cuerpo) })).toBe(cuerpo)
     const titulo = 'Consulta por metformina'
-    expect(readConversationTitle({ titleEncrypted: encryptClinicalContent(titulo), title: null })).toBe(titulo)
+    expect(readConversationTitle({ titleEncrypted: encryptClinicalContent(titulo) })).toBe(titulo)
   })
 
   it('lo cifrado nunca aparece en claro en el payload guardado', () => {
@@ -41,18 +41,19 @@ describe('lectura del contenido cifrado — ida y vuelta y fallbacks', () => {
   })
 
   it('un cuerpo que no se puede descifrar cae al aviso y no tira la conversación', () => {
-    expect(readMessageContent({ contentEncrypted: 'no-es-un-payload-valido', content: null })).toBe(UNREADABLE_MESSAGE)
-    expect(readConversationTitle({ titleEncrypted: 'no-es-un-payload-valido', title: null })).toBe('Consulta sin título')
+    expect(readMessageContent({ contentEncrypted: 'no-es-un-payload-valido' })).toBe(UNREADABLE_MESSAGE)
+    expect(readConversationTitle({ titleEncrypted: 'no-es-un-payload-valido' })).toBe('Consulta sin título')
   })
 
-  it('lo heredado en claro se sigue leyendo hasta el sellado', () => {
-    expect(readMessageContent({ contentEncrypted: null, content: 'mensaje anterior en claro' })).toBe('mensaje anterior en claro')
-    expect(readConversationTitle({ titleEncrypted: null, title: 'título anterior' })).toBe('título anterior')
+  it('una conversación todavía sin título da null', () => {
+    expect(readConversationTitle({ titleEncrypted: null })).toBeNull()
   })
 
-  it('sin ninguna de las dos, el cuerpo cae al aviso y el título a null', () => {
-    expect(readMessageContent({ contentEncrypted: null, content: null })).toBe(UNREADABLE_MESSAGE)
-    expect(readConversationTitle({ titleEncrypted: null, title: null })).toBeNull()
+  it('ya no hay lectura en claro: si una fila trajera content o title, no se usan (0028)', () => {
+    const conViejas = { contentEncrypted: 'v1:basura', content: 'texto en claro' } as { contentEncrypted: string }
+    expect(readMessageContent(conViejas)).toBe(UNREADABLE_MESSAGE)
+    const tituloViejo = { titleEncrypted: null, title: 'título en claro' } as { titleEncrypted: string | null }
+    expect(readConversationTitle(tituloViejo)).toBeNull()
   })
 })
 
