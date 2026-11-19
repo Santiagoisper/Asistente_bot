@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { AccessError, validateStudyAccess } from '@ichtys/auth'
-import { and, db, eq, studySpecs } from '@ichtys/db'
+import { and, auditLogs, db, eq, studySpecs } from '@ichtys/db'
 import { studySpecSchema } from '@ichtys/ingestion'
 import type { StudySpec } from '@ichtys/ingestion'
 import { formatVisitWindow } from '@ichtys/ingestion/visit-window-format'
@@ -438,7 +438,7 @@ export async function GET(req: Request, { params }: RouteParams) {
   const { format } = parsed.data
 
   try {
-    const { orgId } = await validateStudyAccess(studyId)
+    const { orgId, userId } = await validateStudyAccess(studyId)
 
     const row = await db.query.studySpecs.findFirst({
       where: and(
@@ -464,6 +464,19 @@ export async function GET(req: Request, { params }: RouteParams) {
     const spec = specParsed.data
     const protocol = spec.identification.protocolCode ?? 'spec'
     const safeName = protocol.replace(/[^a-z0-9-_]/gi, '_').toLowerCase()
+
+    // Sacar el Study Spec del sistema queda registrado, como bajar un documento
+    // (auditoría 19/11, H-03). Si el registro falla, no se entrega el archivo.
+    await db.insert(auditLogs).values({
+      organizationId: orgId,
+      studyId,
+      userId,
+      // Acción existente: sumar una nueva toca packages/db (sí de Santiago). Lo distingue el tipo de recurso.
+      action: 'document.download',
+      resourceType: 'study_spec',
+      resourceId: row.id,
+      metadata: { format, version: row.version, status: row.status },
+    })
 
     if (format === 'docx') {
       const doc    = buildDocx(spec, row.version, row.status)
