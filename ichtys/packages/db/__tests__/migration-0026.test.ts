@@ -1,8 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { getTableConfig } from 'drizzle-orm/pg-core'
 import { describe, expect, it } from 'vitest'
-import { conversations, messages } from '../schema/conversations'
 
 /**
  * 0026 (PR-A del chat cifrado, diseño de Architect 7a7b2edf + decisiones de Fable):
@@ -15,8 +13,6 @@ const statements = read('0026_chat_content_encrypted.sql')
   .split('--> statement-breakpoint')
   .map((statement) => statement.replace(/^\s*--.*$/gm, '').trim())
   .filter(Boolean)
-const column = (table: Parameters<typeof getTableConfig>[0], name: string) =>
-  getTableConfig(table).columns.find((c) => c.name === name)
 
 describe('migración 0026 — contenido del mensaje y título de la conversación, cifrados', () => {
   it('son exactamente estas cuatro sentencias: dos columnas nuevas, una que deja de ser obligatoria y el CHECK', () => {
@@ -32,14 +28,13 @@ describe('migración 0026 — contenido del mensaje y título de la conversació
     expect(statements.join('\n')).not.toMatch(/DROP\s+(COLUMN|TABLE)|DELETE\s+FROM|TRUNCATE|UPDATE\s|RENAME\s/i)
   })
 
-  it('las columnas nuevas son opcionales: las filas que ya existen quedan sin valor', () => {
-    expect(column(messages, 'content_encrypted')?.notNull).toBe(false)
-    expect(column(conversations, 'title_encrypted')?.notNull).toBe(false)
-  })
-
-  it('la columna en claro del mensaje sigue existiendo, ya sin ser obligatoria; el título en claro queda como estaba', () => {
-    expect(column(messages, 'content')?.notNull).toBe(false)
-    expect(column(conversations, 'title')?.notNull).toBe(false)
+  // El schema de hoy ya no es el de la 0026: desde el 17/11/2026 no tiene `content` ni
+  // `title`, y `content_encrypted` es obligatoria en el schema (la base, desde la migración 0028).
+  // Acá queda lo que la 0026 misma hace, leído de su SQL.
+  it('las columnas que agrega son opcionales en su SQL: las filas que ya existían quedaban sin valor', () => {
+    const texto = statements.join('\n')
+    expect(texto).not.toMatch(/content_encrypted"?\s+text\s+NOT NULL/i)
+    expect(texto).not.toMatch(/title_encrypted"?\s+text\s+NOT NULL/i)
   })
 
   it('todo mensaje tiene cuerpo: el CHECK pide content heredada O la cifrada, y no falla si ya existe (pg_constraint)', () => {

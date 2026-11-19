@@ -17,6 +17,14 @@ import {
 // Props
 // ---------------------------------------------------------------------------
 
+/** Lo que ve la persona cuando el servidor no aprueba la spec. */
+export function specApproveErrorText(status: number): string {
+  if (status === 401) return 'Sesión expirada. Volvé a iniciar sesión.'
+  if (status === 403 || status === 404) return 'Tu rol no puede aprobar la spec de este estudio.'
+  if (status === 429) return 'Hiciste muchos cambios seguidos. Esperá un minuto e intentá de nuevo.'
+  return 'No se pudo aprobar la spec. Intentá de nuevo en unos minutos.'
+}
+
 interface SpecReviewProps {
   specId: string
   studyId: string
@@ -1270,6 +1278,7 @@ export default function SpecReview({
   const [activeTab, setActiveTab]     = useState<Tab>('eligibility')
   const [approving, setApproving]     = useState(false)
   const [approved, setApproved]       = useState(status === 'approved')
+  const [approveError, setApproveError] = useState<string | null>(null)
 
   // Local mutable copies — updated optimistically on each criterion save
   const [localSpec, setLocalSpec]             = useState<StudySpec>(spec)
@@ -1312,6 +1321,7 @@ export default function SpecReview({
 
   async function handleApprove() {
     setApproving(true)
+    setApproveError(null)
     try {
       const url = `/api/studies/${studyId}/spec/${specId}/approve`
       let res = await fetch(url, { method: 'POST' })
@@ -1338,7 +1348,12 @@ export default function SpecReview({
         }
       }
 
+      // Antes un rechazo no decía nada: el botón volvía a su estado y la spec seguía en
+      // borrador sin aviso (auditoría 19/11, H-21).
       if (res.ok) setApproved(true)
+      else if (res.status !== 409) setApproveError(specApproveErrorText(res.status))
+    } catch {
+      setApproveError('No se pudo conectar con el servidor. Revisá tu conexión e intentá de nuevo.')
     } finally {
       setApproving(false)
     }
@@ -1536,6 +1551,11 @@ export default function SpecReview({
             >
               {approving ? 'Aprobando…' : '✓ Aprobar spec'}
             </button>
+          )}
+          {approveError && (
+            <p role="alert" className="text-xs text-alphi-rose">
+              {approveError}
+            </p>
           )}
           {currentStatus === 'approved' && (
             <span className="inline-flex items-center gap-1.5 rounded-lg border border-alphi-sage/30 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-alphi-sage">

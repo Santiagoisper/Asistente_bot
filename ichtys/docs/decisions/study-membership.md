@@ -185,7 +185,7 @@ Las dos direcciones no son iguales:
 Pasos:
 
 1. La migración crea las tablas y las columnas. Las organizaciones existentes quedan en `open`. Nada cambia para nadie. La fecha límite se asigna cuando la pantalla esté disponible, y recién ahí el valor por defecto de la base pasa a `enforced` para las organizaciones nuevas (M1): antes, un centro nuevo quedaría en modo estricto sin pantalla para armar su equipo.
-2. El administrador ve una pantalla «Equipo y accesos»: las personas con sus funciones, los estudios, quién está en cuál y cuántos días quedan. Corrige funciones y carga membresías con el modo todavía en `open`.
+2. El administrador ve una pantalla «Equipo y accesos»: las personas con sus funciones, los estudios, quién está en cuál y cuántos días quedan. Corrige funciones y carga membresías con el modo todavía en `open`. La misma pantalla muestra «qué cambió y quién»: cada alta o baja de función o de estudio y cada cambio de modo, con quién lo hizo y a quién, leído del registro de auditoría de la organización (no hay tabla aparte).
 3. Antes de pasar a `enforced`, la pantalla muestra qué cambia: quién deja de ver qué estudios, quién queda sin ningún estudio y quién deja de poder evolucionar. El cambio pide confirmación y queda auditado.
 4. La corrección de un error de carga es acotada y no necesita volver a `open`: quien tiene alcance total entra siempre y agrega la membresía o la función que falta en el momento. Volver a `open` queda disponible solo antes de la fecha límite, auditado; después, no.
 

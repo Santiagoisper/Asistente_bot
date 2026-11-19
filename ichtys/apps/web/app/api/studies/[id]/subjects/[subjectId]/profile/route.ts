@@ -3,6 +3,7 @@ import { writeAuditLog } from '../../../../../../../lib/chat/persistence'
 import { loadPatientProfileState } from '../../../../../../../lib/subjects/patient-profile-service'
 import { PhiConfigError } from '../../../../../../../lib/subjects/phi-fields'
 import { profileForResponse } from '../../../../../../../lib/subjects/profile-response'
+import { clinicalRateLimit } from '../../../../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -15,6 +16,8 @@ export async function GET(
 
   try {
     const { orgId, userId, study, subject } = await validateSubjectAccess(subjectId, routeStudyId)
+    const limited = await clinicalRateLimit('record_read', { orgId: orgId, userId: userId, studyId: study.id, req: _req, endpoint: 'subjects/profile' })
+    if (limited) return limited
 
     const { profile, unreadable } = await loadPatientProfileState({
       orgId,

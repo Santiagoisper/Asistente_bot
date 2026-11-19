@@ -8,6 +8,7 @@ import { ACCESS_OPEN_DEFAULT_DAYS, canSwitchMode, previewEnforcedImpact } from '
 import { canManageOrgAccess } from '../../../../../lib/access/permissions'
 import { assignOpenDeadline, loadTeamSnapshot, setOrgAccessMode } from '../../../../../lib/access/team-service'
 import { auditedWrite } from '../../../../../lib/audit/audited-write'
+import { clinicalRateLimit } from '../../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -42,13 +43,14 @@ export async function GET(): Promise<Response> {
       const assigned = await auditedWrite(
         // La escritura vive en team-service: nunca pisa una fecha existente.
         (tx) => assignOpenDeadline(tx, { orgId: context.orgId, until }),
-        () => ({
+        (result) => ({
           action: 'org.access_mode.deadline_set',
           orgId: context.orgId,
           userId: context.userId,
           resourceType: 'organization',
           resourceId: context.orgId,
-          metadata: { days: ACCESS_OPEN_DEFAULT_DAYS, openUntil: until.toISOString() },
+          // Carrera perdida: queda registrada, pero `changed: false` (el historial no la muestra como cambio).
+          metadata: { days: ACCESS_OPEN_DEFAULT_DAYS, openUntil: until.toISOString(), changed: result.assigned },
         }),
       )
       if (assigned.assigned) {
@@ -109,6 +111,8 @@ export async function PUT(req: Request): Promise<Response> {
 
     const context = await resolveOrgAccessContext()
     if (!canManageOrgAccess(context.access)) throw new AccessError('Insufficient role', 403)
+    const limited = await clinicalRateLimit('admin_write', { orgId: context.orgId, userId: context.userId, req, endpoint: '/api/org/team/mode' })
+    if (limited) return limited
 
     const problem = canSwitchMode({
       target: input.mode,

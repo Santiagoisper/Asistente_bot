@@ -5,6 +5,7 @@ import { PhiConfigError } from '../../../../../../../../../../lib/subjects/phi-f
 import { findSubjectEvolution } from '../../../../../../../../../../lib/subjects/evolution-reader'
 import { profileForResponse } from '../../../../../../../../../../lib/subjects/profile-response'
 import { parseRouteUuid } from '../../../../../../../../../../lib/api/route-uuid'
+import { clinicalRateLimit } from '../../../../../../../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -29,6 +30,8 @@ export async function POST(
 
   try {
     const { orgId, userId, study, subject } = await validateSubjectAccess(subjectId, routeStudyId, { require: 'clinical.author' })
+    const limited = await clinicalRateLimit('lab_review', { orgId: orgId, userId: userId, studyId: study.id, req: _req, endpoint: 'profile/proposals/confirm' })
+    if (limited) return limited
     if (!evolutionId) return Response.json({ error: 'no_pending_proposal' }, { status: 409 })
 
     const evolution = await findSubjectEvolution({ orgId, studyId: study.id, subjectId: subject.id, evolutionId }, 'with-voided')

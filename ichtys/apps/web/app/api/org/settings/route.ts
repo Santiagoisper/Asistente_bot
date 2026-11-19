@@ -31,6 +31,7 @@ import { isProviderChoiceSupported, mergeOrgKeys } from '../../../../lib/setting
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../lib/api/body-limit'
 import { patchSchema } from '../../../../lib/api/input-schemas'
 import { insertAuditLog } from '../../../../lib/audit/audited-write'
+import { clinicalRateLimit } from '../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -104,6 +105,9 @@ export async function PATCH(req: Request): Promise<Response> {
     if (!canChangeOrgSettings(access)) {
       throw new AccessError('Insufficient role', 403)
     }
+    // El límite se cuenta después del permiso: alguien sin permiso no gasta el cupo del centro.
+    const limited = await clinicalRateLimit('admin_write', { orgId: orgId, userId: userId, req: req, endpoint: '/api/org/settings' })
+    if (limited) return limited
 
     // Tope de bytes ANTES de parsear (413, H7 vuelta 2). El auth ya corrió
     // más arriba; un JSON inválido ahora responde 400 en vez de caer al 500
@@ -222,12 +226,15 @@ export async function PATCH(req: Request): Promise<Response> {
 /**
  * POST /api/org/settings/test-providers — prueba conectividad de cada proveedor.
  */
-export async function POST(): Promise<Response> {
+export async function POST(req: Request): Promise<Response> {
   try {
-    const { orgId, access } = await resolveOrgContext()
+    const { orgId, userId, access } = await resolveOrgContext()
     if (!canChangeOrgSettings(access)) {
       throw new AccessError('Insufficient role', 403)
     }
+    // El límite se cuenta después del permiso: alguien sin permiso no gasta el cupo del centro.
+    const limited = await clinicalRateLimit('admin_write', { orgId: orgId, userId: userId, req: req, endpoint: '/api/org/settings' })
+    if (limited) return limited
 
     const orgKeys = await getOrgLlmApiKeys(orgId)
     const health = await checkAllProviderHealth(orgKeys)

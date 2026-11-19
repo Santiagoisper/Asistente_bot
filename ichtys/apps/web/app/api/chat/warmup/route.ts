@@ -1,4 +1,4 @@
-import { validateStudyAccess } from '@ichtys/auth'
+import { handleApiError, validateStudyAccess } from '@ichtys/auth'
 
 export const runtime = 'nodejs'
 
@@ -15,7 +15,8 @@ export async function GET(req: Request): Promise<Response> {
   try {
     await validateStudyAccess(studyId)
     return Response.json({ ok: true })
-  } catch {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  } catch (err) {
+    // Mismo mapeo que el resto de las rutas: 401/403/404 según el acceso, 500 si falla otra cosa.
+    return handleApiError(err)
   }
 }

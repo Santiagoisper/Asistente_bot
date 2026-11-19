@@ -4,6 +4,7 @@ import { profileWriteErrorResponse } from '../../../../../../../../../../lib/sub
 import { PhiConfigError } from '../../../../../../../../../../lib/subjects/phi-fields'
 import { profileForResponse } from '../../../../../../../../../../lib/subjects/profile-response'
 import { parseRouteUuid } from '../../../../../../../../../../lib/api/route-uuid'
+import { clinicalRateLimit } from '../../../../../../../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -21,6 +22,8 @@ export async function POST(
 
   try {
     const { orgId, userId, study, subject } = await validateSubjectAccess(subjectId, routeStudyId, { require: 'clinical.author' })
+    const limited = await clinicalRateLimit('lab_review', { orgId: orgId, userId: userId, studyId: study.id, req: _req, endpoint: 'profile/proposals/reject' })
+    if (limited) return limited
     if (!evolutionId) return Response.json({ error: 'no_pending_proposal' }, { status: 409 })
 
     // La propuesta se busca en el perfil comparando texto, y ahí el identificador está como lo

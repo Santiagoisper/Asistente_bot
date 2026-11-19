@@ -3,6 +3,7 @@ import { isOsEnabled } from '../../../../../../../../../lib/flags'
 import { labReportErrorResponse } from '../../../../../../../../../lib/labs/lab-report-http'
 import { rejectLabReport } from '../../../../../../../../../lib/labs/lab-report-service'
 import { parseRouteUuid } from '../../../../../../../../../lib/api/route-uuid'
+import { clinicalRateLimit } from '../../../../../../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -17,6 +18,8 @@ export async function POST(
 
   try {
     const access = await validateSubjectAccess(subjectId, studyId, { require: 'labs.manage' })
+    const limited = await clinicalRateLimit('lab_review', { orgId: access.orgId, userId: access.userId, studyId, req: _req, endpoint: 'lab-reports/reject' })
+    if (limited) return limited
     if (!reportId) return Response.json({ error: 'not_found' }, { status: 404 })
 
     await rejectLabReport({

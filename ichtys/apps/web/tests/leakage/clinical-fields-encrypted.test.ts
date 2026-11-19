@@ -71,8 +71,6 @@ const PLAIN: Record<string, string> = {
   'messages.confidence': 'confianza de la respuesta, de una lista cerrada',
   'messages.provider': 'proveedor del modelo que respondió: nombre, no dato de la persona',
   'messages.model': 'identificador del modelo que respondió: nombre, no dato de la persona',
-  'messages.content': 'TEXTO LIBRE EN CLARO, heredado: el cuerpo del mensaje va cifrado en content_encrypted desde el PR-B del chat cifrado (2026-11-16) y el código ya no escribe acá. Quedan en claro los mensajes anteriores hasta que se sellen; después la columna se saca con otra migración',
-  'conversations.title': 'TEXTO LIBRE EN CLARO, heredado: el título lo arma un modelo desde la primera pregunta y va cifrado en title_encrypted desde el PR-B del chat cifrado (2026-11-16); el código ya no escribe acá. Quedan en claro los anteriores hasta que se sellen',
   'agenda_items.kind': 'tipo de turno, de una lista cerrada',
   'agenda_items.status': 'estado del turno, de una lista cerrada',
   'agenda_items.created_by': 'identificador de quien lo agendó',
@@ -120,6 +118,6 @@ describe('leakage — datos de salud cifrados campo por campo (R5)', () => {
 
   it('el texto libre en claro es exactamente el que está marcado como decisión pendiente', () => {
     const pending = Object.entries(PLAIN).filter(([, why]) => why.startsWith('TEXTO LIBRE EN CLARO')).map(([column]) => column)
-    expect(pending.sort()).toEqual(['agenda_items.title', 'conversations.title', 'messages.content'])
+    expect(pending.sort()).toEqual(['agenda_items.title'])
   })
 })
