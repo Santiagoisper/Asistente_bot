@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { mergeDictationAddition, NOT_MENTIONED, studyDictationPrompts, type ProtocolVisit } from '@ichtys/clinical'
-import { bloodPressureProposalLabel } from '../../lib/subjects/proposal-display'
+import { bloodPressureProposalLabel, uniqueConditions } from '../../lib/subjects/proposal-display'
 import { newerDraftNotice, specPendingApprovalNotice, unapprovedSpecNotice } from '../../lib/subjects/spec-notice'
 import { visitForLabel, visitOptions } from '../../lib/subjects/visit-labels'
 import { DictationPanel, type DictationRecording, type DictationSource } from './dictation-panel'
@@ -23,6 +23,19 @@ import { VoidedOriginReviewForm, type RetireChoice } from './voided-origin-revie
 import { labNamesFromEvolution, retireErrorMessage, storedBloodPressureText, voidedOriginNotice } from '../../lib/subjects/voided-origin'
 import { SCREENING_NOT_READ, VOID_HISTORY_NOT_REREAD, voidDoneMessage, voidErrorMessage, type VoidOutcome } from '../../lib/subjects/evolution-void-screen'
 import { formatDateTime } from '../../lib/os/date-time'
+import { measurementSection, type MeasurementSection } from '../../lib/subjects/profile-sections'
+
+/**
+ * Rótulos de la propuesta de perfil (recorrido de punta a punta, 19/11, R-07): peso y talla no
+ * son laboratorio, y la misma condición escrita de dos formas («DM2» y «diabetes tipo 2») se
+ * muestra una vez. Solo pantalla: lo que se acepta no cambia.
+ */
+const PROPOSAL_SECTION_LABEL: Record<MeasurementSection, string> = {
+  laboratorio: 'Laboratorio',
+  vitales: 'Signos vitales',
+  antropometria: 'Antropometría',
+}
+
 
 interface EvolutionItem {
   id: string
@@ -717,7 +730,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId, timeZone }:
 
       {pendingLabs?.requiresHumanReview && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
-          <p className="text-sm font-semibold text-amber-900">Revisión humana requerida (URS-007)</p>
+          <p className="text-sm font-semibold text-amber-900">Revisión humana requerida</p>
           <ul className="mt-2 space-y-1 text-sm text-amber-950">
             {pendingLabs.labs.map((lab) => (
               <li key={lab.name}>
@@ -758,7 +771,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId, timeZone }:
             {bloodPressureProposalLabel(proposal.facts) ? <li>{bloodPressureProposalLabel(proposal.facts)}</li> : null}
             {proposal.facts.labs.map((lab) => (
               <li key={`lab-${lab.name}`}>
-                Laboratorio · {lab.name}: {lab.value}
+                {PROPOSAL_SECTION_LABEL[measurementSection(lab.name)]} · {lab.name}: {lab.value}
                 {lab.unit ? ` ${lab.unit}` : ''}
               </li>
             ))}
@@ -769,7 +782,7 @@ export default function SubjectEvolutionClient({ studyId, subjectId, timeZone }:
                 {med.frequency ? ` ${med.frequency}` : ''}
               </li>
             ))}
-            {proposal.facts.conditions.map((condition) => (
+            {uniqueConditions(proposal.facts.conditions).map((condition) => (
               <li key={`cond-${condition}`}>Condición · {condition}</li>
             ))}
           </ul>

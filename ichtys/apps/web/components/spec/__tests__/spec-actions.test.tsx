@@ -143,6 +143,8 @@ describe('SpecReview — aprobar', () => {
     approveCalls = 0
     confirm.mockReturnValue(true)
     await approve()
+    expect(confirm.mock.calls[0]![0]).toContain('(Visitas)')
+    expect(confirm.mock.calls[0]![0]).not.toContain('visits')
     const resend = fetchMock.mock.calls.filter((c) => String(c[0]).endsWith('/approve')).at(-1)!
     expect(JSON.parse(resend[1].body)).toEqual({ acknowledgeGroups: ['visits'] })
     confirm.mockRestore()

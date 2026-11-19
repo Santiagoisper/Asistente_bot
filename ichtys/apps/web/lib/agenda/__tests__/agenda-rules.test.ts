@@ -61,7 +61,8 @@ describe('vista de la agenda', () => {
 
   it('resume el día', () => {
     expect(daySummary([])).toBe('Sin turnos')
-    expect(daySummary([card({ status: 'cancelled' })])).toBe('Sin turnos')
+    expect(daySummary([card({ status: 'cancelled' })])).toBe('Sin turnos vigentes · 1 cancelado')
+    expect(daySummary([card({ status: 'cancelled' }), card({ status: 'cancelled' })])).toBe('Sin turnos vigentes · 2 cancelados')
     expect(daySummary([card({}), card({ id: 'b', status: 'done' }), card({ id: 'c', status: 'no_show' }), card({ id: 'd' })])).toBe('4 turnos · 1 hecho · 2 pendientes · 1 ausente')
     expect(daySummary([card({ status: 'done' })])).toBe('1 turno · 1 hecho')
   })
