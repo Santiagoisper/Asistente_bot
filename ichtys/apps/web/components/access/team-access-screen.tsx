@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import type { MemberFunction } from '@ichtys/db'
+import { AccessHistoryPanel } from './access-history-panel'
 import { ModePanel } from './mode-panel'
 import { MONITOR_MEMBERSHIP_MAX_DAYS } from '../../lib/access/permissions'
 import {
@@ -89,17 +90,20 @@ async function errorText(res: Response): Promise<string> {
 
 const isoDate = (daysFromNow: number): string => new Date(Date.now() + daysFromNow * DAY).toISOString().slice(0, 10)
 
-export function TeamAccessScreen() {
+export function TeamAccessScreen({ timeZone }: { timeZone: string }) {
   const [data, setData] = useState<TeamPayload | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [noticeIsError, setNoticeIsError] = useState(false)
   const [pendingAction, setPendingAction] = useState<Action | null>(null)
+  // Cambia cada vez que el equipo se vuelve a leer: el historial vuelve a su primera página.
+  const [historyKey, setHistoryKey] = useState(0)
 
   const load = useCallback(async (): Promise<void> => {
     const res = await fetch('/api/org/team')
     if (!res.ok) throw new Error('load failed')
     setData((await res.json()) as TeamPayload)
+    setHistoryKey((key) => key + 1)
   }, [])
 
   useEffect(() => {
@@ -219,6 +223,8 @@ export function TeamAccessScreen() {
           <p className="text-sm text-alphi-muted">No hay integrantes en la organización.</p>
         ) : null}
       </div>
+
+      <AccessHistoryPanel people={data.people} studies={data.studies} refreshKey={historyKey} timeZone={timeZone} listTruncated={data.truncated} />
     </section>
   )
 }

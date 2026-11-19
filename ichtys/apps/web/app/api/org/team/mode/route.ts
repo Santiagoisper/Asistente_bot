@@ -42,13 +42,14 @@ export async function GET(): Promise<Response> {
       const assigned = await auditedWrite(
         // La escritura vive en team-service: nunca pisa una fecha existente.
         (tx) => assignOpenDeadline(tx, { orgId: context.orgId, until }),
-        () => ({
+        (result) => ({
           action: 'org.access_mode.deadline_set',
           orgId: context.orgId,
           userId: context.userId,
           resourceType: 'organization',
           resourceId: context.orgId,
-          metadata: { days: ACCESS_OPEN_DEFAULT_DAYS, openUntil: until.toISOString() },
+          // Carrera perdida: queda registrada, pero `changed: false` (el historial no la muestra como cambio).
+          metadata: { days: ACCESS_OPEN_DEFAULT_DAYS, openUntil: until.toISOString(), changed: result.assigned },
         }),
       )
       if (assigned.assigned) {

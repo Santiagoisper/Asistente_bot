@@ -127,3 +127,85 @@ export const MODE_PANEL_LABELS = {
   stopsAuthoring: 'deja de poder evolucionar (necesita la función Investigador/a)',
   okChanged: 'Modo cambiado.',
 } as const
+
+/** Textos del historial «Qué cambió y quién» (L6: la pantalla y su prueba leen lo mismo). */
+export const HISTORY_TEXTS = {
+  title: 'Qué cambió y quién',
+  detail:
+    'Funciones, accesos a estudios y modo de la organización, de lo más nuevo a lo más viejo. Sale del registro de auditoría; los pedidos que no cambiaron nada no figuran.',
+  empty: 'Todavía no hay cambios de accesos registrados.',
+  loadFailed: 'No se pudo cargar el historial. Probá de nuevo.',
+  more: 'Ver más',
+  loading: 'Cargando…',
+  unknownPerson: 'Una persona que ya no está en la organización',
+  /** La lista del equipo llegó cortada: no se puede afirmar que la persona se fue. */
+  unlistedPerson: 'Una persona que no figura en la lista mostrada',
+  unknownStudy: 'un estudio',
+  unknownFunction: 'una función que ya no existe',
+  system: 'El sistema',
+} as const
+
+/** Lo mínimo que la descripción necesita de una entrada (el tipo completo vive en team-history.ts). */
+export interface HistoryEntryView {
+  action: string
+  at: string
+  actorUserId: string | null
+  memberUserId: string | null
+  functionKey: MemberFunction | null
+  studyId: string | null
+  self: boolean
+  hasExpiry: boolean | null
+  modeTo: 'open' | 'enforced' | null
+  openUntil: string | null
+}
+
+const formatDate = (iso: string, timeZone: string): string =>
+  new Intl.DateTimeFormat('es-AR', { timeZone, day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(iso))
+
+/**
+ * Una entrada del historial en una frase. Los nombres y estudios llegan de la
+ * lista del equipo; quien ya no está se nombra como tal, sin inventar.
+ */
+export function describeHistoryEntry(
+  entry: HistoryEntryView,
+  names: ReadonlyMap<string, string>,
+  studies: ReadonlyMap<string, string>,
+  timeZone: string,
+  options: { listTruncated?: boolean } = {},
+): string {
+  const missing = options.listTruncated ? HISTORY_TEXTS.unlistedPerson : HISTORY_TEXTS.unknownPerson
+  const person = (userId: string | null) => (userId ? names.get(userId) ?? missing : missing)
+  const actor = entry.actorUserId ? person(entry.actorUserId) : HISTORY_TEXTS.system
+  const member = person(entry.memberUserId)
+  const fn = entry.functionKey ? `«${FUNCTION_LABELS[entry.functionKey]}»` : HISTORY_TEXTS.unknownFunction
+  const study = entry.studyId ? studies.get(entry.studyId) ?? HISTORY_TEXTS.unknownStudy : HISTORY_TEXTS.unknownStudy
+
+  switch (entry.action) {
+    case 'access.function.grant':
+      return entry.self ? `${actor} se asignó la función ${fn}.` : `${actor} le asignó a ${member} la función ${fn}.`
+    case 'access.function.revoke':
+      return entry.self ? `${actor} se quitó la función ${fn}.` : `${actor} le quitó a ${member} la función ${fn}.`
+    case 'access.membership.grant': {
+      const expiry = entry.hasExpiry ? ', con vencimiento' : ''
+      return entry.self
+        ? `${actor} se dio acceso al estudio ${study}${expiry}.`
+        : `${actor} le dio a ${member} acceso al estudio ${study}${expiry}.`
+    }
+    case 'access.membership.update':
+      return entry.self
+        ? `${actor} cambió su propio acceso al estudio ${study}.`
+        : `${actor} cambió el acceso de ${member} al estudio ${study}.`
+    case 'access.membership.revoke':
+      return entry.self
+        ? `${actor} se quitó el acceso al estudio ${study}.`
+        : `${actor} le quitó a ${member} el acceso al estudio ${study}.`
+    case 'org.access_mode.update':
+      return `${actor} pasó la organización a ${entry.modeTo === 'enforced' ? 'modo estricto' : 'modo abierto'}.`
+    case 'org.access_mode.deadline_set':
+      return entry.openUntil
+        ? `${actor} abrió esta pantalla por primera vez: el plazo del modo abierto corre hasta el ${formatDate(entry.openUntil, timeZone)}.`
+        : `${actor} abrió esta pantalla por primera vez y empezó a correr el plazo del modo abierto.`
+    default:
+      return 'Cambio de accesos.'
+  }
+}

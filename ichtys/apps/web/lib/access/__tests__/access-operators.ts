@@ -15,6 +15,8 @@ export type Cond =
   | { kind: 'isNull'; column: unknown }
   | { kind: 'isNotNull'; column: unknown }
   | { kind: 'gt'; column: unknown; value: unknown }
+  | { kind: 'lt'; column: unknown; value: unknown }
+  | { kind: 'inArray'; column: unknown; values: unknown[] }
 
 export const eq = (column: unknown, value: unknown): Cond => ({ kind: 'eq', column, value })
 export const and = (...conds: Cond[]): Cond => ({ kind: 'and', conds })
@@ -22,3 +24,12 @@ export const or = (...conds: Cond[]): Cond => ({ kind: 'or', conds })
 export const isNull = (column: unknown): Cond => ({ kind: 'isNull', column })
 export const isNotNull = (column: unknown): Cond => ({ kind: 'isNotNull', column })
 export const gt = (column: unknown, value: unknown): Cond => ({ kind: 'gt', column, value })
+export const lt = (column: unknown, value: unknown): Cond => ({ kind: 'lt', column, value })
+export const inArray = (column: unknown, values: unknown[]): Cond => ({ kind: 'inArray', column, values })
+
+/** Orden descendente: el `orderBy()` del fixture lo lee y ordena las filas de prueba. */
+export interface Order {
+  kind: 'desc'
+  column: unknown
+}
+export const desc = (column: unknown): Order => ({ kind: 'desc', column })

@@ -78,7 +78,7 @@ describe('GET /api/org/team/mode — el plazo (M5/M8)', () => {
       organizationId: 'org-1',
       userId: 'user-1',
     })
-    expect(fx.audits[0]?.values.metadata).toMatchObject({ days: 60 })
+    expect(fx.audits[0]?.values.metadata).toMatchObject({ days: 60, changed: true })
   })
 
   it('un plazo ya asignado no se pisa: no hay segunda escritura', async () => {

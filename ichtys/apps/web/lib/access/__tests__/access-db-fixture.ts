@@ -1,5 +1,5 @@
 import { getTableColumns } from 'drizzle-orm'
-import { and, eq, gt, isNotNull, isNull, or, type Cond } from './access-operators'
+import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, or, type Cond, type Order } from './access-operators'
 
 /**
  * Base de datos de mentira para las pruebas de «Equipo y accesos»
@@ -23,7 +23,7 @@ type Row = Record<string, unknown>
 
 // Los operadores (y su tipo) se re-exportan para quien ya importa el fixture;
 // viven aparte para que los mocks hoisted puedan cargarlos sin ciclo.
-export { eq, and, or, isNull, isNotNull, gt } from './access-operators'
+export { eq, and, or, isNull, isNotNull, gt, lt, inArray, desc } from './access-operators'
 export type { Cond } from './access-operators'
 
 export interface AuditCall {
@@ -67,6 +67,8 @@ export const fx = {
   /** Con qué criterio sobre las anuladas se pidieron los autores de evoluciones (D24). */
   evolutionAuthorPolicies: [] as string[],
   clerkMembers: [] as ClerkMemberRow[],
+  /** Filas de `audit_logs` que se pueden LEER (historial de accesos). Las escrituras van a `audits`. */
+  auditRows: [] as Row[],
   /** Registros de auditoría que llegaron por la transacción (insertAuditLog). */
   audits: [] as AuditCall[],
   transactions: 0,
@@ -90,6 +92,7 @@ export function resetFixture(): void {
     { role: 'org:principal_investigator', publicUserData: { userId: 'user-2', firstName: 'Beto', lastName: 'Médico', identifier: 'beto@centro.test' } },
     { role: 'org:study_admin', publicUserData: { userId: 'user-3', firstName: 'Carla', identifier: 'carla@centro.test' } },
   ]
+  fx.auditRows = []
   fx.audits = []
   fx.transactions = 0
   fx.failAudit = false
@@ -127,6 +130,7 @@ const TABLE_STORE: Record<string, string> = {
   studyMemberships: 'membershipRows',
   studies: 'studyRows',
   clinicalEvolutions: 'evolutionRows',
+  auditLogs: 'auditRows',
 }
 
 /** Construye el módulo '@ichtys/db' de mentira sobre el real (`importOriginal`). */
@@ -167,8 +171,11 @@ export function makeDbMock(actual: Record<string, unknown>): Record<string, unkn
 
   const matches = (cond: Cond, row: Row): boolean => {
     switch (cond.kind) {
-      case 'eq':
-        return row[keyOf(cond.column)] === cond.value
+      case 'eq': {
+        const left = row[keyOf(cond.column)]
+        if (left instanceof Date && cond.value instanceof Date) return left.getTime() === cond.value.getTime()
+        return left === cond.value
+      }
       case 'and':
         return cond.conds.every((child) => matches(child, row))
       case 'or':
@@ -177,12 +184,16 @@ export function makeDbMock(actual: Record<string, unknown>): Record<string, unkn
         return row[keyOf(cond.column)] === null || row[keyOf(cond.column)] === undefined
       case 'isNotNull':
         return row[keyOf(cond.column)] !== null && row[keyOf(cond.column)] !== undefined
-      case 'gt': {
+      case 'gt':
+      case 'lt': {
         const left = row[keyOf(cond.column)]
         const a = left instanceof Date ? left.getTime() : (left as number)
         const b = cond.value instanceof Date ? cond.value.getTime() : (cond.value as number)
-        return typeof a === 'number' && a > b
+        if (typeof a !== 'number') return false
+        return cond.kind === 'gt' ? a > b : a < b
       }
+      case 'inArray':
+        return cond.values.includes(row[keyOf(cond.column)])
     }
   }
 
@@ -192,8 +203,27 @@ export function makeDbMock(actual: Record<string, unknown>): Record<string, unkn
     return (fx as unknown as Record<string, Row[]>)[storeKey] ?? []
   }
 
-  const execute = (store: Row[], cond: Cond | undefined, limit?: number, projection?: unknown): Promise<Row[]> => {
+  const sortKey = (value: unknown): number | string =>
+    value instanceof Date ? value.getTime() : typeof value === 'number' ? value : String(value)
+
+  const execute = (
+    store: Row[],
+    cond: Cond | undefined,
+    limit?: number,
+    projection?: unknown,
+    order: Order[] = [],
+  ): Promise<Row[]> => {
     let rows = store.filter((row) => (cond ? matches(cond, row) : true))
+    if (order.length > 0) {
+      rows = [...rows].sort((x, y) => {
+        for (const o of order) {
+          const a = sortKey(x[keyOf(o.column)])
+          const b = sortKey(y[keyOf(o.column)])
+          if (a !== b) return a < b ? 1 : -1
+        }
+        return 0
+      })
+    }
     if (limit !== undefined) rows = rows.slice(0, limit)
     // Sin proyección, referencias (drizzle devuelve las filas); con proyección,
     // objetos nuevos como haría el select con alias. El update muta referencias.
@@ -210,15 +240,15 @@ export function makeDbMock(actual: Record<string, unknown>): Record<string, unkn
     if (!tableStoreKeys.has(table)) throw new Error('fixture: consulta sobre una tabla no preparada')
     return {
       where: (cond: Cond) => {
-        const base = execute(storeOf(table), cond, undefined, projection)
-        const chain = {
-          limit: (n: number) => execute(storeOf(table), cond, n, projection),
+        const chainFor = (order: Order[]) => ({
+          orderBy: (...next: Order[]) => chainFor(next),
+          limit: (n: number) => execute(storeOf(table), cond, n, projection, order),
           then: <T1 = Row[], T2 = never>(
             onfulfilled?: ((value: Row[]) => T1 | PromiseLike<T1>) | null,
             onrejected?: ((reason: unknown) => T2 | PromiseLike<T2>) | null,
-          ) => base.then(onfulfilled, onrejected),
-        }
-        return chain
+          ) => execute(storeOf(table), cond, undefined, projection, order).then(onfulfilled, onrejected),
+        })
+        return chainFor([])
       },
     }
   }
@@ -328,6 +358,9 @@ export function makeDbMock(actual: Record<string, unknown>): Record<string, unkn
     eq,
     or,
     gt,
+    lt,
+    inArray,
+    desc,
     isNull,
     isNotNull,
   }

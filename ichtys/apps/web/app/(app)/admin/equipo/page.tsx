@@ -1,6 +1,7 @@
 import { TeamAccessScreen } from '../../../../components/access/team-access-screen'
 import { canManageOrgAccess } from '../../../../lib/access/permissions'
 import { getOsContext } from '../../../../lib/os/context'
+import { loadOrgTimeZone } from '../../../../lib/os/org-settings'
 
 export default async function EquipoPage() {
   const ctx = await getOsContext()
@@ -27,5 +28,6 @@ export default async function EquipoPage() {
     )
   }
 
-  return <TeamAccessScreen />
+  // El historial muestra horas en la zona del centro; el navegador no la conoce.
+  return <TeamAccessScreen timeZone={await loadOrgTimeZone(ctx.orgId)} />
 }
