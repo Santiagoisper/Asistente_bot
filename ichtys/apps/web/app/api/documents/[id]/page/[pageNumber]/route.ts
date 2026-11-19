@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { handleApiError, validateDocumentPageAccess } from '@ichtys/auth'
 import { auditLogs, db } from '@ichtys/db'
+import { clinicalRateLimit } from '../../../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -22,6 +23,8 @@ export async function GET(_req: Request, { params }: RouteContext): Promise<Resp
 
   try {
     const ctx = await validateDocumentPageAccess(id, page.data)
+    const limited = await clinicalRateLimit('record_read', { orgId: ctx.orgId, userId: ctx.userId, studyId: ctx.studyId, req: _req, endpoint: 'documents/page' })
+    if (limited) return limited
     const inlineUrl =
       `/api/document-versions/${encodeURIComponent(ctx.documentVersion.id)}/download` +
       `?inline=1#page=${ctx.page.pageNumber}`

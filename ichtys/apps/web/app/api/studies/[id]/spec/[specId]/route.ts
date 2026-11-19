@@ -7,6 +7,7 @@ import { zodIssuesForResponse } from '../../../../../../lib/api/zod-issues'
 import { MAX_SPEC_BODY_BYTES } from '../../../../../../lib/api/limits'
 import { insertAuditLog } from '../../../../../../lib/audit/audited-write'
 import { contentFingerprint } from '../../../../../../lib/audit/fingerprint'
+import { clinicalRateLimit } from '../../../../../../lib/security/clinical-rate-limit'
 
 interface RouteParams {
   params: Promise<{ id: string; specId: string }>
@@ -37,6 +38,8 @@ export async function PATCH(req: Request, { params }: RouteParams) {
 
   try {
     const { orgId, userId } = await validateStudyAccess(studyId, 'study_admin', 'documents.manage')
+    const limited = await clinicalRateLimit('study_write', { orgId: orgId, userId: userId, studyId: studyId, req, endpoint: '/api/studies/[id]/spec/[specId]' })
+    if (limited) return limited
 
     // Verify spec belongs to this tenant + study and is still draft — ANTES de
     // leer el cuerpo (Sicario vuelta 3): no se parsea nada para un specId

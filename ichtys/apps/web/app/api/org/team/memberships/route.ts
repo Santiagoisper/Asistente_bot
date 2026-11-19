@@ -7,6 +7,7 @@ import { findOrgMember } from '../../../../../lib/access/org-members'
 import { STUDY_ACCESS_LEGACY_ROLE, checkMembershipExpiry } from '../../../../../lib/access/permissions'
 import { loadActiveFunctions, revokeMembership, upsertMembership } from '../../../../../lib/access/team-service'
 import { auditedWrite } from '../../../../../lib/audit/audited-write'
+import { clinicalRateLimit } from '../../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -37,6 +38,8 @@ export async function POST(req: Request): Promise<Response> {
     const input = parsed.data
 
     const context = await authorize(input.studyId)
+    const limited = await clinicalRateLimit('admin_write', { orgId: context.orgId, userId: context.userId, req, endpoint: '/api/org/team/memberships' })
+    if (limited) return limited
     const { orgId: clerkOrgId } = await auth()
     if (!clerkOrgId) throw new AccessError('Unauthorized', 401)
 
@@ -90,6 +93,8 @@ export async function DELETE(req: Request): Promise<Response> {
     const input = parsed.data
 
     const context = await authorize(input.studyId)
+    const limited = await clinicalRateLimit('admin_write', { orgId: context.orgId, userId: context.userId, req, endpoint: '/api/org/team/memberships' })
+    if (limited) return limited
 
     const result = await auditedWrite(
       (tx) =>
