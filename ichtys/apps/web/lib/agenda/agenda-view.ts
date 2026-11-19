@@ -63,6 +63,7 @@ export function agendaError(status: number, code: unknown): string {
   if (status === 400) return 'Revisá el nombre del turno, el día y la hora.'
   if (status === 401 || status === 403) return 'Tu rol no puede agendar turnos en este estudio.'
   if (status === 404) return 'Ese turno ya no existe. Recargá la página.'
+  if (status === 429) return 'Hiciste muchos cambios seguidos. Esperá un minuto y probá de nuevo.'
   if (status === 503) return 'El cifrado de datos clínicos no está configurado. Avisá a quien administra el sistema.'
   return 'No se pudo guardar el turno. Probá de nuevo.'
 }

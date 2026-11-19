@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { describeIngestionErrorMessage } from '../../lib/documents/ingestion-stage'
 
 type DocumentVersionStatus = 'pending' | 'processing' | 'ready' | 'error'
 
@@ -20,27 +21,12 @@ const POLL_INTERVAL_MS = 4_000
 /** Refresco del contador de progreso (animación fluida). */
 const PROGRESS_TICK_MS = 700
 
-const INGESTION_ERROR_LABELS: Record<string, string> = {
-  embedding_config_missing:
-    'Falta GROQ_API_KEY (o OPENAI_API_KEY) en apps/web/.env.local. Reiniciá pnpm dev y reprocesá.',
-  embedding_provider_error:
-    'El proveedor de embeddings rechazó la solicitud. Revisá la API key y el saldo.',
-  embedding_rate_limited: 'OpenAI limitó la tasa de requests. Esperá unos minutos y reprocesá.',
-  embedding_dimension_mismatch: 'Error interno de dimensiones de embedding. Contactá soporte.',
-  embedding_internal_error: 'Error interno al indexar el documento.',
-  pdf_text_extraction_failed: 'No se pudo extraer texto del PDF.',
-  pdf_contains_no_extractable_text: 'El PDF no tiene texto seleccionable (puede ser escaneado).',
-  pdf_complexity_limit: 'El PDF supera el tope de páginas o de tiempo de lectura.',
-  blob_download_failed: 'No se pudo leer el archivo almacenado. Volvé a subirlo.',
-  stuck_timeout: 'El procesamiento quedó colgado. Usá Reprocesar.',
-  ingestion_internal_error: 'Error interno de ingesta.',
-  spec_extraction_failed:
-    'El documento se indexó, pero no se pudo extraer el cronograma de visitas ni los criterios automáticamente. Podés reintentar la extracción desde la pantalla del spec.',
-}
-
+/**
+ * El texto de error sale del mismo diccionario que usa la ruta de estado: un código desconocido
+ * muestra un mensaje genérico, nunca el texto interno (auditoría 19/11, H-19).
+ */
 function formatIngestionError(code: string | null): string | null {
-  if (!code) return null
-  return INGESTION_ERROR_LABELS[code] ?? code
+  return code ? describeIngestionErrorMessage(code) : null
 }
 
 /** True si algún item sigue en vuelo (necesita polling). */

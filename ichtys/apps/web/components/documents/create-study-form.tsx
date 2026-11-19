@@ -29,9 +29,13 @@ export function CreateStudyForm() {
       if (!res.ok) {
         const detail = res.status === 401
           ? 'Sesión expirada. Volvé a iniciar sesión.'
-          : res.status >= 500
-            ? 'Error del servidor al crear el estudio. Revisá la consola del servidor.'
-            : 'No se pudo crear el estudio. Intentá de nuevo.'
+          : res.status === 403 || res.status === 404
+            ? 'No tenés permiso para crear estudios en esta organización.'
+            : res.status === 429
+              ? 'Hiciste muchos cambios seguidos. Esperá un minuto e intentá de nuevo.'
+              : res.status >= 500
+                ? 'No se pudo crear el estudio por un problema del servidor. Intentá de nuevo en unos minutos.'
+                : 'No se pudo crear el estudio. Revisá los datos e intentá de nuevo.'
         setError(detail)
         return
       }
@@ -40,7 +44,7 @@ export function CreateStudyForm() {
       router.refresh()
     } catch (err) {
       console.error('[CreateStudyForm]', err)
-      setError('No se pudo conectar con el servidor. ¿Está corriendo pnpm dev?')
+      setError('No se pudo conectar con el servidor. Revisá tu conexión e intentá de nuevo.')
     } finally {
       setLoading(false)
     }

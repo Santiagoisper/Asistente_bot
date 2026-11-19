@@ -73,6 +73,22 @@ interface IngestionStatusResponse {
   errorMessage?: string | null
 }
 
+/**
+ * Lo que ve la persona cuando la subida falla. Antes se mostraba «HTTP 413» o «Network error»
+ * (auditoría 19/11, H-20).
+ */
+export function uploadErrorText(err: unknown): string {
+  const status = Number(/^HTTP (\d{3})$/.exec(err instanceof Error ? err.message : '')?.[1])
+  if (status === 413) return 'El archivo es demasiado grande para subirlo.'
+  if (status === 415) return 'Por ahora solo se procesan archivos PDF. Convertí el documento a PDF e intentá de nuevo.'
+  if (status === 401) return 'Sesión expirada. Volvé a iniciar sesión.'
+  if (status === 403 || status === 404) return 'No tenés permiso para subir documentos a este estudio.'
+  if (status === 429) return 'Hiciste muchas subidas seguidas. Esperá un minuto e intentá de nuevo.'
+  if (status >= 500) return 'La subida falló por un problema del servidor. Intentá de nuevo en unos minutos.'
+  if (status === 400) return 'El servidor rechazó el archivo. Revisá que sea un PDF válido e intentá de nuevo.'
+  return 'No se pudo subir el archivo. Revisá tu conexión e intentá de nuevo.'
+}
+
 /** Errores de red consecutivos tolerados antes de dar por perdida la conexión. */
 const MAX_POLL_FAILURES = 3
 
@@ -313,8 +329,7 @@ export function UploadZone({ studyId, onUploadComplete }: UploadZoneProps) {
       await pollIngestionStatus(documentId, Date.now(), 0)
     } catch (err) {
       stopTimer()
-      const msg = err instanceof Error ? err.message : 'Error desconocido'
-      setState({ ...INITIAL_STATE, status: 'error', fileName: file.name, errorMessage: msg })
+      setState({ ...INITIAL_STATE, status: 'error', fileName: file.name, errorMessage: uploadErrorText(err) })
     }
   }, [studyId, selectedDocType, startTimer, stopTimer, pollIngestionStatus, onUploadComplete, router])
 
