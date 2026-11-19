@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { clinicalRateLimit } from '../../../../../../../lib/security/clinical-rate-limit'
 import { AccessError, validateStudyAccess } from '@ichtys/auth'
 import { and, auditLogs, db, eq, studySpecs } from '@ichtys/db'
 import { studySpecSchema } from '@ichtys/ingestion'
@@ -439,6 +440,9 @@ export async function GET(req: Request, { params }: RouteParams) {
 
   try {
     const { orgId, userId } = await validateStudyAccess(studyId)
+    // Cada exportación deja un registro de auditoría: sin tope, repetirla llena la auditoría.
+    const limited = await clinicalRateLimit('record_read', { orgId, userId, studyId, req, endpoint: 'spec/export' })
+    if (limited) return limited
 
     const row = await db.query.studySpecs.findFirst({
       where: and(

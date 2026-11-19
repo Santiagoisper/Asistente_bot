@@ -17,9 +17,10 @@ const h = vi.hoisted(() => {
       super(message)
     }
   }
-  return { AccessError, validateStudyAccess: vi.fn(), findFirst: vi.fn(), insertValues: vi.fn() }
+  return { AccessError, validateStudyAccess: vi.fn(), findFirst: vi.fn(), insertValues: vi.fn(), rateLimit: vi.fn() }
 })
 
+vi.mock('../../../../../../../../lib/security/clinical-rate-limit', () => ({ clinicalRateLimit: h.rateLimit }))
 vi.mock('@ichtys/auth', () => ({ AccessError: h.AccessError, validateStudyAccess: h.validateStudyAccess }))
 vi.mock('@ichtys/db', () => ({
   db: { query: { studySpecs: { findFirst: h.findFirst } }, insert: () => ({ values: h.insertValues }) },
@@ -48,6 +49,7 @@ beforeEach(() => {
   h.validateStudyAccess.mockResolvedValue({ orgId: 'org-1', userId: 'user-1' })
   h.findFirst.mockResolvedValue({ id: 'spec-1', version: 3, status: 'approved', spec })
   h.insertValues.mockResolvedValue(undefined)
+  h.rateLimit.mockResolvedValue(null)
 })
 
 describe('GET exportar Study Spec', () => {
@@ -60,6 +62,14 @@ describe('GET exportar Study Spec', () => {
     h.validateStudyAccess.mockRejectedValue(new h.AccessError('Not found', 404))
     expect((await GET(req('pdf'), p)).status).toBe(404)
     expect(h.findFirst).not.toHaveBeenCalled()
+  })
+
+  it('pasado el límite de pedidos: 429 sin buscar el Spec ni auditar, contado con la org y la persona de la sesión', async () => {
+    h.rateLimit.mockResolvedValue(new Response('{}', { status: 429 }))
+    expect((await GET(req('docx'), p)).status).toBe(429)
+    expect(h.rateLimit).toHaveBeenCalledWith('record_read', expect.objectContaining({ orgId: 'org-1', userId: 'user-1', studyId: 'study-1' }))
+    expect(h.findFirst).not.toHaveBeenCalled()
+    expect(h.insertValues).not.toHaveBeenCalled()
   })
 
   it('un Spec de otra organización o estudio no aparece: 404 y nada auditado', async () => {
