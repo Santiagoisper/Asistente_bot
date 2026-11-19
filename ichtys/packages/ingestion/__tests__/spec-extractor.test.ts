@@ -293,6 +293,39 @@ describe('extractStudySpec', () => {
     expect(result.spec.inclusionCriteria).toHaveLength(1)
   })
 
+  it('a short protocol with «Objetivo primario» and «Esquema de visitas» headings is not left empty (recorrido 19/11, R-04)', async () => {
+    mocks.generateObject.mockImplementation(({ prompt }: { prompt: string }) => {
+      const usage = { inputTokens: 1, outputTokens: 1 }
+      if (prompt.startsWith('COMPACT PAGE MAP:')) {
+        return Promise.resolve({
+          usage,
+          object: {
+            identification: { pageStart: 1, pageEnd: 1 },
+            eligibility: { pageStart: 1, pageEnd: 1 },
+            endpoints: { pageStart: null, pageEnd: null },
+            visits: { pageStart: null, pageEnd: null },
+            detectedLanguage: 'es',
+          },
+        })
+      }
+      if (prompt.includes('protocol identification')) return Promise.resolve({ usage, object: EMPTY_GROUPS.identification })
+      if (prompt.includes('inclusion criteria')) return Promise.resolve({ usage, object: EMPTY_GROUPS.eligibility })
+      if (prompt.includes('objectives and their')) return Promise.resolve({ usage, object: EMPTY_GROUPS.endpoints })
+      if (prompt.includes('schedule of activities')) return Promise.resolve({ usage, object: EMPTY_GROUPS.visits })
+      return Promise.reject(new Error('unexpected prompt'))
+    })
+    const pages = [
+      page(1, 'PROTOCOLO FICTICIO\n1. Objetivo primario\nCambio en HbA1c\n3. Criterios de inclusión\nI1. Edad\n5. Esquema de visitas\nV1 Selección semana -2'),
+    ]
+
+    const result = await extractStudySpec(pages)
+
+    expect(result.warnings.join(' ')).not.toContain('section not located')
+    const prompts = (mocks.generateObject.mock.calls as Array<[{ prompt: string }]>).map(([arg]) => arg.prompt)
+    expect(prompts.some((p) => p.includes('objectives and their') && p.includes('[PAGE 1]'))).toBe(true)
+    expect(prompts.some((p) => p.includes('schedule of activities') && p.includes('[PAGE 1]'))).toBe(true)
+  })
+
   it('leaves a group empty with a warning when the LLM call fails', async () => {
     mockExtractionByPrompt()
     const providerError = Object.assign(new Error('sensitive provider body'), { code: 'rate_limit', status: 429 })

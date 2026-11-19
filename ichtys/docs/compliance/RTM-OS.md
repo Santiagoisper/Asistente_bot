@@ -1,6 +1,6 @@
 # Matriz de trazabilidad del OS: regla → prueba → evidencia
 
-**Versión:** 0.17 · **Fecha:** 2026-11-19 · **Estado:** borrador, sin revisión de Calidad. Tarea 48 del cronograma.
+**Versión:** 0.18 · **Fecha:** 2026-11-19 · **Estado:** borrador, sin revisión de Calidad. Tarea 48 del cronograma.
 
 Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, accesos), la carga de documentos y el asistente con sus citas, que la matriz de julio ([`RTM.md`](./RTM.md)) no cubre. Responde a la brecha de R2 anotada en la [línea de base](./REGULATORY-BASELINE.md).
 
@@ -45,6 +45,7 @@ Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, acces
 | El Study Spec y su exportación se buscan con la organización y el estudio del acceso; en el HTML para imprimir se escapa el texto del protocolo (auditoría 19/11, H-03) | `apps/web/app/api/studies/[id]/spec/[specId]/export/__tests__/route.test.ts`, `apps/web/app/api/studies/[id]/spec/__tests__/route.test.ts` | Ninguna | — |
 | El historial del chat se lee siempre con la organización y el estudio (y la persona, en la lista), descifrado y sin campos internos; «Probar proveedores» no muestra claves aunque el proveedor las cite en su error (auditoría 19/11, H-09, H-10 y H-18) | `apps/web/lib/chat/__tests__/history.test.ts`, `packages/llm/__tests__/provider-health-probe.test.ts` | Ninguna | — |
 | La biblioteca filtra y busca protocolos sin perder enlaces; el panel de consumo muestra cupo, avisos y desglose por clave, y una falla de carga no rompe la pantalla (auditoría 19/11, H-08) | `apps/web/components/library/__tests__/library-client.test.tsx`, `apps/web/components/usage/__tests__/usage-panel.test.tsx` | Ninguna | — |
+| Cuando el localizador semántico no encuentra objetivos o visitas, el respaldo por encabezados reconoce también «Objetivo primario/secundario», «Esquema/Calendario/Cronograma de visitas» y sus equivalentes en inglés (recorrido 19/11, R-04) | `packages/ingestion/__tests__/spec-extractor.test.ts` | Ninguna | — |
 | Dar acceso a un estudio exige poder administrarlo, en los dos modos; un estudio de otra organización responde igual que uno inexistente | `apps/web/app/api/org/team/memberships/__tests__/route.test.ts` | Ninguna | Las bajas |
 | Sin permiso sobre el estudio no se agenda nada; un turno de otro estudio u otra organización responde como inexistente | `apps/web/app/api/studies/[id]/agenda/__tests__/routes.test.ts`, `apps/web/lib/agenda/__tests__/agenda-service.test.ts` | Ninguna | Con dos cuentas reales |
 | Un turno no se puede atar a un sujeto de otro estudio | `apps/web/lib/agenda/__tests__/agenda-service.test.ts` | Ninguna | — |
