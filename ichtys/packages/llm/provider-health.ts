@@ -11,8 +11,19 @@ export interface ProviderHealthResult {
   modelId: string | null
 }
 
+/**
+ * El texto de error de un proveedor puede repetir parte de la clave («Incorrect API key
+ * provided: sk-proj-…»). Antes de mostrarlo en Ajustes se tapa todo lo que tenga forma de
+ * clave (auditoría 19/11, H-18).
+ */
+export function redactProviderMessage(text: string): string {
+  return text
+    .replace(/\b(sk-ant-|sk-proj-|sk-|gsk_|xai-|AIza)[A-Za-z0-9_\-*.]{4,}/g, '$1[clave]')
+    .replace(/(key=)[^&\s"']+/gi, '$1[clave]')
+}
+
 function classifyError(err: unknown): { status: ProviderHealthStatus; message: string } {
-  const msg = err instanceof Error ? err.message : String(err)
+  const msg = redactProviderMessage(err instanceof Error ? err.message : String(err))
   if (/quota|usage limits|rate limit|resource_exhausted|insufficient_quota|billing/i.test(msg)) {
     return { status: 'quota_exceeded', message: msg.slice(0, 180) }
   }
@@ -185,7 +196,7 @@ export async function fetchOpenAiUsageSummary(apiKey: string): Promise<OpenAiUsa
       available: false,
       monthToDateUsd: null,
       periodLabel: 'mes actual',
-      message: err instanceof Error ? err.message.slice(0, 120) : 'Error al consultar uso',
+      message: err instanceof Error ? redactProviderMessage(err.message).slice(0, 120) : 'Error al consultar uso',
     }
   }
 }

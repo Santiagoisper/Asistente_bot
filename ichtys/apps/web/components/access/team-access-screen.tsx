@@ -13,6 +13,7 @@ import {
   MODE_TEXTS,
   ROLE_LABELS,
 } from '../../lib/access/team-ui'
+import { rateLimitedText } from '../../lib/security/rate-limit-message'
 
 /**
  * Pantalla «Equipo y accesos» (docs/decisions/study-membership.md, paso 5).
@@ -80,7 +81,10 @@ function actionRequest(action: Action): { url: string; method: string; body: Rec
 /** Traduce un rechazo de la API al texto de team-ui; nunca muestra internals. */
 async function errorText(res: Response): Promise<string> {
   try {
-    const { error } = (await res.json()) as { error?: string }
+    const body = (await res.json()) as { error?: string }
+    const limited = rateLimitedText(body)
+    if (limited) return limited
+    const { error } = body
     if (error && error in API_ERROR_TEXTS) return API_ERROR_TEXTS[error as keyof typeof API_ERROR_TEXTS]
   } catch {
     // sin cuerpo JSON: cae al genérico

@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { handleApiError, validateDocumentVersionAccess } from '@ichtys/auth'
 import { auditLogs, db } from '@ichtys/db'
 import { getPrivateDocumentPdf } from './blob-download'
+import { clinicalRateLimit } from '../../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -62,6 +63,8 @@ export async function GET(req: Request, context: RouteContext): Promise<Response
 
     const { userId, orgId, studyId, document, documentVersion } =
       await validateDocumentVersionAccess(params.data.documentVersionId)
+    const limited = await clinicalRateLimit('record_read', { orgId: orgId, userId: userId, studyId: studyId, req: req, endpoint: 'document-versions/download' })
+    if (limited) return limited
 
     const fileName = safeDownloadFileName(document.name)
     const pdf = await getPrivateDocumentPdf(documentVersion.blobUrl)

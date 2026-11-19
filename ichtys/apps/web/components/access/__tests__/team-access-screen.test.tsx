@@ -318,3 +318,19 @@ describe('TeamAccessScreen — qué cambió y quién', () => {
     expect(container.textContent).toContain('Beto Médico')
   })
 })
+
+describe('TeamAccessScreen — límite de pedidos', () => {
+  it('un 429 dice que no se guardó y cuánto esperar', async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'DELETE') return Response.json({ error: 'rate_limited', retryAfterSeconds: 20 }, { status: 429 })
+      return defaultFetch(input, init)
+    })
+    await settled()
+    await act(async () => {
+      buttonInPerson('Beto Médico', 'Quitar acceso').click()
+      await Promise.resolve()
+    })
+    await settled()
+    expect(container.textContent).toContain('Se hicieron demasiados pedidos seguidos. El cambio no se guardó. Esperá 20 segundos y probá otra vez.')
+  })
+})

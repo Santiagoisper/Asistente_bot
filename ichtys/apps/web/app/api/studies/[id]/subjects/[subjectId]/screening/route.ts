@@ -8,6 +8,7 @@ import { PhiConfigError } from '../../../../../../../lib/subjects/phi-fields'
 import { guideVisits } from '../../../../../../../lib/subjects/guide-visits'
 import { profileForResponse } from '../../../../../../../lib/subjects/profile-response'
 import { pendingSpecApproval, SPEC_PENDING_APPROVAL_MESSAGE } from '../../../../../../../lib/subjects/spec-notice'
+import { clinicalRateLimit } from '../../../../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -40,6 +41,8 @@ export async function GET(
 
   try {
     const { orgId, userId, study, subject } = await validateSubjectAccess(subjectId, routeStudyId)
+    const limited = await clinicalRateLimit('record_read', { orgId: orgId, userId: userId, studyId: study.id, req: _req, endpoint: 'subjects/screening' })
+    if (limited) return limited
 
     const { profile, unreadable: profileUnreadable } = await loadPatientProfileState({
       orgId,

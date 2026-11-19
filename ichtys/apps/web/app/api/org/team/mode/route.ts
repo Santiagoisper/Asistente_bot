@@ -8,6 +8,7 @@ import { ACCESS_OPEN_DEFAULT_DAYS, canSwitchMode, previewEnforcedImpact } from '
 import { canManageOrgAccess } from '../../../../../lib/access/permissions'
 import { assignOpenDeadline, loadTeamSnapshot, setOrgAccessMode } from '../../../../../lib/access/team-service'
 import { auditedWrite } from '../../../../../lib/audit/audited-write'
+import { clinicalRateLimit } from '../../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -110,6 +111,8 @@ export async function PUT(req: Request): Promise<Response> {
 
     const context = await resolveOrgAccessContext()
     if (!canManageOrgAccess(context.access)) throw new AccessError('Insufficient role', 403)
+    const limited = await clinicalRateLimit('admin_write', { orgId: context.orgId, userId: context.userId, req, endpoint: '/api/org/team/mode' })
+    if (limited) return limited
 
     const problem = canSwitchMode({
       target: input.mode,
