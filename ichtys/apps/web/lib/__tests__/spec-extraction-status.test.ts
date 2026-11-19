@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { describeExtractionWarning, describeExtractionWarnings } from '../spec-extraction-status'
 import {
   hasLegacyExtractionFailure,
   isProtocolProcessing,
@@ -115,5 +116,26 @@ describe('resolveExtractionFailed', () => {
         legacyExtractionFailed: false,
       }),
     ).toBe(false)
+  })
+})
+
+
+describe('describeExtractionWarning (recorrido de punta a punta, 19/11)', () => {
+  it.each([
+    ['endpoints: section not located by semantic locator — group left empty', 'Endpoints: no se encontró la sección'],
+    ['visits: section not located by semantic locator — group left empty', 'Visitas: no se encontró la sección'],
+    ['eligibility: visual PDF extraction failed; text fallback used', 'Elegibilidad: se leyó desde el texto'],
+    ['endpoints (P44–P48): extraction_failed: el proveedor no devolvió una respuesta utilizable (código rate_limit)', 'Endpoints: el servicio de IA no respondió'],
+    ['section-location: semantic locator provider failure', 'No se pudieron ubicar'],
+    ['visits: salida del modelo fuera de cotas — recuperada y normalizada por ítem', 'Visitas: se corrigió'],
+    ['algo raro: pg relation chunks_tmp', 'Hay una parte de lo extraído para revisar'],
+  ])('%s', (raw, expected) => {
+    const text = describeExtractionWarning(raw)
+    expect(text).toContain(expected)
+    expect(text).not.toMatch(/semantic locator|group left empty|fallback|rate_limit|chunks_tmp/)
+  })
+
+  it('no repite la misma frase', () => {
+    expect(describeExtractionWarnings(['visits: x', 'visits: y'])).toEqual(['Visitas: revisá lo extraído.'])
   })
 })
