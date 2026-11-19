@@ -3,7 +3,9 @@ import { assessScreening } from '../screening-engine'
 import {
   ifccMmolToNgsp,
   normalizeDecimalCommas,
+  mentionsMeasuredGfr,
   parseAnalyteBounds,
+  textMentionsAnalyte,
 } from '../numeric-criteria'
 import type { PatientProfile } from '../profile-schema'
 
@@ -128,5 +130,19 @@ describe('ADR-7 §2.1 umbrales de HbA1c', () => {
     expect(result?.status).toBe('fail')
     expect(result?.reason).toContain('≥ 7,0 % (mínimo inclusivo)')
     expect(result?.reason).not.toContain('máximo')
+  })
+})
+
+describe('eGFR escrito como «tasa de filtración glomerular» (recorrido 19/11, R-09)', () => {
+  it.each([
+    'Tasa de filtración glomerular estimada menor a 30 mL/min/1,73 m2.',
+    'filtracion glomerular estimada < 30 mL/min/1,73 m2',
+    'Estimated glomerular filtration rate < 30 mL/min/1.73 m2',
+  ])('%s', (text) => {
+    expect(textMentionsAnalyte(text, 'eGFR')).toBe(true)
+    expect(parseAnalyteBounds(text, 'eGFR')).toMatchObject({ max: { value: 30, inclusive: false } })
+  })
+  it('el filtrado medido sigue sin compararse como estimado', () => {
+    expect(mentionsMeasuredGfr('Tasa de filtración glomerular medida < 30 mL/min')).toBe(true)
   })
 })
