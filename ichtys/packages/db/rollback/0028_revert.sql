@@ -5,7 +5,7 @@
 -- (producción, 2026-11-19 01:31Z). Para datos, la instantánea `antes-0028-2026-11-18`.
 -- Ensayada en la base de prueba el 2026-11-19 dentro de una transacción revertida:
 -- 0028 → esta vuelta atrás → mismas columnas, tipos, nulabilidad y CHECK que antes.
--- Se aplica en una sola transacción (BEGIN/COMMIT abajo; con psql también vale -1), con el sí de Santiago.
+-- Se aplica en una sola transacción (BEGIN/COMMIT abajo; con psql, sin -1), con el sí de Santiago.
 BEGIN;
 ALTER TABLE "messages" ADD COLUMN IF NOT EXISTS "content" text;
 ALTER TABLE "messages" ADD COLUMN IF NOT EXISTS "annotations" jsonb;
