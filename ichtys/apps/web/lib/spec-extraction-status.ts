@@ -62,3 +62,44 @@ export function resolveExtractionFailed(params: {
   if (params.protocolProcessing) return false
   return params.specExtractionFailed || params.legacyExtractionFailed
 }
+
+const GROUP_LABELS: Record<string, string> = {
+  identification: 'Identificación',
+  eligibility: 'Elegibilidad',
+  endpoints: 'Endpoints',
+  visits: 'Visitas',
+}
+
+/**
+ * Las advertencias se guardan en el idioma técnico del extractor («section not located by
+ * semantic locator — group left empty»). Antes se mostraban así a la persona (recorrido de
+ * punta a punta, 19/11). Acá se pasan a una frase por caso, sin perder el grupo; lo que no se
+ * reconoce no se muestra crudo.
+ */
+export function describeExtractionWarning(warning: string): string {
+  const match = /^([a-z]+)(?:\s*\(P\d+[–-]P\d+\))?\s*:/i.exec(warning)
+  const key = match?.[1]?.toLowerCase() ?? ''
+  const label = GROUP_LABELS[key]
+  if (key === 'section-location' || warning.startsWith('section-location')) {
+    return 'No se pudieron ubicar automáticamente las secciones del documento.'
+  }
+  if (!label) return 'Hay una parte de lo extraído para revisar.'
+  if (warning.includes('section not located')) {
+    return `${label}: no se encontró la sección en el documento y quedó vacío.`
+  }
+  if (warning.includes('visual PDF extraction failed')) {
+    return `${label}: se leyó desde el texto del PDF; revisalo con el documento.`
+  }
+  if (/\(P\d+[–-]P\d+\)\s*:/.test(warning)) {
+    return `${label}: el servicio de IA no respondió y quedó vacío. Reintentá la extracción.`
+  }
+  if (warning.includes('fuera de cotas') || warning.includes('descartado') || warning.includes('recortad')) {
+    return `${label}: se corrigió o recortó parte de lo extraído; revisalo.`
+  }
+  return `${label}: revisá lo extraído.`
+}
+
+/** Las advertencias del spec en palabras de la persona, sin repetir. */
+export function describeExtractionWarnings(warnings: string[]): string[] {
+  return [...new Set(warnings.map(describeExtractionWarning))]
+}

@@ -57,7 +57,7 @@ import {
   SPEC_EXTRACTION_SYSTEM_PROMPT,
 } from '../spec-extractor'
 import { formatVisitWindow } from '../visit-window-format'
-import { studySpecSchema } from '../study-spec'
+import { groupsNeedingAcknowledgement, studySpecSchema } from '../study-spec'
 import type { ParsedPage } from '../parser'
 
 // ---------------------------------------------------------------------------
@@ -291,6 +291,35 @@ describe('extractStudySpec', () => {
     ])
     // Los demás grupos no se ven afectados.
     expect(result.spec.inclusionCriteria).toHaveLength(1)
+    // Recorrido de punta a punta, 19/11: el grupo vacío tiene que pedir confirmación al
+    // aprobar. Antes no quedaba marcado y la spec se aprobaba sin preguntar.
+    expect(result.spec.groupOutcomes?.endpoints).toEqual({ status: 'not_located', code: 'section_not_found' })
+    expect(groupsNeedingAcknowledgement(result.spec)).toEqual(['endpoints'])
+  })
+
+  it('a group left empty by a provider failure also asks for acknowledgement on approval', async () => {
+    mockExtractionByPrompt()
+    const base = mocks.generateObject.getMockImplementation()!
+    mocks.generateObject.mockImplementation((arg: { prompt: string }) =>
+      !arg.prompt.startsWith('COMPACT PAGE MAP:') && arg.prompt.includes('[PAGE 44]')
+        ? Promise.reject(Object.assign(new Error('boom'), { code: 'rate_limit', status: 429 }))
+        : base(arg),
+    )
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    const result = await extractStudySpec(makeProtocolPages())
+
+    expect(result.spec.endpoints).toEqual([])
+    expect(result.spec.groupOutcomes?.endpoints).toEqual({ status: 'provider_error', code: 'extraction_failed' })
+    expect(groupsNeedingAcknowledgement(result.spec)).toEqual(['endpoints'])
+    expect(result.spec.groupOutcomes?.eligibility).toBeUndefined()
+    expect(() => studySpecSchema.parse(result.spec)).not.toThrow()
+  })
+
+  it('a complete extraction asks for nothing', async () => {
+    mockExtractionByPrompt()
+    const result = await extractStudySpec(makeProtocolPages())
+    expect(groupsNeedingAcknowledgement(result.spec)).toEqual([])
   })
 
   it('leaves a group empty with a warning when the LLM call fails', async () => {
