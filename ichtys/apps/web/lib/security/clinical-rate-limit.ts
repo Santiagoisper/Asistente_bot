@@ -14,7 +14,15 @@
 import { getOrCreateRequestId, log, makeRecord } from '../observability/logger'
 import { enforceSlidingWindowRateLimit, type RateLimitConfig } from './rate-limit'
 
-export type ClinicalLimitKind = 'evolution_write' | 'audio_write' | 'audio_listen' | 'lab_upload' | 'lab_extract'
+export type ClinicalLimitKind =
+  | 'evolution_write'
+  | 'audio_write'
+  | 'audio_listen'
+  | 'lab_upload'
+  | 'lab_extract'
+  | 'lab_review'
+  | 'study_write'
+  | 'admin_write'
 
 interface KindSpec {
   env: string
@@ -33,6 +41,13 @@ const KINDS: Record<ClinicalLimitKind, KindSpec> = {
   audio_listen: { env: 'DICTATION_LISTEN', limit: 60, writes: false },
   lab_upload: { env: 'LAB_UPLOAD', limit: 10, orgLimit: 120, writes: true },
   lab_extract: { env: 'LAB_EXTRACT', limit: 10, orgLimit: 120, writes: true },
+  // Auditoría 19/11 (H-04): las escrituras que no tenían tope.
+  // Confirmar o descartar laboratorio y propuestas del perfil: se hace de a uno, pero en lote.
+  lab_review: { env: 'LAB_REVIEW', limit: 60, orgLimit: 600, writes: true },
+  // Estudios, sujetos, agenda y Study Spec (editar y aprobar).
+  study_write: { env: 'STUDY_WRITE', limit: 30, orgLimit: 300, writes: true },
+  // Ajustes de la organización, funciones, accesos a estudios y modo.
+  admin_write: { env: 'ADMIN_WRITE', limit: 30, orgLimit: 120, writes: true },
 }
 
 function positiveInt(value: string | undefined, fallback: number): number {

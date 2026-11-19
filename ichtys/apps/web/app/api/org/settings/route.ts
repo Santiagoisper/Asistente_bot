@@ -31,6 +31,7 @@ import { isProviderChoiceSupported, mergeOrgKeys } from '../../../../lib/setting
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../lib/api/body-limit'
 import { patchSchema } from '../../../../lib/api/input-schemas'
 import { insertAuditLog } from '../../../../lib/audit/audited-write'
+import { clinicalRateLimit } from '../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -101,6 +102,8 @@ export async function GET(): Promise<Response> {
 export async function PATCH(req: Request): Promise<Response> {
   try {
     const { orgId, userId, access } = await resolveOrgContext()
+    const limited = await clinicalRateLimit('admin_write', { orgId: orgId, userId: userId, req: req, endpoint: '/api/org/settings' })
+    if (limited) return limited
     if (!canChangeOrgSettings(access)) {
       throw new AccessError('Insufficient role', 403)
     }
@@ -222,9 +225,11 @@ export async function PATCH(req: Request): Promise<Response> {
 /**
  * POST /api/org/settings/test-providers — prueba conectividad de cada proveedor.
  */
-export async function POST(): Promise<Response> {
+export async function POST(req: Request): Promise<Response> {
   try {
-    const { orgId, access } = await resolveOrgContext()
+    const { orgId, userId, access } = await resolveOrgContext()
+    const limited = await clinicalRateLimit('admin_write', { orgId: orgId, userId: userId, req: req, endpoint: '/api/org/settings' })
+    if (limited) return limited
     if (!canChangeOrgSettings(access)) {
       throw new AccessError('Insufficient role', 403)
     }
