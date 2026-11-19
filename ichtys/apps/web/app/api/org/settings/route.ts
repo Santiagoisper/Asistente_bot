@@ -102,11 +102,12 @@ export async function GET(): Promise<Response> {
 export async function PATCH(req: Request): Promise<Response> {
   try {
     const { orgId, userId, access } = await resolveOrgContext()
-    const limited = await clinicalRateLimit('admin_write', { orgId: orgId, userId: userId, req: req, endpoint: '/api/org/settings' })
-    if (limited) return limited
     if (!canChangeOrgSettings(access)) {
       throw new AccessError('Insufficient role', 403)
     }
+    // El límite se cuenta después del permiso: alguien sin permiso no gasta el cupo del centro.
+    const limited = await clinicalRateLimit('admin_write', { orgId: orgId, userId: userId, req: req, endpoint: '/api/org/settings' })
+    if (limited) return limited
 
     // Tope de bytes ANTES de parsear (413, H7 vuelta 2). El auth ya corrió
     // más arriba; un JSON inválido ahora responde 400 en vez de caer al 500
@@ -228,11 +229,12 @@ export async function PATCH(req: Request): Promise<Response> {
 export async function POST(req: Request): Promise<Response> {
   try {
     const { orgId, userId, access } = await resolveOrgContext()
-    const limited = await clinicalRateLimit('admin_write', { orgId: orgId, userId: userId, req: req, endpoint: '/api/org/settings' })
-    if (limited) return limited
     if (!canChangeOrgSettings(access)) {
       throw new AccessError('Insufficient role', 403)
     }
+    // El límite se cuenta después del permiso: alguien sin permiso no gasta el cupo del centro.
+    const limited = await clinicalRateLimit('admin_write', { orgId: orgId, userId: userId, req: req, endpoint: '/api/org/settings' })
+    if (limited) return limited
 
     const orgKeys = await getOrgLlmApiKeys(orgId)
     const health = await checkAllProviderHealth(orgKeys)

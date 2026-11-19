@@ -41,6 +41,24 @@ describe('rutas que escriben', () => {
     expect(/clinicalRateLimit\(|enforceSlidingWindowRateLimit\(/.test(source)).toBe(true)
   })
 
+  // Un GET también escribe cuando deja registro en la auditoría o actualiza algo (Codex en
+  // el #237). La guarda no separa por manejador: si el archivo escribe y no tiene límite, falla.
+  const WRITES = /db\.insert\(|auditedWrite\(|writeAuditLog\(|\.update\(|assignOpenDeadline\(/
+  const readersThatWrite = routes(API).filter((file) => {
+    const source = stripComments(readFileSync(file, 'utf8'))
+    return /export\s+async\s+function\s+GET\b/.test(source) && WRITES.test(source)
+  })
+
+  it('hay lecturas que escriben (la guarda no corre vacía)', () => {
+    expect(readersThatWrite.length).toBeGreaterThan(5)
+  })
+
+  it.each(readersThatWrite.map((file) => [relative(ROOT, file).replaceAll('\\', '/')]))('%s (GET que escribe) tiene límite de pedidos', (rel) => {
+    if (EXEMPT[rel]) return
+    const source = stripComments(readFileSync(join(ROOT, rel), 'utf8'))
+    expect(/clinicalRateLimit\(|enforceSlidingWindowRateLimit\(/.test(source)).toBe(true)
+  })
+
   it('las excepciones existen y escriben (no quedan nombres viejos)', () => {
     for (const rel of Object.keys(EXEMPT)) {
       expect(writers.map((f) => relative(ROOT, f).replaceAll('\\', '/'))).toContain(rel)

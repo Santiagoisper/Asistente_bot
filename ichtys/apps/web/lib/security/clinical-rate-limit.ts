@@ -23,6 +23,7 @@ export type ClinicalLimitKind =
   | 'lab_review'
   | 'study_write'
   | 'admin_write'
+  | 'record_read'
 
 interface KindSpec {
   env: string
@@ -48,6 +49,9 @@ const KINDS: Record<ClinicalLimitKind, KindSpec> = {
   study_write: { env: 'STUDY_WRITE', limit: 30, orgLimit: 300, writes: true },
   // Ajustes de la organización, funciones, accesos a estudios y modo.
   admin_write: { env: 'ADMIN_WRITE', limit: 30, orgLimit: 120, writes: true },
+  // Lecturas que dejan registro en la auditoría (ficha, perfil, screening, laboratorio,
+  // documentos): sin tope, repetirlas llena la auditoría (Codex en el #237).
+  record_read: { env: 'RECORD_READ', limit: 120, orgLimit: 3000, writes: false },
 }
 
 function positiveInt(value: string | undefined, fallback: number): number {

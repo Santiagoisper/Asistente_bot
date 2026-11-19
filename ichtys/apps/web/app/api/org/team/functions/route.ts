@@ -30,9 +30,10 @@ async function parse(req: Request) {
 export async function POST(req: Request): Promise<Response> {
   try {
     const context = await resolveOrgAccessContext()
+    if (!canManageOrgAccess(context.access)) throw new AccessError('Insufficient role', 403)
+    // El límite se cuenta después del permiso: alguien sin permiso no gasta el cupo del centro.
     const limited = await clinicalRateLimit('admin_write', { orgId: context.orgId, userId: context.userId, req, endpoint: '/api/org/team/functions' })
     if (limited) return limited
-    if (!canManageOrgAccess(context.access)) throw new AccessError('Insufficient role', 403)
 
     const { input, error } = await parse(req)
     if (!input) return error
@@ -79,9 +80,10 @@ export async function POST(req: Request): Promise<Response> {
 export async function DELETE(req: Request): Promise<Response> {
   try {
     const context = await resolveOrgAccessContext()
+    if (!canManageOrgAccess(context.access)) throw new AccessError('Insufficient role', 403)
+    // El límite se cuenta después del permiso: alguien sin permiso no gasta el cupo del centro.
     const limited = await clinicalRateLimit('admin_write', { orgId: context.orgId, userId: context.userId, req, endpoint: '/api/org/team/functions' })
     if (limited) return limited
-    if (!canManageOrgAccess(context.access)) throw new AccessError('Insufficient role', 403)
 
     const { input, error } = await parse(req)
     if (!input) return error
