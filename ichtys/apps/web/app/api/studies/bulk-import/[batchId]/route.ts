@@ -1,5 +1,8 @@
 import { auth } from '@clerk/nextjs/server'
+import { canAdministerStudy, loadAccessSubject, normalizeRole } from '@ichtys/auth'
+import { allows } from '@ichtys/auth/functions'
 import { and, db, eq, ingestionJobs, organizations } from '@ichtys/db'
+import { z } from 'zod'
 
 export const runtime = 'nodejs'
 
@@ -18,11 +21,18 @@ export async function GET(
   { params }: { params: Promise<{ batchId: string }> },
 ): Promise<Response> {
   const { batchId } = await params
-  const { userId, orgId: clerkOrgId } = await auth()
+  const { userId, orgId: clerkOrgId, orgRole } = await auth()
   if (!userId || !clerkOrgId) return new Response('Unauthorized', { status: 401 })
+  // Un identificador que no es UUID no llega a la base (antes: error 500 de Postgres).
+  if (!z.string().uuid().safeParse(batchId).success) return new Response('Bad Request', { status: 400 })
 
   const org = await resolveOrg(clerkOrgId)
   if (!org) return new Response('Not Found', { status: 404 })
+  // Mismo permiso que crear el lote (POST /api/studies/bulk-import): el estado
+  // muestra nombres de archivo y estudios de toda la organización
+  // (auditoría 19/11, H-02).
+  const access = await loadAccessSubject({ org, userId, role: normalizeRole(orgRole) })
+  if (!allows(access, 'study.create', canAdministerStudy)) return new Response('Forbidden', { status: 403 })
 
   const jobs = await db.query.ingestionJobs.findMany({
     where: and(eq(ingestionJobs.organizationId, org.id), eq(ingestionJobs.batchId, batchId)),
