@@ -17,6 +17,18 @@ import {
 // Props
 // ---------------------------------------------------------------------------
 
+const SPEC_GROUP_LABELS: Record<string, string> = {
+  identification: 'Identificación',
+  eligibility: 'Elegibilidad',
+  endpoints: 'Endpoints',
+  visits: 'Visitas',
+}
+
+/** El grupo en palabras para la confirmación de aprobar (recorrido 19/11, R-12). */
+export function specGroupLabel(group: string): string {
+  return SPEC_GROUP_LABELS[group] ?? 'otra sección'
+}
+
 /** Lo que ve la persona cuando el servidor no aprueba la spec. */
 export function specApproveErrorText(status: number): string {
   if (status === 401) return 'Sesión expirada. Volvé a iniciar sesión.'
@@ -1334,7 +1346,7 @@ export default function SpecReview({
           | { error?: string; groups?: string[] }
           | null
         if (payload?.error === 'spec_incomplete' && payload.groups?.length) {
-          const groups = payload.groups.join(', ')
+          const groups = payload.groups.map(specGroupLabel).join(', ')
           const confirmed = window.confirm(
             `La extracción dejó grupos parciales (${groups}). ` +
               'Revisalos antes de aprobar. ¿Aprobás la spec reconociéndolos?',
