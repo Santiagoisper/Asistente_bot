@@ -1,6 +1,6 @@
 # Matriz de trazabilidad del OS: regla → prueba → evidencia
 
-**Versión:** 0.13 · **Fecha:** 2026-11-19 · **Estado:** borrador, sin revisión de Calidad. Tarea 48 del cronograma.
+**Versión:** 0.14 · **Fecha:** 2026-11-19 · **Estado:** borrador, sin revisión de Calidad. Tarea 48 del cronograma.
 
 Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, accesos), la carga de documentos y el asistente con sus citas, que la matriz de julio ([`RTM.md`](./RTM.md)) no cubre. Responde a la brecha de R2 anotada en la [línea de base](./REGULATORY-BASELINE.md).
 
@@ -40,6 +40,7 @@ Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, acces
 | Toda ruta que escribe tiene límite de pedidos por persona y por centro (auditoría 19/11, H-04): ajustes, funciones, accesos y modo; estudios, sujetos, agenda y Study Spec; confirmar y descartar laboratorio y propuestas del perfil. Si el contador se cae, se cuenta en el proceso y nunca se bloquea con 503 | `apps/web/lib/security/__tests__/write-routes-rate-limited.test.ts`, `apps/web/lib/security/__tests__/clinical-rate-limit.test.ts` | Ninguna | Topes estimados, sin prueba de carga (H-16) |
 | Rutas que no tenían pruebas (auditoría 19/11, H-02): el estado de una importación masiva exige el mismo permiso que crearla y rechaza un identificador inválido; documentos del estudio y precalentamiento del chat ya no disfrazan una falla de la base como 401; descarga y página de documento auditan antes de entregar | `apps/web/app/api/__tests__/auditoria-rutas-sin-pruebas.test.ts` | Ninguna | La ruta del Study Spec y la exportación siguen sin pruebas completas |
 | El historial del chat se lee siempre con la organización y el estudio (y la persona, en la lista), descifrado y sin campos internos; «Probar proveedores» no muestra claves aunque el proveedor las cite en su error (auditoría 19/11, H-09, H-10 y H-18) | `apps/web/lib/chat/__tests__/history.test.ts`, `packages/llm/__tests__/provider-health-probe.test.ts` | Ninguna | — |
+| La biblioteca filtra y busca protocolos sin perder enlaces; el panel de consumo muestra cupo, avisos y desglose por clave, y una falla de carga no rompe la pantalla (auditoría 19/11, H-08) | `apps/web/components/library/__tests__/library-client.test.tsx`, `apps/web/components/usage/__tests__/usage-panel.test.tsx` | Ninguna | — |
 | Dar acceso a un estudio exige poder administrarlo, en los dos modos; un estudio de otra organización responde igual que uno inexistente | `apps/web/app/api/org/team/memberships/__tests__/route.test.ts` | Ninguna | Las bajas |
 | Sin permiso sobre el estudio no se agenda nada; un turno de otro estudio u otra organización responde como inexistente | `apps/web/app/api/studies/[id]/agenda/__tests__/routes.test.ts`, `apps/web/lib/agenda/__tests__/agenda-service.test.ts` | Ninguna | Con dos cuentas reales |
 | Un turno no se puede atar a un sujeto de otro estudio | `apps/web/lib/agenda/__tests__/agenda-service.test.ts` | Ninguna | — |
