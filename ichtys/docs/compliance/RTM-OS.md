@@ -1,6 +1,6 @@
 # Matriz de trazabilidad del OS: regla → prueba → evidencia
 
-**Versión:** 0.18 · **Fecha:** 2026-11-19 · **Estado:** borrador, sin revisión de Calidad. Tarea 48 del cronograma.
+**Versión:** 0.19 · **Fecha:** 2026-11-19 · **Estado:** borrador, sin revisión de Calidad. Tarea 48 del cronograma.
 
 Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, accesos), la carga de documentos y el asistente con sus citas, que la matriz de julio ([`RTM.md`](./RTM.md)) no cubre. Responde a la brecha de R2 anotada en la [línea de base](./REGULATORY-BASELINE.md).
 
@@ -49,6 +49,7 @@ Cubre el OS (agenda, sujetos, laboratorios, dictado, perfil, elegibilidad, acces
 | Un criterio que nombra la «tasa de filtración glomerular estimada» se evalúa contra el eGFR del perfil como el resto de los criterios numéricos; el filtrado medido y el aclaramiento siguen a revisar (recorrido 19/11, R-09) | `packages/clinical/__tests__/numeric-criteria.test.ts`, `packages/clinical/__tests__/filtrado-vs-aclaramiento.test.ts` | Ninguna | — |
 | Cuando el localizador semántico no encuentra objetivos o visitas, el respaldo por encabezados reconoce también «Objetivo primario/secundario», «Esquema/Calendario/Cronograma de visitas» y sus equivalentes en inglés (recorrido 19/11, R-04) | `packages/ingestion/__tests__/spec-extractor.test.ts` | Ninguna | — |
 | Un grupo de la spec que queda vacío porque no se encontró su sección o porque falló el proveedor pide confirmación al aprobar; las advertencias de extracción se muestran en palabras de la persona (recorrido de punta a punta 19/11, R-03 y R-05) | `packages/ingestion/__tests__/spec-extractor.test.ts`, `apps/web/lib/__tests__/spec-extraction-status.test.ts` | Ninguna | — |
+| Con un proveedor que no lee PDF (groq) la extracción de la spec manda solo el texto, sin una lectura visual que falla en cada grupo ni la advertencia que la acompaña (entorno de prueba 19/11, R-13) | `packages/ingestion/__tests__/spec-extractor.test.ts` | Ninguna | — |
 | Dar acceso a un estudio exige poder administrarlo, en los dos modos; un estudio de otra organización responde igual que uno inexistente | `apps/web/app/api/org/team/memberships/__tests__/route.test.ts` | Ninguna | Las bajas |
 | Sin permiso sobre el estudio no se agenda nada; un turno de otro estudio u otra organización responde como inexistente | `apps/web/app/api/studies/[id]/agenda/__tests__/routes.test.ts`, `apps/web/lib/agenda/__tests__/agenda-service.test.ts` | Ninguna | Con dos cuentas reales |
 | Un turno no se puede atar a un sujeto de otro estudio | `apps/web/lib/agenda/__tests__/agenda-service.test.ts` | Ninguna | — |

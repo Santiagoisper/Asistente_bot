@@ -124,6 +124,9 @@ export interface ExtractStudySpecOptions {
 
 type UsageRecordingCtx = Pick<ExtractStudySpecOptions, 'orgId' | 'studyId' | 'userId'>
 
+/** Proveedores que no aceptan un PDF adjunto (visto: groq rechaza la parte `file`). */
+export const PROVIDERS_WITHOUT_PDF_INPUT: ReadonlySet<string> = new Set(['groq'])
+
 async function generateSpecObject<T>(params: {
   schema: z.ZodType<T>
   system: string
@@ -133,10 +136,17 @@ async function generateSpecObject<T>(params: {
   orgApiKeys?: OrgLlmApiKeys | null
   usageCtx?: UsageRecordingCtx
   pdf?: Uint8Array
+  /** El mismo pedido sin la mención del PDF adjunto, para un proveedor que no lee PDF. */
+  textOnlyPrompt?: string
 }): Promise<{ object: T; modelId: string }> {
   const { result, provider, modelId, usage, keySource } = await runWithLlmFallback(
     { purpose: 'spec', providerPreference: params.providerPreference, orgApiKeys: params.orgApiKeys },
-    async (model, _provider, reportUsage, signal) => {
+    async (model, provider, reportUsage, signal) => {
+      // Un proveedor que no lee PDF falla en cada lectura visual y obliga a una segunda
+      // llamada por texto (entorno de prueba, 19/11: groq, AI_UnsupportedFunctionalityError).
+      // Con ese proveedor se manda directamente el texto, que ya va en el pedido.
+      const pdf = params.pdf && !PROVIDERS_WITHOUT_PDF_INPUT.has(provider) ? params.pdf : undefined
+      const prompt = params.pdf && !pdf ? (params.textOnlyPrompt ?? params.prompt) : params.prompt
       const response = await generateObject({
         model,
         abortSignal: signal,
@@ -146,17 +156,17 @@ async function generateSpecObject<T>(params: {
         providerOptions: { anthropic: { structuredOutputMode: 'jsonTool' } },
         temperature: 0,
         instructions: params.system,
-        ...(params.pdf
+        ...(pdf
           ? {
               messages: [{
                 role: 'user' as const,
                 content: [
-                  { type: 'file' as const, data: params.pdf, mediaType: 'application/pdf' },
-                  { type: 'text' as const, text: params.prompt },
+                  { type: 'file' as const, data: pdf, mediaType: 'application/pdf' },
+                  { type: 'text' as const, text: prompt },
                 ],
               }],
             }
-          : { prompt: params.prompt }),
+          : { prompt }),
         maxOutputTokens: params.maxTokens,
       })
       reportUsage({ inputTokens: response.usage?.inputTokens ?? 0, outputTokens: response.usage?.outputTokens ?? 0 })
@@ -560,6 +570,7 @@ async function extractGroup<T>(
     usageCtx,
     pdf,
     system: SPEC_EXTRACTION_SYSTEM_PROMPT,
+    textOnlyPrompt: `${instruction}${fewShotContext}\n\nPROTOCOL PAGES:\n${context}`,
     prompt: `${instruction}${fewShotContext}\n\n${pdf ? `The attached PDF contains original PDF pages ${originalPageStart} through ${originalPageEnd}, in order. Its first page is original page ${originalPageStart}. Use [PAGE N] below for sourcePages, not cropped-PDF local page numbers.\n\n` : ''}PROTOCOL PAGES:\n${context}`,
     maxTokens: MAX_OUTPUT_TOKENS,
   })
