@@ -57,7 +57,7 @@ const HISTORY_PAGE_1 = {
     { id: 7, at: '2026-11-12T13:00:00.000Z', action: 'access.function.grant', actorUserId: 'user-1', memberUserId: 'user-2', functionKey: 'monitor', studyId: null, self: false, hasExpiry: null, modeFrom: null, modeTo: null, openUntil: null },
     { id: 6, at: '2026-11-12T12:00:00.000Z', action: 'access.membership.revoke', actorUserId: 'user-1', memberUserId: 'user-9', functionKey: null, studyId: STUDY, self: false, hasExpiry: null, modeFrom: null, modeTo: null, openUntil: null },
   ],
-  next: '2026-11-12T12:00:00.000Z_6',
+  next: '6',
 }
 const HISTORY_PAGE_2 = {
   entries: [

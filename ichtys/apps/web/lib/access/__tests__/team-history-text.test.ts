@@ -58,4 +58,10 @@ describe('describeHistoryEntry', () => {
     expect(say({ action: 'access.membership.revoke', studyId: 's-9' })).toContain(HISTORY_TEXTS.unknownStudy)
     expect(say({ actorUserId: null }).startsWith(HISTORY_TEXTS.system)).toBe(true)
   })
+
+  it('con la lista del equipo cortada, quien no figura no se da por ido', () => {
+    const text = describeHistoryEntry({ ...base, memberUserId: 'u-otro' }, names, studies, 'America/Argentina/Buenos_Aires', { listTruncated: true })
+    expect(text).toContain(HISTORY_TEXTS.unlistedPerson)
+    expect(text).not.toContain(HISTORY_TEXTS.unknownPerson)
+  })
 })

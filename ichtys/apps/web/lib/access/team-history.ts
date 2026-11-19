@@ -1,6 +1,4 @@
 import { and, auditLogs, db, desc, eq, inArray, lt } from '@ichtys/db'
-// `or` no está re-exportado por @ichtys/db (sumarlo toca packages/db); mismo camino que voided-origin-store.
-import { or } from 'drizzle-orm'
 import { parseMemberFunctions } from '@ichtys/auth/functions'
 import type { MemberFunction } from '@ichtys/db'
 
@@ -34,7 +32,7 @@ export type AccessHistoryAction = (typeof ACCESS_HISTORY_ACTIONS)[number]
 export const ACCESS_HISTORY_MAX_PAGE = 100
 
 export interface AccessHistoryEntry {
-  /** Identificador del registro de auditoría (sirve de cursor junto con `at`). */
+  /** Identificador del registro de auditoría (sirve de cursor). */
   id: number
   at: string
   action: AccessHistoryAction
@@ -56,7 +54,6 @@ export interface AccessHistoryEntry {
 }
 
 export interface AccessHistoryCursor {
-  at: Date
   id: number
 }
 
@@ -66,18 +63,20 @@ export interface AccessHistoryPage {
   next: AccessHistoryCursor | null
 }
 
-/** Cursor opaco para la URL: `<fecha ISO>_<id>`. */
+/**
+ * Cursor de página: el `id` de la última fila de auditoría leída. Se pagina por
+ * `id` (bigserial) y no por fecha: `created_at` guarda microsegundos y un `Date`
+ * de JS solo milisegundos, así que un cursor por fecha salteaba filas en el
+ * borde de página (Architect y Devin en el #234). El `id` no se trunca nunca.
+ */
 export function encodeHistoryCursor(cursor: AccessHistoryCursor): string {
-  return `${cursor.at.toISOString()}_${cursor.id}`
+  return String(cursor.id)
 }
 
 export function decodeHistoryCursor(raw: string): AccessHistoryCursor | null {
-  const match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z)_(\d{1,15})$/.exec(raw)
-  if (!match) return null
-  const at = new Date(match[1]!)
-  const id = Number(match[2])
-  if (Number.isNaN(at.getTime()) || !Number.isSafeInteger(id)) return null
-  return { at, id }
+  if (!/^[1-9]\d{0,14}$/.test(raw)) return null
+  const id = Number(raw)
+  return Number.isSafeInteger(id) ? { id } : null
 }
 
 interface AuditRow {
@@ -135,39 +134,58 @@ export function toAccessHistoryEntry(row: AuditRow): AccessHistoryEntry | null {
   }
 }
 
+/** Cuántas lecturas hace como máximo para llenar una página visible. */
+const MAX_BATCHES = 5
+
 /**
  * Página del historial de accesos de una organización, de lo más nuevo a lo
- * más viejo. `before` es el cursor que devolvió la página anterior.
+ * más viejo (orden de inserción). `before` es el cursor que devolvió la página
+ * anterior. Los pedidos sin cambio no ocupan lugar: si una lectura trae filas
+ * que no se muestran, sigue leyendo hasta llenar la página (con un tope), para
+ * que una página no llegue vacía con «Ver más».
  */
 export async function loadAccessHistory(
   orgId: string,
   options: { limit: number; before?: AccessHistoryCursor | null },
 ): Promise<AccessHistoryPage> {
   const limit = Math.max(1, Math.min(ACCESS_HISTORY_MAX_PAGE, Math.trunc(options.limit)))
-  const conditions = [eq(auditLogs.organizationId, orgId), inArray(auditLogs.action, [...ACCESS_HISTORY_ACTIONS])]
-  if (options.before) {
-    const { at, id } = options.before
-    conditions.push(or(lt(auditLogs.createdAt, at), and(eq(auditLogs.createdAt, at), lt(auditLogs.id, id)))!)
+  const entries: AccessHistoryEntry[] = []
+  let before = options.before?.id ?? null
+  let more = true
+  // Se lee de a lotes más grandes que la página: los pedidos sin cambio se descartan acá.
+  const batchSize = Math.max(limit, 50)
+
+  for (let batch = 0; batch < MAX_BATCHES && more && entries.length < limit; batch++) {
+    const conditions = [eq(auditLogs.organizationId, orgId), inArray(auditLogs.action, [...ACCESS_HISTORY_ACTIONS])]
+    if (before !== null) conditions.push(lt(auditLogs.id, before))
+
+    const rows: AuditRow[] = await db
+      .select({
+        id: auditLogs.id,
+        action: auditLogs.action,
+        userId: auditLogs.userId,
+        studyId: auditLogs.studyId,
+        metadata: auditLogs.metadata,
+        createdAt: auditLogs.createdAt,
+      })
+      .from(auditLogs)
+      .where(and(...conditions))
+      .orderBy(desc(auditLogs.id))
+      .limit(batchSize + 1)
+
+    more = rows.length > batchSize
+    const batchRows = rows.slice(0, batchSize)
+    for (const row of batchRows) {
+      before = row.id
+      const entry = toAccessHistoryEntry(row)
+      if (entry) entries.push(entry)
+      if (entries.length === limit) {
+        // Página llena: si quedan filas sin leer en este lote, hay más.
+        more = more || row !== batchRows[batchRows.length - 1]
+        break
+      }
+    }
   }
 
-  const rows: AuditRow[] = await db
-    .select({
-      id: auditLogs.id,
-      action: auditLogs.action,
-      userId: auditLogs.userId,
-      studyId: auditLogs.studyId,
-      metadata: auditLogs.metadata,
-      createdAt: auditLogs.createdAt,
-    })
-    .from(auditLogs)
-    .where(and(...conditions))
-    .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
-    .limit(limit + 1)
-
-  const page = rows.slice(0, limit)
-  const last = page[page.length - 1]
-  return {
-    entries: page.map((row) => toAccessHistoryEntry(row)).filter((entry): entry is AccessHistoryEntry => entry !== null),
-    next: rows.length > limit && last ? { at: last.createdAt, id: last.id } : null,
-  }
+  return { entries, next: more && before !== null ? { id: before } : null }
 }

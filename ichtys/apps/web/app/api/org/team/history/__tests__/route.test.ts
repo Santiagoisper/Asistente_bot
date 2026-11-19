@@ -128,16 +128,38 @@ describe('GET /api/org/team/history — contenido', () => {
   it('pagina con cursor sin repetir ni saltear entradas', async () => {
     const first = await (await GET(url('?limit=2'))).json()
     expect(first.entries.map((e: { id: number }) => e.id)).toEqual([5, 4])
-    expect(typeof first.next).toBe('string')
+    // El cursor es el id de la última fila leída: no se trunca como una fecha.
+    expect(first.next).toBe('4')
 
-    const second = await (await GET(url(`?limit=2&before=${encodeURIComponent(first.next)}`))).json()
-    // La fila 3 (changed:false) ocupa lugar en la página pero no se muestra.
-    expect(second.entries.map((e: { id: number }) => e.id)).toEqual([2])
-    expect(typeof second.next).toBe('string')
+    const second = await (await GET(url(`?limit=2&before=${first.next}`))).json()
+    // La fila 3 (changed:false) no ocupa lugar: la página se llena con 2 y 1.
+    expect(second.entries.map((e: { id: number }) => e.id)).toEqual([2, 1])
+    expect(second.next).toBeNull()
+  })
 
-    const third = await (await GET(url(`?limit=2&before=${encodeURIComponent(second.next)}`))).json()
-    expect(third.entries.map((e: { id: number }) => e.id)).toEqual([1])
-    expect(third.next).toBeNull()
+  it('muchos pedidos sin cambio arriba de todo: la primera página igual se llena', async () => {
+    nextId = 1
+    fx.auditRows = [
+      audit({ action: 'access.function.grant', at: '2026-11-01T10:00:00Z', metadata: { memberUserId: 'user-2', functionKey: 'investigator', changed: true } }),
+      audit({ action: 'access.function.grant', at: '2026-11-02T10:00:00Z', metadata: { memberUserId: 'user-2', functionKey: 'monitor', changed: true } }),
+      ...Array.from({ length: 12 }, (_, i) =>
+        audit({ action: 'access.function.grant', at: `2026-11-03T10:00:${String(i).padStart(2, '0')}Z`, metadata: { memberUserId: 'user-2', functionKey: 'monitor', changed: false } }),
+      ),
+    ]
+    const body = await (await GET(url('?limit=2'))).json()
+    expect(body.entries.map((e: { id: number }) => e.id)).toEqual([2, 1])
+    expect(body.next).toBeNull()
+  })
+
+  it('una carrera perdida al fijar el plazo (changed:false) no figura como cambio', async () => {
+    nextId = 1
+    fx.auditRows = [
+      audit({ action: 'org.access_mode.deadline_set', at: '2026-11-01T10:00:00Z', metadata: { days: 60, openUntil: '2026-12-31T10:00:00.000Z', changed: true } }),
+      audit({ action: 'org.access_mode.deadline_set', at: '2026-11-01T10:00:00Z', actor: 'user-3', metadata: { days: 60, openUntil: '2026-12-31T10:00:01.000Z', changed: false } }),
+    ]
+    const body = await (await GET(url())).json()
+    expect(body.entries).toHaveLength(1)
+    expect(body.entries[0]).toMatchObject({ id: 1, actorUserId: 'user-1', openUntil: '2026-12-31T10:00:00.000Z' })
   })
 
   it('dos registros en el mismo instante: el cursor desempata por id', async () => {
@@ -148,7 +170,7 @@ describe('GET /api/org/team/history — contenido', () => {
     ]
     const first = await (await GET(url('?limit=1'))).json()
     expect(first.entries.map((e: { id: number }) => e.id)).toEqual([2])
-    const second = await (await GET(url(`?limit=1&before=${encodeURIComponent(first.next)}`))).json()
+    const second = await (await GET(url(`?limit=1&before=${first.next}`))).json()
     expect(second.entries.map((e: { id: number }) => e.id)).toEqual([1])
     expect(second.next).toBeNull()
   })
@@ -159,7 +181,9 @@ describe('GET /api/org/team/history — contenido', () => {
     ['?limit=abc'],
     ['?before=ayer'],
     ['?before=2026-11-10T10:00:00Z'],
-    ['?before=2026-11-10T10:00:00Z_-1'],
+    ['?before=0'],
+    ['?before=-1'],
+    ['?before=1.5'],
   ])('entrada inválida %s: 400 sin consultar', async (query) => {
     const res = await GET(url(query))
     expect(res.status).toBe(400)

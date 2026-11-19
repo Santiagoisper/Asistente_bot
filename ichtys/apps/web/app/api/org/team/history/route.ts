@@ -1,4 +1,5 @@
 import { AccessError, handleApiError } from '@ichtys/auth'
+import { z } from 'zod'
 import { resolveOrgAccessContext } from '../../../../../lib/access/org-context'
 import { canManageOrgAccess } from '../../../../../lib/access/permissions'
 import {
@@ -12,6 +13,29 @@ export const runtime = 'nodejs'
 
 const DEFAULT_PAGE = 30
 
+// Regla 11 de docs/CLAUDE.md: la entrada de una API se valida con zod.
+const HistoryQuery = z.object({
+  limit: z
+    .string()
+    .regex(/^\d{1,3}$/)
+    .transform(Number)
+    .pipe(z.number().int().min(1).max(ACCESS_HISTORY_MAX_PAGE))
+    .optional()
+    .transform((value) => value ?? DEFAULT_PAGE),
+  before: z
+    .string()
+    .optional()
+    .transform((raw, ctx) => {
+      if (raw === undefined) return null
+      const cursor = decodeHistoryCursor(raw)
+      if (!cursor) {
+        ctx.addIssue({ code: 'custom', message: 'invalid cursor' })
+        return z.NEVER
+      }
+      return cursor
+    }),
+})
+
 /**
  * GET /api/org/team/history — «qué cambió y quién» en los accesos del centro
  * (docs/decisions/study-membership.md, paso 5). Mismo permiso que la lista del
@@ -24,17 +48,12 @@ export async function GET(req: Request): Promise<Response> {
     if (!canManageOrgAccess(context.access)) throw new AccessError('Insufficient role', 403)
 
     const params = new URL(req.url).searchParams
-    const rawLimit = params.get('limit')
-    let limit = DEFAULT_PAGE
-    if (rawLimit !== null) {
-      if (!/^\d{1,3}$/.test(rawLimit) || Number(rawLimit) < 1 || Number(rawLimit) > ACCESS_HISTORY_MAX_PAGE) {
-        return Response.json({ error: 'invalid_input' }, { status: 400 })
-      }
-      limit = Number(rawLimit)
-    }
-    const rawBefore = params.get('before')
-    const before = rawBefore === null ? null : decodeHistoryCursor(rawBefore)
-    if (rawBefore !== null && !before) return Response.json({ error: 'invalid_input' }, { status: 400 })
+    const parsed = HistoryQuery.safeParse({
+      limit: params.get('limit') ?? undefined,
+      before: params.get('before') ?? undefined,
+    })
+    if (!parsed.success) return Response.json({ error: 'invalid_input' }, { status: 400 })
+    const { limit, before } = parsed.data
 
     const page = await loadAccessHistory(context.orgId, { limit, before })
     return Response.json({ entries: page.entries, next: page.next ? encodeHistoryCursor(page.next) : null })

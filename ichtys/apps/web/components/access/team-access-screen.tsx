@@ -224,7 +224,7 @@ export function TeamAccessScreen({ timeZone }: { timeZone: string }) {
         ) : null}
       </div>
 
-      <AccessHistoryPanel people={data.people} studies={data.studies} refreshKey={historyKey} timeZone={timeZone} />
+      <AccessHistoryPanel people={data.people} studies={data.studies} refreshKey={historyKey} timeZone={timeZone} listTruncated={data.truncated} />
     </section>
   )
 }

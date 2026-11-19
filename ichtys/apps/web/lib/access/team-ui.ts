@@ -138,6 +138,8 @@ export const HISTORY_TEXTS = {
   more: 'Ver más',
   loading: 'Cargando…',
   unknownPerson: 'Una persona que ya no está en la organización',
+  /** La lista del equipo llegó cortada: no se puede afirmar que la persona se fue. */
+  unlistedPerson: 'Una persona que no figura en la lista mostrada',
   unknownStudy: 'un estudio',
   unknownFunction: 'una función que ya no existe',
   system: 'El sistema',
@@ -169,8 +171,10 @@ export function describeHistoryEntry(
   names: ReadonlyMap<string, string>,
   studies: ReadonlyMap<string, string>,
   timeZone: string,
+  options: { listTruncated?: boolean } = {},
 ): string {
-  const person = (userId: string | null) => (userId ? names.get(userId) ?? HISTORY_TEXTS.unknownPerson : HISTORY_TEXTS.unknownPerson)
+  const missing = options.listTruncated ? HISTORY_TEXTS.unlistedPerson : HISTORY_TEXTS.unknownPerson
+  const person = (userId: string | null) => (userId ? names.get(userId) ?? missing : missing)
   const actor = entry.actorUserId ? person(entry.actorUserId) : HISTORY_TEXTS.system
   const member = person(entry.memberUserId)
   const fn = entry.functionKey ? `«${FUNCTION_LABELS[entry.functionKey]}»` : HISTORY_TEXTS.unknownFunction

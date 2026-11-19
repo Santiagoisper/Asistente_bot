@@ -21,19 +21,23 @@ export function AccessHistoryPanel({
   studies,
   refreshKey,
   timeZone,
+  listTruncated,
 }: {
-  people: { userId: string; name: string }[]
+  /** El nombre puede faltar en el proveedor de identidad: entonces va el identificador. */
+  people: { userId: string; name: string | null; identifier: string }[]
   studies: { id: string; name: string }[]
   refreshKey: number
   /** Zona del centro (la pasa la página): las horas nunca en la del navegador. */
   timeZone: string
+  /** La lista del equipo llegó cortada: quien no figura puede seguir en la organización. */
+  listTruncated: boolean
 }) {
   const [entries, setEntries] = useState<HistoryResponse['entries']>([])
   const [next, setNext] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
 
-  const names = useMemo(() => new Map(people.map((p) => [p.userId, p.name])), [people])
+  const names = useMemo(() => new Map(people.map((p) => [p.userId, p.name || p.identifier])), [people])
   const studyNames = useMemo(() => new Map(studies.map((s) => [s.id, s.name])), [studies])
 
   const fetchPage = useCallback(async (before: string | null): Promise<HistoryResponse> => {
@@ -93,7 +97,7 @@ export function AccessHistoryPanel({
               <time dateTime={entry.at} className="shrink-0 text-alphi-muted sm:w-40">
                 {formatDateTime(entry.at, timeZone)}
               </time>
-              <span className="text-alphi-navy">{describeHistoryEntry(entry, names, studyNames, timeZone)}</span>
+              <span className="text-alphi-navy">{describeHistoryEntry(entry, names, studyNames, timeZone, { listTruncated })}</span>
             </li>
           ))}
         </ol>
