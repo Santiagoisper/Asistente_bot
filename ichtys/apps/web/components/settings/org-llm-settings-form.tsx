@@ -8,6 +8,7 @@ import {
   type LlmProvider,
   type LlmKeyProvider,
 } from './provider-options'
+import { rateLimitedText } from '../../lib/security/rate-limit-message'
 
 type LlmKeyStatus = {
   provider: LlmKeyProvider
@@ -130,7 +131,7 @@ export function OrgLlmSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
       })
       const payload = (await res.json()) as { error?: string; llmProvider?: LlmProvider }
       if (!res.ok) {
-        setError(payload.error ?? 'No se pudo guardar.')
+        setError(rateLimitedText(payload) ?? payload.error ?? 'No se pudo guardar.')
         return
       }
       setMessage('Configuración guardada.')
@@ -155,7 +156,7 @@ export function OrgLlmSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
         error?: string
       }
       if (!res.ok) {
-        setError(payload.error ?? 'No se pudo probar proveedores.')
+        setError(rateLimitedText(payload) ?? payload.error ?? 'No se pudo probar proveedores.')
         return
       }
       setHealth(payload.health ?? null)

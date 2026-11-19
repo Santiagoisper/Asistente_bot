@@ -5,6 +5,7 @@ import { labReportErrorResponse } from '../../../../../../../../lib/labs/lab-rep
 import { loadLabReport } from '../../../../../../../../lib/labs/lab-report-service'
 import { PhiConfigError } from '../../../../../../../../lib/subjects/phi-fields'
 import { parseRouteUuid } from '../../../../../../../../lib/api/route-uuid'
+import { clinicalRateLimit } from '../../../../../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -19,6 +20,8 @@ export async function GET(
 
   try {
     const access = await validateSubjectAccess(subjectId, studyId)
+    const limited = await clinicalRateLimit('record_read', { orgId: access.orgId, userId: access.userId, studyId: studyId, req: _req, endpoint: 'lab-reports/[reportId]' })
+    if (limited) return limited
     if (!reportId) return Response.json({ error: 'not_found' }, { status: 404 })
 
     const report = await loadLabReport({ orgId: access.orgId, studyId, subjectId, reportId })

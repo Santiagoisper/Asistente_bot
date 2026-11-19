@@ -7,6 +7,7 @@ import { labReportErrorResponse } from '../../../../../../../../../lib/labs/lab-
 import { confirmLabReport } from '../../../../../../../../../lib/labs/lab-report-service'
 import { PhiConfigError } from '../../../../../../../../../lib/subjects/phi-fields'
 import { parseRouteUuid } from '../../../../../../../../../lib/api/route-uuid'
+import { clinicalRateLimit } from '../../../../../../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -26,6 +27,8 @@ export async function POST(
   let access: Awaited<ReturnType<typeof validateSubjectAccess>>
   try {
     access = await validateSubjectAccess(subjectId, studyId, { require: 'labs.manage' })
+    const limited = await clinicalRateLimit('lab_review', { orgId: access.orgId, userId: access.userId, studyId, req, endpoint: 'lab-reports/confirm' })
+    if (limited) return limited
   } catch (err) {
     return handleApiError(err)
   }

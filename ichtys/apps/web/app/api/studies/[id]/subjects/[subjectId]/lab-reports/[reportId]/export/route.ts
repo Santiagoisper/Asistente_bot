@@ -8,6 +8,7 @@ import { loadLabReport } from '../../../../../../../../../lib/labs/lab-report-se
 import { loadOrgTimeZone } from '../../../../../../../../../lib/os/org-settings'
 import { PhiConfigError } from '../../../../../../../../../lib/subjects/phi-fields'
 import { parseRouteUuid } from '../../../../../../../../../lib/api/route-uuid'
+import { clinicalRateLimit } from '../../../../../../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -29,6 +30,8 @@ export async function GET(
 
   try {
     const access = await validateSubjectAccess(subjectId, studyId)
+    const limited = await clinicalRateLimit('record_read', { orgId: access.orgId, userId: access.userId, studyId: studyId, req: req, endpoint: 'lab-reports/export' })
+    if (limited) return limited
     if (!reportId) return Response.json({ error: 'not_found' }, { status: 404 })
     const requested = new URL(req.url).searchParams.get('formato') ?? 'csv'
     if (!Object.hasOwn(FORMATS, requested)) return Response.json({ error: 'invalid_format' }, { status: 400 })

@@ -8,6 +8,7 @@ import { auditedWrite } from '../../../../lib/audit/audited-write'
 import { isOsEnabled } from '../../../../lib/flags'
 import { checkModuleInput, checkTimeZoneInput, orgConfigInputSchema, urlHost } from '../../../../lib/os/org-admin'
 import { saveOrgModule, saveOrgTimeZone } from '../../../../lib/os/org-admin-service'
+import { clinicalRateLimit } from '../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -29,6 +30,8 @@ export async function PUT(req: Request): Promise<Response> {
     // estricto, la capacidad `org.settings`.
     const access = await loadAccessSubject({ org, userId, role: normalizeRole(orgRole) })
     if (!allows(access, 'org.settings', canAdministerOrg)) return new Response('Forbidden', { status: 403 })
+    const limited = await clinicalRateLimit('admin_write', { orgId: org.id, userId: userId, req, endpoint: '/api/os/org-config' })
+    if (limited) return limited
 
     let body: unknown
     try {

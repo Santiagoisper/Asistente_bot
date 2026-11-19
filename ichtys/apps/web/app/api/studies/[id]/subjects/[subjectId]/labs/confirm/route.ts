@@ -5,6 +5,7 @@ import { PhiConfigError } from '../../../../../../../../lib/subjects/phi-fields'
 import { labOcrConfirmSchema } from '../../../../../../../../lib/subjects/schemas'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../../../lib/api/body-limit'
 import { profileForResponse } from '../../../../../../../../lib/subjects/profile-response'
+import { clinicalRateLimit } from '../../../../../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -22,6 +23,8 @@ export async function POST(
   let access: Awaited<ReturnType<typeof validateSubjectAccess>>
   try {
     access = await validateSubjectAccess(subjectId, routeStudyId, { require: 'labs.manage' })
+    const limited = await clinicalRateLimit('lab_review', { orgId: access.orgId, userId: access.userId, studyId: access.study.id, req, endpoint: 'labs/confirm' })
+    if (limited) return limited
   } catch (err) {
     return handleApiError(err)
   }

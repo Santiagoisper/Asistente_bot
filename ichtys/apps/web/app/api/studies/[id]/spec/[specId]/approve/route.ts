@@ -8,6 +8,7 @@ import {
 } from '@ichtys/ingestion/study-spec'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../../../../../lib/api/body-limit'
 import { extractSpecTerminology } from '../../../../../../../lib/rag/spec-terminology'
+import { clinicalRateLimit } from '../../../../../../../lib/security/clinical-rate-limit'
 
 interface RouteParams {
   params: Promise<{ id: string; specId: string }>
@@ -26,6 +27,8 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   try {
     const { userId, orgId } = await validateStudyAccess(studyId, 'study_admin', 'documents.manage')
+    const limited = await clinicalRateLimit('study_write', { orgId: orgId, userId: userId, studyId: studyId, req, endpoint: '/api/studies/[id]/spec/[specId]/approve' })
+    if (limited) return limited
 
     // Cuerpo opcional: { acknowledgeGroups: ['eligibility', …] }. Sin cuerpo
     // se aprueba sólo una spec completa (ADR-3 §2.4).

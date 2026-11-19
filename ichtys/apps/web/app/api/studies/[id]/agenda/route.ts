@@ -6,6 +6,7 @@ import { auditedWrite } from '../../../../../lib/audit/audited-write'
 import { isOsEnabled } from '../../../../../lib/flags'
 import { loadOrgTimeZone } from '../../../../../lib/os/org-settings'
 import { PhiConfigError } from '../../../../../lib/subjects/phi-fields'
+import { clinicalRateLimit } from '../../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -20,6 +21,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   let access: Awaited<ReturnType<typeof validatePhiStudyAccess>>
   try {
     access = await validatePhiStudyAccess(studyId, { require: 'agenda.manage' })
+    const limited = await clinicalRateLimit('study_write', { orgId: access.orgId, userId: access.userId, studyId: access.study.id, req, endpoint: '/api/studies/[id]/agenda' })
+    if (limited) return limited
   } catch (err) {
     return handleApiError(err)
   }

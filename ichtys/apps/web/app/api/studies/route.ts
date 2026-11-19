@@ -5,6 +5,7 @@ import { loadAccessSubject } from '@ichtys/auth/access-subject'
 import { allows, type AccessSubject } from '@ichtys/auth/functions'
 import { JsonBodyTooLargeError, readJsonBody } from '../../../lib/api/body-limit'
 import { createStudyInput } from '../../../lib/api/input-schemas'
+import { clinicalRateLimit } from '../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -30,6 +31,8 @@ export async function POST(req: Request): Promise<Response> {
   if (!allows(access, 'study.create', canAdministerStudy)) {
     return new Response('Forbidden', { status: 403 })
   }
+  const limited = await clinicalRateLimit('study_write', { orgId: org.id, userId: userId, req, endpoint: '/api/studies' })
+  if (limited) return limited
 
   // Tope de bytes ANTES de parsear (413, H7 vuelta 2). El auth ya corrió
   // más arriba.

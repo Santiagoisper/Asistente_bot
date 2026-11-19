@@ -1,5 +1,6 @@
 import { validateSubjectAccess, handleApiError } from '@ichtys/auth'
 import { writeAuditLog } from '../../../../../../lib/chat/persistence'
+import { clinicalRateLimit } from '../../../../../../lib/security/clinical-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -14,6 +15,8 @@ export async function GET(
 
   try {
     const { orgId, userId, study, subject } = await validateSubjectAccess(subjectId, routeStudyId)
+    const limited = await clinicalRateLimit('record_read', { orgId: orgId, userId: userId, studyId: study.id, req: _req, endpoint: 'subjects/[subjectId]' })
+    if (limited) return limited
 
     await writeAuditLog({
       action: 'subject.view',
