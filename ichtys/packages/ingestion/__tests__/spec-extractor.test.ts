@@ -410,6 +410,37 @@ describe('extractStudySpec', () => {
     expect(visitCall?.messages?.[0]?.content.find((part) => part.type === 'text')?.text).toContain('Use [PAGE N] below for sourcePages')
   })
 
+  it('a provider that cannot read PDF gets the text only, without a failed visual call (entorno de prueba 19/11)', async () => {
+    const llm = await import('@ichtys/llm')
+    const runner = vi.mocked(llm.runWithLlmFallback)
+    const base = runner.getMockImplementation()!
+    runner.mockImplementation(async (_opts, run) => {
+      const usage = { inputTokens: 0, outputTokens: 0 }
+      const result = await run(mocks.mockModel as never, 'groq' as never, (u: { inputTokens: number; outputTokens: number }) => {
+        usage.inputTokens += u.inputTokens
+        usage.outputTokens += u.outputTokens
+      }, undefined as never)
+      return { result, provider: 'groq', modelId: 'openai/gpt-oss-120b', usage, keySource: 'platform' } as never
+    })
+    mockExtractionByPrompt()
+    const original = mocks.generateObject.getMockImplementation()!
+    mocks.generateObject.mockImplementation(async (args: { prompt?: string; messages?: unknown }) => {
+      if (args.messages) throw new Error('groq: file parts not supported')
+      return original(args as never)
+    })
+    const source = await PDFDocument.create()
+    for (let i = 0; i < 60; i += 1) source.addPage()
+
+    const result = await extractStudySpec(makeProtocolPages(), [], { protocolPdf: await source.save() })
+
+    const calls = mocks.generateObject.mock.calls as Array<[{ prompt?: string; messages?: unknown }]>
+    expect(calls.every(([arg]) => arg.messages === undefined)).toBe(true)
+    expect(calls.some(([arg]) => arg.prompt?.includes('attached PDF'))).toBe(false)
+    expect(result.warnings.join(' ')).not.toContain('visual PDF extraction failed')
+    expect(result.spec.inclusionCriteria).toHaveLength(1)
+    runner.mockImplementation(base)
+  })
+
   it('warns and lowers confidence for duplicate or out-of-order visits', async () => {
     mockExtractionByPrompt()
     const original = mocks.generateObject.getMockImplementation()!
