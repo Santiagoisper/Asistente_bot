@@ -351,3 +351,19 @@ describe('lectura de un informe de laboratorio', () => {
     expect(labs.find((lab) => lab.name === 'eGFR')?.value).toBe(91)
   })
 })
+
+describe('«tasa de filtración glomerular estimada» en un criterio (recorrido 19/11, R-09)', () => {
+  const criterion = 'Tasa de filtración glomerular estimada menor a 30 mL/min/1,73 m2.'
+  it('con eGFR 88 la exclusión no excluye', () => {
+    const [result] = assessScreening(profile([{ name: 'eGFR', value: 88, unit: 'mL/min/1.73m2' }]), exclusion(criterion))
+    expect(result?.status).toBe('pass')
+  })
+  it('con eGFR 25 excluye', () => {
+    const [result] = assessScreening(profile([{ name: 'eGFR', value: 25, unit: 'mL/min/1.73m2' }]), exclusion(criterion))
+    expect(result?.status).toBe('fail')
+  })
+  it('sin el dato queda a revisar', () => {
+    const [result] = assessScreening(profile([]), exclusion(criterion))
+    expect(result?.status).toBe('unknown')
+  })
+})
